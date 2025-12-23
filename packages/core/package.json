@@ -1,0 +1,28 @@
+{
+  "name": "@gerts/core",
+  "version": "0.0.1",
+  "description": "Core primitives for gerts.ai platform",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts",
+      "types": "./src/index.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "gpt-tokenizer": "^2.5.0",
+    "llm-info": "^1.0.69",
+    "zod": "^3.22.0"
+  }
+}

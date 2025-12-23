@@ -1,0 +1,93 @@
+/**
+ * @gerts/core - LLM Module
+ * Phase 21: LLM Abstraction
+ *
+ * Exports:
+ * - Types for LLM operations
+ * - BaseLLM abstract class
+ * - Native providers (OpenAI, Anthropic)
+ * - ModelRouter factory with smart routing
+ * - Model registry (llm-info integration)
+ */
+
+// Types
+export type {
+  LLMRole,
+  LLMMessage,
+  LLMContentBlock,
+  TokenUsage,
+  UsageMetrics,
+  LLMResponse,
+  LLMToolCall,
+  LLMConfig,
+  LLMProviderConfig,
+  LLMTool,
+  LLMCallOptions,
+  LLMResponseFormat,
+  LLMProvider,
+  LLMEventType,
+  LLMEvent,
+  LLMCallStartedEvent,
+  LLMCallCompletedEvent,
+  LLMCallFailedEvent,
+  LLMCallStreamedEvent,
+  LLMToolStartedEvent,
+  LLMToolCompletedEvent,
+  LLMToolFailedEvent,
+} from './types';
+
+// Legacy constants (deprecated - use model-registry functions instead)
+export {
+  LLM_CONTEXT_WINDOWS,
+  OPENAI_MODELS,
+  ANTHROPIC_MODELS,
+} from './types';
+
+// Base class and errors
+export { BaseLLM, LLMContextLengthExceededError, LLMCallError } from './base';
+export type { LLMCapabilities } from './base';
+
+// Providers
+export { OpenAIProvider, type OpenAIConfig } from './providers/openai';
+export { AnthropicProvider, type AnthropicConfig, type AnthropicThinkingConfig } from './providers/anthropic';
+
+// Router
+export {
+  ModelRouter,
+  type RouterConfig,
+  type ProviderConfig,
+  getDefaultRouter,
+  createLLM,
+  createLLMWithFallback,
+} from './routing';
+
+// Model Registry (llm-info integration)
+export {
+  // Types from llm-info
+  type ModelInfo,
+  type Model,
+  type Provider,
+  ModelInfoMap,
+  AllModels,
+  // Utility functions
+  getModelInfo,
+  getContextWindowSize,
+  getOutputTokenLimit,
+  getModelPricing,
+  calculateCost,
+  inferProvider,
+  supportsVision,
+  supportsReasoning,
+  isRecommendedForCoding,
+  isLegacyModel,
+  getAllModelNames,
+  getModelsForProvider,
+  getModelsForProviderAsync,
+  getModelsByCapability,
+  getCheapestModel,
+  getMostCapableModel,
+  // Constants
+  CONTEXT_WINDOW_USAGE_RATIO,
+  DEFAULT_CONTEXT_WINDOW_SIZE,
+  DEFAULT_OUTPUT_TOKEN_LIMIT,
+} from './model-registry';
