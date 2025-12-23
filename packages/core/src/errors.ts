@@ -112,16 +112,23 @@ export class ValidationError extends GertsError {
 
 /**
  * Timeout error - transient, retryable.
+ * Use GertsTimeoutError when you need full GertsError interface.
+ * Use TimeoutError from './timeout' for lightweight timeout utilities.
  */
-export class TimeoutError extends GertsError {
+export class GertsTimeoutError extends GertsError {
   readonly timeoutMs: number;
 
   constructor(message: string, timeoutMs: number, details?: Record<string, unknown>) {
     super(message, { code: 'TIMEOUT', details: { ...details, timeoutMs }, retryable: true });
-    this.name = 'TimeoutError';
+    this.name = 'GertsTimeoutError';
     this.timeoutMs = timeoutMs;
   }
 }
+
+/**
+ * @deprecated Use GertsTimeoutError for GertsError interface, or TimeoutError from './timeout'.
+ */
+export { GertsTimeoutError as TimeoutErrorGerts };
 
 /**
  * Connection error - transient, retryable.
