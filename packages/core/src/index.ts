@@ -13,5 +13,16 @@ export * from './result';
 export * from './lru-cache';
 export * from './tokenization';
 export * from './retry';
+// Note: TimeoutError from ./timeout is lightweight, use GertsTimeoutError for full GertsError interface
+export {
+  TimeoutError,
+  withTimeout,
+  createTimeoutController,
+  raceWithTimeout,
+  allWithTimeouts,
+  deadline,
+  isTimeoutError,
+} from './timeout';
+export type { TimeoutOptions, TimeoutController } from './timeout';
 export * from './graph';
 export * from './streaming';
