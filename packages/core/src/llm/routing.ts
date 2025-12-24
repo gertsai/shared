@@ -13,6 +13,7 @@ import type { EventBus } from '../event-bus';
 import { BaseLLM } from './base';
 import { OpenAIProvider, type OpenAIConfig } from './providers/openai';
 import { AnthropicProvider, type AnthropicConfig } from './providers/anthropic';
+import { GeminiProvider, type GeminiConfig } from './providers/gemini';
 import type { LLMConfig, LLMProvider } from './types';
 import {
   inferProvider as inferProviderFromRegistry,
@@ -41,7 +42,11 @@ const PROVIDER_PREFIXES: Record<string, LLMProvider> = {
 };
 
 /** Supported native providers */
-const NATIVE_PROVIDERS = new Set<LLMProvider>(['openai', 'anthropic']);
+const NATIVE_PROVIDERS = new Set<LLMProvider>([
+  'openai',
+  'anthropic',
+  'gemini',
+]);
 
 /** Router configuration */
 export interface RouterConfig {
@@ -56,7 +61,7 @@ export interface RouterConfig {
 }
 
 /** Provider-specific configuration union */
-export type ProviderConfig = OpenAIConfig | AnthropicConfig;
+export type ProviderConfig = OpenAIConfig | AnthropicConfig | GeminiConfig;
 
 /**
  * Model Router - Factory for creating LLM instances.
@@ -388,6 +393,15 @@ export class ModelRouter {
           thinking: (config as AnthropicConfig)?.thinking,
         };
         return new AnthropicProvider(anthropicConfig, this.eventBus);
+      }
+
+      case 'gemini': {
+        const geminiConfig: GeminiConfig = {
+          ...baseConfig,
+          apiKey: (config as GeminiConfig)?.apiKey,
+          baseUrl: (config as GeminiConfig)?.baseUrl,
+        };
+        return new GeminiProvider(geminiConfig, this.eventBus);
       }
 
       default:

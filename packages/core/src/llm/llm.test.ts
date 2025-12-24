@@ -22,6 +22,7 @@ import {
 } from './routing';
 import { OpenAIProvider } from './providers/openai';
 import { AnthropicProvider } from './providers/anthropic';
+import { GeminiProvider } from './providers/gemini';
 import type {
   LLMMessage,
   LLMResponse,
@@ -90,6 +91,30 @@ function createMockAnthropicResponse(content: string, usage?: Partial<TokenUsage
           input_tokens: usage?.promptTokens ?? 10,
           output_tokens: usage?.completionTokens ?? 20,
         },
+      }),
+  } as Response;
+}
+
+// Helper to create mock Gemini response
+function createMockGeminiResponse(content: string, usage?: Partial<TokenUsage>): Response {
+  return {
+    ok: true,
+    json: () =>
+      Promise.resolve({
+        candidates: [
+          {
+            content: {
+              parts: [{ text: content }],
+            },
+            finishReason: 'STOP',
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: usage?.promptTokens ?? 10,
+          candidatesTokenCount: usage?.completionTokens ?? 20,
+          totalTokenCount: usage?.totalTokens ?? 30,
+        },
+        modelVersion: 'gemini-1.5-pro',
       }),
   } as Response;
 }
@@ -286,6 +311,7 @@ describe('ModelRouter', () => {
     it('should parse provider prefix', () => {
       expect(router.inferProvider('openai/gpt-4o')).toBe('openai');
       expect(router.inferProvider('anthropic/claude-3-5-sonnet')).toBe('anthropic');
+      expect(router.inferProvider('gemini/gemini-1.5-pro')).toBe('gemini');
     });
 
     it('should default to configured provider for unknown models', () => {
@@ -309,7 +335,14 @@ describe('ModelRouter', () => {
     });
 
     it('should throw for unsupported providers', () => {
-      expect(() => router.create('gemini/gemini-1.5-pro')).toThrow('not supported');
+      expect(() => router.create('groq/llama3-8b')).toThrow('not supported');
+    });
+
+    it('should create Gemini provider for Gemini models', () => {
+      mockFetch.mockResolvedValueOnce(createMockGeminiResponse('Hello'));
+
+      const llm = router.create('gemini-1.5-pro', { apiKey: 'test-key' });
+      expect(llm).toBeInstanceOf(GeminiProvider);
     });
 
     it('should handle provider prefix', () => {
@@ -332,6 +365,7 @@ describe('ModelRouter', () => {
       const providers = router.getSupportedProviders();
       expect(providers).toContain('openai');
       expect(providers).toContain('anthropic');
+      expect(providers).toContain('gemini');
     });
   });
 });
@@ -484,6 +518,59 @@ describe('AnthropicProvider', () => {
       expect(caps.supportsFunctionCalling).toBe(true);
       expect(caps.supportsVision).toBe(true);
       expect(caps.supportsStreaming).toBe(true);
+    });
+  });
+});
+
+// ==================== Test GeminiProvider ====================
+
+describe('GeminiProvider', () => {
+  let provider: GeminiProvider;
+
+  beforeEach(() => {
+    mockFetch.mockReset();
+    provider = new GeminiProvider({
+      model: 'gemini-1.5-pro',
+      apiKey: 'test-api-key',
+      temperature: 0.7,
+    });
+  });
+
+  describe('call', () => {
+    it('should make API call and return response', async () => {
+      mockFetch.mockResolvedValueOnce(createMockGeminiResponse('Hello, world!'));
+
+      const response = await provider.call([{ role: 'user', content: 'Hi' }]);
+
+      expect(response.content).toBe('Hello, world!');
+      expect(response.model).toBe('gemini-1.5-pro');
+      expect(response.usage.totalTokens).toBe(30);
+    });
+
+    it('should apply stop words to response', async () => {
+      mockFetch.mockResolvedValueOnce(
+        createMockGeminiResponse('Hello stop world')
+      );
+
+      const providerWithStop = new GeminiProvider({
+        model: 'gemini-1.5-pro',
+        apiKey: 'test-api-key',
+        stop: ['stop'],
+      });
+
+      const response = await providerWithStop.call([
+        { role: 'user', content: 'Hi' },
+      ]);
+
+      expect(response.content).toBe('Hello');
+    });
+
+    it('should throw error if API key missing', async () => {
+      const noKeyProvider = new GeminiProvider({ model: 'gemini-1.5-pro' });
+
+      await expect(
+        noKeyProvider.call([{ role: 'user', content: 'Hi' }])
+      ).rejects.toThrow(LLMCallError);
     });
   });
 });

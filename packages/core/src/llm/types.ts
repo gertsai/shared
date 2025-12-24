@@ -9,6 +9,72 @@
  * - Event-driven architecture
  */
 
+// ==================== JSON Schema Types ====================
+
+/** JSON Schema primitive types */
+export type JSONSchemaType =
+  | 'string'
+  | 'number'
+  | 'integer'
+  | 'boolean'
+  | 'object'
+  | 'array'
+  | 'null';
+
+/** JSON Schema definition (minimal type-safe interface) */
+export interface JSONSchemaDefinition {
+  /** Schema type */
+  type?: JSONSchemaType | JSONSchemaType[];
+  /** Schema title */
+  title?: string;
+  /** Schema description */
+  description?: string;
+  /** Default value */
+  default?: unknown;
+  /** Enum values */
+  enum?: unknown[];
+  /** Const value */
+  const?: unknown;
+
+  // String constraints
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+  format?: string;
+
+  // Number constraints
+  minimum?: number;
+  maximum?: number;
+  exclusiveMinimum?: number;
+  exclusiveMaximum?: number;
+  multipleOf?: number;
+
+  // Array constraints
+  items?: JSONSchemaDefinition | JSONSchemaDefinition[];
+  minItems?: number;
+  maxItems?: number;
+  uniqueItems?: boolean;
+
+  // Object constraints
+  properties?: Record<string, JSONSchemaDefinition>;
+  required?: string[];
+  additionalProperties?: boolean | JSONSchemaDefinition;
+  patternProperties?: Record<string, JSONSchemaDefinition>;
+
+  // Composition
+  allOf?: JSONSchemaDefinition[];
+  anyOf?: JSONSchemaDefinition[];
+  oneOf?: JSONSchemaDefinition[];
+  not?: JSONSchemaDefinition;
+
+  // References
+  $ref?: string;
+  $defs?: Record<string, JSONSchemaDefinition>;
+  definitions?: Record<string, JSONSchemaDefinition>;
+}
+
+// ==================== Message Types ====================
+
 /** Message role in LLM conversation */
 export type LLMRole = 'system' | 'user' | 'assistant' | 'tool';
 
@@ -131,7 +197,7 @@ export interface LLMTool {
     /** Description of what the function does */
     description: string;
     /** JSON Schema for the function parameters */
-    parameters: Record<string, unknown>;
+    parameters: JSONSchemaDefinition;
   };
 }
 
@@ -161,8 +227,11 @@ export interface LLMResponseFormat {
   type: 'text' | 'json_object' | 'json_schema';
   /** JSON schema definition (for json_schema type) */
   jsonSchema?: {
+    /** Schema name */
     name: string;
-    schema: Record<string, unknown>;
+    /** JSON Schema definition */
+    schema: JSONSchemaDefinition;
+    /** Whether to enforce strict schema validation */
     strict?: boolean;
   };
 }

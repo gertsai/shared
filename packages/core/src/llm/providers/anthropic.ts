@@ -18,6 +18,7 @@ import type {
   LLMCallOptions,
   LLMTool,
   TokenUsage,
+  JSONSchemaDefinition,
 } from '../types';
 
 /** Anthropic-specific configuration */
@@ -65,7 +66,7 @@ interface AnthropicContentBlock {
 interface AnthropicTool {
   name: string;
   description: string;
-  input_schema: Record<string, unknown>;
+  input_schema: JSONSchemaDefinition;
 }
 
 /** Anthropic API response */

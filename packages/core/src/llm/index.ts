@@ -50,6 +50,7 @@ export type { LLMCapabilities } from './base';
 // Providers
 export { OpenAIProvider, type OpenAIConfig } from './providers/openai';
 export { AnthropicProvider, type AnthropicConfig, type AnthropicThinkingConfig } from './providers/anthropic';
+export { GeminiProvider, type GeminiConfig } from './providers/gemini';
 
 // Router
 export {

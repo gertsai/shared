@@ -19,6 +19,7 @@ import type {
   LLMTool,
   TokenUsage,
   LLMRole,
+  JSONSchemaDefinition,
 } from '../types';
 
 /** OpenAI-specific configuration */
@@ -60,7 +61,7 @@ interface OpenAITool {
   function: {
     name: string;
     description: string;
-    parameters: Record<string, unknown>;
+    parameters: JSONSchemaDefinition;
   };
 }
 
