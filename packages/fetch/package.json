@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@gerts/fetch",
+  "version": "0.2.0",
+  "description": "A rest full client for the Orchestra API",
+  "private": false,
+  "main": "dist/cjs/index.js",
+  "types": "dist/esm/index.d.ts",
+  "module": "dist/esm/index.js",
+  "private": true,
+  "scripts": {
+    "prepublish": "pnpm run build:cjs && pnpm run build:esm",
+    "build": "pnpm run prepublish",
+    "build:cjs": "tsc -p tsconfig.cjs.json && pnpm dlx tsc-alias -p tsconfig.cjs.json",
+    "build:esm": "tsc -p tsconfig.esm.json && pnpm dlx tsc-alias -p tsconfig.esm.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "contributors": [
+    "Eli Rum <explosivebit@gmail.com>"
+  ],
+  "keywords": [
+    "orchestra",
+    "orch",
+    "api",
+    "fetch",
+    "client",
+    "node",
+    "web",
+    "rest"
+  ],
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "undici": "^5.25.2"
+  },
+  "devDependencies": {
+    "@types/node": "18.17.9",
+    "esbuild-plugin-version-injector": "^1.2.0",
+    "tsc-alias": "^1.8.10",
+    "tsup": "^7.2.0",
+    "typescript": "^5.2.2",
+    "vitest": "3.2.4"
+  },
+  "engines": {
+    "node": ">=18.17.1"
+  }
+}

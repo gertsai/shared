@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="4" failures="0" errors="0" time="0.067807083">
+    <testsuite name="__tests__/undiciFetcher.spec.ts" timestamp="2025-09-03T10:52:35.376Z" hostname="MacBook-Pro-explosovebit.local" tests="4" failures="0" errors="0" skipped="0" time="0.067807083">
+        <testcase classname="__tests__/undiciFetcher.spec.ts" name="httpCaller &gt; JSON response" time="0.023120542">
+        </testcase>
+        <testcase classname="__tests__/undiciFetcher.spec.ts" name="httpCaller &gt; text response" time="0.004895875">
+        </testcase>
+        <testcase classname="__tests__/undiciFetcher.spec.ts" name="httpCaller &gt; non-OK status" time="0.0007395">
+        </testcase>
+        <testcase classname="__tests__/undiciFetcher.spec.ts" name="httpCaller &gt; streaming body available" time="0.018960167">
+        </testcase>
+    </testsuite>
+</testsuites>
