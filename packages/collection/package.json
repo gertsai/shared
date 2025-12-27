@@ -1,0 +1,140 @@
+{
+  "name": "@gerts/collection",
+  "version": "0.1.0",
+  "description": "Orchestra collection library",
+  "keywords": [
+    "collection",
+    "map",
+    "set",
+    "array",
+    "list",
+    "hash",
+    "map",
+    "set",
+    "typescript"
+  ],
+  "author": "Orchestra Team",
+  "license": "UNLICENSED",
+  "sideEffects": false,
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    },
+    "./operations": {
+      "types": "./dist/esm/operations/index.d.ts",
+      "import": {
+        "types": "./dist/esm/operations/index.d.ts",
+        "default": "./dist/esm/operations/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/operations/index.d.ts",
+        "default": "./dist/cjs/operations/index.js"
+      }
+    },
+    "./operations/*": {
+      "types": "./dist/esm/operations/*.d.ts",
+      "import": {
+        "types": "./dist/esm/operations/*.d.ts",
+        "default": "./dist/esm/operations/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/operations/*.d.ts",
+        "default": "./dist/cjs/operations/*.js"
+      }
+    },
+    "./seq": {
+      "types": "./dist/esm/Seq.d.ts",
+      "import": {
+        "types": "./dist/esm/Seq.d.ts",
+        "default": "./dist/esm/Seq.js"
+      },
+      "require": {
+        "types": "./dist/cjs/Seq.d.ts",
+        "default": "./dist/cjs/Seq.js"
+      }
+    },
+    "./core/*": {
+      "types": "./dist/esm/core/*.d.ts",
+      "import": {
+        "types": "./dist/esm/core/*.d.ts",
+        "default": "./dist/esm/core/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/core/*.d.ts",
+        "default": "./dist/cjs/core/*.js"
+      }
+    },
+    "./mixins": {
+      "types": "./dist/esm/mixins/index.d.ts",
+      "import": {
+        "types": "./dist/esm/mixins/index.d.ts",
+        "default": "./dist/esm/mixins/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/mixins/index.d.ts",
+        "default": "./dist/cjs/mixins/index.js"
+      }
+    },
+    "./mixins/*": {
+      "types": "./dist/esm/mixins/*.d.ts",
+      "import": {
+        "types": "./dist/esm/mixins/*.d.ts",
+        "default": "./dist/esm/mixins/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/mixins/*.d.ts",
+        "default": "./dist/cjs/mixins/*.js"
+      }
+    },
+    "./specialized": {
+      "types": "./dist/esm/specialized/index.d.ts",
+      "import": {
+        "types": "./dist/esm/specialized/index.d.ts",
+        "default": "./dist/esm/specialized/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/specialized/index.d.ts",
+        "default": "./dist/cjs/specialized/index.js"
+      }
+    },
+    "./specialized/*": {
+      "types": "./dist/esm/specialized/*.d.ts",
+      "import": {
+        "types": "./dist/esm/specialized/*.d.ts",
+        "default": "./dist/esm/specialized/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/specialized/*.d.ts",
+        "default": "./dist/cjs/specialized/*.js"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "private": true,
+  "scripts": {
+    "dev": "tsc --watch",
+    "build": "pnpm run \"/^build:(esm|cjs)$/\"",
+    "build:esm": "tsc",
+    "build:cjs": "tsc --outDir dist/cjs --module commonjs",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest --coverage"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@vitest/coverage-v8": "^1.6.1",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  }
+}
