@@ -268,4 +268,3 @@ export declare class HookManager {
  * const hooks = hookManager.getBeforeLLMHooks({ agent: myAgent });
  */
 export declare const hookManager: HookManager;
-//# sourceMappingURL=manager.d.ts.map

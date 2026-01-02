@@ -1,14 +1,4 @@
 /**
- * @gerts/core - LLM Types
- * Phase 21: LLM Abstraction
- *
- * Core types for LLM integration following CrewAI patterns:
- * - Native SDK priority (OpenAI, Anthropic)
- * - Factory pattern with smart routing
- * - Token usage tracking
- * - Event-driven architecture
- */
-/**
  * Model registry is now provided by llm-info package.
  * Import from './model-registry' for:
  * - getModelInfo(model)

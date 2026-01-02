@@ -173,4 +173,3 @@ export interface UsersMetaType {
         type: UserType;
     };
 }
-//# sourceMappingURL=types.d.ts.map

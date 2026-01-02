@@ -58,4 +58,3 @@ export declare class GeminiProvider extends BaseLLM {
     private formatToolResult;
     private isContextLengthError;
 }
-//# sourceMappingURL=gemini.d.ts.map

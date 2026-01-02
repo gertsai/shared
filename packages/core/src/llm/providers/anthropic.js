@@ -1,13 +1,3 @@
-/**
- * @gerts/core - Anthropic LLM Provider
- * Phase 21: LLM Abstraction
- *
- * Native Anthropic SDK integration with:
- * - Streaming support
- * - Tool use
- * - Extended thinking mode
- * - System message handling (Anthropic-specific)
- */
 import { BaseLLM, LLMCallError } from '../base';
 /**
  * Anthropic LLM Provider using native SDK patterns.

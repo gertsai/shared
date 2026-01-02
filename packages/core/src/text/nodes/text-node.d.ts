@@ -125,6 +125,7 @@ export declare const TextNodeSchema: z.ZodObject<{
     }>>>;
 }, "strip", z.ZodTypeAny, {
     id: string;
+    text: string;
     metadata: {
         chunk_index: number;
         start_index: number;
@@ -134,7 +135,7 @@ export declare const TextNodeSchema: z.ZodObject<{
         Header_3?: string | undefined;
         section_path?: string | undefined;
         total_chunks?: number | undefined;
-        chunk_method?: "code" | "token" | "character" | "recursive" | "sentence" | "markdown" | "html" | "semantic" | undefined;
+        chunk_method?: "token" | "code" | "character" | "recursive" | "sentence" | "markdown" | "html" | "semantic" | undefined;
         chunk_overlap?: number | undefined;
         end_index?: number | undefined;
         startCharIdx?: number | undefined;
@@ -143,7 +144,6 @@ export declare const TextNodeSchema: z.ZodObject<{
     } & {
         [k: string]: unknown;
     };
-    text: string;
     embedding?: number[] | undefined;
     relationships?: Record<string, {
         nodeId: string;
@@ -152,6 +152,7 @@ export declare const TextNodeSchema: z.ZodObject<{
     }> | undefined;
 }, {
     id: string;
+    text: string;
     metadata: {
         chunk_index: number;
         start_index: number;
@@ -161,7 +162,7 @@ export declare const TextNodeSchema: z.ZodObject<{
         Header_3?: string | undefined;
         section_path?: string | undefined;
         total_chunks?: number | undefined;
-        chunk_method?: "code" | "token" | "character" | "recursive" | "sentence" | "markdown" | "html" | "semantic" | undefined;
+        chunk_method?: "token" | "code" | "character" | "recursive" | "sentence" | "markdown" | "html" | "semantic" | undefined;
         chunk_overlap?: number | undefined;
         end_index?: number | undefined;
         startCharIdx?: number | undefined;
@@ -170,7 +171,6 @@ export declare const TextNodeSchema: z.ZodObject<{
     } & {
         [k: string]: unknown;
     };
-    text: string;
     embedding?: number[] | undefined;
     relationships?: Record<string, {
         nodeId: string;
@@ -180,4 +180,3 @@ export declare const TextNodeSchema: z.ZodObject<{
 }>;
 export type TextNode = z.infer<typeof TextNodeSchema>;
 export declare function createTextNode(text: string, metadata: TextNodeMetadata, relationships?: TextNode['relationships']): TextNode;
-//# sourceMappingURL=text-node.d.ts.map

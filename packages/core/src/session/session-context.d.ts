@@ -193,4 +193,3 @@ export declare function createSystemSession(tenantId?: string, clientPlatform?: 
  */
 export type OrchestraSession = GraphRAGSessionContext;
 export type GertsSession = GraphRAGSessionContext;
-//# sourceMappingURL=session-context.d.ts.map

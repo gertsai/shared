@@ -2,14 +2,12 @@
   "name": "@gerts/core",
   "version": "0.0.1",
   "description": "Core primitives for gerts.ai platform",
-  "type": "module",
   "main": "dist/index.js",
-  "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./src/index.ts",
-      "types": "./src/index.ts"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     }
   },
   "files": [

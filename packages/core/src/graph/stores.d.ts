@@ -405,4 +405,3 @@ export declare function isCommunityStore(obj: unknown): obj is ICommunityStore;
  * Check if an object implements full IGraphStore.
  */
 export declare function isGraphStore(obj: unknown): obj is IGraphStore;
-//# sourceMappingURL=stores.d.ts.map

@@ -1,14 +1,3 @@
-/**
- * @gerts/core - BaseLLM Abstract Class
- * Phase 21: LLM Abstraction
- *
- * Abstract base class for LLM implementations following CrewAI patterns:
- * - Abstract call() and stream() methods
- * - Event emission for observability
- * - Stop words handling
- * - Token usage tracking
- * - Hook system integration (prepared for Phase 19)
- */
 import { getContextWindowSize as getContextWindowFromRegistry, supportsVision as supportsVisionFromRegistry, supportsReasoning as supportsReasoningFromRegistry, } from './model-registry';
 /**
  * Abstract base class for LLM implementations.

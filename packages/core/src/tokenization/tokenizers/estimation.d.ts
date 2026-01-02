@@ -80,4 +80,3 @@ export declare function createEstimationTokenizer(model?: string): EstimationTok
  * @returns EstimationTokenizer with provider-specific multiplier
  */
 export declare function createProviderTokenizer(provider: TokenizerProvider): EstimationTokenizer;
-//# sourceMappingURL=estimation.d.ts.map

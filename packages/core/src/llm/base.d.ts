@@ -186,4 +186,3 @@ export declare class LLMCallError extends Error {
     readonly cause?: unknown | undefined;
     constructor(message: string, provider: string, model: string, cause?: unknown | undefined);
 }
-//# sourceMappingURL=base.d.ts.map

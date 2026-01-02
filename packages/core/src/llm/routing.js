@@ -1,13 +1,3 @@
-/**
- * @gerts/core - LLM Model Router
- * Phase 21: LLM Abstraction
- *
- * Factory pattern with smart routing to native providers:
- * - Automatic provider inference from model name
- * - Provider prefix parsing (openai/gpt-4, anthropic/claude-3)
- * - Fallback chain support
- * - Cost optimization routing
- */
 import { OpenAIProvider } from './providers/openai';
 import { AnthropicProvider } from './providers/anthropic';
 import { GeminiProvider } from './providers/gemini';

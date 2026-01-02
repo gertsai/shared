@@ -17,4 +17,5 @@ export { TimeoutError, withTimeout, createTimeoutController, raceWithTimeout, al
 export type { TimeoutOptions, TimeoutController } from './timeout';
 export * from './graph';
 export * from './streaming';
-//# sourceMappingURL=index.d.ts.map
+export * from './session';
+export * from './query';

@@ -1,17 +1,3 @@
-/**
- * @gerts/core - Hook Types
- * Phase 19: Hooks & Lifecycle
- *
- * Core types for the hooks system merging Agno (decorators, background execution)
- * and CrewAI (global registry, event bus, filtering) patterns.
- *
- * Features:
- * - Pre/post hooks for agents, tools, workflows
- * - Background execution support
- * - Type-safe hook contexts
- * - Priority-based execution ordering
- * - Filter support (agents, tools)
- */
 // ============================================================================
 // Check Trigger & Errors
 // ============================================================================

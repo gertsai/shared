@@ -1,17 +1,3 @@
-/**
- * @gerts/core - Hook Decorators
- * Phase 19: Hooks & Lifecycle
- *
- * Decorator functions for hooks.
- * From Agno pattern: Decorator for background execution and metadata.
- * From CrewAI pattern: Auto-registration decorators.
- *
- * Features:
- * - @hook decorator for marking hooks
- * - @beforeLLMCall, @afterLLMCall for LLM hooks
- * - @beforeToolCall, @afterToolCall for tool hooks
- * - Auto-registration support
- */
 import { setHookMetadata } from './executor';
 import { hookManager } from './manager';
 // ============================================================================

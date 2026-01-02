@@ -17,3 +17,5 @@ export * from './retry';
 export { TimeoutError, withTimeout, createTimeoutController, raceWithTimeout, allWithTimeouts, deadline, isTimeoutError, } from './timeout';
 export * from './graph';
 export * from './streaming';
+export * from './session';
+export * from './query';

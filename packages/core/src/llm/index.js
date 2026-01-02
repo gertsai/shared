@@ -1,14 +1,3 @@
-/**
- * @gerts/core - LLM Module
- * Phase 21: LLM Abstraction
- *
- * Exports:
- * - Types for LLM operations
- * - BaseLLM abstract class
- * - Native providers (OpenAI, Anthropic)
- * - ModelRouter factory with smart routing
- * - Model registry (llm-info integration)
- */
 // Legacy constants (deprecated - use model-registry functions instead)
 export { LLM_CONTEXT_WINDOWS, OPENAI_MODELS, ANTHROPIC_MODELS, } from './types';
 // Base class and errors

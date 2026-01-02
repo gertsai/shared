@@ -1,15 +1,3 @@
-/**
- * @gerts/core - Graph Store Interfaces (Interface Segregation Principle)
- *
- * Split IGraphStore (~40 methods) into focused, single-responsibility interfaces.
- * Following ISP: clients should not be forced to depend on interfaces they don't use.
- *
- * This enables:
- * - Independent implementation of sub-interfaces
- * - Better testability with focused mocks
- * - Clearer API contracts for consumers
- * - Easier extension without breaking existing code
- */
 // ============================================================================
 // Type Guards
 // ============================================================================

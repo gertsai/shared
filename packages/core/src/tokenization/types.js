@@ -1,16 +1,4 @@
 /**
- * @gerts/core - Tokenization Types
- *
- * Universal tokenization interface for multi-model support.
- * Works with OpenAI, Anthropic, Google, and other LLM providers.
- *
- * Design principles:
- * - Async-first (supports API-based tokenizers)
- * - Provider-aware (different tokenizers for different models)
- * - Cacheable (expensive operations are cached)
- * - Extensible (easy to add new providers)
- */
-/**
  * Provider-specific token multipliers.
  * Based on empirical testing comparing to GPT-4 tokenizer.
  *

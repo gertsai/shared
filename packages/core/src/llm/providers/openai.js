@@ -1,13 +1,3 @@
-/**
- * @gerts/core - OpenAI LLM Provider
- * Phase 21: LLM Abstraction
- *
- * Native OpenAI SDK integration with:
- * - Streaming support
- * - Function/tool calling
- * - Structured outputs (JSON schema)
- * - Token usage tracking
- */
 import { BaseLLM, LLMCallError } from '../base';
 /**
  * OpenAI LLM Provider using native SDK patterns.

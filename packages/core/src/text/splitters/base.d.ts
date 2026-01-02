@@ -27,4 +27,3 @@ export declare abstract class BaseTextSplitter implements ITextSplitter {
     protected mergeSplits(splits: Iterable<string>, separator: string): string[];
     splitDocuments(docs: Document[]): TextNode[];
 }
-//# sourceMappingURL=base.d.ts.map

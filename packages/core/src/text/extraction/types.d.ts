@@ -320,13 +320,6 @@ export declare const ExtractionResultSchema: z.ZodObject<{
         extractorVersion?: string | undefined;
     }>;
 }, "strip", z.ZodTypeAny, {
-    metadata: {
-        processingTimeMs: number;
-        chunkId: string;
-        tokensUsed?: number | undefined;
-        modelUsed?: string | undefined;
-        extractorVersion?: string | undefined;
-    };
     triplets: {
         object: {
             type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
@@ -372,6 +365,13 @@ export declare const ExtractionResultSchema: z.ZodObject<{
             direction?: "forward" | "backward" | "bidirectional" | undefined;
         };
     }[];
+    metadata: {
+        processingTimeMs: number;
+        chunkId: string;
+        tokensUsed?: number | undefined;
+        modelUsed?: string | undefined;
+        extractorVersion?: string | undefined;
+    };
     entities: {
         type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
         id: string;
@@ -390,13 +390,6 @@ export declare const ExtractionResultSchema: z.ZodObject<{
         customType?: string | undefined;
     }[];
 }, {
-    metadata: {
-        processingTimeMs: number;
-        chunkId: string;
-        tokensUsed?: number | undefined;
-        modelUsed?: string | undefined;
-        extractorVersion?: string | undefined;
-    };
     triplets: {
         object: {
             type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
@@ -442,6 +435,13 @@ export declare const ExtractionResultSchema: z.ZodObject<{
             direction?: "forward" | "backward" | "bidirectional" | undefined;
         };
     }[];
+    metadata: {
+        processingTimeMs: number;
+        chunkId: string;
+        tokensUsed?: number | undefined;
+        modelUsed?: string | undefined;
+        extractorVersion?: string | undefined;
+    };
     entities: {
         type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
         id: string;
@@ -462,4 +462,3 @@ export declare const ExtractionResultSchema: z.ZodObject<{
 }>;
 export type ExtractionResult = z.infer<typeof ExtractionResultSchema>;
 export type { Entity, Triplet, Mention, EntityType, Predicate } from './schemas';
-//# sourceMappingURL=types.d.ts.map

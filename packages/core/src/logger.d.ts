@@ -14,4 +14,3 @@ export declare class ConsoleLogger implements Logger {
     warn(message: string, meta?: Record<string, unknown>): void;
     error(message: string | Error, meta?: Record<string, unknown>): void;
 }
-//# sourceMappingURL=logger.d.ts.map

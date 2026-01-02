@@ -8,4 +8,3 @@ export * from './strategy';
 export * from './exact-match';
 export * from './fuzzy-match';
 export * from './embedding-match';
-//# sourceMappingURL=index.d.ts.map

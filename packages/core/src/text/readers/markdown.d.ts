@@ -29,4 +29,3 @@ export declare class MarkdownReader extends FileReader {
      */
     private extractTitle;
 }
-//# sourceMappingURL=markdown.d.ts.map

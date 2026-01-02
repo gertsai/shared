@@ -1,11 +1,4 @@
 /**
- * @gerts/core - Hook Context Classes
- * Phase 19: Hooks & Lifecycle
- *
- * Context objects passed to hooks for LLM and Tool operations.
- * From CrewAI pattern: Mutable contexts with human input support.
- */
-/**
  * Context passed to LLM hooks.
  *
  * From CrewAI pattern: Mutable messages list, human input support.

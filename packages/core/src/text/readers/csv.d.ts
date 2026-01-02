@@ -47,4 +47,3 @@ export declare class CSVReader extends FileReader {
      */
     private getMetadata;
 }
-//# sourceMappingURL=csv.d.ts.map

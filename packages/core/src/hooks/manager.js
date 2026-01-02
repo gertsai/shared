@@ -1,16 +1,3 @@
-/**
- * @gerts/core - Hook Manager
- * Phase 19: Hooks & Lifecycle
- *
- * Global hook registry for LLM and Tool hooks.
- * From CrewAI pattern: Centralized registration with filtering support.
- *
- * Features:
- * - Global hook registry (singleton)
- * - Filter support (agents, tools)
- * - Priority-based execution ordering
- * - Thread-safe registration
- */
 // ============================================================================
 // Hook Manager
 // ============================================================================

@@ -14,13 +14,13 @@ export declare const CitationSchema: z.ZodObject<{
         url: z.ZodOptional<z.ZodString>;
     }, "strip", z.ZodTypeAny, {
         id: string;
-        path?: string | undefined;
         name?: string | undefined;
+        path?: string | undefined;
         url?: string | undefined;
     }, {
         id: string;
-        path?: string | undefined;
         name?: string | undefined;
+        path?: string | undefined;
         url?: string | undefined;
     }>;
     /** Source chunk info */
@@ -67,8 +67,8 @@ export declare const CitationSchema: z.ZodObject<{
     confidence: number;
     sourceDocument: {
         id: string;
-        path?: string | undefined;
         name?: string | undefined;
+        path?: string | undefined;
         url?: string | undefined;
     };
     entity?: {
@@ -87,8 +87,8 @@ export declare const CitationSchema: z.ZodObject<{
     confidence: number;
     sourceDocument: {
         id: string;
-        path?: string | undefined;
         name?: string | undefined;
+        path?: string | undefined;
         url?: string | undefined;
     };
     entity?: {
@@ -98,4 +98,3 @@ export declare const CitationSchema: z.ZodObject<{
     } | undefined;
 }>;
 export type Citation = z.infer<typeof CitationSchema>;
-//# sourceMappingURL=citation.d.ts.map

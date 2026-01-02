@@ -1,12 +1,4 @@
 /**
- * @gerts/core - Unified Retry Logic
- *
- * Provides exponential backoff with jitter for reliable retry operations.
- * Consolidates retry patterns from @gerts/agent and @gerts/scheduler.
- *
- * @module @gerts/core/retry
- */
-/**
  * Check if an error is retryable.
  * Duplicated from errors.ts to avoid circular imports.
  */

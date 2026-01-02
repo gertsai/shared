@@ -1,12 +1,5 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.GraphRAGSessionContext = void 0;
-exports.createSession = createSession;
-exports.defaultSession = defaultSession;
-exports.createSessionFactory = createSessionFactory;
-exports.createSystemSession = createSystemSession;
-const crypto_1 = require("crypto");
-const types_1 = require("./types");
+import { randomUUID } from 'crypto';
+import { UserType } from './types';
 /**
  * Default GraphRAG settings
  */
@@ -53,7 +46,7 @@ const DEFAULT_GRAPHRAG_SETTINGS = {
  * session.$destroy();
  * ```
  */
-class GraphRAGSessionContext {
+export class GraphRAGSessionContext {
     _tenantId;
     _operator;
     _requestMeta;
@@ -72,7 +65,7 @@ class GraphRAGSessionContext {
         this._operator = config.operator;
         this._tenantConfig = config.tenantConfig;
         this._requestMeta = {
-            requestId: config.requestId || (0, crypto_1.randomUUID)(),
+            requestId: config.requestId || randomUUID(),
             traceId: config.traceId,
             clientPlatform: config.clientPlatform,
             clientVersion: config.clientVersion,
@@ -318,12 +311,11 @@ class GraphRAGSessionContext {
         }
     }
 }
-exports.GraphRAGSessionContext = GraphRAGSessionContext;
 // ========== Factory Functions (Orchestra compatibility) ==========
 /**
  * Create a new session context
  */
-function createSession(operatorUuid, operatorType, clientPlatform, clientVersion, tenantId = 'default') {
+export function createSession(operatorUuid, operatorType, clientPlatform, clientVersion, tenantId = 'default') {
     return new GraphRAGSessionContext({
         tenantId,
         operator: { id: operatorUuid, type: operatorType, roles: [] },
@@ -334,18 +326,18 @@ function createSession(operatorUuid, operatorType, clientPlatform, clientVersion
 /**
  * Default session factory (compatible with Orchestra's defaultSession)
  */
-function defaultSession(operatorUuid, operatorType, clientPlatform, clientVersion, tenantId = 'default') {
+export function defaultSession(operatorUuid, operatorType, clientPlatform, clientVersion, tenantId = 'default') {
     return createSession(operatorUuid, operatorType, clientPlatform, clientVersion, tenantId);
 }
 /**
  * Create a default session factory
  */
-function createSessionFactory(clientPlatform, clientVersion, defaultTenantId = 'default') {
+export function createSessionFactory(clientPlatform, clientVersion, defaultTenantId = 'default') {
     return (operatorUuid, operatorType) => createSession(operatorUuid, operatorType, clientPlatform, clientVersion, defaultTenantId);
 }
 /**
  * Create a system session for internal operations
  */
-function createSystemSession(tenantId = 'default', clientPlatform = 'api', clientVersion = 'v1') {
-    return createSession('system', types_1.UserType.SYSTEM, clientPlatform, clientVersion, tenantId);
+export function createSystemSession(tenantId = 'default', clientPlatform = 'api', clientVersion = 'v1') {
+    return createSession('system', UserType.SYSTEM, clientPlatform, clientVersion, tenantId);
 }

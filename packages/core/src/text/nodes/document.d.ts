@@ -92,6 +92,7 @@ export declare const DocumentSchema: z.ZodObject<{
     embedding: z.ZodOptional<z.ZodArray<z.ZodNumber, "many">>;
 }, "strip", z.ZodTypeAny, {
     id: string;
+    text: string;
     metadata: {
         file_path?: string | undefined;
         file_name?: string | undefined;
@@ -109,7 +110,6 @@ export declare const DocumentSchema: z.ZodObject<{
     } & {
         [k: string]: unknown;
     };
-    text: string;
     embedding?: number[] | undefined;
 }, {
     id: string;
@@ -133,4 +133,3 @@ export declare const DocumentSchema: z.ZodObject<{
 }>;
 export type Document = z.infer<typeof DocumentSchema>;
 export declare function createDocument(text: string, metadata?: Partial<DocumentMetadata>): Document;
-//# sourceMappingURL=document.d.ts.map

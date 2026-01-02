@@ -1,11 +1,4 @@
 /**
- * @fileoverview Exact match deduplication strategy for entity deduplication.
- * Provides O(n) exact name matching using normalized keys (type + lowercase name).
- *
- * @module @gerts/core/text/deduplication
- * @since Phase 23
- */
-/**
  * ExactMatchDeduplication - O(n) exact name matching deduplication strategy.
  *
  * This strategy identifies duplicate entities by comparing normalized entity keys.

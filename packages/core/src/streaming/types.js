@@ -1,10 +1,4 @@
 /**
- * @gerts/core - Streaming Interfaces
- *
- * Core streaming abstractions for async operations.
- * Used by Graph RAG, LLM providers, and other async operations.
- */
-/**
  * Default streaming configuration.
  */
 export const DEFAULT_STREAMING_CONFIG = {

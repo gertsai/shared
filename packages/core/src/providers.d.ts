@@ -10,4 +10,3 @@ export interface StorageProvider<T = unknown> {
     get(key: string): Promise<T | null>;
     delete(key: string): Promise<void>;
 }
-//# sourceMappingURL=providers.d.ts.map

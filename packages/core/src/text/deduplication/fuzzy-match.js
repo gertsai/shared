@@ -1,11 +1,4 @@
 /**
- * @fileoverview Fuzzy match deduplication strategy using string similarity algorithms.
- * Implements Jaro-Winkler and Levenshtein distance for entity matching.
- *
- * @module @gerts/core/text/deduplication
- * @since Phase 23
- */
-/**
  * FuzzyMatchDeduplication - String similarity-based entity deduplication.
  *
  * Uses Jaro-Winkler or Levenshtein distance to find similar entity names.

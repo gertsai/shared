@@ -88,4 +88,3 @@ export declare function getAcceptedConnectionTypes(targetType: GertsConnectionTy
  * Get all connection types that can connect to a given source type
  */
 export declare function getCompatibleTargets(sourceType: GertsConnectionType): GertsConnectionType[];
-//# sourceMappingURL=connections.d.ts.map

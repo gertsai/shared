@@ -6,4 +6,3 @@ export * from './csv';
 export * from './json';
 export * from './directory';
 export * from './html';
-//# sourceMappingURL=index.d.ts.map

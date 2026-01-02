@@ -1,17 +1,3 @@
-/**
- * @gerts/core - Hook Executor
- * Phase 19: Hooks & Lifecycle
- *
- * Executes hooks with support for background execution and deep copy.
- * Combines Agno (background + deep copy) and CrewAI (filtering) patterns.
- *
- * Features:
- * - Background execution with queue
- * - Deep copy mechanism for background hooks
- * - Priority-based execution ordering
- * - Error isolation
- * - Parameter filtering based on function signature
- */
 import { RunEvent } from './types';
 import { hookManager } from './manager';
 import { SimpleEventBus } from '../event-bus';

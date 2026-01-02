@@ -1,14 +1,3 @@
-/**
- * @gerts/core - Cached Tokenizer
- *
- * LRU cache wrapper for tokenizers.
- * Caches token counts by text hash to avoid repeated computation.
- *
- * Especially useful for:
- * - API-based tokenizers (Anthropic, Google) - avoids API calls
- * - Repeated text (prompts, templates) - fast lookup
- * - High-frequency counting (memory budgeting) - reduced latency
- */
 import { LRUCache, toCacheKey } from '../../lru-cache.js';
 /**
  * Default cache configuration.
