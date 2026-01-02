@@ -1,13 +1,16 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<testsuites name="vitest tests" tests="4" failures="0" errors="0" time="0.067807083">
-    <testsuite name="__tests__/undiciFetcher.spec.ts" timestamp="2025-09-03T10:52:35.376Z" hostname="MacBook-Pro-explosovebit.local" tests="4" failures="0" errors="0" skipped="0" time="0.067807083">
-        <testcase classname="__tests__/undiciFetcher.spec.ts" name="httpCaller &gt; JSON response" time="0.023120542">
-        </testcase>
-        <testcase classname="__tests__/undiciFetcher.spec.ts" name="httpCaller &gt; text response" time="0.004895875">
-        </testcase>
-        <testcase classname="__tests__/undiciFetcher.spec.ts" name="httpCaller &gt; non-OK status" time="0.0007395">
-        </testcase>
-        <testcase classname="__tests__/undiciFetcher.spec.ts" name="httpCaller &gt; streaming body available" time="0.018960167">
+<testsuites name="vitest tests" tests="1" failures="1" errors="0" time="0">
+    <testsuite name="__tests__/undiciFetcher.spec.ts" timestamp="2025-12-30T21:27:01.634Z" hostname="MacBook-Pro-explosovebit.local" tests="1" failures="1" errors="0" skipped="0" time="0">
+        <testcase classname="__tests__/undiciFetcher.spec.ts" name="__tests__/undiciFetcher.spec.ts" time="0">
+            <failure message="Cannot find module &apos;../dist/cjs/index.js&apos; imported from &apos;/Users/explosovebit/Work/GertsAi/gertsai_codex/packages/fetch/__tests__/undiciFetcher.spec.ts&apos;" type="Error">
+Error: Cannot find module &apos;../dist/cjs/index.js&apos; imported from &apos;/Users/explosovebit/Work/GertsAi/gertsai_codex/packages/fetch/__tests__/undiciFetcher.spec.ts&apos;
+ ❯ __tests__/undiciFetcher.spec.ts:3:31
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: &apos;ERR_MODULE_NOT_FOUND&apos; }
+Caused by: Caused by: Error: Failed to load url ../dist/cjs/index.js (resolved id: ../dist/cjs/index.js) in /Users/explosovebit/Work/GertsAi/gertsai_codex/packages/fetch/__tests__/undiciFetcher.spec.ts. Does the file exist?
+ ❯ loadAndTransform ../../node_modules/.pnpm/vite@5.4.21_@types+node@18.17.9/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:51969:17
+            </failure>
         </testcase>
     </testsuite>
 </testsuites>
