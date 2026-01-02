@@ -26,3 +26,5 @@ export {
 export type { TimeoutOptions, TimeoutController } from './timeout';
 export * from './graph';
 export * from './streaming';
+export * from './session';
+export * from './query';
