@@ -2,12 +2,11 @@
   "name": "@gerts/ws-rpc",
   "version": "0.1.0",
   "description": "WebSocket JSON-RPC 2.0 client with auto-reconnect and subscriptions",
-  "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
     ".": {
-      "import": "./src/index.ts",
+      "default": "./src/index.ts",
       "types": "./src/index.ts"
     }
   },
