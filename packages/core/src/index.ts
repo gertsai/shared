@@ -28,3 +28,9 @@ export * from './graph';
 export * from './streaming';
 export * from './session';
 export * from './query';
+
+// RAG API Standard (RFC-036)
+// Exported as namespace to avoid name collisions with existing types
+// Usage: import { rag } from '@gerts/core'; const response: rag.RAGResponse<{}> = ...
+// Or: import { RAGResponse } from '@gerts/core/rag';
+export * as rag from './rag';

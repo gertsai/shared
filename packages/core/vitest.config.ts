@@ -1,14 +1,12 @@
 import { defineConfig } from 'vitest/config';
-import tsconfigPaths from 'vite-tsconfig-paths';
+import * as path from 'path';
 
 export default defineConfig({
-  plugins: [
-    tsconfigPaths({
-      projects: ['../../tsconfig.base.json'],
-      ignoreConfigErrors: true,
-      loose: true,
-    }),
-  ],
+  resolve: {
+    alias: {
+      '@gerts/core': path.resolve(__dirname, 'src'),
+    },
+  },
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts', 'src/**/*.spec.ts'],
