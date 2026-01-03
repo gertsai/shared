@@ -1,3 +1,4 @@
+"use strict";
 /**
  * @gerts/core - LLM Model Registry
  * Phase 21: LLM Abstraction
@@ -10,31 +11,50 @@
  *
  * @see https://github.com/paradite/llm-info
  */
-import { ModelInfoMap, AllModels, getModelsByProvider as getModelsByProviderAsync, } from 'llm-info';
-export { ModelInfoMap, AllModels };
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.DEFAULT_OUTPUT_TOKEN_LIMIT = exports.DEFAULT_CONTEXT_WINDOW_SIZE = exports.CONTEXT_WINDOW_USAGE_RATIO = exports.AllModels = exports.ModelInfoMap = void 0;
+exports.getModelInfo = getModelInfo;
+exports.getContextWindowSize = getContextWindowSize;
+exports.getOutputTokenLimit = getOutputTokenLimit;
+exports.getModelPricing = getModelPricing;
+exports.calculateCost = calculateCost;
+exports.inferProvider = inferProvider;
+exports.supportsVision = supportsVision;
+exports.supportsReasoning = supportsReasoning;
+exports.isRecommendedForCoding = isRecommendedForCoding;
+exports.isLegacyModel = isLegacyModel;
+exports.getAllModelNames = getAllModelNames;
+exports.getModelsForProvider = getModelsForProvider;
+exports.getModelsForProviderAsync = getModelsForProviderAsync;
+exports.getModelsByCapability = getModelsByCapability;
+exports.getCheapestModel = getCheapestModel;
+exports.getMostCapableModel = getMostCapableModel;
+const llm_info_1 = require("llm-info");
+Object.defineProperty(exports, "ModelInfoMap", { enumerable: true, get: function () { return llm_info_1.ModelInfoMap; } });
+Object.defineProperty(exports, "AllModels", { enumerable: true, get: function () { return llm_info_1.AllModels; } });
 // Note: getModelsByProvider from llm-info is async, use our sync version below
 /** Default context window usage ratio (85% to avoid cutoff) */
-export const CONTEXT_WINDOW_USAGE_RATIO = 0.85;
+exports.CONTEXT_WINDOW_USAGE_RATIO = 0.85;
 /** Default context window size for unknown models */
-export const DEFAULT_CONTEXT_WINDOW_SIZE = 8192;
+exports.DEFAULT_CONTEXT_WINDOW_SIZE = 8192;
 /** Default output token limit */
-export const DEFAULT_OUTPUT_TOKEN_LIMIT = 4096;
+exports.DEFAULT_OUTPUT_TOKEN_LIMIT = 4096;
 /**
  * Get model info from the registry.
  *
  * @param model - Model identifier (e.g., 'gpt-4o', 'claude-3-5-sonnet-20241022')
  * @returns ModelInfo or undefined if not found
  */
-export function getModelInfo(model) {
+function getModelInfo(model) {
     // Direct lookup
-    if (model in ModelInfoMap) {
-        const info = ModelInfoMap[model];
+    if (model in llm_info_1.ModelInfoMap) {
+        const info = llm_info_1.ModelInfoMap[model];
         if (info) {
             return { ...info, id: model };
         }
     }
     // Try to find by prefix matching for versioned models
-    for (const [key, info] of Object.entries(ModelInfoMap)) {
+    for (const [key, info] of Object.entries(llm_info_1.ModelInfoMap)) {
         if (model.startsWith(key) || key.startsWith(model)) {
             return { ...info, id: key };
         }
@@ -48,12 +68,12 @@ export function getModelInfo(model) {
  * @param model - Model identifier
  * @returns Usable context window size
  */
-export function getContextWindowSize(model) {
+function getContextWindowSize(model) {
     const info = getModelInfo(model);
     if (info) {
-        return Math.floor(info.contextWindowTokenLimit * CONTEXT_WINDOW_USAGE_RATIO);
+        return Math.floor(info.contextWindowTokenLimit * exports.CONTEXT_WINDOW_USAGE_RATIO);
     }
-    return Math.floor(DEFAULT_CONTEXT_WINDOW_SIZE * CONTEXT_WINDOW_USAGE_RATIO);
+    return Math.floor(exports.DEFAULT_CONTEXT_WINDOW_SIZE * exports.CONTEXT_WINDOW_USAGE_RATIO);
 }
 /**
  * Get output token limit for a model.
@@ -61,9 +81,9 @@ export function getContextWindowSize(model) {
  * @param model - Model identifier
  * @returns Maximum output tokens
  */
-export function getOutputTokenLimit(model) {
+function getOutputTokenLimit(model) {
     const info = getModelInfo(model);
-    return info?.outputTokenLimit ?? DEFAULT_OUTPUT_TOKEN_LIMIT;
+    return info?.outputTokenLimit ?? exports.DEFAULT_OUTPUT_TOKEN_LIMIT;
 }
 /**
  * Get pricing for a model.
@@ -71,7 +91,7 @@ export function getOutputTokenLimit(model) {
  * @param model - Model identifier
  * @returns Pricing per million tokens or undefined
  */
-export function getModelPricing(model) {
+function getModelPricing(model) {
     const info = getModelInfo(model);
     if (info && info.pricePerMillionInputTokens !== null && info.pricePerMillionOutputTokens !== null) {
         return {
@@ -89,7 +109,7 @@ export function getModelPricing(model) {
  * @param outputTokens - Number of output tokens
  * @returns Cost in USD or undefined if pricing not available
  */
-export function calculateCost(model, inputTokens, outputTokens) {
+function calculateCost(model, inputTokens, outputTokens) {
     const pricing = getModelPricing(model);
     if (!pricing)
         return undefined;
@@ -103,7 +123,7 @@ export function calculateCost(model, inputTokens, outputTokens) {
  * @param model - Model identifier
  * @returns Provider name or 'openai' as default
  */
-export function inferProvider(model) {
+function inferProvider(model) {
     const info = getModelInfo(model);
     if (info) {
         return info.provider.toLowerCase();
@@ -133,7 +153,7 @@ export function inferProvider(model) {
  * @param model - Model identifier
  * @returns true if model supports vision
  */
-export function supportsVision(model) {
+function supportsVision(model) {
     const info = getModelInfo(model);
     return info?.supportsImageInput ?? false;
 }
@@ -143,7 +163,7 @@ export function supportsVision(model) {
  * @param model - Model identifier
  * @returns true if model supports reasoning
  */
-export function supportsReasoning(model) {
+function supportsReasoning(model) {
     const info = getModelInfo(model);
     return info?.reasoning ?? false;
 }
@@ -153,7 +173,7 @@ export function supportsReasoning(model) {
  * @param model - Model identifier
  * @returns true if recommended for coding
  */
-export function isRecommendedForCoding(model) {
+function isRecommendedForCoding(model) {
     const info = getModelInfo(model);
     return info?.recommendedForCoding ?? false;
 }
@@ -163,7 +183,7 @@ export function isRecommendedForCoding(model) {
  * @param model - Model identifier
  * @returns true if model is legacy
  */
-export function isLegacyModel(model) {
+function isLegacyModel(model) {
     const info = getModelInfo(model);
     return info?.legacy ?? false;
 }
@@ -172,8 +192,8 @@ export function isLegacyModel(model) {
  *
  * @returns Array of model identifiers
  */
-export function getAllModelNames() {
-    return AllModels;
+function getAllModelNames() {
+    return llm_info_1.AllModels;
 }
 /** Provider name mapping (case-insensitive) */
 const PROVIDER_ALIASES = {
@@ -193,11 +213,11 @@ const PROVIDER_ALIASES = {
  * @param provider - Provider name (e.g., 'OpenAI', 'Anthropic', 'openai', 'anthropic')
  * @returns Array of model identifiers
  */
-export function getModelsForProvider(provider) {
+function getModelsForProvider(provider) {
     // Normalize provider name
     const normalizedProvider = PROVIDER_ALIASES[provider.toLowerCase()] ?? provider;
-    return AllModels.filter((model) => {
-        const info = ModelInfoMap[model];
+    return llm_info_1.AllModels.filter((model) => {
+        const info = llm_info_1.ModelInfoMap[model];
         return info?.provider === normalizedProvider;
     });
 }
@@ -208,8 +228,8 @@ export function getModelsForProvider(provider) {
  * @param provider - Provider type from llm-info
  * @returns Promise with array of ModelInfo
  */
-export async function getModelsForProviderAsync(provider) {
-    return getModelsByProviderAsync(provider);
+async function getModelsForProviderAsync(provider) {
+    return (0, llm_info_1.getModelsByProvider)(provider);
 }
 /**
  * Get models with specific capability.
@@ -217,9 +237,9 @@ export async function getModelsForProviderAsync(provider) {
  * @param capability - Capability to filter by
  * @returns Array of model identifiers
  */
-export function getModelsByCapability(capability) {
-    return AllModels.filter((model) => {
-        const info = ModelInfoMap[model];
+function getModelsByCapability(capability) {
+    return llm_info_1.AllModels.filter((model) => {
+        const info = llm_info_1.ModelInfoMap[model];
         switch (capability) {
             case 'vision':
                 return info?.supportsImageInput;
@@ -240,14 +260,14 @@ export function getModelsByCapability(capability) {
  * @param provider - Provider name
  * @returns Cheapest model or undefined
  */
-export function getCheapestModel(provider) {
+function getCheapestModel(provider) {
     const models = getModelsForProvider(provider);
     if (models.length === 0)
         return undefined;
     let cheapest;
     let lowestCost = Infinity;
     for (const model of models) {
-        const info = ModelInfoMap[model];
+        const info = llm_info_1.ModelInfoMap[model];
         if (!info || info.legacy)
             continue;
         const inputPrice = info.pricePerMillionInputTokens ?? 0;
@@ -267,14 +287,14 @@ export function getCheapestModel(provider) {
  * @param provider - Provider name
  * @returns Most capable model or undefined
  */
-export function getMostCapableModel(provider) {
+function getMostCapableModel(provider) {
     const models = getModelsForProvider(provider);
     if (models.length === 0)
         return undefined;
     let best;
     let bestScore = -1;
     for (const model of models) {
-        const info = ModelInfoMap[model];
+        const info = llm_info_1.ModelInfoMap[model];
         if (!info || info.legacy)
             continue;
         let score = 0;
@@ -295,3 +315,4 @@ export function getMostCapableModel(provider) {
     }
     return best;
 }
+//# sourceMappingURL=model-registry.js.map

@@ -1,8 +1,14 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.AuthorizationError = exports.AuthenticationError = exports.RateLimitError = exports.ConnectionError = exports.TimeoutErrorGerts = exports.GertsTimeoutError = exports.ValidationError = exports.NotFoundError = exports.GertsError = void 0;
+exports.isGertsError = isGertsError;
+exports.isRetryableError = isRetryableError;
+exports.wrapError = wrapError;
 /**
  * Base error class for all gerts.ai errors.
  * Implements RetryableError interface for unified error handling.
  */
-export class GertsError extends Error {
+class GertsError extends Error {
     code;
     severity;
     details;
@@ -50,24 +56,27 @@ export class GertsError extends Error {
         };
     }
 }
-export class NotFoundError extends GertsError {
+exports.GertsError = GertsError;
+class NotFoundError extends GertsError {
     constructor(message, details) {
         super(message, { code: 'NOT_FOUND', details, retryable: false });
         this.name = 'NotFoundError';
     }
 }
-export class ValidationError extends GertsError {
+exports.NotFoundError = NotFoundError;
+class ValidationError extends GertsError {
     constructor(message, details) {
         super(message, { code: 'VALIDATION_FAILED', details, severity: 'warn', retryable: false });
         this.name = 'ValidationError';
     }
 }
+exports.ValidationError = ValidationError;
 /**
  * Timeout error - transient, retryable.
  * Use GertsTimeoutError when you need full GertsError interface.
  * Use TimeoutError from './timeout' for lightweight timeout utilities.
  */
-export class GertsTimeoutError extends GertsError {
+class GertsTimeoutError extends GertsError {
     timeoutMs;
     constructor(message, timeoutMs, details) {
         super(message, { code: 'TIMEOUT', details: { ...details, timeoutMs }, retryable: true });
@@ -75,23 +84,22 @@ export class GertsTimeoutError extends GertsError {
         this.timeoutMs = timeoutMs;
     }
 }
-/**
- * @deprecated Use GertsTimeoutError for GertsError interface, or TimeoutError from './timeout'.
- */
-export { GertsTimeoutError as TimeoutErrorGerts };
+exports.GertsTimeoutError = GertsTimeoutError;
+exports.TimeoutErrorGerts = GertsTimeoutError;
 /**
  * Connection error - transient, retryable.
  */
-export class ConnectionError extends GertsError {
+class ConnectionError extends GertsError {
     constructor(message, details) {
         super(message, { code: 'CONNECTION_FAILED', details, retryable: true });
         this.name = 'ConnectionError';
     }
 }
+exports.ConnectionError = ConnectionError;
 /**
  * Rate limit error - retryable with delay.
  */
-export class RateLimitError extends GertsError {
+class RateLimitError extends GertsError {
     retryAfterMs;
     constructor(message, retryAfterMs, details) {
         super(message, {
@@ -106,37 +114,40 @@ export class RateLimitError extends GertsError {
         return this.retryAfterMs ?? 1000;
     }
 }
+exports.RateLimitError = RateLimitError;
 /**
  * Authentication error - permanent, not retryable.
  */
-export class AuthenticationError extends GertsError {
+class AuthenticationError extends GertsError {
     constructor(message, details) {
         super(message, { code: 'AUTHENTICATION_FAILED', details, retryable: false });
         this.name = 'AuthenticationError';
     }
 }
+exports.AuthenticationError = AuthenticationError;
 /**
  * Authorization error - permanent, not retryable.
  */
-export class AuthorizationError extends GertsError {
+class AuthorizationError extends GertsError {
     constructor(message, details) {
         super(message, { code: 'AUTHORIZATION_FAILED', details, retryable: false });
         this.name = 'AuthorizationError';
     }
 }
+exports.AuthorizationError = AuthorizationError;
 // =============================================================================
 // Type Guards and Utilities
 // =============================================================================
 /**
  * Check if an error is a GertsError.
  */
-export function isGertsError(error) {
+function isGertsError(error) {
     return error instanceof GertsError;
 }
 /**
  * Check if an error is retryable.
  */
-export function isRetryableError(error) {
+function isRetryableError(error) {
     if (error instanceof GertsError) {
         return error.isRetryable();
     }
@@ -157,7 +168,7 @@ export function isRetryableError(error) {
 /**
  * Wrap an unknown error in a GertsError.
  */
-export function wrapError(error, code = 'UNKNOWN_ERROR') {
+function wrapError(error, code = 'UNKNOWN_ERROR') {
     if (error instanceof GertsError) {
         return error;
     }
@@ -170,3 +181,4 @@ export function wrapError(error, code = 'UNKNOWN_ERROR') {
     }
     return new GertsError(String(error), { code });
 }
+//# sourceMappingURL=errors.js.map

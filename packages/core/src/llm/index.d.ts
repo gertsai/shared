@@ -18,3 +18,4 @@ export { AnthropicProvider, type AnthropicConfig, type AnthropicThinkingConfig }
 export { GeminiProvider, type GeminiConfig } from './providers/gemini';
 export { ModelRouter, type RouterConfig, type ProviderConfig, getDefaultRouter, createLLM, createLLMWithFallback, } from './routing';
 export { type ModelInfo, type Model, type Provider, ModelInfoMap, AllModels, getModelInfo, getContextWindowSize, getOutputTokenLimit, getModelPricing, calculateCost, inferProvider, supportsVision, supportsReasoning, isRecommendedForCoding, isLegacyModel, getAllModelNames, getModelsForProvider, getModelsForProviderAsync, getModelsByCapability, getCheapestModel, getMostCapableModel, CONTEXT_WINDOW_USAGE_RATIO, DEFAULT_CONTEXT_WINDOW_SIZE, DEFAULT_OUTPUT_TOKEN_LIMIT, } from './model-registry';
+//# sourceMappingURL=index.d.ts.map

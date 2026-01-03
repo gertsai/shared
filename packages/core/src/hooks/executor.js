@@ -1,6 +1,29 @@
-import { RunEvent } from './types';
-import { hookManager } from './manager';
-import { SimpleEventBus } from '../event-bus';
+"use strict";
+/**
+ * @gerts/core - Hook Executor
+ * Phase 19: Hooks & Lifecycle
+ *
+ * Executes hooks with support for background execution and deep copy.
+ * Combines Agno (background + deep copy) and CrewAI (filtering) patterns.
+ *
+ * Features:
+ * - Background execution with queue
+ * - Deep copy mechanism for background hooks
+ * - Priority-based execution ordering
+ * - Error isolation
+ * - Parameter filtering based on function signature
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.hookExecutor = exports.HookExecutor = void 0;
+exports.getHookMetadata = getHookMetadata;
+exports.setHookMetadata = setHookMetadata;
+exports.shouldRunInBackground = shouldRunInBackground;
+exports.getHookPriority = getHookPriority;
+exports.getHookName = getHookName;
+exports.copyArgsForBackground = copyArgsForBackground;
+const types_1 = require("./types");
+const manager_1 = require("./manager");
+const event_bus_1 = require("../event-bus");
 // ============================================================================
 // Hook Metadata Helpers
 // ============================================================================
@@ -9,13 +32,13 @@ const HOOK_METADATA_KEY = Symbol('gertsHookMetadata');
 /**
  * Get hook metadata from a function.
  */
-export function getHookMetadata(hook) {
+function getHookMetadata(hook) {
     return hook[HOOK_METADATA_KEY];
 }
 /**
  * Set hook metadata on a function.
  */
-export function setHookMetadata(hook, metadata) {
+function setHookMetadata(hook, metadata) {
     Object.defineProperty(hook, HOOK_METADATA_KEY, {
         value: metadata,
         writable: false,
@@ -25,19 +48,19 @@ export function setHookMetadata(hook, metadata) {
 /**
  * Check if a hook should run in background.
  */
-export function shouldRunInBackground(hook) {
+function shouldRunInBackground(hook) {
     return getHookMetadata(hook)?.runInBackground === true;
 }
 /**
  * Get hook priority (for execution ordering).
  */
-export function getHookPriority(hook) {
+function getHookPriority(hook) {
     return getHookMetadata(hook)?.priority ?? 0;
 }
 /**
  * Get hook name.
  */
-export function getHookName(hook) {
+function getHookName(hook) {
     return getHookMetadata(hook)?.name ?? hook.name ?? 'anonymous';
 }
 // ============================================================================
@@ -66,7 +89,7 @@ const COPY_KEYS = new Set([
  * const copied = copyArgsForBackground(params);
  * backgroundQueue.add(() => hook(copied));
  */
-export function copyArgsForBackground(args) {
+function copyArgsForBackground(args) {
     const copied = {};
     for (const [key, value] of Object.entries(args)) {
         if (COPY_KEYS.has(key) && value != null) {
@@ -191,7 +214,7 @@ class BackgroundQueue {
  *   false
  * );
  */
-export class HookExecutor {
+class HookExecutor {
     backgroundQueue;
     eventBus;
     constructor(config) {
@@ -199,7 +222,7 @@ export class HookExecutor {
             concurrency: config?.backgroundConcurrency ?? 10,
             timeout: config?.backgroundTimeout ?? 30000,
         });
-        this.eventBus = new SimpleEventBus();
+        this.eventBus = new event_bus_1.SimpleEventBus();
     }
     /**
      * Set event bus for hook events.
@@ -226,7 +249,7 @@ export class HookExecutor {
             const shouldRunInBg = shouldRunInBackground(hook) || runInBackground;
             const hookName = getHookName(hook);
             // Emit start event
-            this.emitHookEvent(RunEvent.PRE_HOOK_STARTED, hookName, 'pre', shouldRunInBg);
+            this.emitHookEvent(types_1.RunEvent.PRE_HOOK_STARTED, hookName, 'pre', shouldRunInBg);
             if (shouldRunInBg) {
                 // Deep copy for background execution
                 const copied = copyArgsForBackground(params);
@@ -234,10 +257,10 @@ export class HookExecutor {
                     const startTime = Date.now();
                     try {
                         await hook(copied);
-                        this.emitHookEvent(RunEvent.PRE_HOOK_COMPLETED, hookName, 'pre', true, Date.now() - startTime);
+                        this.emitHookEvent(types_1.RunEvent.PRE_HOOK_COMPLETED, hookName, 'pre', true, Date.now() - startTime);
                     }
                     catch (error) {
-                        this.emitHookEvent(RunEvent.PRE_HOOK_ERROR, hookName, 'pre', true, Date.now() - startTime, String(error));
+                        this.emitHookEvent(types_1.RunEvent.PRE_HOOK_ERROR, hookName, 'pre', true, Date.now() - startTime, String(error));
                     }
                 });
             }
@@ -246,10 +269,10 @@ export class HookExecutor {
                 const startTime = Date.now();
                 try {
                     await hook(params);
-                    this.emitHookEvent(RunEvent.PRE_HOOK_COMPLETED, hookName, 'pre', false, Date.now() - startTime);
+                    this.emitHookEvent(types_1.RunEvent.PRE_HOOK_COMPLETED, hookName, 'pre', false, Date.now() - startTime);
                 }
                 catch (error) {
-                    this.emitHookEvent(RunEvent.PRE_HOOK_ERROR, hookName, 'pre', false, Date.now() - startTime, String(error));
+                    this.emitHookEvent(types_1.RunEvent.PRE_HOOK_ERROR, hookName, 'pre', false, Date.now() - startTime, String(error));
                     throw error; // Pre-hooks can block
                 }
             }
@@ -270,17 +293,17 @@ export class HookExecutor {
         for (const hook of sorted) {
             const shouldRunInBg = shouldRunInBackground(hook) || runInBackground;
             const hookName = getHookName(hook);
-            this.emitHookEvent(RunEvent.POST_HOOK_STARTED, hookName, 'post', shouldRunInBg);
+            this.emitHookEvent(types_1.RunEvent.POST_HOOK_STARTED, hookName, 'post', shouldRunInBg);
             if (shouldRunInBg) {
                 const copied = copyArgsForBackground(params);
                 this.backgroundQueue.add(async () => {
                     const startTime = Date.now();
                     try {
                         await hook(copied);
-                        this.emitHookEvent(RunEvent.POST_HOOK_COMPLETED, hookName, 'post', true, Date.now() - startTime);
+                        this.emitHookEvent(types_1.RunEvent.POST_HOOK_COMPLETED, hookName, 'post', true, Date.now() - startTime);
                     }
                     catch (error) {
-                        this.emitHookEvent(RunEvent.POST_HOOK_ERROR, hookName, 'post', true, Date.now() - startTime, String(error));
+                        this.emitHookEvent(types_1.RunEvent.POST_HOOK_ERROR, hookName, 'post', true, Date.now() - startTime, String(error));
                     }
                 });
             }
@@ -288,10 +311,10 @@ export class HookExecutor {
                 const startTime = Date.now();
                 try {
                     await hook(params);
-                    this.emitHookEvent(RunEvent.POST_HOOK_COMPLETED, hookName, 'post', false, Date.now() - startTime);
+                    this.emitHookEvent(types_1.RunEvent.POST_HOOK_COMPLETED, hookName, 'post', false, Date.now() - startTime);
                 }
                 catch (error) {
-                    this.emitHookEvent(RunEvent.POST_HOOK_ERROR, hookName, 'post', false, Date.now() - startTime, String(error));
+                    this.emitHookEvent(types_1.RunEvent.POST_HOOK_ERROR, hookName, 'post', false, Date.now() - startTime, String(error));
                     // Post-hooks log errors but don't block
                     console.error(`Post-hook ${hookName} failed:`, error);
                 }
@@ -308,7 +331,7 @@ export class HookExecutor {
      * @returns false if any hook blocks execution, null otherwise
      */
     async executeBeforeLLMHooks(context) {
-        const hooks = hookManager.getBeforeLLMHooks({
+        const hooks = manager_1.hookManager.getBeforeLLMHooks({
             agent: context.agent,
         });
         for (const hook of hooks) {
@@ -332,7 +355,7 @@ export class HookExecutor {
      * @returns Modified response or null
      */
     async executeAfterLLMHooks(context) {
-        const hooks = hookManager.getAfterLLMHooks({
+        const hooks = manager_1.hookManager.getAfterLLMHooks({
             agent: context.agent,
         });
         let modifiedResponse = null;
@@ -361,7 +384,7 @@ export class HookExecutor {
      * @returns false if any hook blocks execution
      */
     async executeBeforeToolHooks(context) {
-        const hooks = hookManager.getBeforeToolHooks({
+        const hooks = manager_1.hookManager.getBeforeToolHooks({
             toolName: context.toolName,
             agent: context.agent,
         });
@@ -386,7 +409,7 @@ export class HookExecutor {
      * @returns Modified result or null
      */
     async executeAfterToolHooks(context) {
-        const hooks = hookManager.getAfterToolHooks({
+        const hooks = manager_1.hookManager.getAfterToolHooks({
             toolName: context.toolName,
             agent: context.agent,
         });
@@ -533,10 +556,12 @@ export class HookExecutor {
         this.eventBus.emit(eventType, event);
     }
 }
+exports.HookExecutor = HookExecutor;
 // ============================================================================
 // Default Executor
 // ============================================================================
 /**
  * Default hook executor instance.
  */
-export const hookExecutor = new HookExecutor();
+exports.hookExecutor = new HookExecutor();
+//# sourceMappingURL=executor.js.map

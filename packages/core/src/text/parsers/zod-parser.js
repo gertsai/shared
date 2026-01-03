@@ -1,4 +1,7 @@
-import { z, ZodError } from 'zod';
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ZodOutputParser = void 0;
+const zod_1 = require("zod");
 /**
  * ZodOutputParser - parse and validate LLM output.
  * From LangChain structured output patterns.
@@ -20,7 +23,7 @@ import { z, ZodError } from 'zod';
  * const result = await parser.parse(llmOutput);
  * ```
  */
-export class ZodOutputParser {
+class ZodOutputParser {
     schema;
     options;
     constructor(schema, options = {}) {
@@ -53,7 +56,7 @@ export class ZodOutputParser {
                     throw new Error(`JSON parsing error: ${error.message}. Fix attempt also failed: ${fixError instanceof Error ? fixError.message : String(fixError)}`);
                 }
             }
-            if (error instanceof ZodError) {
+            if (error instanceof zod_1.ZodError) {
                 throw new Error(`Validation error: ${error.errors.map(e => e.message).join(', ')}`);
             }
             throw error;
@@ -127,7 +130,7 @@ export class ZodOutputParser {
      */
     getSchemaDescription() {
         // Simplified schema description
-        if (this.schema instanceof z.ZodObject) {
+        if (this.schema instanceof zod_1.z.ZodObject) {
             const shape = this.schema.shape;
             const description = {};
             for (const [key, value] of Object.entries(shape)) {
@@ -135,7 +138,7 @@ export class ZodOutputParser {
             }
             return description;
         }
-        if (this.schema instanceof z.ZodArray) {
+        if (this.schema instanceof zod_1.z.ZodArray) {
             return { type: 'array', items: this.describeZodType(this.schema.element) };
         }
         return this.describeZodType(this.schema);
@@ -148,22 +151,24 @@ export class ZodOutputParser {
      * @private
      */
     describeZodType(schema) {
-        if (schema instanceof z.ZodString)
+        if (schema instanceof zod_1.z.ZodString)
             return 'string';
-        if (schema instanceof z.ZodNumber)
+        if (schema instanceof zod_1.z.ZodNumber)
             return 'number';
-        if (schema instanceof z.ZodBoolean)
+        if (schema instanceof zod_1.z.ZodBoolean)
             return 'boolean';
-        if (schema instanceof z.ZodArray)
+        if (schema instanceof zod_1.z.ZodArray)
             return ['array'];
-        if (schema instanceof z.ZodObject)
+        if (schema instanceof zod_1.z.ZodObject)
             return 'object';
-        if (schema instanceof z.ZodEnum)
+        if (schema instanceof zod_1.z.ZodEnum)
             return schema.options;
-        if (schema instanceof z.ZodOptional) {
+        if (schema instanceof zod_1.z.ZodOptional) {
             const innerType = this.describeZodType(schema.unwrap());
             return { type: innerType, optional: true };
         }
         return 'unknown';
     }
 }
+exports.ZodOutputParser = ZodOutputParser;
+//# sourceMappingURL=zod-parser.js.map

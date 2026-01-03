@@ -1,3 +1,46 @@
+"use strict";
+/**
+ * @gerts/core - Hook Context Classes
+ * Phase 19: Hooks & Lifecycle
+ *
+ * Context objects passed to hooks for LLM and Tool operations.
+ * From CrewAI pattern: Mutable contexts with human input support.
+ */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.HookContextFactory = exports.ToolCallContext = exports.LLMCallContext = void 0;
 /**
  * Context passed to LLM hooks.
  *
@@ -16,7 +59,7 @@
  * // Request human input
  * const approval = await context.requestHumanInput('Continue?');
  */
-export class LLMCallContext {
+class LLMCallContext {
     /** Executor reference */
     executor;
     /** Messages to send to LLM (mutable - modify in-place) */
@@ -78,7 +121,7 @@ export class LLMCallContext {
         // Default implementation using readline (Node.js environment)
         // In browser or other environments, this should be overridden
         if (typeof process !== 'undefined' && process.stdin && process.stdout) {
-            const readline = await import('readline');
+            const readline = await Promise.resolve().then(() => __importStar(require('readline')));
             const rl = readline.createInterface({
                 input: process.stdin,
                 output: process.stdout,
@@ -114,6 +157,7 @@ export class LLMCallContext {
         });
     }
 }
+exports.LLMCallContext = LLMCallContext;
 /**
  * Context passed to tool hooks.
  *
@@ -132,7 +176,7 @@ export class LLMCallContext {
  * // Request approval
  * const approval = await context.requestHumanInput('Execute search?');
  */
-export class ToolCallContext {
+class ToolCallContext {
     /** Tool name */
     toolName;
     /** Tool input arguments (mutable - modify in-place) */
@@ -189,7 +233,7 @@ export class ToolCallContext {
         }
         // Default implementation using readline (Node.js environment)
         if (typeof process !== 'undefined' && process.stdin && process.stdout) {
-            const readline = await import('readline');
+            const readline = await Promise.resolve().then(() => __importStar(require('readline')));
             const rl = readline.createInterface({
                 input: process.stdin,
                 output: process.stdout,
@@ -223,13 +267,14 @@ export class ToolCallContext {
         });
     }
 }
+exports.ToolCallContext = ToolCallContext;
 // ============================================================================
 // Context Factory
 // ============================================================================
 /**
  * Factory for creating hook contexts.
  */
-export const HookContextFactory = {
+exports.HookContextFactory = {
     /**
      * Create LLM call context.
      */
@@ -243,3 +288,4 @@ export const HookContextFactory = {
         return new ToolCallContext(options);
     },
 };
+//# sourceMappingURL=context.js.map

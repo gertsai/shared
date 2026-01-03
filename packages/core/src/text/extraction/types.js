@@ -1,25 +1,29 @@
-import { z } from 'zod';
-import { EntitySchema, TripletSchema } from './schemas';
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ExtractionResultSchema = void 0;
+const zod_1 = require("zod");
+const schemas_1 = require("./schemas");
 /**
  * ExtractionResult - output of entity extraction.
  * Contains entities, relationships, and processing metadata.
  */
-export const ExtractionResultSchema = z.object({
+exports.ExtractionResultSchema = zod_1.z.object({
     /** Extracted entities */
-    entities: z.array(EntitySchema),
+    entities: zod_1.z.array(schemas_1.EntitySchema),
     /** Extracted triplets (relationships) */
-    triplets: z.array(TripletSchema),
+    triplets: zod_1.z.array(schemas_1.TripletSchema),
     /** Processing metadata */
-    metadata: z.object({
+    metadata: zod_1.z.object({
         /** Time to process (ms) */
-        processingTimeMs: z.number(),
+        processingTimeMs: zod_1.z.number(),
         /** Tokens used (if LLM-based) */
-        tokensUsed: z.number().optional(),
+        tokensUsed: zod_1.z.number().optional(),
         /** Model used (if LLM-based) */
-        modelUsed: z.string().optional(),
+        modelUsed: zod_1.z.string().optional(),
         /** Source chunk ID */
-        chunkId: z.string(),
+        chunkId: zod_1.z.string(),
         /** Extractor version */
-        extractorVersion: z.string().optional(),
+        extractorVersion: zod_1.z.string().optional(),
     }),
 });
+//# sourceMappingURL=types.js.map

@@ -1,4 +1,8 @@
-export const LANGUAGE_SEPARATORS = {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.LANGUAGE_SEPARATORS = void 0;
+exports.getSeparatorsForLanguage = getSeparatorsForLanguage;
+exports.LANGUAGE_SEPARATORS = {
     en: ['\n\n', '\n', ' ', ''],
     ru: ['\n\n', '\n', ' ', ''],
     de: ['\n\n', '\n', ' ', ''],
@@ -30,7 +34,8 @@ const DEFAULT_LANGUAGE = 'en';
 function normalizeLanguage(lang) {
     return lang.toLowerCase().split(/[-_]/)[0] ?? DEFAULT_LANGUAGE;
 }
-export function getSeparatorsForLanguage(lang) {
+function getSeparatorsForLanguage(lang) {
     const key = normalizeLanguage(lang);
-    return LANGUAGE_SEPARATORS[key] ?? LANGUAGE_SEPARATORS[DEFAULT_LANGUAGE];
+    return exports.LANGUAGE_SEPARATORS[key] ?? exports.LANGUAGE_SEPARATORS[DEFAULT_LANGUAGE];
 }
+//# sourceMappingURL=language-separators.js.map

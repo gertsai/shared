@@ -75,12 +75,12 @@ export declare const EntitySchema: z.ZodObject<{
     /** Optional embedding vector for semantic deduplication */
     embedding: z.ZodOptional<z.ZodArray<z.ZodNumber, "many">>;
 }, "strip", z.ZodTypeAny, {
-    type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
+    type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
     id: string;
     name: string;
     confidence: number;
-    aliases: string[];
     properties: Record<string, unknown>;
+    aliases: string[];
     sourceChunkId: string;
     mentions: {
         text: string;
@@ -88,10 +88,10 @@ export declare const EntitySchema: z.ZodObject<{
         endIndex: number;
         confidence?: number | undefined;
     }[];
-    embedding?: number[] | undefined;
     customType?: string | undefined;
+    embedding?: number[] | undefined;
 }, {
-    type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
+    type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
     id: string;
     name: string;
     confidence: number;
@@ -102,10 +102,10 @@ export declare const EntitySchema: z.ZodObject<{
         endIndex: number;
         confidence?: number | undefined;
     }[];
-    embedding?: number[] | undefined;
     customType?: string | undefined;
-    aliases?: string[] | undefined;
+    embedding?: number[] | undefined;
     properties?: Record<string, unknown> | undefined;
+    aliases?: string[] | undefined;
 }>;
 export type Entity = z.infer<typeof EntitySchema>;
 /**
@@ -184,12 +184,12 @@ export declare const TripletSchema: z.ZodObject<{
         /** Optional embedding vector for semantic deduplication */
         embedding: z.ZodOptional<z.ZodArray<z.ZodNumber, "many">>;
     }, "strip", z.ZodTypeAny, {
-        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
+        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
         id: string;
         name: string;
         confidence: number;
-        aliases: string[];
         properties: Record<string, unknown>;
+        aliases: string[];
         sourceChunkId: string;
         mentions: {
             text: string;
@@ -197,10 +197,10 @@ export declare const TripletSchema: z.ZodObject<{
             endIndex: number;
             confidence?: number | undefined;
         }[];
-        embedding?: number[] | undefined;
         customType?: string | undefined;
+        embedding?: number[] | undefined;
     }, {
-        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
+        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
         id: string;
         name: string;
         confidence: number;
@@ -211,10 +211,10 @@ export declare const TripletSchema: z.ZodObject<{
             endIndex: number;
             confidence?: number | undefined;
         }[];
-        embedding?: number[] | undefined;
         customType?: string | undefined;
-        aliases?: string[] | undefined;
+        embedding?: number[] | undefined;
         properties?: Record<string, unknown> | undefined;
+        aliases?: string[] | undefined;
     }>;
     /** Relationship (edge) */
     predicate: z.ZodObject<{
@@ -283,12 +283,12 @@ export declare const TripletSchema: z.ZodObject<{
         /** Optional embedding vector for semantic deduplication */
         embedding: z.ZodOptional<z.ZodArray<z.ZodNumber, "many">>;
     }, "strip", z.ZodTypeAny, {
-        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
+        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
         id: string;
         name: string;
         confidence: number;
-        aliases: string[];
         properties: Record<string, unknown>;
+        aliases: string[];
         sourceChunkId: string;
         mentions: {
             text: string;
@@ -296,10 +296,10 @@ export declare const TripletSchema: z.ZodObject<{
             endIndex: number;
             confidence?: number | undefined;
         }[];
-        embedding?: number[] | undefined;
         customType?: string | undefined;
+        embedding?: number[] | undefined;
     }, {
-        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
+        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
         id: string;
         name: string;
         confidence: number;
@@ -310,10 +310,10 @@ export declare const TripletSchema: z.ZodObject<{
             endIndex: number;
             confidence?: number | undefined;
         }[];
-        embedding?: number[] | undefined;
         customType?: string | undefined;
-        aliases?: string[] | undefined;
+        embedding?: number[] | undefined;
         properties?: Record<string, unknown> | undefined;
+        aliases?: string[] | undefined;
     }>;
     /** Source chunk ID for provenance */
     sourceChunkId: z.ZodString;
@@ -321,12 +321,12 @@ export declare const TripletSchema: z.ZodObject<{
     confidence: z.ZodNumber;
 }, "strip", z.ZodTypeAny, {
     object: {
-        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
+        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
         id: string;
         name: string;
         confidence: number;
-        aliases: string[];
         properties: Record<string, unknown>;
+        aliases: string[];
         sourceChunkId: string;
         mentions: {
             text: string;
@@ -334,18 +334,17 @@ export declare const TripletSchema: z.ZodObject<{
             endIndex: number;
             confidence?: number | undefined;
         }[];
-        embedding?: number[] | undefined;
         customType?: string | undefined;
+        embedding?: number[] | undefined;
     };
     confidence: number;
-    sourceChunkId: string;
     subject: {
-        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
+        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
         id: string;
         name: string;
         confidence: number;
-        aliases: string[];
         properties: Record<string, unknown>;
+        aliases: string[];
         sourceChunkId: string;
         mentions: {
             text: string;
@@ -353,8 +352,8 @@ export declare const TripletSchema: z.ZodObject<{
             endIndex: number;
             confidence?: number | undefined;
         }[];
-        embedding?: number[] | undefined;
         customType?: string | undefined;
+        embedding?: number[] | undefined;
     };
     predicate: {
         type: string;
@@ -363,9 +362,10 @@ export declare const TripletSchema: z.ZodObject<{
         evidence?: string | undefined;
         direction?: "forward" | "backward" | "bidirectional" | undefined;
     };
+    sourceChunkId: string;
 }, {
     object: {
-        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
+        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
         id: string;
         name: string;
         confidence: number;
@@ -376,15 +376,14 @@ export declare const TripletSchema: z.ZodObject<{
             endIndex: number;
             confidence?: number | undefined;
         }[];
-        embedding?: number[] | undefined;
         customType?: string | undefined;
-        aliases?: string[] | undefined;
+        embedding?: number[] | undefined;
         properties?: Record<string, unknown> | undefined;
+        aliases?: string[] | undefined;
     };
     confidence: number;
-    sourceChunkId: string;
     subject: {
-        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
+        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
         id: string;
         name: string;
         confidence: number;
@@ -395,10 +394,10 @@ export declare const TripletSchema: z.ZodObject<{
             endIndex: number;
             confidence?: number | undefined;
         }[];
-        embedding?: number[] | undefined;
         customType?: string | undefined;
-        aliases?: string[] | undefined;
+        embedding?: number[] | undefined;
         properties?: Record<string, unknown> | undefined;
+        aliases?: string[] | undefined;
     };
     predicate: {
         type: string;
@@ -407,5 +406,7 @@ export declare const TripletSchema: z.ZodObject<{
         evidence?: string | undefined;
         direction?: "forward" | "backward" | "bidirectional" | undefined;
     };
+    sourceChunkId: string;
 }>;
 export type Triplet = z.infer<typeof TripletSchema>;
+//# sourceMappingURL=schemas.d.ts.map

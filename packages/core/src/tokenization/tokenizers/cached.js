@@ -1,8 +1,23 @@
-import { LRUCache, toCacheKey } from '../../lru-cache.js';
+"use strict";
+/**
+ * @gerts/core - Cached Tokenizer
+ *
+ * LRU cache wrapper for tokenizers.
+ * Caches token counts by text hash to avoid repeated computation.
+ *
+ * Especially useful for:
+ * - API-based tokenizers (Anthropic, Google) - avoids API calls
+ * - Repeated text (prompts, templates) - fast lookup
+ * - High-frequency counting (memory budgeting) - reduced latency
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.CachedTokenizer = exports.DEFAULT_CACHE_CONFIG = void 0;
+exports.withCache = withCache;
+const lru_cache_js_1 = require("../../lru-cache.js");
 /**
  * Default cache configuration.
  */
-export const DEFAULT_CACHE_CONFIG = {
+exports.DEFAULT_CACHE_CONFIG = {
     maxSize: 1000,
     ttlMs: 5 * 60 * 1000, // 5 minutes
 };
@@ -25,15 +40,15 @@ export const DEFAULT_CACHE_CONFIG = {
  * console.log(result2.cached); // true
  * ```
  */
-export class CachedTokenizer {
+class CachedTokenizer {
     inner;
     cache;
     hits = 0;
     misses = 0;
     constructor(inner, config = {}) {
         this.inner = inner;
-        const { maxSize, ttlMs } = { ...DEFAULT_CACHE_CONFIG, ...config };
-        this.cache = new LRUCache({
+        const { maxSize, ttlMs } = { ...exports.DEFAULT_CACHE_CONFIG, ...config };
+        this.cache = new lru_cache_js_1.LRUCache({
             maxSize,
             defaultTTL: ttlMs,
         });
@@ -64,7 +79,7 @@ export class CachedTokenizer {
             };
         }
         // Hash text for cache key (fast, deterministic)
-        const cacheKey = toCacheKey(this.hashText(text));
+        const cacheKey = (0, lru_cache_js_1.toCacheKey)(this.hashText(text));
         // Check cache
         const cached = this.cache.get(cacheKey);
         if (cached) {
@@ -154,6 +169,7 @@ export class CachedTokenizer {
         return hash.toString(16);
     }
 }
+exports.CachedTokenizer = CachedTokenizer;
 /**
  * Wrap a tokenizer with caching.
  *
@@ -161,6 +177,7 @@ export class CachedTokenizer {
  * @param config - Cache configuration
  * @returns Cached tokenizer
  */
-export function withCache(tokenizer, config) {
+function withCache(tokenizer, config) {
     return new CachedTokenizer(tokenizer, config);
 }
+//# sourceMappingURL=cached.js.map

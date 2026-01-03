@@ -1,7 +1,23 @@
-import { OpenAIProvider } from './providers/openai';
-import { AnthropicProvider } from './providers/anthropic';
-import { GeminiProvider } from './providers/gemini';
-import { inferProvider as inferProviderFromRegistry, } from './model-registry';
+"use strict";
+/**
+ * @gerts/core - LLM Model Router
+ * Phase 21: LLM Abstraction
+ *
+ * Factory pattern with smart routing to native providers:
+ * - Automatic provider inference from model name
+ * - Provider prefix parsing (openai/gpt-4, anthropic/claude-3)
+ * - Fallback chain support
+ * - Cost optimization routing
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ModelRouter = void 0;
+exports.getDefaultRouter = getDefaultRouter;
+exports.createLLM = createLLM;
+exports.createLLMWithFallback = createLLMWithFallback;
+const openai_1 = require("./providers/openai");
+const anthropic_1 = require("./providers/anthropic");
+const gemini_1 = require("./providers/gemini");
+const model_registry_1 = require("./model-registry");
 /** Provider mapping for model prefixes */
 const PROVIDER_PREFIXES = {
     openai: 'openai',
@@ -46,7 +62,7 @@ const NATIVE_PROVIDERS = new Set([
  * const explicit = router.create('openai/gpt-4o');
  * ```
  */
-export class ModelRouter {
+class ModelRouter {
     defaultProvider;
     eventBus;
     fallbacks;
@@ -224,7 +240,7 @@ export class ModelRouter {
      */
     inferProviderFromModel(model) {
         // First, try llm-info registry
-        const registryProvider = inferProviderFromRegistry(model);
+        const registryProvider = (0, model_registry_1.inferProvider)(model);
         // Map registry provider names to our LLMProvider type
         const providerMap = {
             openai: 'openai',
@@ -295,7 +311,7 @@ export class ModelRouter {
                     project: config?.project,
                     reasoningEffort: config?.reasoningEffort,
                 };
-                return new OpenAIProvider(openaiConfig, this.eventBus);
+                return new openai_1.OpenAIProvider(openaiConfig, this.eventBus);
             }
             case 'anthropic': {
                 const anthropicConfig = {
@@ -306,7 +322,7 @@ export class ModelRouter {
                     topK: config?.topK,
                     thinking: config?.thinking,
                 };
-                return new AnthropicProvider(anthropicConfig, this.eventBus);
+                return new anthropic_1.AnthropicProvider(anthropicConfig, this.eventBus);
             }
             case 'gemini': {
                 const geminiConfig = {
@@ -314,13 +330,14 @@ export class ModelRouter {
                     apiKey: config?.apiKey,
                     baseUrl: config?.baseUrl,
                 };
-                return new GeminiProvider(geminiConfig, this.eventBus);
+                return new gemini_1.GeminiProvider(geminiConfig, this.eventBus);
             }
             default:
                 throw new Error(`Provider '${provider}' is not yet implemented`);
         }
     }
 }
+exports.ModelRouter = ModelRouter;
 /**
  * Singleton router instance for convenience.
  */
@@ -328,7 +345,7 @@ let defaultRouter = null;
 /**
  * Get or create the default router instance.
  */
-export function getDefaultRouter(config) {
+function getDefaultRouter(config) {
     if (!defaultRouter) {
         defaultRouter = new ModelRouter(config);
     }
@@ -343,12 +360,13 @@ export function getDefaultRouter(config) {
  * const response = await llm.call([{ role: 'user', content: 'Hello!' }]);
  * ```
  */
-export function createLLM(model, config) {
+function createLLM(model, config) {
     return getDefaultRouter().create(model, config);
 }
 /**
  * Create an LLM instance with fallback chain using the default router.
  */
-export function createLLMWithFallback(models, config) {
+function createLLMWithFallback(models, config) {
     return getDefaultRouter().createWithFallback(models, config);
 }
+//# sourceMappingURL=routing.js.map

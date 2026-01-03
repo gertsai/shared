@@ -1,3 +1,4 @@
+"use strict";
 /**
  * @gerts/core - Connection Types
  *
@@ -6,10 +7,17 @@
  *
  * @see research/architecture/13-execution-engine-spec.md Section 6
  */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.CONNECTION_COMPATIBILITY = exports.GertsConnectionTypes = void 0;
+exports.validateConnection = validateConnection;
+exports.isAiConnectionType = isAiConnectionType;
+exports.isGraphConnectionType = isGraphConnectionType;
+exports.getAcceptedConnectionTypes = getAcceptedConnectionTypes;
+exports.getCompatibleTargets = getCompatibleTargets;
 /**
  * All connection types supported by gerts.ai
  */
-export const GertsConnectionTypes = {
+exports.GertsConnectionTypes = {
     // === Standard Flow ===
     Main: 'main',
     Error: 'error',
@@ -47,94 +55,94 @@ export const GertsConnectionTypes = {
  * Connection compatibility matrix.
  * Maps target connection types to acceptable source types.
  */
-export const CONNECTION_COMPATIBILITY = {
+exports.CONNECTION_COMPATIBILITY = {
     // Main accepts any
-    [GertsConnectionTypes.Main]: [],
-    [GertsConnectionTypes.Error]: [],
+    [exports.GertsConnectionTypes.Main]: [],
+    [exports.GertsConnectionTypes.Error]: [],
     // Agent can receive: model, memory, tools, retriever
-    [GertsConnectionTypes.AiAgent]: [
-        GertsConnectionTypes.AiLanguageModel,
-        GertsConnectionTypes.AiMemory,
-        GertsConnectionTypes.AiTool,
-        GertsConnectionTypes.AiRetriever,
+    [exports.GertsConnectionTypes.AiAgent]: [
+        exports.GertsConnectionTypes.AiLanguageModel,
+        exports.GertsConnectionTypes.AiMemory,
+        exports.GertsConnectionTypes.AiTool,
+        exports.GertsConnectionTypes.AiRetriever,
     ],
     // Chain can receive: model, memory, output parser
-    [GertsConnectionTypes.AiChain]: [
-        GertsConnectionTypes.AiLanguageModel,
-        GertsConnectionTypes.AiMemory,
-        GertsConnectionTypes.AiOutputParser,
+    [exports.GertsConnectionTypes.AiChain]: [
+        exports.GertsConnectionTypes.AiLanguageModel,
+        exports.GertsConnectionTypes.AiMemory,
+        exports.GertsConnectionTypes.AiOutputParser,
     ],
     // Language model - no inputs (leaf node)
-    [GertsConnectionTypes.AiLanguageModel]: [],
+    [exports.GertsConnectionTypes.AiLanguageModel]: [],
     // Memory - no inputs (leaf node)
-    [GertsConnectionTypes.AiMemory]: [],
+    [exports.GertsConnectionTypes.AiMemory]: [],
     // Tool - no inputs (leaf node)
-    [GertsConnectionTypes.AiTool]: [],
+    [exports.GertsConnectionTypes.AiTool]: [],
     // Output parser - no inputs (leaf node)
-    [GertsConnectionTypes.AiOutputParser]: [],
+    [exports.GertsConnectionTypes.AiOutputParser]: [],
     // Embedding - no inputs (leaf node)
-    [GertsConnectionTypes.AiEmbedding]: [],
+    [exports.GertsConnectionTypes.AiEmbedding]: [],
     // Vector store can receive: embedding
-    [GertsConnectionTypes.AiVectorStore]: [
-        GertsConnectionTypes.AiEmbedding,
+    [exports.GertsConnectionTypes.AiVectorStore]: [
+        exports.GertsConnectionTypes.AiEmbedding,
     ],
     // Retriever can receive: vector store, graph store, reranker
-    [GertsConnectionTypes.AiRetriever]: [
-        GertsConnectionTypes.AiVectorStore,
-        GertsConnectionTypes.GraphStore,
-        GertsConnectionTypes.AiReranker,
+    [exports.GertsConnectionTypes.AiRetriever]: [
+        exports.GertsConnectionTypes.AiVectorStore,
+        exports.GertsConnectionTypes.GraphStore,
+        exports.GertsConnectionTypes.AiReranker,
     ],
     // Reranker - no inputs (leaf node)
-    [GertsConnectionTypes.AiReranker]: [],
+    [exports.GertsConnectionTypes.AiReranker]: [],
     // Document - no inputs (leaf node)
-    [GertsConnectionTypes.AiDocument]: [],
+    [exports.GertsConnectionTypes.AiDocument]: [],
     // Text splitter can receive: document
-    [GertsConnectionTypes.AiTextSplitter]: [
-        GertsConnectionTypes.AiDocument,
+    [exports.GertsConnectionTypes.AiTextSplitter]: [
+        exports.GertsConnectionTypes.AiDocument,
     ],
     // Graph store can receive: entity extractor, relation extractor, triplets
-    [GertsConnectionTypes.GraphStore]: [
-        GertsConnectionTypes.EntityExtractor,
-        GertsConnectionTypes.RelationExtractor,
-        GertsConnectionTypes.Triplets,
+    [exports.GertsConnectionTypes.GraphStore]: [
+        exports.GertsConnectionTypes.EntityExtractor,
+        exports.GertsConnectionTypes.RelationExtractor,
+        exports.GertsConnectionTypes.Triplets,
     ],
     // Entity extractor can receive: language model
-    [GertsConnectionTypes.EntityExtractor]: [
-        GertsConnectionTypes.AiLanguageModel,
+    [exports.GertsConnectionTypes.EntityExtractor]: [
+        exports.GertsConnectionTypes.AiLanguageModel,
     ],
     // Relation extractor can receive: language model
-    [GertsConnectionTypes.RelationExtractor]: [
-        GertsConnectionTypes.AiLanguageModel,
+    [exports.GertsConnectionTypes.RelationExtractor]: [
+        exports.GertsConnectionTypes.AiLanguageModel,
     ],
     // Triplets - no inputs (leaf node)
-    [GertsConnectionTypes.Triplets]: [],
+    [exports.GertsConnectionTypes.Triplets]: [],
     // Graph subgraph - no inputs (result type)
-    [GertsConnectionTypes.GraphSubgraph]: [],
+    [exports.GertsConnectionTypes.GraphSubgraph]: [],
     // Graph paths - no inputs (result type)
-    [GertsConnectionTypes.GraphPaths]: [],
+    [exports.GertsConnectionTypes.GraphPaths]: [],
     // Graph communities - no inputs (result type)
-    [GertsConnectionTypes.GraphCommunities]: [],
+    [exports.GertsConnectionTypes.GraphCommunities]: [],
     // Knowledge memory can receive: graph store, vector store
-    [GertsConnectionTypes.KnowledgeMemory]: [
-        GertsConnectionTypes.GraphStore,
-        GertsConnectionTypes.AiVectorStore,
+    [exports.GertsConnectionTypes.KnowledgeMemory]: [
+        exports.GertsConnectionTypes.GraphStore,
+        exports.GertsConnectionTypes.AiVectorStore,
     ],
     // Conversation memory - no inputs (leaf node)
-    [GertsConnectionTypes.ConversationMemory]: [],
+    [exports.GertsConnectionTypes.ConversationMemory]: [],
     // Ranked results - no inputs (result type)
-    [GertsConnectionTypes.RankedResults]: [],
+    [exports.GertsConnectionTypes.RankedResults]: [],
     // Retrieval context - no inputs (result type)
-    [GertsConnectionTypes.RetrievalContext]: [],
+    [exports.GertsConnectionTypes.RetrievalContext]: [],
     // Document chunks can receive: text splitter
-    [GertsConnectionTypes.DocumentChunks]: [
-        GertsConnectionTypes.AiTextSplitter,
+    [exports.GertsConnectionTypes.DocumentChunks]: [
+        exports.GertsConnectionTypes.AiTextSplitter,
     ],
     // Embeddings can receive: embedding provider
-    [GertsConnectionTypes.Embeddings]: [
-        GertsConnectionTypes.AiEmbedding,
+    [exports.GertsConnectionTypes.Embeddings]: [
+        exports.GertsConnectionTypes.AiEmbedding,
     ],
     // Vector results - no inputs (result type)
-    [GertsConnectionTypes.VectorResults]: [],
+    [exports.GertsConnectionTypes.VectorResults]: [],
 };
 /**
  * Validate if a connection between source and target is valid.
@@ -152,17 +160,17 @@ export const CONNECTION_COMPATIBILITY = {
  * // { valid: true }
  * ```
  */
-export function validateConnection(sourceType, targetType) {
+function validateConnection(sourceType, targetType) {
     // Main connections always valid
-    if (sourceType === GertsConnectionTypes.Main || targetType === GertsConnectionTypes.Main) {
+    if (sourceType === exports.GertsConnectionTypes.Main || targetType === exports.GertsConnectionTypes.Main) {
         return { valid: true };
     }
     // Error connections always valid
-    if (sourceType === GertsConnectionTypes.Error || targetType === GertsConnectionTypes.Error) {
+    if (sourceType === exports.GertsConnectionTypes.Error || targetType === exports.GertsConnectionTypes.Error) {
         return { valid: true };
     }
     // Check compatibility matrix
-    const acceptedTypes = CONNECTION_COMPATIBILITY[targetType];
+    const acceptedTypes = exports.CONNECTION_COMPATIBILITY[targetType];
     // If target has no accepted types defined, it's a leaf node (no inputs)
     if (acceptedTypes.length === 0) {
         return {
@@ -182,34 +190,35 @@ export function validateConnection(sourceType, targetType) {
 /**
  * Check if a connection type is an AI component type
  */
-export function isAiConnectionType(type) {
+function isAiConnectionType(type) {
     return type.startsWith('ai_');
 }
 /**
  * Check if a connection type is a Graph RAG specific type
  */
-export function isGraphConnectionType(type) {
+function isGraphConnectionType(type) {
     return (type.startsWith('graph_') ||
-        type === GertsConnectionTypes.EntityExtractor ||
-        type === GertsConnectionTypes.RelationExtractor ||
-        type === GertsConnectionTypes.Triplets ||
-        type === GertsConnectionTypes.KnowledgeMemory);
+        type === exports.GertsConnectionTypes.EntityExtractor ||
+        type === exports.GertsConnectionTypes.RelationExtractor ||
+        type === exports.GertsConnectionTypes.Triplets ||
+        type === exports.GertsConnectionTypes.KnowledgeMemory);
 }
 /**
  * Get all connection types that a target type accepts
  */
-export function getAcceptedConnectionTypes(targetType) {
-    return CONNECTION_COMPATIBILITY[targetType] ?? [];
+function getAcceptedConnectionTypes(targetType) {
+    return exports.CONNECTION_COMPATIBILITY[targetType] ?? [];
 }
 /**
  * Get all connection types that can connect to a given source type
  */
-export function getCompatibleTargets(sourceType) {
+function getCompatibleTargets(sourceType) {
     const compatibleTargets = [];
-    for (const [target, accepted] of Object.entries(CONNECTION_COMPATIBILITY)) {
+    for (const [target, accepted] of Object.entries(exports.CONNECTION_COMPATIBILITY)) {
         if (accepted.includes(sourceType)) {
             compatibleTargets.push(target);
         }
     }
     return compatibleTargets;
 }
+//# sourceMappingURL=connections.js.map

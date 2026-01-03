@@ -66,3 +66,4 @@ export declare class JSONReader extends FileReader {
      */
     private extractMetadata;
 }
+//# sourceMappingURL=json.d.ts.map

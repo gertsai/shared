@@ -1,7 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.TenantCache = exports.LRUCache = void 0;
+exports.toCacheKey = toCacheKey;
 /**
  * Create a type-safe cache key
  */
-export function toCacheKey(key) {
+function toCacheKey(key) {
     return key;
 }
 /**
@@ -49,7 +53,7 @@ class LRUNode {
  * cache.invalidatePattern(/^user:/);
  * ```
  */
-export class LRUCache {
+class LRUCache {
     cache = new Map();
     maxSize;
     defaultTTL;
@@ -330,6 +334,7 @@ export class LRUCache {
         this.deleteNode(this.tail, 'capacity');
     }
 }
+exports.LRUCache = LRUCache;
 /**
  * Tenant-aware cache wrapper for simplified usage
  *
@@ -341,7 +346,7 @@ export class LRUCache {
  * const user = cache.get(tenantId, toCacheKey('user:123'));
  * ```
  */
-export class TenantCache {
+class TenantCache {
     cache;
     constructor(options = {}) {
         this.cache = new LRUCache({
@@ -387,3 +392,5 @@ export class TenantCache {
         return this.cache.size;
     }
 }
+exports.TenantCache = TenantCache;
+//# sourceMappingURL=lru-cache.js.map

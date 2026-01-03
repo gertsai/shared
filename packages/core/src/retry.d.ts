@@ -151,3 +151,4 @@ export declare function sleep(ms: number): Promise<void>;
  * Check if a delay is reasonable (not too long).
  */
 export declare function isReasonableDelay(delay: number, maxMs?: number): boolean;
+//# sourceMappingURL=retry.d.ts.map

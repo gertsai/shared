@@ -1,5 +1,18 @@
-import { queryFailure, isQuerySuccess } from './types.js';
-import { getAllSupportedTypes, } from './executor.js';
+"use strict";
+/**
+ * @gerts/core - Query Router
+ *
+ * Routes queries to appropriate executors based on type or custom logic.
+ * Inspired by LlamaIndex RouterQueryEngine and TrustGraph OntoRAG.
+ *
+ * @see RFC-032: Universal Query System
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.QueryRouter = exports.PriorityBasedSelector = exports.TypeBasedSelector = void 0;
+exports.createQueryRouter = createQueryRouter;
+exports.createPriorityRouter = createPriorityRouter;
+const types_js_1 = require("./types.js");
+const executor_js_1 = require("./executor.js");
 // ============================================================================
 // Type-Based Selector
 // ============================================================================
@@ -13,7 +26,7 @@ import { getAllSupportedTypes, } from './executor.js';
  * // selection.executorName = 'nl-query' if query.type === 'nl'
  * ```
  */
-export class TypeBasedSelector {
+class TypeBasedSelector {
     name = 'type-based';
     async select(query, executors) {
         // Find executor that supports this query type
@@ -40,13 +53,14 @@ export class TypeBasedSelector {
         };
     }
 }
+exports.TypeBasedSelector = TypeBasedSelector;
 // ============================================================================
 // Priority-Based Selector
 // ============================================================================
 /**
  * Selector that uses explicit priority for routing
  */
-export class PriorityBasedSelector {
+class PriorityBasedSelector {
     priorities;
     name = 'priority-based';
     constructor(priorities = new Map()) {
@@ -82,6 +96,7 @@ export class PriorityBasedSelector {
         };
     }
 }
+exports.PriorityBasedSelector = PriorityBasedSelector;
 // ============================================================================
 // Query Router
 // ============================================================================
@@ -111,7 +126,7 @@ export class PriorityBasedSelector {
  * });
  * ```
  */
-export class QueryRouter {
+class QueryRouter {
     executors = new Map();
     selector;
     /**
@@ -164,7 +179,7 @@ export class QueryRouter {
      * Get all supported query types
      */
     getSupportedTypes() {
-        return getAllSupportedTypes(Array.from(this.executors.values()));
+        return (0, executor_js_1.getAllSupportedTypes)(Array.from(this.executors.values()));
     }
     /**
      * Check if a query type is supported
@@ -186,17 +201,17 @@ export class QueryRouter {
         // 1. Select best executor
         const selection = await this.selector.select(query, this.listExecutors());
         if (selection.confidence === 0) {
-            return queryFailure('NO_EXECUTOR', selection.reason ?? `No executor found for query type '${query.type}'`, { retryable: false });
+            return (0, types_js_1.queryFailure)('NO_EXECUTOR', selection.reason ?? `No executor found for query type '${query.type}'`, { retryable: false });
         }
         // 2. Get executor
         const executor = this.executors.get(selection.executorName);
         if (!executor) {
-            return queryFailure('EXECUTOR_NOT_FOUND', `Executor '${selection.executorName}' not found`, { retryable: false });
+            return (0, types_js_1.queryFailure)('EXECUTOR_NOT_FOUND', `Executor '${selection.executorName}' not found`, { retryable: false });
         }
         // 3. Execute
         const result = await executor.execute(query);
         // 4. Enrich metadata with routing info
-        if (isQuerySuccess(result)) {
+        if ((0, types_js_1.isQuerySuccess)(result)) {
             return {
                 ...result,
                 metadata: {
@@ -222,18 +237,18 @@ export class QueryRouter {
         // 1. Select executor
         const selection = await this.selector.select(query, this.listExecutors());
         if (selection.confidence === 0) {
-            yield queryFailure('NO_EXECUTOR', selection.reason ?? `No executor found for query type '${query.type}'`);
+            yield (0, types_js_1.queryFailure)('NO_EXECUTOR', selection.reason ?? `No executor found for query type '${query.type}'`);
             return;
         }
         const executor = this.executors.get(selection.executorName);
         if (!executor) {
-            yield queryFailure('EXECUTOR_NOT_FOUND', 'Executor not found');
+            yield (0, types_js_1.queryFailure)('EXECUTOR_NOT_FOUND', 'Executor not found');
             return;
         }
         // 2. Stream from executor
         for await (const result of executor.stream(query)) {
             // Enrich success results with routing info
-            if (isQuerySuccess(result)) {
+            if ((0, types_js_1.isQuerySuccess)(result)) {
                 yield {
                     ...result,
                     metadata: {
@@ -268,6 +283,7 @@ export class QueryRouter {
         };
     }
 }
+exports.QueryRouter = QueryRouter;
 // ============================================================================
 // Router Factory
 // ============================================================================
@@ -283,7 +299,7 @@ export class QueryRouter {
  * ]);
  * ```
  */
-export function createQueryRouter(executors, selector) {
+function createQueryRouter(executors, selector) {
     const router = new QueryRouter(selector);
     for (const executor of executors) {
         router.register(executor);
@@ -304,10 +320,11 @@ export function createQueryRouter(executors, selector) {
  * });
  * ```
  */
-export function createPriorityRouter(executors, priorities) {
+function createPriorityRouter(executors, priorities) {
     const selector = new PriorityBasedSelector();
     for (const [name, priority] of Object.entries(priorities)) {
         selector.setPriority(name, priority);
     }
     return createQueryRouter(executors, selector);
 }
+//# sourceMappingURL=router.js.map

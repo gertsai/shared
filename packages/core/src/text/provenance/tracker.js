@@ -1,8 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ProvenanceTracker = void 0;
 /**
  * ProvenanceTracker - tracks extraction provenance.
  * Enables transparent citation from extracted entities back to source chunks.
  */
-export class ProvenanceTracker {
+class ProvenanceTracker {
     chunks = new Map();
     entities = new Map();
     triplets = [];
@@ -91,3 +94,5 @@ export class ProvenanceTracker {
         this.graphPath = [];
     }
 }
+exports.ProvenanceTracker = ProvenanceTracker;
+//# sourceMappingURL=tracker.js.map

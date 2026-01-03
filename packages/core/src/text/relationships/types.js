@@ -1,4 +1,7 @@
-export var NodeRelationship;
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.NodeRelationship = void 0;
+var NodeRelationship;
 (function (NodeRelationship) {
     NodeRelationship["PREVIOUS"] = "PREVIOUS";
     NodeRelationship["NEXT"] = "NEXT";
@@ -9,4 +12,5 @@ export var NodeRelationship;
     NodeRelationship["REFERENCES"] = "REFERENCES";
     NodeRelationship["CONTRADICTS"] = "CONTRADICTS";
     NodeRelationship["SUPPORTS"] = "SUPPORTS";
-})(NodeRelationship || (NodeRelationship = {}));
+})(NodeRelationship || (exports.NodeRelationship = NodeRelationship = {}));
+//# sourceMappingURL=types.js.map

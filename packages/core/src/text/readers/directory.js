@@ -1,10 +1,46 @@
-import { ReaderRegistry } from './registry';
-import { TextFileReader } from './text';
-import { MarkdownReader } from './markdown';
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.DirectoryReader = exports.PathTraversalError = void 0;
+const registry_1 = require("./registry");
+const text_1 = require("./text");
+const markdown_1 = require("./markdown");
 /**
  * Error thrown when a path traversal attempt is detected.
  */
-export class PathTraversalError extends Error {
+class PathTraversalError extends Error {
     attemptedPath;
     allowedRoot;
     constructor(attemptedPath, allowedRoot) {
@@ -14,6 +50,7 @@ export class PathTraversalError extends Error {
         this.name = 'PathTraversalError';
     }
 }
+exports.PathTraversalError = PathTraversalError;
 /**
  * DirectoryReader - Recursively reads all files in a directory
  *
@@ -32,7 +69,7 @@ export class PathTraversalError extends Error {
  *
  * Does NOT extend FileReader as directories aren't files - implements IDocumentReader directly.
  */
-export class DirectoryReader {
+class DirectoryReader {
     registry;
     options;
     resolvedRoot = null;
@@ -67,8 +104,8 @@ export class DirectoryReader {
      * @throws PathTraversalError if any file path escapes the source directory
      */
     async loadData(source) {
-        const fs = await import('fs/promises');
-        const path = await import('path');
+        const fs = await Promise.resolve().then(() => __importStar(require('fs/promises')));
+        const path = await Promise.resolve().then(() => __importStar(require('path')));
         // Verify directory exists and resolve to absolute path
         try {
             const stats = await fs.stat(source);
@@ -263,11 +300,11 @@ export class DirectoryReader {
      * @param maxFileSize - Optional file size limit to pass to readers
      */
     createDefaultRegistry(maxFileSize) {
-        const registry = new ReaderRegistry();
+        const registry = new registry_1.ReaderRegistry();
         const readerConfig = maxFileSize ? { maxFileSize } : {};
         // Import and register all available readers with file size limits
-        registry.registerFileReader(new TextFileReader(readerConfig));
-        registry.registerFileReader(new MarkdownReader(readerConfig));
+        registry.registerFileReader(new text_1.TextFileReader(readerConfig));
+        registry.registerFileReader(new markdown_1.MarkdownReader(readerConfig));
         // Import other readers dynamically to avoid circular dependencies
         try {
             const { CSVReader } = require('./csv');
@@ -305,3 +342,5 @@ export class DirectoryReader {
         return { ...this.options };
     }
 }
+exports.DirectoryReader = DirectoryReader;
+//# sourceMappingURL=directory.js.map

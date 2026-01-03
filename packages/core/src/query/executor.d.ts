@@ -222,3 +222,4 @@ export declare function findExecutorByName<T extends IQueryExecutor<any, any>>(e
  * Find executors supporting a type
  */
 export declare function findExecutorsByType<T extends IQueryExecutor<any, any>>(executors: readonly T[], type: string): T[];
+//# sourceMappingURL=executor.d.ts.map

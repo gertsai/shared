@@ -1,4 +1,12 @@
-export function toId(value) {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.createExecutionId = exports.createFlowId = exports.createSessionId = exports.createTaskId = exports.createAgentId = exports.createUserId = exports.createTenantId = void 0;
+exports.toId = toId;
+exports.createId = createId;
+exports.isTenantId = isTenantId;
+exports.isUserId = isUserId;
+exports.isAgentId = isAgentId;
+function toId(value) {
     return value;
 }
 function createRandomValue() {
@@ -9,24 +17,32 @@ function createRandomValue() {
     const randomPart = Math.random().toString(36).slice(2);
     return `${timePart}-${randomPart}`;
 }
-export function createId(prefix, value) {
+function createId(prefix, value) {
     return `${prefix}:${value ?? createRandomValue()}`;
 }
 // Type-safe ID creators
-export const createTenantId = (value) => createId('tenant', value);
-export const createUserId = (value) => createId('user', value);
-export const createAgentId = (value) => createId('agent', value);
-export const createTaskId = (value) => createId('task', value);
-export const createSessionId = (value) => createId('session', value);
-export const createFlowId = (value) => createId('flow', value);
-export const createExecutionId = (value) => createId('execution', value);
+const createTenantId = (value) => createId('tenant', value);
+exports.createTenantId = createTenantId;
+const createUserId = (value) => createId('user', value);
+exports.createUserId = createUserId;
+const createAgentId = (value) => createId('agent', value);
+exports.createAgentId = createAgentId;
+const createTaskId = (value) => createId('task', value);
+exports.createTaskId = createTaskId;
+const createSessionId = (value) => createId('session', value);
+exports.createSessionId = createSessionId;
+const createFlowId = (value) => createId('flow', value);
+exports.createFlowId = createFlowId;
+const createExecutionId = (value) => createId('execution', value);
+exports.createExecutionId = createExecutionId;
 // Type guards for branded IDs
-export function isTenantId(id) {
+function isTenantId(id) {
     return id.startsWith('tenant:');
 }
-export function isUserId(id) {
+function isUserId(id) {
     return id.startsWith('user:');
 }
-export function isAgentId(id) {
+function isAgentId(id) {
     return id.startsWith('agent:');
 }
+//# sourceMappingURL=ids.js.map

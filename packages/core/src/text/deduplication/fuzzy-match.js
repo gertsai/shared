@@ -1,3 +1,13 @@
+"use strict";
+/**
+ * @fileoverview Fuzzy match deduplication strategy using string similarity algorithms.
+ * Implements Jaro-Winkler and Levenshtein distance for entity matching.
+ *
+ * @module @gerts/core/text/deduplication
+ * @since Phase 23
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.FuzzyMatchDeduplication = void 0;
 /**
  * FuzzyMatchDeduplication - String similarity-based entity deduplication.
  *
@@ -30,7 +40,7 @@
  * - Optimized O(n²) pairwise comparison
  * - For large datasets (>10k entities), consider embedding-based deduplication
  */
-export class FuzzyMatchDeduplication {
+class FuzzyMatchDeduplication {
     name = 'fuzzy-match';
     config;
     /**
@@ -374,3 +384,5 @@ export class FuzzyMatchDeduplication {
         return totalSimilarity / comparisons;
     }
 }
+exports.FuzzyMatchDeduplication = FuzzyMatchDeduplication;
+//# sourceMappingURL=fuzzy-match.js.map

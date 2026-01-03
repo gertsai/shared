@@ -1,4 +1,7 @@
-import { BaseTextSplitter } from './base';
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.CharacterTextSplitter = void 0;
+const base_1 = require("./base");
 /**
  * CharacterTextSplitter splits text by a single separator character or string.
  *
@@ -16,7 +19,7 @@ import { BaseTextSplitter } from './base';
  * const chunks = splitter.splitText(text);
  * ```
  */
-export class CharacterTextSplitter extends BaseTextSplitter {
+class CharacterTextSplitter extends base_1.BaseTextSplitter {
     separator;
     constructor(options) {
         super({ ...options, chunkMethod: 'character' });
@@ -27,3 +30,5 @@ export class CharacterTextSplitter extends BaseTextSplitter {
         return this.mergeSplits(splits, this.separator);
     }
 }
+exports.CharacterTextSplitter = CharacterTextSplitter;
+//# sourceMappingURL=character.js.map

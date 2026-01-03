@@ -433,3 +433,4 @@ export type InferResult<F> = F extends (...args: unknown[]) => Result<infer T, i
  * Infers Option from a function return type.
  */
 export type InferOption<F> = F extends (...args: unknown[]) => Option<infer T> ? Option<T> : never;
+//# sourceMappingURL=result.d.ts.map

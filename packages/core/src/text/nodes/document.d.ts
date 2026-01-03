@@ -92,8 +92,8 @@ export declare const DocumentSchema: z.ZodObject<{
     embedding: z.ZodOptional<z.ZodArray<z.ZodNumber, "many">>;
 }, "strip", z.ZodTypeAny, {
     id: string;
-    text: string;
     metadata: {
+        url?: string | undefined;
         file_path?: string | undefined;
         file_name?: string | undefined;
         file_type?: string | undefined;
@@ -102,18 +102,19 @@ export declare const DocumentSchema: z.ZodObject<{
         Header_2?: string | undefined;
         Header_3?: string | undefined;
         section_path?: string | undefined;
-        url?: string | undefined;
-        source_type?: "stream" | "file" | "url" | "memory" | undefined;
+        source_type?: "url" | "stream" | "file" | "memory" | undefined;
         created_at?: string | undefined;
         modified_at?: string | undefined;
         extra?: Record<string, unknown> | undefined;
     } & {
         [k: string]: unknown;
     };
+    text: string;
     embedding?: number[] | undefined;
 }, {
     id: string;
     text: string;
+    embedding?: number[] | undefined;
     metadata?: z.objectInputType<{
         file_path: z.ZodOptional<z.ZodString>;
         file_name: z.ZodOptional<z.ZodString>;
@@ -129,7 +130,7 @@ export declare const DocumentSchema: z.ZodObject<{
         modified_at: z.ZodOptional<z.ZodString>;
         extra: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
     }, z.ZodTypeAny, "passthrough"> | undefined;
-    embedding?: number[] | undefined;
 }>;
 export type Document = z.infer<typeof DocumentSchema>;
 export declare function createDocument(text: string, metadata?: Partial<DocumentMetadata>): Document;
+//# sourceMappingURL=document.d.ts.map

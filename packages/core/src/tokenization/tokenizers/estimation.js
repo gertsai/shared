@@ -1,3 +1,4 @@
+"use strict";
 /**
  * @gerts/core - Estimation Tokenizer
  *
@@ -9,12 +10,16 @@
  * - Gemini uses ~10% more tokens
  * - Llama often uses fewer tokens (smaller vocabulary)
  */
-import { PROVIDER_TOKEN_MULTIPLIERS, } from '../types.js';
-import { inferProvider } from '../../llm/model-registry.js';
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.EstimationTokenizer = exports.DEFAULT_ESTIMATION_CONFIG = void 0;
+exports.createEstimationTokenizer = createEstimationTokenizer;
+exports.createProviderTokenizer = createProviderTokenizer;
+const types_js_1 = require("../types.js");
+const model_registry_js_1 = require("../../llm/model-registry.js");
 /**
  * Default estimation configuration.
  */
-export const DEFAULT_ESTIMATION_CONFIG = {
+exports.DEFAULT_ESTIMATION_CONFIG = {
     charsPerToken: 4,
     model: 'unknown',
 };
@@ -32,7 +37,7 @@ export const DEFAULT_ESTIMATION_CONFIG = {
  * console.log(result); // { count: ~5, method: 'estimated', provider: 'anthropic' }
  * ```
  */
-export class EstimationTokenizer {
+class EstimationTokenizer {
     provider;
     isExact = false;
     charsPerToken;
@@ -40,17 +45,17 @@ export class EstimationTokenizer {
     model;
     constructor(config = {}) {
         // Extract values with defaults (but NOT multiplier - we want to auto-detect)
-        const charsPerToken = config.charsPerToken ?? DEFAULT_ESTIMATION_CONFIG.charsPerToken;
-        const model = config.model ?? DEFAULT_ESTIMATION_CONFIG.model;
+        const charsPerToken = config.charsPerToken ?? exports.DEFAULT_ESTIMATION_CONFIG.charsPerToken;
+        const model = config.model ?? exports.DEFAULT_ESTIMATION_CONFIG.model;
         const explicitMultiplier = config.multiplier; // May be undefined
         this.charsPerToken = charsPerToken;
         this.model = model;
         // Auto-detect provider and multiplier from model name
         if (model && model !== 'unknown') {
-            const detectedProvider = inferProvider(model);
-            this.provider = detectedProvider in PROVIDER_TOKEN_MULTIPLIERS ? detectedProvider : 'estimation';
+            const detectedProvider = (0, model_registry_js_1.inferProvider)(model);
+            this.provider = detectedProvider in types_js_1.PROVIDER_TOKEN_MULTIPLIERS ? detectedProvider : 'estimation';
             // Use explicit multiplier if provided, otherwise use provider-specific
-            this.multiplier = explicitMultiplier ?? PROVIDER_TOKEN_MULTIPLIERS[this.provider] ?? 1.0;
+            this.multiplier = explicitMultiplier ?? types_js_1.PROVIDER_TOKEN_MULTIPLIERS[this.provider] ?? 1.0;
         }
         else {
             this.provider = 'estimation';
@@ -118,13 +123,14 @@ export class EstimationTokenizer {
         this.multiplier = Math.max(0.1, multiplier);
     }
 }
+exports.EstimationTokenizer = EstimationTokenizer;
 /**
  * Create an estimation tokenizer for a model.
  *
  * @param model - Model name (e.g., 'claude-3-5-sonnet', 'gemini-1.5-pro')
  * @returns EstimationTokenizer with provider-specific multiplier
  */
-export function createEstimationTokenizer(model) {
+function createEstimationTokenizer(model) {
     return new EstimationTokenizer({ model });
 }
 /**
@@ -133,7 +139,8 @@ export function createEstimationTokenizer(model) {
  * @param provider - Provider name
  * @returns EstimationTokenizer with provider-specific multiplier
  */
-export function createProviderTokenizer(provider) {
-    const multiplier = PROVIDER_TOKEN_MULTIPLIERS[provider] ?? 1.0;
+function createProviderTokenizer(provider) {
+    const multiplier = types_js_1.PROVIDER_TOKEN_MULTIPLIERS[provider] ?? 1.0;
     return new EstimationTokenizer({ multiplier });
 }
+//# sourceMappingURL=estimation.js.map

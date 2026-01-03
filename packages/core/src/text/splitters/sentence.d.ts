@@ -12,3 +12,4 @@ export declare class SentenceSplitter extends BaseTextSplitter {
     } & SentenceSplitterOptions);
     splitText(text: string): string[];
 }
+//# sourceMappingURL=sentence.d.ts.map

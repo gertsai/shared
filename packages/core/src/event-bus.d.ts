@@ -12,3 +12,4 @@ export declare class SimpleEventBus implements EventBus {
     emit<T>(event: string, payload: T): void;
     clear(): void;
 }
+//# sourceMappingURL=event-bus.d.ts.map

@@ -1,4 +1,17 @@
-import { BaseLLM, LLMCallError } from '../base';
+"use strict";
+/**
+ * @gerts/core - OpenAI LLM Provider
+ * Phase 21: LLM Abstraction
+ *
+ * Native OpenAI SDK integration with:
+ * - Streaming support
+ * - Function/tool calling
+ * - Structured outputs (JSON schema)
+ * - Token usage tracking
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.OpenAIProvider = void 0;
+const base_1 = require("../base");
 /**
  * OpenAI LLM Provider using native SDK patterns.
  *
@@ -21,7 +34,7 @@ import { BaseLLM, LLMCallError } from '../base';
  * ]);
  * ```
  */
-export class OpenAIProvider extends BaseLLM {
+class OpenAIProvider extends base_1.BaseLLM {
     organization;
     project;
     reasoningEffort;
@@ -62,7 +75,7 @@ export class OpenAIProvider extends BaseLLM {
             const formattedMessages = this.formatMessagesForOpenAI(messages);
             const params = this.prepareParams(formattedMessages, options);
             if (!this.apiKey) {
-                throw new LLMCallError('OpenAI API key is required', 'openai', this.model);
+                throw new base_1.LLMCallError('OpenAI API key is required', 'openai', this.model);
             }
             const response = await this.makeRequest(params);
             const content = response.choices[0]?.message?.content ?? '';
@@ -101,9 +114,9 @@ export class OpenAIProvider extends BaseLLM {
             const errorMsg = error instanceof Error ? error.message : String(error);
             this.emitCallFailed(errorMsg, startTime);
             if (this.isContextLengthError(error)) {
-                throw new LLMCallError(`Context window exceeded for model ${this.model}`, 'openai', this.model, error);
+                throw new base_1.LLMCallError(`Context window exceeded for model ${this.model}`, 'openai', this.model, error);
             }
-            throw new LLMCallError(`OpenAI API call failed: ${errorMsg}`, 'openai', this.model, error);
+            throw new base_1.LLMCallError(`OpenAI API call failed: ${errorMsg}`, 'openai', this.model, error);
         }
     }
     /**
@@ -117,7 +130,7 @@ export class OpenAIProvider extends BaseLLM {
             const params = this.prepareParams(formattedMessages, options);
             params.stream = true;
             if (!this.apiKey) {
-                throw new LLMCallError('OpenAI API key is required', 'openai', this.model);
+                throw new base_1.LLMCallError('OpenAI API key is required', 'openai', this.model);
             }
             const response = await fetch(`${this.getBaseUrl()}/chat/completions`, {
                 method: 'POST',
@@ -179,7 +192,7 @@ export class OpenAIProvider extends BaseLLM {
         catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
             this.emitCallFailed(errorMsg, startTime);
-            throw new LLMCallError(`OpenAI streaming failed: ${errorMsg}`, 'openai', this.model, error);
+            throw new base_1.LLMCallError(`OpenAI streaming failed: ${errorMsg}`, 'openai', this.model, error);
         }
     }
     // ==================== Private Methods ====================
@@ -317,3 +330,5 @@ export class OpenAIProvider extends BaseLLM {
         return false;
     }
 }
+exports.OpenAIProvider = OpenAIProvider;
+//# sourceMappingURL=openai.js.map

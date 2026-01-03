@@ -24,3 +24,4 @@ export declare class CharacterTextSplitter extends BaseTextSplitter {
     constructor(options: CharacterTextSplitterOptions);
     splitText(text: string): string[];
 }
+//# sourceMappingURL=character.d.ts.map

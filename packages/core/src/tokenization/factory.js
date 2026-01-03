@@ -1,3 +1,4 @@
+"use strict";
 /**
  * @gerts/core - Tokenizer Factory
  *
@@ -23,11 +24,16 @@
  * const count = await TokenizerFactory.countTokens('Hello!', 'gpt-4o');
  * ```
  */
-import { DEFAULT_TOKENIZER_FACTORY_CONFIG, getEncodingForModel, } from './types.js';
-import { TiktokenTokenizer } from './tokenizers/tiktoken.js';
-import { EstimationTokenizer } from './tokenizers/estimation.js';
-import { CachedTokenizer } from './tokenizers/cached.js';
-import { inferProvider } from '../llm/model-registry.js';
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.TokenizerFactory = void 0;
+exports.countTokens = countTokens;
+exports.getTokenizer = getTokenizer;
+exports.getCachedTokenizer = getCachedTokenizer;
+const types_js_1 = require("./types.js");
+const tiktoken_js_1 = require("./tokenizers/tiktoken.js");
+const estimation_js_1 = require("./tokenizers/estimation.js");
+const cached_js_1 = require("./tokenizers/cached.js");
+const model_registry_js_1 = require("../llm/model-registry.js");
 /**
  * TokenizerFactory - create tokenizers for any model.
  *
@@ -38,17 +44,17 @@ import { inferProvider } from '../llm/model-registry.js';
  *
  * All tokenizers can be wrapped with caching for performance.
  */
-export class TokenizerFactory {
+class TokenizerFactory {
     static instances = new Map();
     static cachedInstances = new Map();
-    static config = DEFAULT_TOKENIZER_FACTORY_CONFIG;
+    static config = types_js_1.DEFAULT_TOKENIZER_FACTORY_CONFIG;
     /**
      * Configure the factory.
      *
      * @param config - Factory configuration
      */
     static configure(config) {
-        TokenizerFactory.config = { ...DEFAULT_TOKENIZER_FACTORY_CONFIG, ...config };
+        TokenizerFactory.config = { ...types_js_1.DEFAULT_TOKENIZER_FACTORY_CONFIG, ...config };
     }
     /**
      * Get tokenizer for a model.
@@ -81,7 +87,7 @@ export class TokenizerFactory {
             return existing;
         }
         const baseTokenizer = TokenizerFactory.forModel(model);
-        const cached = new CachedTokenizer(baseTokenizer, {
+        const cached = new cached_js_1.CachedTokenizer(baseTokenizer, {
             maxSize: TokenizerFactory.config.cacheMaxSize,
             ttlMs: TokenizerFactory.config.cacheTTL,
         });
@@ -122,21 +128,21 @@ export class TokenizerFactory {
     static forProvider(provider) {
         switch (provider) {
             case 'openai':
-                return new TiktokenTokenizer('gpt-4o');
+                return new tiktoken_js_1.TiktokenTokenizer('gpt-4o');
             case 'anthropic':
-                return new EstimationTokenizer({ model: 'claude-3-5-sonnet', multiplier: 1.25 });
+                return new estimation_js_1.EstimationTokenizer({ model: 'claude-3-5-sonnet', multiplier: 1.25 });
             case 'google':
-                return new EstimationTokenizer({ model: 'gemini-1.5-pro', multiplier: 1.1 });
+                return new estimation_js_1.EstimationTokenizer({ model: 'gemini-1.5-pro', multiplier: 1.1 });
             case 'deepseek':
-                return new EstimationTokenizer({ model: 'deepseek-chat', multiplier: 1.0 });
+                return new estimation_js_1.EstimationTokenizer({ model: 'deepseek-chat', multiplier: 1.0 });
             case 'mistral':
-                return new EstimationTokenizer({ model: 'mistral-large', multiplier: 1.05 });
+                return new estimation_js_1.EstimationTokenizer({ model: 'mistral-large', multiplier: 1.05 });
             case 'llama':
-                return new EstimationTokenizer({ model: 'llama-3-70b', multiplier: 0.95 });
+                return new estimation_js_1.EstimationTokenizer({ model: 'llama-3-70b', multiplier: 0.95 });
             case 'xai':
-                return new EstimationTokenizer({ model: 'grok-2', multiplier: 1.0 });
+                return new estimation_js_1.EstimationTokenizer({ model: 'grok-2', multiplier: 1.0 });
             default:
-                return new EstimationTokenizer();
+                return new estimation_js_1.EstimationTokenizer();
         }
     }
     /**
@@ -147,7 +153,7 @@ export class TokenizerFactory {
      * @returns TiktokenTokenizer
      */
     static openai(model = 'gpt-4o') {
-        return new TiktokenTokenizer(model);
+        return new tiktoken_js_1.TiktokenTokenizer(model);
     }
     /**
      * Create Anthropic estimation tokenizer.
@@ -157,7 +163,7 @@ export class TokenizerFactory {
      * @returns EstimationTokenizer
      */
     static anthropic(model = 'claude-3-5-sonnet') {
-        return new EstimationTokenizer({ model, multiplier: 1.25 });
+        return new estimation_js_1.EstimationTokenizer({ model, multiplier: 1.25 });
     }
     /**
      * Create Google estimation tokenizer.
@@ -167,7 +173,7 @@ export class TokenizerFactory {
      * @returns EstimationTokenizer
      */
     static google(model = 'gemini-1.5-pro') {
-        return new EstimationTokenizer({ model, multiplier: 1.1 });
+        return new estimation_js_1.EstimationTokenizer({ model, multiplier: 1.1 });
     }
     /**
      * Create estimation tokenizer with custom multiplier.
@@ -176,7 +182,7 @@ export class TokenizerFactory {
      * @returns EstimationTokenizer
      */
     static estimation(multiplier = 1.0) {
-        return new EstimationTokenizer({ multiplier });
+        return new estimation_js_1.EstimationTokenizer({ multiplier });
     }
     /**
      * Clear all cached instances.
@@ -208,15 +214,16 @@ export class TokenizerFactory {
      */
     static createTokenizer(model) {
         // Check if model uses OpenAI encoding
-        const encoding = getEncodingForModel(model);
+        const encoding = (0, types_js_1.getEncodingForModel)(model);
         if (encoding) {
-            return new TiktokenTokenizer(model);
+            return new tiktoken_js_1.TiktokenTokenizer(model);
         }
         // Infer provider and create estimation tokenizer
-        const provider = inferProvider(model);
-        return new EstimationTokenizer({ model });
+        const provider = (0, model_registry_js_1.inferProvider)(model);
+        return new estimation_js_1.EstimationTokenizer({ model });
     }
 }
+exports.TokenizerFactory = TokenizerFactory;
 /**
  * Convenience function to count tokens.
  *
@@ -224,7 +231,7 @@ export class TokenizerFactory {
  * @param model - Model name (default: 'gpt-4o')
  * @returns Token count
  */
-export async function countTokens(text, model) {
+async function countTokens(text, model) {
     return TokenizerFactory.count(text, model);
 }
 /**
@@ -233,7 +240,7 @@ export async function countTokens(text, model) {
  * @param model - Model name
  * @returns Tokenizer instance
  */
-export function getTokenizer(model) {
+function getTokenizer(model) {
     return TokenizerFactory.forModel(model);
 }
 /**
@@ -242,6 +249,7 @@ export function getTokenizer(model) {
  * @param model - Model name
  * @returns Cached tokenizer
  */
-export function getCachedTokenizer(model) {
+function getCachedTokenizer(model) {
     return TokenizerFactory.getCached(model);
 }
+//# sourceMappingURL=factory.js.map

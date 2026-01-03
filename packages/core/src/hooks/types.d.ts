@@ -445,3 +445,4 @@ export interface HookExecutorConfig {
 }
 /** Keys to deep copy for background hooks */
 export declare const BACKGROUND_HOOK_COPY_KEYS: Set<string>;
+//# sourceMappingURL=types.d.ts.map

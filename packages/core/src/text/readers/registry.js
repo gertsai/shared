@@ -1,3 +1,6 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ReaderRegistry = void 0;
 function normalizeExtension(ext) {
     const trimmed = ext.trim().toLowerCase();
     if (!trimmed)
@@ -13,7 +16,7 @@ function normalizeExtension(ext) {
  * - Look up readers by extension
  * - List all registered readers and extensions
  */
-export class ReaderRegistry {
+class ReaderRegistry {
     readersByExtension = new Map();
     registeredReaders = new Set();
     /**
@@ -89,3 +92,5 @@ export class ReaderRegistry {
         this.registeredReaders.clear();
     }
 }
+exports.ReaderRegistry = ReaderRegistry;
+//# sourceMappingURL=registry.js.map

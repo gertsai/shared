@@ -233,3 +233,4 @@ export interface ActuatorRegistration<T extends StepActuator = StepActuator> {
     /** Optional category for grouping */
     category?: 'ai' | 'graph' | 'transform' | 'control' | 'io' | 'utility';
 }
+//# sourceMappingURL=actuator.d.ts.map

@@ -53,3 +53,4 @@ export declare class HTMLReader extends FileReader {
      */
     private decodeEntities;
 }
+//# sourceMappingURL=html.d.ts.map

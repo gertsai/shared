@@ -168,3 +168,4 @@ export declare function isStreamable<TChunk, TResult>(obj: unknown): obj is IStr
  * Check if an object is an enhanced streamable.
  */
 export declare function isStreamableEnhanced<TChunk, TResult>(obj: unknown): obj is IStreamableEnhanced<TChunk, TResult>;
+//# sourceMappingURL=types.d.ts.map

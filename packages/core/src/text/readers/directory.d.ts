@@ -122,3 +122,4 @@ export declare class DirectoryReader implements IDocumentReader {
         maxFileSize?: number;
     }>;
 }
+//# sourceMappingURL=directory.d.ts.map

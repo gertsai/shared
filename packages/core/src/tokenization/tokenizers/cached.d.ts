@@ -107,3 +107,4 @@ export declare class CachedTokenizer implements IUniversalTokenizer {
  * @returns Cached tokenizer
  */
 export declare function withCache(tokenizer: IUniversalTokenizer, config?: CachedTokenizerConfig): CachedTokenizer;
+//# sourceMappingURL=cached.d.ts.map

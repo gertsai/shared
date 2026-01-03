@@ -184,3 +184,4 @@ export declare function isTimeoutError(error: unknown): error is TimeoutError;
  * Convenience re-export from retry module.
  */
 export { sleep } from './retry';
+//# sourceMappingURL=timeout.d.ts.map

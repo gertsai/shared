@@ -15,3 +15,4 @@ export declare class RecursiveCharacterTextSplitter extends BaseTextSplitter {
     splitText(text: string): string[];
     private splitTextRecursively;
 }
+//# sourceMappingURL=recursive.d.ts.map

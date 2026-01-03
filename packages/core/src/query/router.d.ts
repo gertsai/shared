@@ -175,3 +175,4 @@ export declare function createQueryRouter(executors: IQueryExecutor<any, any>[],
  * ```
  */
 export declare function createPriorityRouter(executors: IQueryExecutor<any, any>[], priorities: Record<string, number>): QueryRouter;
+//# sourceMappingURL=router.d.ts.map

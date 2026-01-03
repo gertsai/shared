@@ -174,3 +174,4 @@ export declare class HookExecutor {
  * Default hook executor instance.
  */
 export declare const hookExecutor: HookExecutor;
+//# sourceMappingURL=executor.d.ts.map

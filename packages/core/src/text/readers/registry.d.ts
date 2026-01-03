@@ -49,3 +49,4 @@ export declare class ReaderRegistry {
      */
     clear(): void;
 }
+//# sourceMappingURL=registry.d.ts.map

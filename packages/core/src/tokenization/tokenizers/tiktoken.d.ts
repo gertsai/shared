@@ -61,3 +61,4 @@ export declare class TiktokenTokenizer implements IUniversalTokenizer {
  * @returns TiktokenTokenizer instance
  */
 export declare function createTiktokenTokenizer(model?: string): TiktokenTokenizer;
+//# sourceMappingURL=tiktoken.d.ts.map

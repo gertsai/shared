@@ -271,3 +271,4 @@ export declare class QueryError extends Error {
  * Type guard for QueryError
  */
 export declare function isQueryError(error: unknown): error is QueryError;
+//# sourceMappingURL=types.d.ts.map

@@ -1,6 +1,42 @@
-import { FileReader } from './base';
-import { createDocument } from '../nodes/document';
-export class HTMLReader extends FileReader {
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.HTMLReader = void 0;
+const base_1 = require("./base");
+const document_1 = require("../nodes/document");
+class HTMLReader extends base_1.FileReader {
     supportedExtensions = ['.html', '.htm'];
     readerOptions;
     constructor(options = {}) {
@@ -8,8 +44,8 @@ export class HTMLReader extends FileReader {
         this.readerOptions = options;
     }
     async loadData(source) {
-        const fs = await import('fs/promises');
-        const path = await import('path');
+        const fs = await Promise.resolve().then(() => __importStar(require('fs/promises')));
+        const path = await Promise.resolve().then(() => __importStar(require('path')));
         // SEC-001: Validate file size before reading
         await this.validateFileSize(source);
         const content = await fs.readFile(source, 'utf-8');
@@ -30,7 +66,7 @@ export class HTMLReader extends FileReader {
                 ...metaTags,
             },
         };
-        return [createDocument(text, metadata)];
+        return [(0, document_1.createDocument)(text, metadata)];
     }
     /**
      * Extract title from <title> tag
@@ -118,3 +154,5 @@ export class HTMLReader extends FileReader {
         return text.replace(/&[#\w]+;/g, (entity) => entities[entity] ?? entity);
     }
 }
+exports.HTMLReader = HTMLReader;
+//# sourceMappingURL=html.js.map

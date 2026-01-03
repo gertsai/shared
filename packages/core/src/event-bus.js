@@ -1,4 +1,7 @@
-export class SimpleEventBus {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SimpleEventBus = void 0;
+class SimpleEventBus {
     handlers = new Map();
     on(event, handler) {
         const set = this.handlers.get(event) ?? new Set();
@@ -25,3 +28,5 @@ export class SimpleEventBus {
         this.handlers.clear();
     }
 }
+exports.SimpleEventBus = SimpleEventBus;
+//# sourceMappingURL=event-bus.js.map

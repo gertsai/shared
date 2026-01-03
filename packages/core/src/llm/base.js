@@ -1,4 +1,18 @@
-import { getContextWindowSize as getContextWindowFromRegistry, supportsVision as supportsVisionFromRegistry, supportsReasoning as supportsReasoningFromRegistry, } from './model-registry';
+"use strict";
+/**
+ * @gerts/core - BaseLLM Abstract Class
+ * Phase 21: LLM Abstraction
+ *
+ * Abstract base class for LLM implementations following CrewAI patterns:
+ * - Abstract call() and stream() methods
+ * - Event emission for observability
+ * - Stop words handling
+ * - Token usage tracking
+ * - Hook system integration (prepared for Phase 19)
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.LLMCallError = exports.LLMContextLengthExceededError = exports.BaseLLM = void 0;
+const model_registry_1 = require("./model-registry");
 /**
  * Abstract base class for LLM implementations.
  *
@@ -15,7 +29,7 @@ import { getContextWindowSize as getContextWindowFromRegistry, supportsVision as
  * }
  * ```
  */
-export class BaseLLM {
+class BaseLLM {
     /** Model identifier */
     model;
     /** Provider name */
@@ -93,7 +107,7 @@ export class BaseLLM {
             supportsStopWords: true,
             supportsStreaming: true,
             supportsStructuredOutputs: false,
-            supportsVision: supportsVisionFromRegistry(this.model),
+            supportsVision: (0, model_registry_1.supportsVision)(this.model),
         };
     }
     /**
@@ -101,7 +115,7 @@ export class BaseLLM {
      * Uses llm-info registry.
      */
     supportsReasoning() {
-        return supportsReasoningFromRegistry(this.model);
+        return (0, model_registry_1.supportsReasoning)(this.model);
     }
     /**
      * Get the context window size for this model.
@@ -113,7 +127,7 @@ export class BaseLLM {
             return this._contextWindowSize;
         }
         // Use llm-info registry for accurate context window sizes
-        this._contextWindowSize = getContextWindowFromRegistry(this.model);
+        this._contextWindowSize = (0, model_registry_1.getContextWindowSize)(this.model);
         return this._contextWindowSize;
     }
     /**
@@ -321,19 +335,21 @@ export class BaseLLM {
         return messages;
     }
 }
+exports.BaseLLM = BaseLLM;
 /**
  * Error thrown when context window is exceeded.
  */
-export class LLMContextLengthExceededError extends Error {
+class LLMContextLengthExceededError extends Error {
     constructor(message) {
         super(message);
         this.name = 'LLMContextLengthExceededError';
     }
 }
+exports.LLMContextLengthExceededError = LLMContextLengthExceededError;
 /**
  * Error thrown when LLM call fails.
  */
-export class LLMCallError extends Error {
+class LLMCallError extends Error {
     provider;
     model;
     cause;
@@ -345,3 +361,5 @@ export class LLMCallError extends Error {
         this.name = 'LLMCallError';
     }
 }
+exports.LLMCallError = LLMCallError;
+//# sourceMappingURL=base.js.map

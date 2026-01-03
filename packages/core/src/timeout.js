@@ -1,3 +1,4 @@
+"use strict";
 /**
  * @gerts/core - Timeout Utilities
  *
@@ -6,6 +7,14 @@
  *
  * @module @gerts/core/timeout
  */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.sleep = exports.TimeoutError = void 0;
+exports.withTimeout = withTimeout;
+exports.createTimeoutController = createTimeoutController;
+exports.raceWithTimeout = raceWithTimeout;
+exports.allWithTimeouts = allWithTimeouts;
+exports.deadline = deadline;
+exports.isTimeoutError = isTimeoutError;
 // Note: We use a local TimeoutError class instead of importing from errors.ts
 // to avoid circular dependency issues with vitest bundling.
 // The GertsError-based TimeoutError in errors.ts should be used for
@@ -14,7 +23,7 @@
  * Lightweight TimeoutError for timeout utilities.
  * For GertsError-compatible TimeoutError, use import from './errors'.
  */
-export class TimeoutError extends Error {
+class TimeoutError extends Error {
     timeoutMs;
     constructor(message, timeoutMs) {
         super(message);
@@ -29,6 +38,7 @@ export class TimeoutError extends Error {
         return true;
     }
 }
+exports.TimeoutError = TimeoutError;
 // =============================================================================
 // Main Functions
 // =============================================================================
@@ -71,7 +81,7 @@ export class TimeoutError extends Error {
  * @throws {TimeoutError} If the operation times out
  * @throws {Error} If the external signal is aborted
  */
-export async function withTimeout(promise, options) {
+async function withTimeout(promise, options) {
     const { timeoutMs, signal, onTimeout, message } = options;
     if (timeoutMs <= 0) {
         throw new Error('timeoutMs must be positive');
@@ -159,7 +169,7 @@ export async function withTimeout(promise, options) {
  * }
  * ```
  */
-export function createTimeoutController(ms) {
+function createTimeoutController(ms) {
     if (ms <= 0) {
         throw new Error('timeout must be positive');
     }
@@ -210,7 +220,7 @@ export function createTimeoutController(ms) {
  * );
  * ```
  */
-export async function raceWithTimeout(promises, timeoutMs) {
+async function raceWithTimeout(promises, timeoutMs) {
     return withTimeout(Promise.race(promises), { timeoutMs });
 }
 /**
@@ -237,7 +247,7 @@ export async function raceWithTimeout(promises, timeoutMs) {
  * });
  * ```
  */
-export async function allWithTimeouts(entries) {
+async function allWithTimeouts(entries) {
     const wrappedPromises = entries.map(([promise, timeoutMs]) => withTimeout(promise, { timeoutMs }));
     return Promise.allSettled(wrappedPromises);
 }
@@ -262,7 +272,7 @@ export async function allWithTimeouts(entries) {
  * ]);
  * ```
  */
-export function deadline(ms, message) {
+function deadline(ms, message) {
     return new Promise((_, reject) => {
         setTimeout(() => {
             reject(new TimeoutError(message ?? `Deadline exceeded after ${ms}ms`, ms));
@@ -272,11 +282,13 @@ export function deadline(ms, message) {
 /**
  * Check if an error is a TimeoutError.
  */
-export function isTimeoutError(error) {
+function isTimeoutError(error) {
     return error instanceof TimeoutError;
 }
 /**
  * Sleep for a given number of milliseconds.
  * Convenience re-export from retry module.
  */
-export { sleep } from './retry';
+var retry_1 = require("./retry");
+Object.defineProperty(exports, "sleep", { enumerable: true, get: function () { return retry_1.sleep; } });
+//# sourceMappingURL=timeout.js.map

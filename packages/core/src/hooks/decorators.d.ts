@@ -212,3 +212,4 @@ export declare function BeforeToolCall(options?: ToolHookDecoratorOptions): Meth
  * Method decorator for @AfterToolCall.
  */
 export declare function AfterToolCall(options?: ToolHookDecoratorOptions): MethodDecorator;
+//# sourceMappingURL=decorators.d.ts.map

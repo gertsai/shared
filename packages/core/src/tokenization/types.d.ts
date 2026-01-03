@@ -141,3 +141,4 @@ export interface TokenizerFactoryConfig {
  * Default factory configuration.
  */
 export declare const DEFAULT_TOKENIZER_FACTORY_CONFIG: Required<TokenizerFactoryConfig>;
+//# sourceMappingURL=types.d.ts.map

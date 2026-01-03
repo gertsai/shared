@@ -13,3 +13,4 @@ export declare class TextFileReader extends FileReader {
     constructor(config?: FileReaderConfig);
     loadData(source: string): Promise<Document[]>;
 }
+//# sourceMappingURL=text.d.ts.map

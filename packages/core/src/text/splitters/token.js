@@ -1,10 +1,13 @@
-import { BaseTextSplitter } from './base';
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.TokenTextSplitter = exports.SimpleTokenizer = void 0;
+const base_1 = require("./base");
 /**
  * Simple stub tokenizer that estimates ~4 characters per token.
  * This is a rough approximation for development/testing.
  * In production, replace with tiktoken or another proper tokenizer.
  */
-export class SimpleTokenizer {
+class SimpleTokenizer {
     /**
      * Encode text into token IDs using a simple 4-char-per-token heuristic.
      * @param text - Text to tokenize
@@ -26,6 +29,7 @@ export class SimpleTokenizer {
         return '';
     }
 }
+exports.SimpleTokenizer = SimpleTokenizer;
 /**
  * Text splitter that splits based on token count rather than character count.
  * Useful for LLM context window management where token limits are critical.
@@ -39,7 +43,7 @@ export class SimpleTokenizer {
  * const chunks = splitter.splitText(longText);
  * ```
  */
-export class TokenTextSplitter extends BaseTextSplitter {
+class TokenTextSplitter extends base_1.BaseTextSplitter {
     tokenizer;
     constructor(options) {
         // Convert token counts to approximate char counts for base class
@@ -106,3 +110,5 @@ export class TokenTextSplitter extends BaseTextSplitter {
         return sentences.filter((s) => s.length > 0);
     }
 }
+exports.TokenTextSplitter = TokenTextSplitter;
+//# sourceMappingURL=token.js.map

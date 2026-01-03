@@ -22,3 +22,4 @@ export declare const createExecutionId: (value?: string) => ExecutionId;
 export declare function isTenantId(id: string): id is TenantId;
 export declare function isUserId(id: string): id is UserId;
 export declare function isAgentId(id: string): id is AgentId;
+//# sourceMappingURL=ids.d.ts.map

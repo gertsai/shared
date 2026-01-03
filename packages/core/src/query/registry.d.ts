@@ -411,3 +411,4 @@ export declare function createVectorQuery(tenantId: TenantId, query: string | re
  * Create a RAG query
  */
 export declare function createRAGQuery(tenantId: TenantId, question: string, mode?: RAGMode, options?: Partial<Omit<RAGQuery, 'type' | 'tenantId' | 'question' | 'mode'>>): RAGQuery;
+//# sourceMappingURL=registry.d.ts.map

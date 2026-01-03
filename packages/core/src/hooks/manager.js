@@ -1,3 +1,19 @@
+"use strict";
+/**
+ * @gerts/core - Hook Manager
+ * Phase 19: Hooks & Lifecycle
+ *
+ * Global hook registry for LLM and Tool hooks.
+ * From CrewAI pattern: Centralized registration with filtering support.
+ *
+ * Features:
+ * - Global hook registry (singleton)
+ * - Filter support (agents, tools)
+ * - Priority-based execution ordering
+ * - Thread-safe registration
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.hookManager = exports.HookManager = void 0;
 // ============================================================================
 // Hook Manager
 // ============================================================================
@@ -25,7 +41,7 @@
  *   { tools: ['search', 'browse'] } // Only for specific tools
  * );
  */
-export class HookManager {
+class HookManager {
     static instance = null;
     // LLM hooks
     beforeLLMHooks = [];
@@ -341,6 +357,7 @@ export class HookManager {
         hooks.sort((a, b) => b.priority - a.priority);
     }
 }
+exports.HookManager = HookManager;
 // ============================================================================
 // Singleton Export
 // ============================================================================
@@ -356,4 +373,5 @@ export class HookManager {
  * // Get hooks for execution
  * const hooks = hookManager.getBeforeLLMHooks({ agent: myAgent });
  */
-export const hookManager = HookManager.getInstance();
+exports.hookManager = HookManager.getInstance();
+//# sourceMappingURL=manager.js.map

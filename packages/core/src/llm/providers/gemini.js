@@ -1,3 +1,4 @@
+"use strict";
 /**
  * @gerts/core - Gemini LLM Provider
  * Phase 21: LLM Abstraction
@@ -10,39 +11,41 @@
  *
  * Note: Function calling is not yet wired in this provider.
  */
-import { z } from 'zod';
-import { BaseLLM, LLMCallError, LLMContextLengthExceededError, } from '../base';
-import { supportsVision as supportsVisionFromRegistry } from '../model-registry';
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.GeminiProvider = void 0;
+const zod_1 = require("zod");
+const base_1 = require("../base");
+const model_registry_1 = require("../model-registry");
 // ==================== Zod Schemas for API Validation ====================
 /** Schema for Gemini API response part */
-const GeminiPartSchema = z.object({
-    text: z.string().optional(),
+const GeminiPartSchema = zod_1.z.object({
+    text: zod_1.z.string().optional(),
 });
 /** Schema for Gemini API response candidate */
-const GeminiCandidateSchema = z.object({
-    content: z.object({
-        parts: z.array(GeminiPartSchema).optional(),
+const GeminiCandidateSchema = zod_1.z.object({
+    content: zod_1.z.object({
+        parts: zod_1.z.array(GeminiPartSchema).optional(),
     }).optional(),
-    finishReason: z.string().optional(),
+    finishReason: zod_1.z.string().optional(),
 });
 /** Schema for Gemini API usage metadata */
-const GeminiUsageMetadataSchema = z.object({
-    promptTokenCount: z.number().optional(),
-    candidatesTokenCount: z.number().optional(),
-    totalTokenCount: z.number().optional(),
+const GeminiUsageMetadataSchema = zod_1.z.object({
+    promptTokenCount: zod_1.z.number().optional(),
+    candidatesTokenCount: zod_1.z.number().optional(),
+    totalTokenCount: zod_1.z.number().optional(),
 });
 /** Schema for full Gemini API response */
-const GeminiGenerateResponseSchema = z.object({
-    candidates: z.array(GeminiCandidateSchema).optional(),
+const GeminiGenerateResponseSchema = zod_1.z.object({
+    candidates: zod_1.z.array(GeminiCandidateSchema).optional(),
     usageMetadata: GeminiUsageMetadataSchema.optional(),
-    modelVersion: z.string().optional(),
+    modelVersion: zod_1.z.string().optional(),
 });
 /** Schema for Gemini API error response */
-const GeminiErrorResponseSchema = z.object({
-    error: z.object({
-        code: z.number().optional(),
-        message: z.string().optional(),
-        status: z.string().optional(),
+const GeminiErrorResponseSchema = zod_1.z.object({
+    error: zod_1.z.object({
+        code: zod_1.z.number().optional(),
+        message: zod_1.z.string().optional(),
+        status: zod_1.z.string().optional(),
     }).optional(),
 });
 /**
@@ -60,7 +63,7 @@ const GeminiErrorResponseSchema = z.object({
  * ]);
  * ```
  */
-export class GeminiProvider extends BaseLLM {
+class GeminiProvider extends base_1.BaseLLM {
     constructor(config, eventBus) {
         super({
             ...config,
@@ -77,7 +80,7 @@ export class GeminiProvider extends BaseLLM {
             supportsStopWords: true,
             supportsStreaming: false,
             supportsStructuredOutputs: true,
-            supportsVision: supportsVisionFromRegistry(this.model),
+            supportsVision: (0, model_registry_1.supportsVision)(this.model),
         };
     }
     /**
@@ -88,7 +91,7 @@ export class GeminiProvider extends BaseLLM {
         this.emitCallStarted(messages, options?.tools);
         try {
             if (!this.apiKey) {
-                throw new LLMCallError('Gemini API key is required', 'gemini', this.model);
+                throw new base_1.LLMCallError('Gemini API key is required', 'gemini', this.model);
             }
             const { contents, systemInstruction } = this.formatMessagesForGemini(messages);
             const params = this.prepareParams(contents, systemInstruction, options);
@@ -112,15 +115,15 @@ export class GeminiProvider extends BaseLLM {
         }
         catch (error) {
             // Re-throw known error types without wrapping
-            if (error instanceof LLMCallError || error instanceof LLMContextLengthExceededError) {
+            if (error instanceof base_1.LLMCallError || error instanceof base_1.LLMContextLengthExceededError) {
                 throw error;
             }
             const message = error instanceof Error ? error.message : String(error);
             this.emitCallFailed(message, startTime);
             if (this.isContextLengthError(error)) {
-                throw new LLMContextLengthExceededError(message);
+                throw new base_1.LLMContextLengthExceededError(message);
             }
-            throw new LLMCallError(message, 'gemini', this.model, error);
+            throw new base_1.LLMCallError(message, 'gemini', this.model, error);
         }
     }
     formatMessagesForGemini(messages) {
@@ -211,7 +214,7 @@ export class GeminiProvider extends BaseLLM {
             // Validate response with Zod schema
             const validated = GeminiGenerateResponseSchema.safeParse(json);
             if (!validated.success) {
-                throw new LLMCallError(`Invalid Gemini API response: ${validated.error.message}`, 'gemini', this.model);
+                throw new base_1.LLMCallError(`Invalid Gemini API response: ${validated.error.message}`, 'gemini', this.model);
             }
             return validated.data;
         }
@@ -261,7 +264,7 @@ export class GeminiProvider extends BaseLLM {
             }
             else if (!GeminiProvider.SUPPORTED_BLOCK_TYPES.has(block.type)) {
                 // Explicitly reject unsupported block types
-                throw new LLMCallError(`Unsupported content block type: ${block.type}. Gemini provider only supports: ${[...GeminiProvider.SUPPORTED_BLOCK_TYPES].join(', ')}`, 'gemini', this.model);
+                throw new base_1.LLMCallError(`Unsupported content block type: ${block.type}. Gemini provider only supports: ${[...GeminiProvider.SUPPORTED_BLOCK_TYPES].join(', ')}`, 'gemini', this.model);
             }
             // Empty text/tool_result blocks are silently skipped
         }
@@ -284,3 +287,5 @@ export class GeminiProvider extends BaseLLM {
         return false;
     }
 }
+exports.GeminiProvider = GeminiProvider;
+//# sourceMappingURL=gemini.js.map

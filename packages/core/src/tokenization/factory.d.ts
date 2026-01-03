@@ -162,3 +162,4 @@ export declare function getTokenizer(model: string): IUniversalTokenizer;
  * @returns Cached tokenizer
  */
 export declare function getCachedTokenizer(model: string): CachedTokenizer;
+//# sourceMappingURL=factory.d.ts.map

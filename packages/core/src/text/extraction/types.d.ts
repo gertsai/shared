@@ -32,12 +32,12 @@ export declare const ExtractionResultSchema: z.ZodObject<{
         }>, "many">;
         embedding: z.ZodOptional<z.ZodArray<z.ZodNumber, "many">>;
     }, "strip", z.ZodTypeAny, {
-        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
+        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
         id: string;
         name: string;
         confidence: number;
-        aliases: string[];
         properties: Record<string, unknown>;
+        aliases: string[];
         sourceChunkId: string;
         mentions: {
             text: string;
@@ -45,10 +45,10 @@ export declare const ExtractionResultSchema: z.ZodObject<{
             endIndex: number;
             confidence?: number | undefined;
         }[];
-        embedding?: number[] | undefined;
         customType?: string | undefined;
+        embedding?: number[] | undefined;
     }, {
-        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
+        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
         id: string;
         name: string;
         confidence: number;
@@ -59,10 +59,10 @@ export declare const ExtractionResultSchema: z.ZodObject<{
             endIndex: number;
             confidence?: number | undefined;
         }[];
-        embedding?: number[] | undefined;
         customType?: string | undefined;
-        aliases?: string[] | undefined;
+        embedding?: number[] | undefined;
         properties?: Record<string, unknown> | undefined;
+        aliases?: string[] | undefined;
     }>, "many">;
     /** Extracted triplets (relationships) */
     triplets: z.ZodArray<z.ZodObject<{
@@ -93,12 +93,12 @@ export declare const ExtractionResultSchema: z.ZodObject<{
             }>, "many">;
             embedding: z.ZodOptional<z.ZodArray<z.ZodNumber, "many">>;
         }, "strip", z.ZodTypeAny, {
-            type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
+            type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
             id: string;
             name: string;
             confidence: number;
-            aliases: string[];
             properties: Record<string, unknown>;
+            aliases: string[];
             sourceChunkId: string;
             mentions: {
                 text: string;
@@ -106,10 +106,10 @@ export declare const ExtractionResultSchema: z.ZodObject<{
                 endIndex: number;
                 confidence?: number | undefined;
             }[];
-            embedding?: number[] | undefined;
             customType?: string | undefined;
+            embedding?: number[] | undefined;
         }, {
-            type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
+            type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
             id: string;
             name: string;
             confidence: number;
@@ -120,10 +120,10 @@ export declare const ExtractionResultSchema: z.ZodObject<{
                 endIndex: number;
                 confidence?: number | undefined;
             }[];
-            embedding?: number[] | undefined;
             customType?: string | undefined;
-            aliases?: string[] | undefined;
+            embedding?: number[] | undefined;
             properties?: Record<string, unknown> | undefined;
+            aliases?: string[] | undefined;
         }>;
         predicate: z.ZodObject<{
             type: z.ZodString;
@@ -171,12 +171,12 @@ export declare const ExtractionResultSchema: z.ZodObject<{
             }>, "many">;
             embedding: z.ZodOptional<z.ZodArray<z.ZodNumber, "many">>;
         }, "strip", z.ZodTypeAny, {
-            type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
+            type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
             id: string;
             name: string;
             confidence: number;
-            aliases: string[];
             properties: Record<string, unknown>;
+            aliases: string[];
             sourceChunkId: string;
             mentions: {
                 text: string;
@@ -184,10 +184,10 @@ export declare const ExtractionResultSchema: z.ZodObject<{
                 endIndex: number;
                 confidence?: number | undefined;
             }[];
-            embedding?: number[] | undefined;
             customType?: string | undefined;
+            embedding?: number[] | undefined;
         }, {
-            type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
+            type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
             id: string;
             name: string;
             confidence: number;
@@ -198,21 +198,21 @@ export declare const ExtractionResultSchema: z.ZodObject<{
                 endIndex: number;
                 confidence?: number | undefined;
             }[];
-            embedding?: number[] | undefined;
             customType?: string | undefined;
-            aliases?: string[] | undefined;
+            embedding?: number[] | undefined;
             properties?: Record<string, unknown> | undefined;
+            aliases?: string[] | undefined;
         }>;
         sourceChunkId: z.ZodString;
         confidence: z.ZodNumber;
     }, "strip", z.ZodTypeAny, {
         object: {
-            type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
+            type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
             id: string;
             name: string;
             confidence: number;
-            aliases: string[];
             properties: Record<string, unknown>;
+            aliases: string[];
             sourceChunkId: string;
             mentions: {
                 text: string;
@@ -220,18 +220,17 @@ export declare const ExtractionResultSchema: z.ZodObject<{
                 endIndex: number;
                 confidence?: number | undefined;
             }[];
-            embedding?: number[] | undefined;
             customType?: string | undefined;
+            embedding?: number[] | undefined;
         };
         confidence: number;
-        sourceChunkId: string;
         subject: {
-            type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
+            type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
             id: string;
             name: string;
             confidence: number;
-            aliases: string[];
             properties: Record<string, unknown>;
+            aliases: string[];
             sourceChunkId: string;
             mentions: {
                 text: string;
@@ -239,8 +238,8 @@ export declare const ExtractionResultSchema: z.ZodObject<{
                 endIndex: number;
                 confidence?: number | undefined;
             }[];
-            embedding?: number[] | undefined;
             customType?: string | undefined;
+            embedding?: number[] | undefined;
         };
         predicate: {
             type: string;
@@ -249,9 +248,10 @@ export declare const ExtractionResultSchema: z.ZodObject<{
             evidence?: string | undefined;
             direction?: "forward" | "backward" | "bidirectional" | undefined;
         };
+        sourceChunkId: string;
     }, {
         object: {
-            type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
+            type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
             id: string;
             name: string;
             confidence: number;
@@ -262,15 +262,14 @@ export declare const ExtractionResultSchema: z.ZodObject<{
                 endIndex: number;
                 confidence?: number | undefined;
             }[];
-            embedding?: number[] | undefined;
             customType?: string | undefined;
-            aliases?: string[] | undefined;
+            embedding?: number[] | undefined;
             properties?: Record<string, unknown> | undefined;
+            aliases?: string[] | undefined;
         };
         confidence: number;
-        sourceChunkId: string;
         subject: {
-            type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
+            type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
             id: string;
             name: string;
             confidence: number;
@@ -281,10 +280,10 @@ export declare const ExtractionResultSchema: z.ZodObject<{
                 endIndex: number;
                 confidence?: number | undefined;
             }[];
-            embedding?: number[] | undefined;
             customType?: string | undefined;
-            aliases?: string[] | undefined;
+            embedding?: number[] | undefined;
             properties?: Record<string, unknown> | undefined;
+            aliases?: string[] | undefined;
         };
         predicate: {
             type: string;
@@ -293,6 +292,7 @@ export declare const ExtractionResultSchema: z.ZodObject<{
             evidence?: string | undefined;
             direction?: "forward" | "backward" | "bidirectional" | undefined;
         };
+        sourceChunkId: string;
     }>, "many">;
     /** Processing metadata */
     metadata: z.ZodObject<{
@@ -307,27 +307,51 @@ export declare const ExtractionResultSchema: z.ZodObject<{
         /** Extractor version */
         extractorVersion: z.ZodOptional<z.ZodString>;
     }, "strip", z.ZodTypeAny, {
-        processingTimeMs: number;
         chunkId: string;
+        processingTimeMs: number;
         tokensUsed?: number | undefined;
         modelUsed?: string | undefined;
         extractorVersion?: string | undefined;
     }, {
-        processingTimeMs: number;
         chunkId: string;
+        processingTimeMs: number;
         tokensUsed?: number | undefined;
         modelUsed?: string | undefined;
         extractorVersion?: string | undefined;
     }>;
 }, "strip", z.ZodTypeAny, {
+    metadata: {
+        chunkId: string;
+        processingTimeMs: number;
+        tokensUsed?: number | undefined;
+        modelUsed?: string | undefined;
+        extractorVersion?: string | undefined;
+    };
+    entities: {
+        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
+        id: string;
+        name: string;
+        confidence: number;
+        properties: Record<string, unknown>;
+        aliases: string[];
+        sourceChunkId: string;
+        mentions: {
+            text: string;
+            startIndex: number;
+            endIndex: number;
+            confidence?: number | undefined;
+        }[];
+        customType?: string | undefined;
+        embedding?: number[] | undefined;
+    }[];
     triplets: {
         object: {
-            type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
+            type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
             id: string;
             name: string;
             confidence: number;
-            aliases: string[];
             properties: Record<string, unknown>;
+            aliases: string[];
             sourceChunkId: string;
             mentions: {
                 text: string;
@@ -335,18 +359,17 @@ export declare const ExtractionResultSchema: z.ZodObject<{
                 endIndex: number;
                 confidence?: number | undefined;
             }[];
-            embedding?: number[] | undefined;
             customType?: string | undefined;
+            embedding?: number[] | undefined;
         };
         confidence: number;
-        sourceChunkId: string;
         subject: {
-            type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
+            type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
             id: string;
             name: string;
             confidence: number;
-            aliases: string[];
             properties: Record<string, unknown>;
+            aliases: string[];
             sourceChunkId: string;
             mentions: {
                 text: string;
@@ -354,8 +377,8 @@ export declare const ExtractionResultSchema: z.ZodObject<{
                 endIndex: number;
                 confidence?: number | undefined;
             }[];
-            embedding?: number[] | undefined;
             customType?: string | undefined;
+            embedding?: number[] | undefined;
         };
         predicate: {
             type: string;
@@ -364,86 +387,18 @@ export declare const ExtractionResultSchema: z.ZodObject<{
             evidence?: string | undefined;
             direction?: "forward" | "backward" | "bidirectional" | undefined;
         };
-    }[];
-    metadata: {
-        processingTimeMs: number;
-        chunkId: string;
-        tokensUsed?: number | undefined;
-        modelUsed?: string | undefined;
-        extractorVersion?: string | undefined;
-    };
-    entities: {
-        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
-        id: string;
-        name: string;
-        confidence: number;
-        aliases: string[];
-        properties: Record<string, unknown>;
         sourceChunkId: string;
-        mentions: {
-            text: string;
-            startIndex: number;
-            endIndex: number;
-            confidence?: number | undefined;
-        }[];
-        embedding?: number[] | undefined;
-        customType?: string | undefined;
     }[];
 }, {
-    triplets: {
-        object: {
-            type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
-            id: string;
-            name: string;
-            confidence: number;
-            sourceChunkId: string;
-            mentions: {
-                text: string;
-                startIndex: number;
-                endIndex: number;
-                confidence?: number | undefined;
-            }[];
-            embedding?: number[] | undefined;
-            customType?: string | undefined;
-            aliases?: string[] | undefined;
-            properties?: Record<string, unknown> | undefined;
-        };
-        confidence: number;
-        sourceChunkId: string;
-        subject: {
-            type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
-            id: string;
-            name: string;
-            confidence: number;
-            sourceChunkId: string;
-            mentions: {
-                text: string;
-                startIndex: number;
-                endIndex: number;
-                confidence?: number | undefined;
-            }[];
-            embedding?: number[] | undefined;
-            customType?: string | undefined;
-            aliases?: string[] | undefined;
-            properties?: Record<string, unknown> | undefined;
-        };
-        predicate: {
-            type: string;
-            confidence: number;
-            properties?: Record<string, unknown> | undefined;
-            evidence?: string | undefined;
-            direction?: "forward" | "backward" | "bidirectional" | undefined;
-        };
-    }[];
     metadata: {
-        processingTimeMs: number;
         chunkId: string;
+        processingTimeMs: number;
         tokensUsed?: number | undefined;
         modelUsed?: string | undefined;
         extractorVersion?: string | undefined;
     };
     entities: {
-        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
+        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
         id: string;
         name: string;
         confidence: number;
@@ -454,11 +409,57 @@ export declare const ExtractionResultSchema: z.ZodObject<{
             endIndex: number;
             confidence?: number | undefined;
         }[];
-        embedding?: number[] | undefined;
         customType?: string | undefined;
-        aliases?: string[] | undefined;
+        embedding?: number[] | undefined;
         properties?: Record<string, unknown> | undefined;
+        aliases?: string[] | undefined;
+    }[];
+    triplets: {
+        object: {
+            type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
+            id: string;
+            name: string;
+            confidence: number;
+            sourceChunkId: string;
+            mentions: {
+                text: string;
+                startIndex: number;
+                endIndex: number;
+                confidence?: number | undefined;
+            }[];
+            customType?: string | undefined;
+            embedding?: number[] | undefined;
+            properties?: Record<string, unknown> | undefined;
+            aliases?: string[] | undefined;
+        };
+        confidence: number;
+        subject: {
+            type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
+            id: string;
+            name: string;
+            confidence: number;
+            sourceChunkId: string;
+            mentions: {
+                text: string;
+                startIndex: number;
+                endIndex: number;
+                confidence?: number | undefined;
+            }[];
+            customType?: string | undefined;
+            embedding?: number[] | undefined;
+            properties?: Record<string, unknown> | undefined;
+            aliases?: string[] | undefined;
+        };
+        predicate: {
+            type: string;
+            confidence: number;
+            properties?: Record<string, unknown> | undefined;
+            evidence?: string | undefined;
+            direction?: "forward" | "backward" | "bidirectional" | undefined;
+        };
+        sourceChunkId: string;
     }[];
 }>;
 export type ExtractionResult = z.infer<typeof ExtractionResultSchema>;
 export type { Entity, Triplet, Mention, EntityType, Predicate } from './schemas';
+//# sourceMappingURL=types.d.ts.map

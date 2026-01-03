@@ -1,9 +1,12 @@
-import { z } from 'zod';
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.TripletSchema = exports.PredicateSchema = exports.EntitySchema = exports.MentionSchema = exports.EntityTypeSchema = void 0;
+const zod_1 = require("zod");
 /**
  * Entity types for Graph RAG.
  * Extensible via custom types.
  */
-export const EntityTypeSchema = z.enum([
+exports.EntityTypeSchema = zod_1.z.enum([
     'PERSON',
     'ORGANIZATION',
     'LOCATION',
@@ -18,71 +21,72 @@ export const EntityTypeSchema = z.enum([
  * Mention - where entity appears in source text.
  * Enables citations and provenance tracking.
  */
-export const MentionSchema = z.object({
+exports.MentionSchema = zod_1.z.object({
     /** Exact text of mention */
-    text: z.string(),
+    text: zod_1.z.string(),
     /** Character start in chunk */
-    startIndex: z.number().int().min(0),
+    startIndex: zod_1.z.number().int().min(0),
     /** Character end in chunk */
-    endIndex: z.number().int().min(0),
+    endIndex: zod_1.z.number().int().min(0),
     /** Confidence of this specific mention (0-1) */
-    confidence: z.number().min(0).max(1).optional(),
+    confidence: zod_1.z.number().min(0).max(1).optional(),
 });
 /**
  * Entity - extracted named entity.
  * Core building block for knowledge graphs.
  */
-export const EntitySchema = z.object({
+exports.EntitySchema = zod_1.z.object({
     /** Unique ID (UUID) */
-    id: z.string().uuid(),
+    id: zod_1.z.string().uuid(),
     /** Canonical name */
-    name: z.string().min(1).max(500),
+    name: zod_1.z.string().min(1).max(500),
     /** Entity type */
-    type: EntityTypeSchema,
+    type: exports.EntityTypeSchema,
     /** Custom type if type === 'CUSTOM' */
-    customType: z.string().optional(),
+    customType: zod_1.z.string().optional(),
     /** Alternative names (aliases, abbreviations) */
-    aliases: z.array(z.string()).default([]),
+    aliases: zod_1.z.array(zod_1.z.string()).default([]),
     /** Structured properties (domain-specific metadata) */
-    properties: z.record(z.string(), z.unknown()).default({}),
+    properties: zod_1.z.record(zod_1.z.string(), zod_1.z.unknown()).default({}),
     /** Extraction confidence (0-1) */
-    confidence: z.number().min(0).max(1),
+    confidence: zod_1.z.number().min(0).max(1),
     /** Source chunk ID for provenance */
-    sourceChunkId: z.string(),
+    sourceChunkId: zod_1.z.string(),
     /** All mentions in source text */
-    mentions: z.array(MentionSchema).min(1),
+    mentions: zod_1.z.array(exports.MentionSchema).min(1),
     /** Optional embedding vector for semantic deduplication */
-    embedding: z.array(z.number()).optional(),
+    embedding: zod_1.z.array(zod_1.z.number()).optional(),
 });
 /**
  * Predicate - relationship type between entities.
  * Represents edges in the knowledge graph.
  */
-export const PredicateSchema = z.object({
+exports.PredicateSchema = zod_1.z.object({
     /** Relationship type (e.g., 'WORKS_FOR', 'LOCATED_IN') */
-    type: z.string().min(1).max(100),
+    type: zod_1.z.string().min(1).max(100),
     /** Relationship properties (metadata, temporal info) */
-    properties: z.record(z.string(), z.unknown()).default({}),
+    properties: zod_1.z.record(zod_1.z.string(), zod_1.z.unknown()).default({}),
     /** Confidence of relationship (0-1) */
-    confidence: z.number().min(0).max(1),
+    confidence: zod_1.z.number().min(0).max(1),
     /** Evidence text from source supporting this relationship */
-    evidence: z.string().optional(),
+    evidence: zod_1.z.string().optional(),
     /** Optional direction hint for asymmetric relationships */
-    direction: z.enum(['forward', 'backward', 'bidirectional']).optional(),
+    direction: zod_1.z.enum(['forward', 'backward', 'bidirectional']).optional(),
 });
 /**
  * Triplet - subject-predicate-object relationship.
  * Complete knowledge graph edge with nodes.
  */
-export const TripletSchema = z.object({
+exports.TripletSchema = zod_1.z.object({
     /** Subject entity (source) */
-    subject: EntitySchema,
+    subject: exports.EntitySchema,
     /** Relationship (edge) */
-    predicate: PredicateSchema,
+    predicate: exports.PredicateSchema,
     /** Object entity (target) */
-    object: EntitySchema,
+    object: exports.EntitySchema,
     /** Source chunk ID for provenance */
-    sourceChunkId: z.string(),
+    sourceChunkId: zod_1.z.string(),
     /** Overall confidence (product of entity + predicate confidence) */
-    confidence: z.number().min(0).max(1),
+    confidence: zod_1.z.number().min(0).max(1),
 });
+//# sourceMappingURL=schemas.js.map

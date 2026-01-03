@@ -138,3 +138,4 @@ export declare function getCheapestModel(provider: AI_PROVIDER_TYPE): string | u
  * @returns Most capable model or undefined
  */
 export declare function getMostCapableModel(provider: AI_PROVIDER_TYPE): string | undefined;
+//# sourceMappingURL=model-registry.d.ts.map

@@ -1,3 +1,20 @@
+"use strict";
+/**
+ * @gerts/core - Unified Retry Logic
+ *
+ * Provides exponential backoff with jitter for reliable retry operations.
+ * Consolidates retry patterns from @gerts/agent and @gerts/scheduler.
+ *
+ * @module @gerts/core/retry
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.BackoffCalculator = exports.DEFAULT_RETRY_CONFIG = void 0;
+exports.withRetry = withRetry;
+exports.retryAsync = retryAsync;
+exports.createRetryConfig = createRetryConfig;
+exports.createSimpleRetryConfig = createSimpleRetryConfig;
+exports.sleep = sleep;
+exports.isReasonableDelay = isReasonableDelay;
 /**
  * Check if an error is retryable.
  * Duplicated from errors.ts to avoid circular imports.
@@ -24,7 +41,7 @@ function isRetryableError(error) {
 /**
  * Default retry configuration.
  */
-export const DEFAULT_RETRY_CONFIG = {
+exports.DEFAULT_RETRY_CONFIG = {
     maxAttempts: 3,
     baseDelay: 100,
     maxDelay: 10000,
@@ -54,7 +71,7 @@ export const DEFAULT_RETRY_CONFIG = {
  * const delay = calculator.calculateDelay(2);
  * ```
  */
-export class BackoffCalculator {
+class BackoffCalculator {
     config;
     constructor(config) {
         this.config = config;
@@ -85,6 +102,7 @@ export class BackoffCalculator {
         return Math.floor(delay * jitterFactor);
     }
 }
+exports.BackoffCalculator = BackoffCalculator;
 // =============================================================================
 // Retry Executor
 // =============================================================================
@@ -121,8 +139,8 @@ export class BackoffCalculator {
  * }
  * ```
  */
-export async function withRetry(fn, config = {}) {
-    const fullConfig = { ...DEFAULT_RETRY_CONFIG, ...config };
+async function withRetry(fn, config = {}) {
+    const fullConfig = { ...exports.DEFAULT_RETRY_CONFIG, ...config };
     const calculator = new BackoffCalculator(fullConfig);
     const startTime = Date.now();
     let lastError;
@@ -181,7 +199,7 @@ export async function withRetry(fn, config = {}) {
  * }
  * ```
  */
-export async function retryAsync(fn, config = {}) {
+async function retryAsync(fn, config = {}) {
     const result = await withRetry(fn, config);
     if (result.success) {
         return result.value;
@@ -194,15 +212,15 @@ export async function retryAsync(fn, config = {}) {
 /**
  * Create a RetryConfig with custom overrides.
  */
-export function createRetryConfig(overrides = {}) {
-    return { ...DEFAULT_RETRY_CONFIG, ...overrides };
+function createRetryConfig(overrides = {}) {
+    return { ...exports.DEFAULT_RETRY_CONFIG, ...overrides };
 }
 /**
  * Create a simple retry config with common defaults.
  */
-export function createSimpleRetryConfig(maxAttempts, baseDelay = 100) {
+function createSimpleRetryConfig(maxAttempts, baseDelay = 100) {
     return {
-        ...DEFAULT_RETRY_CONFIG,
+        ...exports.DEFAULT_RETRY_CONFIG,
         maxAttempts,
         baseDelay,
     };
@@ -210,12 +228,13 @@ export function createSimpleRetryConfig(maxAttempts, baseDelay = 100) {
 /**
  * Sleep for a given number of milliseconds.
  */
-export function sleep(ms) {
+function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 /**
  * Check if a delay is reasonable (not too long).
  */
-export function isReasonableDelay(delay, maxMs = 60000) {
+function isReasonableDelay(delay, maxMs = 60000) {
     return delay >= 0 && delay <= maxMs;
 }
+//# sourceMappingURL=retry.js.map

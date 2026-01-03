@@ -1,8 +1,25 @@
+"use strict";
+/**
+ * @gerts/core - Hook Types
+ * Phase 19: Hooks & Lifecycle
+ *
+ * Core types for the hooks system merging Agno (decorators, background execution)
+ * and CrewAI (global registry, event bus, filtering) patterns.
+ *
+ * Features:
+ * - Pre/post hooks for agents, tools, workflows
+ * - Background execution support
+ * - Type-safe hook contexts
+ * - Priority-based execution ordering
+ * - Filter support (agents, tools)
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.BACKGROUND_HOOK_COPY_KEYS = exports.RunEvent = exports.OutputCheckError = exports.InputCheckError = exports.CheckTrigger = void 0;
 // ============================================================================
 // Check Trigger & Errors
 // ============================================================================
 /** Trigger reason for check errors */
-export var CheckTrigger;
+var CheckTrigger;
 (function (CheckTrigger) {
     CheckTrigger["INPUT_NOT_ALLOWED"] = "input_not_allowed";
     CheckTrigger["OUTPUT_NOT_ALLOWED"] = "output_not_allowed";
@@ -13,9 +30,9 @@ export var CheckTrigger;
     CheckTrigger["QUOTA_EXCEEDED"] = "quota_exceeded";
     CheckTrigger["TOOL_BLOCKED"] = "tool_blocked";
     CheckTrigger["VALIDATION_FAILED"] = "validation_failed";
-})(CheckTrigger || (CheckTrigger = {}));
+})(CheckTrigger || (exports.CheckTrigger = CheckTrigger = {}));
 /** Error thrown by input validation hooks */
-export class InputCheckError extends Error {
+class InputCheckError extends Error {
     checkTrigger;
     constructor(message, checkTrigger) {
         super(message);
@@ -24,8 +41,9 @@ export class InputCheckError extends Error {
         Object.setPrototypeOf(this, InputCheckError.prototype);
     }
 }
+exports.InputCheckError = InputCheckError;
 /** Error thrown by output validation hooks */
-export class OutputCheckError extends Error {
+class OutputCheckError extends Error {
     checkTrigger;
     constructor(message, checkTrigger) {
         super(message);
@@ -34,11 +52,12 @@ export class OutputCheckError extends Error {
         Object.setPrototypeOf(this, OutputCheckError.prototype);
     }
 }
+exports.OutputCheckError = OutputCheckError;
 // ============================================================================
 // Event Types
 // ============================================================================
 /** Run event types */
-export var RunEvent;
+var RunEvent;
 (function (RunEvent) {
     // Run lifecycle
     RunEvent["RUN_STARTED"] = "run_started";
@@ -68,9 +87,9 @@ export var RunEvent;
     RunEvent["MEMORY_UPDATE_COMPLETED"] = "memory_update_completed";
     // Custom event
     RunEvent["CUSTOM_EVENT"] = "custom_event";
-})(RunEvent || (RunEvent = {}));
+})(RunEvent || (exports.RunEvent = RunEvent = {}));
 /** Keys to deep copy for background hooks */
-export const BACKGROUND_HOOK_COPY_KEYS = new Set([
+exports.BACKGROUND_HOOK_COPY_KEYS = new Set([
     'runInput',
     'runContext',
     'runOutput',
@@ -78,3 +97,4 @@ export const BACKGROUND_HOOK_COPY_KEYS = new Set([
     'dependencies',
     'metadata',
 ]);
+//# sourceMappingURL=types.js.map

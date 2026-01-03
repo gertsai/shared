@@ -52,3 +52,4 @@ export { LLMCallContext, ToolCallContext, type LLMCallContextOptions, type ToolC
 export { HookManager, hookManager, } from './manager';
 export { HookExecutor, hookExecutor, getHookMetadata, setHookMetadata, shouldRunInBackground, getHookPriority, getHookName, copyArgsForBackground, } from './executor';
 export { hook, createHook, beforeLLMCall, afterLLMCall, createBeforeLLMHook, createAfterLLMHook, beforeToolCall, afterToolCall, createBeforeToolHook, createAfterToolHook, blockingHook, backgroundHook, priorityHook, Hook, BeforeLLMCall, AfterLLMCall, BeforeToolCall, AfterToolCall, type HookDecoratorOptions, type LLMHookDecoratorOptions, type ToolHookDecoratorOptions, } from './decorators';
+//# sourceMappingURL=index.d.ts.map

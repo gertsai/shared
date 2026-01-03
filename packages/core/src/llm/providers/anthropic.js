@@ -1,4 +1,17 @@
-import { BaseLLM, LLMCallError } from '../base';
+"use strict";
+/**
+ * @gerts/core - Anthropic LLM Provider
+ * Phase 21: LLM Abstraction
+ *
+ * Native Anthropic SDK integration with:
+ * - Streaming support
+ * - Tool use
+ * - Extended thinking mode
+ * - System message handling (Anthropic-specific)
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.AnthropicProvider = void 0;
+const base_1 = require("../base");
 /**
  * Anthropic LLM Provider using native SDK patterns.
  *
@@ -21,7 +34,7 @@ import { BaseLLM, LLMCallError } from '../base';
  * ]);
  * ```
  */
-export class AnthropicProvider extends BaseLLM {
+class AnthropicProvider extends base_1.BaseLLM {
     topP;
     topK;
     thinking;
@@ -61,7 +74,7 @@ export class AnthropicProvider extends BaseLLM {
             const { formattedMessages, systemMessage } = this.formatMessagesForAnthropic(messages);
             const params = this.prepareParams(formattedMessages, systemMessage, options);
             if (!this.apiKey) {
-                throw new LLMCallError('Anthropic API key is required', 'anthropic', this.model);
+                throw new base_1.LLMCallError('Anthropic API key is required', 'anthropic', this.model);
             }
             const response = await this.makeRequest(params);
             // Extract text content
@@ -109,9 +122,9 @@ export class AnthropicProvider extends BaseLLM {
             const errorMsg = error instanceof Error ? error.message : String(error);
             this.emitCallFailed(errorMsg, startTime);
             if (this.isContextLengthError(error)) {
-                throw new LLMCallError(`Context window exceeded for model ${this.model}`, 'anthropic', this.model, error);
+                throw new base_1.LLMCallError(`Context window exceeded for model ${this.model}`, 'anthropic', this.model, error);
             }
-            throw new LLMCallError(`Anthropic API call failed: ${errorMsg}`, 'anthropic', this.model, error);
+            throw new base_1.LLMCallError(`Anthropic API call failed: ${errorMsg}`, 'anthropic', this.model, error);
         }
     }
     /**
@@ -125,7 +138,7 @@ export class AnthropicProvider extends BaseLLM {
             const params = this.prepareParams(formattedMessages, systemMessage, options);
             params.stream = true;
             if (!this.apiKey) {
-                throw new LLMCallError('Anthropic API key is required', 'anthropic', this.model);
+                throw new base_1.LLMCallError('Anthropic API key is required', 'anthropic', this.model);
             }
             const response = await fetch(`${this.getBaseUrl()}/messages`, {
                 method: 'POST',
@@ -185,7 +198,7 @@ export class AnthropicProvider extends BaseLLM {
         catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
             this.emitCallFailed(errorMsg, startTime);
-            throw new LLMCallError(`Anthropic streaming failed: ${errorMsg}`, 'anthropic', this.model, error);
+            throw new base_1.LLMCallError(`Anthropic streaming failed: ${errorMsg}`, 'anthropic', this.model, error);
         }
     }
     // ==================== Private Methods ====================
@@ -346,3 +359,5 @@ export class AnthropicProvider extends BaseLLM {
         return false;
     }
 }
+exports.AnthropicProvider = AnthropicProvider;
+//# sourceMappingURL=anthropic.js.map

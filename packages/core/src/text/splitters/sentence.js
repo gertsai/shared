@@ -1,5 +1,8 @@
-import { BaseTextSplitter } from './base';
-export const ABBREVIATIONS = {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SentenceSplitter = exports.ABBREVIATIONS = void 0;
+const base_1 = require("./base");
+exports.ABBREVIATIONS = {
     en: [
         'Mr.',
         'Mrs.',
@@ -35,7 +38,7 @@ function normalizeLanguage(lang) {
 }
 function getAbbreviationSet(options) {
     const language = normalizeLanguage(options?.language);
-    const base = ABBREVIATIONS[language] ?? ABBREVIATIONS.en;
+    const base = exports.ABBREVIATIONS[language] ?? exports.ABBREVIATIONS.en;
     const extras = options?.abbreviations ?? [];
     return new Set([...base, ...extras]);
 }
@@ -79,7 +82,7 @@ function splitSentences(text, abbreviations) {
     }
     return sentences.filter((s) => s.length > 0);
 }
-export class SentenceSplitter extends BaseTextSplitter {
+class SentenceSplitter extends base_1.BaseTextSplitter {
     abbreviations;
     constructor(options) {
         super({
@@ -99,3 +102,5 @@ export class SentenceSplitter extends BaseTextSplitter {
         return this.mergeSplits(sentences, '');
     }
 }
+exports.SentenceSplitter = SentenceSplitter;
+//# sourceMappingURL=sentence.js.map

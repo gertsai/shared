@@ -1,7 +1,18 @@
+"use strict";
+/**
+ * @gerts/core - Streaming Interfaces
+ *
+ * Core streaming abstractions for async operations.
+ * Used by Graph RAG, LLM providers, and other async operations.
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.DEFAULT_STREAMING_CONFIG = void 0;
+exports.isStreamable = isStreamable;
+exports.isStreamableEnhanced = isStreamableEnhanced;
 /**
  * Default streaming configuration.
  */
-export const DEFAULT_STREAMING_CONFIG = {
+exports.DEFAULT_STREAMING_CONFIG = {
     maxBufferSize: 100,
     chunkTimeout: 30000,
     swallowCallbackErrors: true,
@@ -15,7 +26,7 @@ export const DEFAULT_STREAMING_CONFIG = {
 /**
  * Check if an object is a streamable.
  */
-export function isStreamable(obj) {
+function isStreamable(obj) {
     return (typeof obj === 'object' &&
         obj !== null &&
         'stream' in obj &&
@@ -25,9 +36,10 @@ export function isStreamable(obj) {
 /**
  * Check if an object is an enhanced streamable.
  */
-export function isStreamableEnhanced(obj) {
+function isStreamableEnhanced(obj) {
     return (isStreamable(obj) &&
         typeof obj.abortAsync === 'function' &&
         'isActive' in obj &&
         'bufferSize' in obj);
 }
+//# sourceMappingURL=types.js.map

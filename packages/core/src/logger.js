@@ -1,3 +1,6 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ConsoleLogger = void 0;
 function shouldLog(current, level) {
     const weights = {
         debug: 10,
@@ -7,7 +10,7 @@ function shouldLog(current, level) {
     };
     return weights[level] >= weights[current];
 }
-export class ConsoleLogger {
+class ConsoleLogger {
     level;
     constructor(level = 'info') {
         this.level = level;
@@ -31,3 +34,5 @@ export class ConsoleLogger {
         console.error('[error]', content, meta ?? '');
     }
 }
+exports.ConsoleLogger = ConsoleLogger;
+//# sourceMappingURL=logger.js.map

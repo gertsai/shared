@@ -1,22 +1,40 @@
+"use strict";
+/**
+ * @gerts/core - Query System Types
+ *
+ * Universal query types for type-safe query → result mapping.
+ * Aligned with @gerts/tools ToolResult pattern and @gerts/api-types Source.
+ *
+ * @see RFC-032: Universal Query System
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.QueryError = exports.QUERY_ERROR_CODES = void 0;
+exports.isQuerySuccess = isQuerySuccess;
+exports.isQueryFailure = isQueryFailure;
+exports.isQueryPartial = isQueryPartial;
+exports.querySuccess = querySuccess;
+exports.queryFailure = queryFailure;
+exports.queryPartial = queryPartial;
+exports.isQueryError = isQueryError;
 // ============================================================================
 // Type Guards
 // ============================================================================
 /**
  * Type guard for successful query result
  */
-export function isQuerySuccess(result) {
+function isQuerySuccess(result) {
     return result.status === 'success';
 }
 /**
  * Type guard for failed query result
  */
-export function isQueryFailure(result) {
+function isQueryFailure(result) {
     return result.status === 'error';
 }
 /**
  * Type guard for partial query result
  */
-export function isQueryPartial(result) {
+function isQueryPartial(result) {
     return result.status === 'partial';
 }
 // ============================================================================
@@ -35,7 +53,7 @@ export function isQueryPartial(result) {
  * );
  * ```
  */
-export function querySuccess(data, sources, durationMs, options) {
+function querySuccess(data, sources, durationMs, options) {
     return {
         status: 'success',
         data,
@@ -60,7 +78,7 @@ export function querySuccess(data, sources, durationMs, options) {
  * );
  * ```
  */
-export function queryFailure(code, message, options) {
+function queryFailure(code, message, options) {
     return {
         status: 'error',
         code,
@@ -82,7 +100,7 @@ export function queryFailure(code, message, options) {
  * );
  * ```
  */
-export function queryPartial(data, progress, sources, durationMs, options) {
+function queryPartial(data, progress, sources, durationMs, options) {
     return {
         status: 'partial',
         data,
@@ -103,7 +121,7 @@ export function queryPartial(data, progress, sources, durationMs, options) {
  * Standard query error codes.
  * Extensions can add custom codes.
  */
-export const QUERY_ERROR_CODES = {
+exports.QUERY_ERROR_CODES = {
     // Validation errors
     VALIDATION_FAILED: 'VALIDATION_FAILED',
     INVALID_QUERY: 'INVALID_QUERY',
@@ -133,7 +151,7 @@ export const QUERY_ERROR_CODES = {
  * Query error class for throwing.
  * Can be caught and converted to QueryFailure.
  */
-export class QueryError extends Error {
+class QueryError extends Error {
     code;
     retryable;
     details;
@@ -164,9 +182,11 @@ export class QueryError extends Error {
         return this.code === code;
     }
 }
+exports.QueryError = QueryError;
 /**
  * Type guard for QueryError
  */
-export function isQueryError(error) {
+function isQueryError(error) {
     return error instanceof QueryError;
 }
+//# sourceMappingURL=types.js.map

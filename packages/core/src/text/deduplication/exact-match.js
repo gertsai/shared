@@ -1,3 +1,13 @@
+"use strict";
+/**
+ * @fileoverview Exact match deduplication strategy for entity deduplication.
+ * Provides O(n) exact name matching using normalized keys (type + lowercase name).
+ *
+ * @module @gerts/core/text/deduplication
+ * @since Phase 23
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ExactMatchDeduplication = void 0;
 /**
  * ExactMatchDeduplication - O(n) exact name matching deduplication strategy.
  *
@@ -51,7 +61,7 @@
  * // Returns 1 group combining new and existing 'John Smith' entities
  * ```
  */
-export class ExactMatchDeduplication {
+class ExactMatchDeduplication {
     /**
      * Strategy identifier.
      * Used for logging, metrics, and strategy selection.
@@ -225,3 +235,5 @@ export class ExactMatchDeduplication {
         return `${entity.type}:${entity.name.toLowerCase().trim()}`;
     }
 }
+exports.ExactMatchDeduplication = ExactMatchDeduplication;
+//# sourceMappingURL=exact-match.js.map

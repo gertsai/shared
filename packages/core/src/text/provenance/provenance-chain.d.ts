@@ -92,7 +92,6 @@ export declare const ProvenanceChainSchema: z.ZodObject<{
         }>>>;
     }, "strip", z.ZodTypeAny, {
         id: string;
-        text: string;
         metadata: {
             chunk_index: number;
             start_index: number;
@@ -102,7 +101,7 @@ export declare const ProvenanceChainSchema: z.ZodObject<{
             Header_3?: string | undefined;
             section_path?: string | undefined;
             total_chunks?: number | undefined;
-            chunk_method?: "token" | "code" | "character" | "recursive" | "sentence" | "markdown" | "html" | "semantic" | undefined;
+            chunk_method?: "code" | "token" | "character" | "recursive" | "sentence" | "markdown" | "html" | "semantic" | undefined;
             chunk_overlap?: number | undefined;
             end_index?: number | undefined;
             startCharIdx?: number | undefined;
@@ -111,6 +110,7 @@ export declare const ProvenanceChainSchema: z.ZodObject<{
         } & {
             [k: string]: unknown;
         };
+        text: string;
         embedding?: number[] | undefined;
         relationships?: Record<string, {
             nodeId: string;
@@ -119,7 +119,6 @@ export declare const ProvenanceChainSchema: z.ZodObject<{
         }> | undefined;
     }, {
         id: string;
-        text: string;
         metadata: {
             chunk_index: number;
             start_index: number;
@@ -129,7 +128,7 @@ export declare const ProvenanceChainSchema: z.ZodObject<{
             Header_3?: string | undefined;
             section_path?: string | undefined;
             total_chunks?: number | undefined;
-            chunk_method?: "token" | "code" | "character" | "recursive" | "sentence" | "markdown" | "html" | "semantic" | undefined;
+            chunk_method?: "code" | "token" | "character" | "recursive" | "sentence" | "markdown" | "html" | "semantic" | undefined;
             chunk_overlap?: number | undefined;
             end_index?: number | undefined;
             startCharIdx?: number | undefined;
@@ -138,6 +137,7 @@ export declare const ProvenanceChainSchema: z.ZodObject<{
         } & {
             [k: string]: unknown;
         };
+        text: string;
         embedding?: number[] | undefined;
         relationships?: Record<string, {
             nodeId: string;
@@ -173,12 +173,12 @@ export declare const ProvenanceChainSchema: z.ZodObject<{
         }>, "many">;
         embedding: z.ZodOptional<z.ZodArray<z.ZodNumber, "many">>;
     }, "strip", z.ZodTypeAny, {
-        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
+        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
         id: string;
         name: string;
         confidence: number;
-        aliases: string[];
         properties: Record<string, unknown>;
+        aliases: string[];
         sourceChunkId: string;
         mentions: {
             text: string;
@@ -186,10 +186,10 @@ export declare const ProvenanceChainSchema: z.ZodObject<{
             endIndex: number;
             confidence?: number | undefined;
         }[];
-        embedding?: number[] | undefined;
         customType?: string | undefined;
+        embedding?: number[] | undefined;
     }, {
-        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
+        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
         id: string;
         name: string;
         confidence: number;
@@ -200,10 +200,10 @@ export declare const ProvenanceChainSchema: z.ZodObject<{
             endIndex: number;
             confidence?: number | undefined;
         }[];
-        embedding?: number[] | undefined;
         customType?: string | undefined;
-        aliases?: string[] | undefined;
+        embedding?: number[] | undefined;
         properties?: Record<string, unknown> | undefined;
+        aliases?: string[] | undefined;
     }>, "many">;
     /** Graph traversal path */
     graphPath: z.ZodArray<z.ZodObject<{
@@ -232,13 +232,13 @@ export declare const ProvenanceChainSchema: z.ZodObject<{
             url: z.ZodOptional<z.ZodString>;
         }, "strip", z.ZodTypeAny, {
             id: string;
-            name?: string | undefined;
             path?: string | undefined;
+            name?: string | undefined;
             url?: string | undefined;
         }, {
             id: string;
-            name?: string | undefined;
             path?: string | undefined;
+            name?: string | undefined;
             url?: string | undefined;
         }>;
         chunk: z.ZodObject<{
@@ -273,17 +273,17 @@ export declare const ProvenanceChainSchema: z.ZodObject<{
         confidence: z.ZodNumber;
     }, "strip", z.ZodTypeAny, {
         id: string;
+        confidence: number;
         chunk: {
             id: string;
             text: string;
             startIndex: number;
             endIndex: number;
         };
-        confidence: number;
         sourceDocument: {
             id: string;
-            name?: string | undefined;
             path?: string | undefined;
+            name?: string | undefined;
             url?: string | undefined;
         };
         entity?: {
@@ -293,17 +293,17 @@ export declare const ProvenanceChainSchema: z.ZodObject<{
         } | undefined;
     }, {
         id: string;
+        confidence: number;
         chunk: {
             id: string;
             text: string;
             startIndex: number;
             endIndex: number;
         };
-        confidence: number;
         sourceDocument: {
             id: string;
-            name?: string | undefined;
             path?: string | undefined;
+            name?: string | undefined;
             url?: string | undefined;
         };
         entity?: {
@@ -316,10 +316,10 @@ export declare const ProvenanceChainSchema: z.ZodObject<{
     createdAt: z.ZodString;
     processingTimeMs: z.ZodNumber;
 }, "strip", z.ZodTypeAny, {
+    createdAt: string;
     query: string;
     retrievedChunks: {
         id: string;
-        text: string;
         metadata: {
             chunk_index: number;
             start_index: number;
@@ -329,7 +329,7 @@ export declare const ProvenanceChainSchema: z.ZodObject<{
             Header_3?: string | undefined;
             section_path?: string | undefined;
             total_chunks?: number | undefined;
-            chunk_method?: "token" | "code" | "character" | "recursive" | "sentence" | "markdown" | "html" | "semantic" | undefined;
+            chunk_method?: "code" | "token" | "character" | "recursive" | "sentence" | "markdown" | "html" | "semantic" | undefined;
             chunk_overlap?: number | undefined;
             end_index?: number | undefined;
             startCharIdx?: number | undefined;
@@ -338,6 +338,7 @@ export declare const ProvenanceChainSchema: z.ZodObject<{
         } & {
             [k: string]: unknown;
         };
+        text: string;
         embedding?: number[] | undefined;
         relationships?: Record<string, {
             nodeId: string;
@@ -346,12 +347,12 @@ export declare const ProvenanceChainSchema: z.ZodObject<{
         }> | undefined;
     }[];
     extractedEntities: {
-        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
+        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
         id: string;
         name: string;
         confidence: number;
-        aliases: string[];
         properties: Record<string, unknown>;
+        aliases: string[];
         sourceChunkId: string;
         mentions: {
             text: string;
@@ -359,8 +360,8 @@ export declare const ProvenanceChainSchema: z.ZodObject<{
             endIndex: number;
             confidence?: number | undefined;
         }[];
-        embedding?: number[] | undefined;
         customType?: string | undefined;
+        embedding?: number[] | undefined;
     }[];
     graphPath: {
         type: string;
@@ -370,17 +371,17 @@ export declare const ProvenanceChainSchema: z.ZodObject<{
     }[];
     citations: {
         id: string;
+        confidence: number;
         chunk: {
             id: string;
             text: string;
             startIndex: number;
             endIndex: number;
         };
-        confidence: number;
         sourceDocument: {
             id: string;
-            name?: string | undefined;
             path?: string | undefined;
+            name?: string | undefined;
             url?: string | undefined;
         };
         entity?: {
@@ -389,13 +390,12 @@ export declare const ProvenanceChainSchema: z.ZodObject<{
             name: string;
         } | undefined;
     }[];
-    createdAt: string;
     processingTimeMs: number;
 }, {
+    createdAt: string;
     query: string;
     retrievedChunks: {
         id: string;
-        text: string;
         metadata: {
             chunk_index: number;
             start_index: number;
@@ -405,7 +405,7 @@ export declare const ProvenanceChainSchema: z.ZodObject<{
             Header_3?: string | undefined;
             section_path?: string | undefined;
             total_chunks?: number | undefined;
-            chunk_method?: "token" | "code" | "character" | "recursive" | "sentence" | "markdown" | "html" | "semantic" | undefined;
+            chunk_method?: "code" | "token" | "character" | "recursive" | "sentence" | "markdown" | "html" | "semantic" | undefined;
             chunk_overlap?: number | undefined;
             end_index?: number | undefined;
             startCharIdx?: number | undefined;
@@ -414,6 +414,7 @@ export declare const ProvenanceChainSchema: z.ZodObject<{
         } & {
             [k: string]: unknown;
         };
+        text: string;
         embedding?: number[] | undefined;
         relationships?: Record<string, {
             nodeId: string;
@@ -422,7 +423,7 @@ export declare const ProvenanceChainSchema: z.ZodObject<{
         }> | undefined;
     }[];
     extractedEntities: {
-        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "QUANTITY" | "CUSTOM";
+        type: "PERSON" | "ORGANIZATION" | "LOCATION" | "EVENT" | "CONCEPT" | "PRODUCT" | "DATE" | "CUSTOM" | "QUANTITY";
         id: string;
         name: string;
         confidence: number;
@@ -433,10 +434,10 @@ export declare const ProvenanceChainSchema: z.ZodObject<{
             endIndex: number;
             confidence?: number | undefined;
         }[];
-        embedding?: number[] | undefined;
         customType?: string | undefined;
-        aliases?: string[] | undefined;
+        embedding?: number[] | undefined;
         properties?: Record<string, unknown> | undefined;
+        aliases?: string[] | undefined;
     }[];
     graphPath: {
         type: string;
@@ -446,17 +447,17 @@ export declare const ProvenanceChainSchema: z.ZodObject<{
     }[];
     citations: {
         id: string;
+        confidence: number;
         chunk: {
             id: string;
             text: string;
             startIndex: number;
             endIndex: number;
         };
-        confidence: number;
         sourceDocument: {
             id: string;
-            name?: string | undefined;
             path?: string | undefined;
+            name?: string | undefined;
             url?: string | undefined;
         };
         entity?: {
@@ -465,7 +466,7 @@ export declare const ProvenanceChainSchema: z.ZodObject<{
             name: string;
         } | undefined;
     }[];
-    createdAt: string;
     processingTimeMs: number;
 }>;
 export type ProvenanceChain = z.infer<typeof ProvenanceChainSchema>;
+//# sourceMappingURL=provenance-chain.d.ts.map

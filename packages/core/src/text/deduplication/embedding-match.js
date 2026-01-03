@@ -1,3 +1,6 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.EmbeddingDeduplication = void 0;
 /**
  * EmbeddingDeduplication - Semantic similarity via embeddings.
  * Uses cosine similarity to find entities with similar meanings.
@@ -9,7 +12,7 @@
  *
  * Performance: O(n^2) comparisons, but embeddings are cached.
  */
-export class EmbeddingDeduplication {
+class EmbeddingDeduplication {
     config;
     name = 'embedding-match';
     constructor(config) {
@@ -162,3 +165,5 @@ export class EmbeddingDeduplication {
         return result.map((v) => v / embeddings.length);
     }
 }
+exports.EmbeddingDeduplication = EmbeddingDeduplication;
+//# sourceMappingURL=embedding-match.js.map

@@ -1,5 +1,8 @@
-import { createTextNode } from '../nodes/text-node';
-import { NodeRelationship } from '../relationships/types';
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.BaseTextSplitter = void 0;
+const text_node_1 = require("../nodes/text-node");
+const types_1 = require("../relationships/types");
 function linkSequentialRelationships(nodes) {
     for (let i = 0; i < nodes.length; i++) {
         const prev = nodes[i - 1];
@@ -9,12 +12,12 @@ function linkSequentialRelationships(nodes) {
             continue;
         current.relationships ??= {};
         if (prev)
-            current.relationships[NodeRelationship.PREVIOUS] = { nodeId: prev.id };
+            current.relationships[types_1.NodeRelationship.PREVIOUS] = { nodeId: prev.id };
         if (next)
-            current.relationships[NodeRelationship.NEXT] = { nodeId: next.id };
+            current.relationships[types_1.NodeRelationship.NEXT] = { nodeId: next.id };
     }
 }
-export class BaseTextSplitter {
+class BaseTextSplitter {
     chunkSize;
     chunkOverlap;
     keepSeparator;
@@ -91,7 +94,7 @@ export class BaseTextSplitter {
                     searchIndex = startIndex;
                 }
                 const endIndex = Math.min(doc.text.length, startIndex + chunk.length);
-                return createTextNode(chunk, {
+                return (0, text_node_1.createTextNode)(chunk, {
                     chunk_index: index,
                     total_chunks: chunks.length,
                     chunk_method: this.chunkMethod,
@@ -113,10 +116,12 @@ export class BaseTextSplitter {
             // Establish SOURCE relationship to parent document
             for (const node of docNodes) {
                 node.relationships ??= {};
-                node.relationships[NodeRelationship.SOURCE] = { nodeId: doc.id };
+                node.relationships[types_1.NodeRelationship.SOURCE] = { nodeId: doc.id };
             }
             nodes.push(...docNodes);
         }
         return nodes;
     }
 }
+exports.BaseTextSplitter = BaseTextSplitter;
+//# sourceMappingURL=base.js.map

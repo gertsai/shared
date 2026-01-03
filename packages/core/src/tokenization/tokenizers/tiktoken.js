@@ -1,3 +1,4 @@
+"use strict";
 /**
  * @gerts/core - Tiktoken Tokenizer
  *
@@ -7,7 +8,43 @@
  * Uses gpt-tokenizer which is a fast pure-JS implementation
  * of OpenAI's tiktoken tokenizer.
  */
-import { getEncodingForModel, } from '../types.js';
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.TiktokenTokenizer = void 0;
+exports.createTiktokenTokenizer = createTiktokenTokenizer;
+const types_js_1 = require("../types.js");
 // Lazy-loaded gpt-tokenizer to avoid startup cost
 let gptTokenizer = null;
 /**
@@ -15,7 +52,7 @@ let gptTokenizer = null;
  */
 async function loadGptTokenizer() {
     if (!gptTokenizer) {
-        gptTokenizer = await import('gpt-tokenizer');
+        gptTokenizer = await Promise.resolve().then(() => __importStar(require('gpt-tokenizer')));
     }
     return gptTokenizer;
 }
@@ -32,7 +69,7 @@ async function loadGptTokenizer() {
  * console.log(result); // { count: 4, method: 'exact', provider: 'openai' }
  * ```
  */
-export class TiktokenTokenizer {
+class TiktokenTokenizer {
     provider = 'openai';
     isExact = true;
     encoding;
@@ -40,7 +77,7 @@ export class TiktokenTokenizer {
     encoderPromise = null;
     constructor(model = 'gpt-4o') {
         this.model = model;
-        this.encoding = getEncodingForModel(model) ?? 'cl100k_base';
+        this.encoding = (0, types_js_1.getEncodingForModel)(model) ?? 'cl100k_base';
     }
     /**
      * Get encoder (lazy initialization).
@@ -128,7 +165,7 @@ export class TiktokenTokenizer {
      * Check if tokenizer supports a model.
      */
     supportsModel(model) {
-        const encoding = getEncodingForModel(model);
+        const encoding = (0, types_js_1.getEncodingForModel)(model);
         return encoding !== undefined;
     }
     /**
@@ -138,12 +175,14 @@ export class TiktokenTokenizer {
         // gpt-tokenizer doesn't require cleanup
     }
 }
+exports.TiktokenTokenizer = TiktokenTokenizer;
 /**
  * Create a tiktoken tokenizer for a model.
  *
  * @param model - Model name (e.g., 'gpt-4o', 'gpt-3.5-turbo')
  * @returns TiktokenTokenizer instance
  */
-export function createTiktokenTokenizer(model = 'gpt-4o') {
+function createTiktokenTokenizer(model = 'gpt-4o') {
     return new TiktokenTokenizer(model);
 }
+//# sourceMappingURL=tiktoken.js.map

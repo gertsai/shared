@@ -45,3 +45,4 @@ export declare abstract class FileReader implements IDocumentReader {
     protected validateFileSize(filePath: string): Promise<number>;
     abstract loadData(source: string): Promise<Document[]>;
 }
+//# sourceMappingURL=base.d.ts.map

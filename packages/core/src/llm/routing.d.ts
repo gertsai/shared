@@ -132,3 +132,4 @@ export declare function createLLM(model: string, config?: Partial<ProviderConfig
  * Create an LLM instance with fallback chain using the default router.
  */
 export declare function createLLMWithFallback(models: string[], config?: Partial<ProviderConfig>): BaseLLM;
+//# sourceMappingURL=routing.d.ts.map

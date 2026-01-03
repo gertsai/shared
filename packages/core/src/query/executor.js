@@ -1,4 +1,20 @@
-import { queryFailure, QueryError } from './types.js';
+"use strict";
+/**
+ * @gerts/core - Query Executor Interface
+ *
+ * Core IQueryExecutor interface (Port in Hexagonal Architecture).
+ * Adapters implement this interface to provide query execution.
+ *
+ * @see RFC-032: Universal Query System
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.BaseQueryExecutor = void 0;
+exports.createExecutorMetadata = createExecutorMetadata;
+exports.executorSupportsType = executorSupportsType;
+exports.getAllSupportedTypes = getAllSupportedTypes;
+exports.findExecutorByName = findExecutorByName;
+exports.findExecutorsByType = findExecutorsByType;
+const types_js_1 = require("./types.js");
 // ============================================================================
 // Abstract Base Class
 // ============================================================================
@@ -29,7 +45,7 @@ import { queryFailure, QueryError } from './types.js';
  * }
  * ```
  */
-export class BaseQueryExecutor {
+class BaseQueryExecutor {
     /**
      * Default streaming implementation - delegates to execute()
      *
@@ -62,10 +78,10 @@ export class BaseQueryExecutor {
             return await fn();
         }
         catch (error) {
-            if (error instanceof QueryError) {
+            if (error instanceof types_js_1.QueryError) {
                 return error.toFailure();
             }
-            return queryFailure('EXECUTION_FAILED', error instanceof Error ? error.message : String(error), { retryable: false });
+            return (0, types_js_1.queryFailure)('EXECUTION_FAILED', error instanceof Error ? error.message : String(error), { retryable: false });
         }
     }
     /**
@@ -79,19 +95,20 @@ export class BaseQueryExecutor {
      */
     validateQueryType(query) {
         if (!this.supportsType(query.type)) {
-            return queryFailure('INVALID_QUERY', `Query type '${query.type}' not supported by ${this.metadata.name}. ` +
+            return (0, types_js_1.queryFailure)('INVALID_QUERY', `Query type '${query.type}' not supported by ${this.metadata.name}. ` +
                 `Supported: ${this.metadata.supportedTypes.join(', ')}`, { retryable: false });
         }
         return null;
     }
 }
+exports.BaseQueryExecutor = BaseQueryExecutor;
 // ============================================================================
 // Helper Functions
 // ============================================================================
 /**
  * Create executor metadata
  */
-export function createExecutorMetadata(name, options) {
+function createExecutorMetadata(name, options) {
     return {
         name,
         ...options,
@@ -100,13 +117,13 @@ export function createExecutorMetadata(name, options) {
 /**
  * Check if executor supports a query type
  */
-export function executorSupportsType(executor, type) {
+function executorSupportsType(executor, type) {
     return executor.metadata.supportedTypes.includes(type);
 }
 /**
  * Get all supported types from multiple executors
  */
-export function getAllSupportedTypes(executors) {
+function getAllSupportedTypes(executors) {
     const types = new Set();
     for (const executor of executors) {
         for (const type of executor.metadata.supportedTypes) {
@@ -118,12 +135,13 @@ export function getAllSupportedTypes(executors) {
 /**
  * Find executor by name
  */
-export function findExecutorByName(executors, name) {
+function findExecutorByName(executors, name) {
     return executors.find((e) => e.metadata.name === name);
 }
 /**
  * Find executors supporting a type
  */
-export function findExecutorsByType(executors, type) {
+function findExecutorsByType(executors, type) {
     return executors.filter((e) => e.metadata.supportedTypes.includes(type));
 }
+//# sourceMappingURL=executor.js.map

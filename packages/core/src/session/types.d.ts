@@ -26,16 +26,16 @@ export declare const MutationMarksSchema: z.ZodObject<{
     updatedByPlatform: z.ZodString;
 }, "strip", z.ZodTypeAny, {
     createdAt: Date;
+    updatedAt: Date;
     creatorId: string;
     creatorPlatform: string;
-    updatedAt: Date;
     updatedById: string;
     updatedByPlatform: string;
 }, {
     createdAt: Date;
+    updatedAt: Date;
     creatorId: string;
     creatorPlatform: string;
-    updatedAt: Date;
     updatedById: string;
     updatedByPlatform: string;
 }>;
@@ -119,10 +119,10 @@ export declare const GraphRAGSettingsSchema: z.ZodObject<{
     streaming: z.ZodDefault<z.ZodBoolean>;
     streamChunkSize: z.ZodDefault<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
+    mode: "hybrid" | "local" | "global" | "auto";
     maxTokens: number;
     streaming: boolean;
     topK: number;
-    mode: "local" | "global" | "hybrid" | "auto";
     maxHops: number;
     useSchemaHints: boolean;
     ontologyMode: boolean;
@@ -133,10 +133,10 @@ export declare const GraphRAGSettingsSchema: z.ZodObject<{
     includeSources: boolean;
     streamChunkSize: number;
 }, {
+    mode?: "hybrid" | "local" | "global" | "auto" | undefined;
     maxTokens?: number | undefined;
     streaming?: boolean | undefined;
     topK?: number | undefined;
-    mode?: "local" | "global" | "hybrid" | "auto" | undefined;
     maxHops?: number | undefined;
     useSchemaHints?: boolean | undefined;
     ontologyMode?: boolean | undefined;
@@ -173,3 +173,4 @@ export interface UsersMetaType {
         type: UserType;
     };
 }
+//# sourceMappingURL=types.d.ts.map

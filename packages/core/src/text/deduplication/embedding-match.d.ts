@@ -55,3 +55,4 @@ export declare class EmbeddingDeduplication implements IDeduplicationStrategy {
      */
     private averageEmbedding;
 }
+//# sourceMappingURL=embedding-match.d.ts.map

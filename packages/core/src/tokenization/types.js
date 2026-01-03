@@ -1,3 +1,19 @@
+"use strict";
+/**
+ * @gerts/core - Tokenization Types
+ *
+ * Universal tokenization interface for multi-model support.
+ * Works with OpenAI, Anthropic, Google, and other LLM providers.
+ *
+ * Design principles:
+ * - Async-first (supports API-based tokenizers)
+ * - Provider-aware (different tokenizers for different models)
+ * - Cacheable (expensive operations are cached)
+ * - Extensible (easy to add new providers)
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.DEFAULT_TOKENIZER_FACTORY_CONFIG = exports.MODEL_ENCODINGS = exports.PROVIDER_TOKEN_MULTIPLIERS = void 0;
+exports.getEncodingForModel = getEncodingForModel;
 /**
  * Provider-specific token multipliers.
  * Based on empirical testing comparing to GPT-4 tokenizer.
@@ -5,7 +21,7 @@
  * Claude uses ~20-30% more tokens than GPT for same text.
  * Gemini uses ~10% more tokens.
  */
-export const PROVIDER_TOKEN_MULTIPLIERS = {
+exports.PROVIDER_TOKEN_MULTIPLIERS = {
     openai: 1.0,
     anthropic: 1.25, // Claude uses more tokens
     google: 1.1, // Gemini slightly more
@@ -18,7 +34,7 @@ export const PROVIDER_TOKEN_MULTIPLIERS = {
 /**
  * Model to encoding mapping.
  */
-export const MODEL_ENCODINGS = {
+exports.MODEL_ENCODINGS = {
     // GPT-4o family
     'gpt-4o': 'o200k_base',
     'gpt-4o-mini': 'o200k_base',
@@ -48,10 +64,10 @@ export const MODEL_ENCODINGS = {
  * @param model - Model name
  * @returns Encoding name or undefined
  */
-export function getEncodingForModel(model) {
+function getEncodingForModel(model) {
     // Direct lookup
-    if (model in MODEL_ENCODINGS) {
-        return MODEL_ENCODINGS[model];
+    if (model in exports.MODEL_ENCODINGS) {
+        return exports.MODEL_ENCODINGS[model];
     }
     // Prefix matching
     const modelLower = model.toLowerCase();
@@ -66,9 +82,10 @@ export function getEncodingForModel(model) {
 /**
  * Default factory configuration.
  */
-export const DEFAULT_TOKENIZER_FACTORY_CONFIG = {
+exports.DEFAULT_TOKENIZER_FACTORY_CONFIG = {
     enableCache: true,
     cacheMaxSize: 1000,
     cacheTTL: 5 * 60 * 1000, // 5 minutes
     defaultProvider: 'estimation',
 };
+//# sourceMappingURL=types.js.map

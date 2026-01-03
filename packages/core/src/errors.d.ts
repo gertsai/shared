@@ -117,3 +117,4 @@ export declare function isRetryableError(error: unknown): boolean;
  * Wrap an unknown error in a GertsError.
  */
 export declare function wrapError(error: unknown, code?: string): GertsError;
+//# sourceMappingURL=errors.d.ts.map

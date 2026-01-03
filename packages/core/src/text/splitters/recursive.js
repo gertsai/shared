@@ -1,5 +1,8 @@
-import { BaseTextSplitter } from './base';
-export const DEFAULT_SEPARATORS = ['\n\n', '\n', ' ', ''];
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.RecursiveCharacterTextSplitter = exports.DEFAULT_SEPARATORS = void 0;
+const base_1 = require("./base");
+exports.DEFAULT_SEPARATORS = ['\n\n', '\n', ' ', ''];
 function splitByFixedSize(text, chunkSize) {
     const splits = [];
     for (let i = 0; i < text.length; i += chunkSize) {
@@ -47,7 +50,7 @@ function chooseSeparator(text, separators) {
     }
     return separators.at(-1) ?? '';
 }
-export class RecursiveCharacterTextSplitter extends BaseTextSplitter {
+class RecursiveCharacterTextSplitter extends base_1.BaseTextSplitter {
     separators;
     keepSeparatorMode;
     constructor(options) {
@@ -58,7 +61,7 @@ export class RecursiveCharacterTextSplitter extends BaseTextSplitter {
             keepSeparator: options.keepSeparator ?? false,
             addStartIndex: true,
         });
-        this.separators = options.separators ?? DEFAULT_SEPARATORS;
+        this.separators = options.separators ?? exports.DEFAULT_SEPARATORS;
         this.keepSeparatorMode = options.keepSeparator ?? false;
     }
     splitText(text) {
@@ -99,3 +102,5 @@ export class RecursiveCharacterTextSplitter extends BaseTextSplitter {
         return docs;
     }
 }
+exports.RecursiveCharacterTextSplitter = RecursiveCharacterTextSplitter;
+//# sourceMappingURL=recursive.js.map

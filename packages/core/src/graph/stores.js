@@ -1,10 +1,30 @@
+"use strict";
+/**
+ * @gerts/core - Graph Store Interfaces (Interface Segregation Principle)
+ *
+ * Split IGraphStore (~40 methods) into focused, single-responsibility interfaces.
+ * Following ISP: clients should not be forced to depend on interfaces they don't use.
+ *
+ * This enables:
+ * - Independent implementation of sub-interfaces
+ * - Better testability with focused mocks
+ * - Clearer API contracts for consumers
+ * - Easier extension without breaking existing code
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.isEntityStore = isEntityStore;
+exports.isRelationshipStore = isRelationshipStore;
+exports.isMentionStore = isMentionStore;
+exports.isTextUnitStore = isTextUnitStore;
+exports.isCommunityStore = isCommunityStore;
+exports.isGraphStore = isGraphStore;
 // ============================================================================
 // Type Guards
 // ============================================================================
 /**
  * Check if an object implements IEntityStore.
  */
-export function isEntityStore(obj) {
+function isEntityStore(obj) {
     return (typeof obj === 'object' &&
         obj !== null &&
         typeof obj.addEntity === 'function' &&
@@ -17,7 +37,7 @@ export function isEntityStore(obj) {
 /**
  * Check if an object implements IRelationshipStore.
  */
-export function isRelationshipStore(obj) {
+function isRelationshipStore(obj) {
     return (typeof obj === 'object' &&
         obj !== null &&
         typeof obj.addRelationship === 'function' &&
@@ -29,7 +49,7 @@ export function isRelationshipStore(obj) {
 /**
  * Check if an object implements IMentionStore.
  */
-export function isMentionStore(obj) {
+function isMentionStore(obj) {
     return (typeof obj === 'object' &&
         obj !== null &&
         typeof obj.addEntityMention === 'function' &&
@@ -41,7 +61,7 @@ export function isMentionStore(obj) {
 /**
  * Check if an object implements ITextUnitStore.
  */
-export function isTextUnitStore(obj) {
+function isTextUnitStore(obj) {
     return (typeof obj === 'object' &&
         obj !== null &&
         typeof obj.addTextUnit === 'function' &&
@@ -52,7 +72,7 @@ export function isTextUnitStore(obj) {
 /**
  * Check if an object implements ICommunityStore.
  */
-export function isCommunityStore(obj) {
+function isCommunityStore(obj) {
     return (typeof obj === 'object' &&
         obj !== null &&
         typeof obj.addCommunity === 'function' &&
@@ -62,7 +82,7 @@ export function isCommunityStore(obj) {
 /**
  * Check if an object implements full IGraphStore.
  */
-export function isGraphStore(obj) {
+function isGraphStore(obj) {
     return (isEntityStore(obj) &&
         isRelationshipStore(obj) &&
         isMentionStore(obj) &&
@@ -71,3 +91,4 @@ export function isGraphStore(obj) {
         typeof obj.clear === 'function' &&
         typeof obj.getStats === 'function');
 }
+//# sourceMappingURL=stores.js.map
