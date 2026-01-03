@@ -575,7 +575,7 @@ export class ApiController<
               }
             : undefined;
 
-          const { code, message, data } = await action.options.handler.call(
+          const { code, message, data, raw } = await action.options.handler.call(
             this,
             {
               session,
@@ -602,6 +602,13 @@ export class ApiController<
               respond,
             },
           );
+
+          // Raw response mode: return data directly without Orchestra wrapping
+          // Used for streaming responses (SSE, WebSockets) where data is a Readable stream
+          if (raw === true) {
+            this.logger.info('Action returning raw response', action.name);
+            return data;
+          }
 
           if (config.RESPONSE_VALIDATION === true) {
             const responseIsValid = action.options.response(data);
