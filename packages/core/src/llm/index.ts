@@ -92,3 +92,14 @@ export {
   DEFAULT_CONTEXT_WINDOW_SIZE,
   DEFAULT_OUTPUT_TOKEN_LIMIT,
 } from './model-registry';
+
+// Structured Output (Zod → JSON Schema for LiteLLM)
+export {
+  zodToResponseFormat,
+  zodToJsonSchemaLiteLLM,
+  jsonMode,
+  textMode,
+  type LiteLLMJsonSchema,
+  type LiteLLMResponseFormat,
+  type ZodToLiteLLMOptions,
+} from './structured-output';
