@@ -9,6 +9,7 @@
 
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import type { ZodType } from 'zod';
+import type { LLMResponseFormat } from './types.js';
 
 /**
  * LiteLLM JSON Schema format for structured output
@@ -83,10 +84,9 @@ export function zodToResponseFormat(
   schema: ZodType,
   options: ZodToLiteLLMOptions
 ): LiteLLMResponseFormat {
-  // Convert Zod to JSON Schema with OpenAI-compatible settings
+  // Convert Zod to JSON Schema - don't use 'name' option to avoid $ref
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const jsonSchema = zodToJsonSchema(schema as any, {
-    name: options.name,
     $refStrategy: 'none',
   });
 
@@ -98,6 +98,54 @@ export function zodToResponseFormat(
     json_schema: {
       name: options.name,
       schema: schemaBody as LiteLLMJsonSchema['schema'],
+      strict: options.strict ?? true,
+    },
+  };
+}
+
+/**
+ * Convert a Zod schema to core LLMResponseFormat.
+ *
+ * Use this for @gerts/core LLM providers (BaseLLM.call).
+ * Returns camelCase format compatible with LLMCallOptions.
+ *
+ * @param schema - Zod schema to convert
+ * @param options - Conversion options
+ * @returns Core LLMResponseFormat
+ *
+ * @example
+ * ```typescript
+ * import { z } from 'zod';
+ * import { zodToLLMResponseFormat } from '@gerts/core';
+ *
+ * const EntitySchema = z.object({
+ *   name: z.string(),
+ *   type: z.string(),
+ * });
+ *
+ * // Use with BaseLLM.call
+ * const response = await llm.call(messages, {
+ *   responseFormat: zodToLLMResponseFormat(EntitySchema, { name: 'entity' }),
+ * });
+ * ```
+ */
+export function zodToLLMResponseFormat(
+  schema: ZodType,
+  options: ZodToLiteLLMOptions
+): LLMResponseFormat {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const jsonSchema = zodToJsonSchema(schema as any, {
+    $refStrategy: 'none',
+  });
+
+  // Remove metadata and get clean schema
+  const { $schema, definitions, ...schemaBody } = jsonSchema as Record<string, unknown>;
+
+  return {
+    type: 'json_schema',
+    jsonSchema: {
+      name: options.name,
+      schema: schemaBody as LLMResponseFormat['jsonSchema'] extends { schema: infer S } ? S : never,
       strict: options.strict ?? true,
     },
   };

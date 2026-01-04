@@ -97,6 +97,7 @@ export {
 export {
   // Schema conversion
   zodToResponseFormat,
+  zodToLLMResponseFormat,
   zodToJsonSchemaLiteLLM,
   // Response format helpers
   jsonMode,

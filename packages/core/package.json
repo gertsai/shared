@@ -6,12 +6,12 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+      "import": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+      "require": { "types": "./dist/index.d.ts", "default": "./dist/index.js" }
     },
     "./rag": {
-      "types": "./dist/rag/index.d.ts",
-      "default": "./dist/rag/index.js"
+      "import": { "types": "./dist/rag/index.d.ts", "default": "./dist/rag/index.js" },
+      "require": { "types": "./dist/rag/index.d.ts", "default": "./dist/rag/index.js" }
     }
   },
   "files": [
@@ -19,7 +19,7 @@
     "src"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc --build tsconfig.json",
     "test": "vitest run"
   },
   "dependencies": {
