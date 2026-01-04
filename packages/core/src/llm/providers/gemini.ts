@@ -145,8 +145,11 @@ export class GeminiProvider extends BaseLLM {
       supportsFunctionCalling: false,
       supportsStopWords: true,
       supportsStreaming: false,
-      supportsStructuredOutputs: true,
       supportsVision: supportsVisionFromRegistry(this.model),
+      // Gemini supports JSON schema via responseSchema in generationConfig
+      supportsNativeStructuredOutputs: false,
+      supportsJsonSchemaOutputs: true,
+      supportsJsonMode: true,
     };
   }
 

@@ -315,4 +315,3 @@ function getMostCapableModel(provider) {
     }
     return best;
 }
-//# sourceMappingURL=model-registry.js.map

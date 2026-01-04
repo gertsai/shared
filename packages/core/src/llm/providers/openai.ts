@@ -159,8 +159,11 @@ export class OpenAIProvider extends BaseLLM {
       // O1 models don't support stop words
       supportsStopWords: !this.isO1Model,
       supportsStreaming: true,
-      supportsStructuredOutputs: true,
       supportsVision: this.model.includes('gpt-4o') || this.model.includes('gpt-4-turbo'),
+      // OpenAI has full native structured output support
+      supportsNativeStructuredOutputs: true,
+      supportsJsonSchemaOutputs: true,
+      supportsJsonMode: true,
     };
   }
 

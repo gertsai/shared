@@ -60,4 +60,3 @@ Object.defineProperty(exports, "getMostCapableModel", { enumerable: true, get: f
 Object.defineProperty(exports, "CONTEXT_WINDOW_USAGE_RATIO", { enumerable: true, get: function () { return model_registry_1.CONTEXT_WINDOW_USAGE_RATIO; } });
 Object.defineProperty(exports, "DEFAULT_CONTEXT_WINDOW_SIZE", { enumerable: true, get: function () { return model_registry_1.DEFAULT_CONTEXT_WINDOW_SIZE; } });
 Object.defineProperty(exports, "DEFAULT_OUTPUT_TOKEN_LIMIT", { enumerable: true, get: function () { return model_registry_1.DEFAULT_OUTPUT_TOKEN_LIMIT; } });
-//# sourceMappingURL=index.js.map

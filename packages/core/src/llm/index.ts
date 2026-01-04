@@ -95,11 +95,22 @@ export {
 
 // Structured Output (Zod → JSON Schema for LiteLLM)
 export {
+  // Schema conversion
   zodToResponseFormat,
   zodToJsonSchemaLiteLLM,
+  // Response format helpers
   jsonMode,
   textMode,
+  // Smart fallback
+  getStructuredOutputCapabilities,
+  getSmartResponseFormat,
+  MODEL_STRUCTURED_OUTPUT_CAPABILITIES,
+  // JSON extraction fallback
+  extractJsonFromText,
+  parseStructuredResponse,
+  // Types
   type LiteLLMJsonSchema,
   type LiteLLMResponseFormat,
   type ZodToLiteLLMOptions,
+  type StructuredOutputCapabilities,
 } from './structured-output';

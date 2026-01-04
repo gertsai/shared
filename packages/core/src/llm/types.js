@@ -36,4 +36,3 @@ exports.LLM_CONTEXT_WINDOWS = {};
 exports.OPENAI_MODELS = new Set();
 /** @deprecated Use getModelsForProvider('Anthropic') from model-registry instead */
 exports.ANTHROPIC_MODELS = new Set();
-//# sourceMappingURL=types.js.map

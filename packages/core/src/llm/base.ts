@@ -41,11 +41,35 @@ export interface LLMCapabilities {
   supportsStopWords: boolean;
   /** Supports streaming responses */
   supportsStreaming: boolean;
-  /** Supports structured outputs (JSON schema) */
-  supportsStructuredOutputs: boolean;
   /** Supports vision/images */
   supportsVision: boolean;
+
+  // ==================== Structured Output Capabilities ====================
+
+  /**
+   * Supports native structured outputs (OpenAI, Anthropic 4.5+, Mistral)
+   * Uses `response_format: { type: "json_schema", json_schema: {...} }`
+   * with strict mode guaranteeing schema adherence.
+   */
+  supportsNativeStructuredOutputs: boolean;
+
+  /**
+   * Supports JSON schema format (Llama, LMStudio, Gemini)
+   * Model understands JSON schema but may not guarantee strict adherence.
+   */
+  supportsJsonSchemaOutputs: boolean;
+
+  /**
+   * Supports basic JSON mode (most models)
+   * Uses `response_format: { type: "json_object" }` - valid JSON but no schema.
+   */
+  supportsJsonMode: boolean;
 }
+
+/** @deprecated Use supportsNativeStructuredOutputs instead */
+export type LLMCapabilitiesLegacy = LLMCapabilities & {
+  supportsStructuredOutputs: boolean;
+};
 
 /**
  * Abstract base class for LLM implementations.
@@ -169,8 +193,11 @@ export abstract class BaseLLM {
       supportsFunctionCalling: true,
       supportsStopWords: true,
       supportsStreaming: true,
-      supportsStructuredOutputs: false,
       supportsVision: supportsVisionFromRegistry(this.model),
+      // Structured output capabilities - override in providers
+      supportsNativeStructuredOutputs: false,
+      supportsJsonSchemaOutputs: false,
+      supportsJsonMode: true,
     };
   }
 

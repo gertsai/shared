@@ -149,13 +149,19 @@ export class AnthropicProvider extends BaseLLM {
    * Get Anthropic-specific capabilities.
    */
   override getCapabilities(): LLMCapabilities {
+    // Claude 4.5+ models support native structured outputs
+    const isNewModel = this.model.includes('claude-sonnet-4') ||
+                       this.model.includes('claude-3-5-sonnet') ||
+                       this.model.includes('claude-opus-4');
     return {
       supportsFunctionCalling: true,
       supportsStopWords: true,
       supportsStreaming: true,
-      // Anthropic uses tool-based approach for structured outputs
-      supportsStructuredOutputs: false,
       supportsVision: true,
+      // Newer Claude models have native support, older use tool-based approach
+      supportsNativeStructuredOutputs: isNewModel,
+      supportsJsonSchemaOutputs: isNewModel,
+      supportsJsonMode: true,
     };
   }
 
