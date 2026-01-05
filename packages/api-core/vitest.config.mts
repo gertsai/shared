@@ -1,11 +1,15 @@
 import { defineConfig } from 'vitest/config';
-import untypia from '@ryoppippi/unplugin-typia';
+import tsconfigPaths from 'vite-tsconfig-paths';
+import unpluginTypia from '@ryoppippi/unplugin-typia/vite';
 
 export default defineConfig({
   plugins: [
-    untypia.vite({
-      tsconfig: './orchdev/api-core/tsconfig.json',
+    tsconfigPaths({
+      projects: ['../../tsconfig.base.json'],
+      ignoreConfigErrors: true,
+      loose: true,
     }),
+    unpluginTypia(),
   ],
   test: {
     environment: 'node',
@@ -17,7 +21,7 @@ export default defineConfig({
       reporter: ['text', 'json', 'html', 'lcov'],
       reportsDirectory: 'coverage',
     },
-    include: ['__tests__/**/*.spec.ts', 'src/**/*.spec.ts'],
+    include: ['src/**/*.test.ts', 'src/**/*.spec.ts', '__tests__/**/*.spec.ts'],
     globals: false,
     hookTimeout: 30000,
     testTimeout: 30000,

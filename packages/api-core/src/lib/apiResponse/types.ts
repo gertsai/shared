@@ -91,6 +91,36 @@ export enum ResponseCode {
   UNSUPPORTED_RESPONSE_TYPE = '400/unsupported_response_type',
 }
 
+// ============================================================================
+// RFC-030 Hybrid: Processing Stage (from GertsErrorResponse)
+// ============================================================================
+
+/**
+ * Processing stage where error occurred.
+ * Helps identify which component failed in the pipeline.
+ *
+ * @see apps/pipeline/docs/RFC-030-UNIFIED-API-PROTOCOL.md
+ */
+export type GertsProcessingStage =
+  | 'routing'
+  | 'retrieval'
+  | 'generation'
+  | 'tool_execution'
+  | 'grounding'
+  | 'extraction'
+  | 'embedding'
+  | 'graph_query'
+  | 'vector_search'
+  | 'community_detection'
+  | 'summarization'
+  | 'validation'
+  | 'authentication'
+  | 'rate_limiting';
+
+// ============================================================================
+// Response Metadata Types
+// ============================================================================
+
 type ResponseMeta<CODE extends ResponseCode, DATA> = {
   validator: TypiaValidator<DATA>;
   meta: {
@@ -99,17 +129,41 @@ type ResponseMeta<CODE extends ResponseCode, DATA> = {
     code: CODE;
     http_code: number;
     raw?: boolean;
+    /**
+     * RFC-030: Whether this error is retryable.
+     * Critical for client-side retry logic!
+     */
+    retryable?: boolean;
+    /**
+     * RFC-030: Processing stage where error occurred.
+     */
+    stage?: GertsProcessingStage;
   };
 };
+
+/**
+ * RFC-030: Error metadata options for generateErrorMeta.
+ */
+export interface ErrorMetaOptions {
+  /**
+   * Whether this error is retryable by the client.
+   * @default false
+   */
+  retryable?: boolean;
+  /**
+   * Processing stage where error typically occurs.
+   */
+  stage?: GertsProcessingStage;
+}
 
 const anyValidator = typia.createValidate<any>();
 const neverValidator = typia.createValidate<never>();
 
 /**
- * Helper to generate responseMeta
- * @param code
- * @param message
- * @param validator
+ * Helper to generate responseMeta for success responses.
+ * @param code - Response code
+ * @param message - Human-readable message
+ * @param validator - Typia validator for response data
  */
 const generateResponseMeta = <
   CODE extends ResponseCode,
@@ -133,10 +187,28 @@ const generateResponseMeta = <
   }) as unknown as Record<CODE, ResponseMeta<CODE, DATA>>;
 
 /**
- * Helper to generate errorMeta
- * @param code
- * @param message
- * @param validator
+ * Helper to generate errorMeta for error responses.
+ * RFC-030 Hybrid: Now supports retryable and stage options.
+ *
+ * @param code - Response code
+ * @param message - Human-readable message
+ * @param options - RFC-030 options (retryable, stage)
+ * @param validator - Typia validator for error data
+ *
+ * @example
+ * ```typescript
+ * // Rate limit error - retryable
+ * generateErrorMeta(ResponseCode.TOO_MANY_REQUESTS, 'Too many requests', {
+ *   retryable: true,
+ *   stage: 'rate_limiting',
+ * });
+ *
+ * // Auth error - not retryable
+ * generateErrorMeta(ResponseCode.NOT_AUTHORIZED, 'Not Authorized', {
+ *   retryable: false,
+ *   stage: 'authentication',
+ * });
+ * ```
  */
 const generateErrorMeta = <
   CODE extends ResponseCode,
@@ -145,6 +217,7 @@ const generateErrorMeta = <
 >(
   code: CODE,
   message: string,
+  options?: ErrorMetaOptions,
   validator?: Validator,
 ) =>
   ({
@@ -155,32 +228,22 @@ const generateErrorMeta = <
         message,
         code,
         http_code: +code.split('/')[0],
+        ...(options?.retryable !== undefined ? { retryable: options.retryable } : {}),
+        ...(options?.stage !== undefined ? { stage: options.stage } : {}),
       },
     },
   }) as unknown as Record<CODE, ResponseMeta<CODE, DATA>>;
 
 export const responseMetadata = {
   ...generateResponseMeta(ResponseCode.SUCCESS, 'Success', anyValidator),
-  ...generateResponseMeta(
-    ResponseCode.SUCCESS_CREATED,
-    'Success; Created',
-    anyValidator,
-  ),
-  ...generateResponseMeta(
-    ResponseCode.SUCCESS_ACCEPTED,
-    'Success; Accepted',
-    anyValidator,
-  ),
+  ...generateResponseMeta(ResponseCode.SUCCESS_CREATED, 'Success; Created', anyValidator),
+  ...generateResponseMeta(ResponseCode.SUCCESS_ACCEPTED, 'Success; Accepted', anyValidator),
   ...generateResponseMeta(
     ResponseCode.SUCCESS_PARTIAL_RESPONSE,
     'Success; Partial response',
     anyValidator,
   ),
-  ...generateResponseMeta(
-    ResponseCode.SUCCESS_NO_RESPONSE,
-    'Success; No response',
-    anyValidator,
-  ),
+  ...generateResponseMeta(ResponseCode.SUCCESS_NO_RESPONSE, 'Success; No response', anyValidator),
   //
   ...generateErrorMeta(ResponseCode.MULTIPLE_CHOICES, 'Multiple choices'),
   ...generateErrorMeta(ResponseCode.PERMANENTLY_MOVED, 'Permanently moved'),
@@ -190,54 +253,76 @@ export const responseMetadata = {
   ...generateErrorMeta(ResponseCode.TEMPORARY_REDIRECT, 'Temporary redirect'),
   ...generateErrorMeta(ResponseCode.PERMANENT_REDIRECT, 'Permanent redirect'),
   //
-  ...generateErrorMeta(ResponseCode.BAD_REQUEST, 'Bad request'),
-  ...generateErrorMeta(
-    ResponseCode.BAD_REQUEST__INVALID_PARAMS,
-    'Bad request: Invalid params',
-  ),
+  // 400 - Bad Request (not retryable, validation stage)
+  ...generateErrorMeta(ResponseCode.BAD_REQUEST, 'Bad request', {
+    retryable: false,
+    stage: 'validation',
+  }),
+  ...generateErrorMeta(ResponseCode.BAD_REQUEST__INVALID_PARAMS, 'Bad request: Invalid params', {
+    retryable: false,
+    stage: 'validation',
+  }),
   ...generateErrorMeta(
     ResponseCode.BAD_REQUEST__INVALID_RESPONSE,
     'Bad request: Invalid response',
+    { retryable: false, stage: 'validation' },
   ),
   //
-  ...generateErrorMeta(ResponseCode.NOT_AUTHORIZED, 'Not Authorized'),
+  // 401 - Not Authorized (not retryable, authentication stage)
+  ...generateErrorMeta(ResponseCode.NOT_AUTHORIZED, 'Not Authorized', {
+    retryable: false,
+    stage: 'authentication',
+  }),
   ...generateErrorMeta(
     ResponseCode.NOT_AUTHORIZED__TOKEN_INVALID,
     'Not Authorized: Invalid token',
+    { retryable: false, stage: 'authentication' },
   ),
   ...generateErrorMeta(
     ResponseCode.NOT_AUTHORIZED__TOKEN_EXPIRED,
     'Not Authorized: Expired token',
+    { retryable: true, stage: 'authentication' }, // Can retry with refreshed token
   ),
   ...generateErrorMeta(
     ResponseCode.NOT_AUTHORIZED__USER_NOT_FOUND,
     'Not Authorized: User not found',
+    { retryable: false, stage: 'authentication' },
   ),
   ...generateErrorMeta(
     ResponseCode.NOT_AUTHORIZED__USER_INACTIVE,
     'Not Authorized: User inactive',
+    { retryable: false, stage: 'authentication' },
   ),
   //
-  ...generateErrorMeta(ResponseCode.PAYMENT_REQUIRED, 'Payment required'),
+  ...generateErrorMeta(ResponseCode.PAYMENT_REQUIRED, 'Payment required', {
+    retryable: true, // Can retry after payment
+  }),
   //
-  ...generateErrorMeta(ResponseCode.FORBIDDEN, 'Forbidden'),
+  // 403 - Forbidden (not retryable)
+  ...generateErrorMeta(ResponseCode.FORBIDDEN, 'Forbidden', {
+    retryable: false,
+    stage: 'authentication',
+  }),
   ...generateErrorMeta(
     ResponseCode.FORBIDDEN__INSUFFICIENT_RIGHTS,
     'Forbidden: Insufficient rights',
+    { retryable: false, stage: 'authentication' },
   ),
   //
-  ...generateErrorMeta(ResponseCode.NOT_FOUND, 'Not found'),
+  // 404 - Not Found (not retryable, routing stage)
+  ...generateErrorMeta(ResponseCode.NOT_FOUND, 'Not found', {
+    retryable: false,
+    stage: 'routing',
+  }),
   ...generateErrorMeta(
     ResponseCode.NOT_FOUND__ACTION_NOT_FOUND,
     'Requested endpoint is not found',
+    { retryable: false, stage: 'routing' },
   ),
   //
   ...generateErrorMeta(ResponseCode.METHOD_NOT_ALLOWED, 'Method not allowed'),
   ...generateErrorMeta(ResponseCode.NOT_ACCEPTABLE, 'Not acceptable'),
-  ...generateErrorMeta(
-    ResponseCode.PROXY_AUTHENTICATION_REQUIRED,
-    'Proxy authentication required',
-  ),
+  ...generateErrorMeta(ResponseCode.PROXY_AUTHENTICATION_REQUIRED, 'Proxy authentication required'),
   ...generateErrorMeta(ResponseCode.REQUEST_TIMEOUT, 'Request timeout'),
   ...generateErrorMeta(ResponseCode.CONFLICT, 'Conflict'),
   ...generateErrorMeta(ResponseCode.GONE, 'Gone'),
@@ -245,60 +330,56 @@ export const responseMetadata = {
   ...generateErrorMeta(ResponseCode.PRECONDITION_FAILED, 'Precondition failed'),
   ...generateErrorMeta(ResponseCode.PAYLOAD_TOO_LARGE, 'Payload too large'),
   ...generateErrorMeta(ResponseCode.URI_TOO_LONG, 'URI too long'),
-  ...generateErrorMeta(
-    ResponseCode.UNSUPPORTED_MEDIA_TYPE,
-    'Unsupported media type',
-  ),
-  ...generateErrorMeta(
-    ResponseCode.RANGE_NOT_SATISFIABLE,
-    'Range not satisfiable',
-  ),
+  ...generateErrorMeta(ResponseCode.UNSUPPORTED_MEDIA_TYPE, 'Unsupported media type'),
+  ...generateErrorMeta(ResponseCode.RANGE_NOT_SATISFIABLE, 'Range not satisfiable'),
   ...generateErrorMeta(ResponseCode.EXPECTATION_FAILED, 'Expectation failed'),
   ...generateErrorMeta(ResponseCode.IM_A_TEAPOT, "I'm a teapot"),
   ...generateErrorMeta(ResponseCode.MISDIRECTED_REQUEST, 'Misdirected request'),
-  ...generateErrorMeta(
-    ResponseCode.UNPROCESSABLE_ENTITY,
-    'Unprocessable entity',
-  ),
+  ...generateErrorMeta(ResponseCode.UNPROCESSABLE_ENTITY, 'Unprocessable entity'),
   ...generateErrorMeta(ResponseCode.LOCKED, 'Locked'),
   ...generateErrorMeta(ResponseCode.FAILED_DEPENDENCY, 'Failed dependency'),
   ...generateErrorMeta(ResponseCode.TOO_EARLY, 'Too early'),
   ...generateErrorMeta(ResponseCode.UPGRADE_REQUIRED, 'Upgrade required'),
-  ...generateErrorMeta(
-    ResponseCode.PRECONDITION_REQUIRED,
-    'Precondition required',
-  ),
+  ...generateErrorMeta(ResponseCode.PRECONDITION_REQUIRED, 'Precondition required'),
   //
-  ...generateErrorMeta(ResponseCode.TOO_MANY_REQUESTS, 'Too many requests'),
+  // 429 - Rate Limit (RETRYABLE! with retry_after)
+  ...generateErrorMeta(ResponseCode.TOO_MANY_REQUESTS, 'Too many requests', {
+    retryable: true,
+    stage: 'rate_limiting',
+  }),
   //
   ...generateErrorMeta(
     ResponseCode.REQUEST_HEADER_FIELDS_TOO_LARGE,
     'Request header fields too large',
+    { retryable: false },
   ),
   ...generateErrorMeta(
     ResponseCode.UNAVAILABLE_FOR_LEGAL_REASONS,
     'Unavailable for legal reasons',
+    { retryable: false },
   ),
   //
-  ...generateErrorMeta(ResponseCode.INTERNAL_ERROR, 'Internal server error'),
+  // 500 - Internal Error (potentially retryable for transient issues)
+  ...generateErrorMeta(ResponseCode.INTERNAL_ERROR, 'Internal server error', {
+    retryable: true, // May be transient
+  }),
   //
-  ...generateErrorMeta(ResponseCode.NOT_IMPLEMENTED, 'Not implemented'),
-
-  ...generateErrorMeta(ResponseCode.BAD_GATEWAY, 'Bad gateway'),
-  ...generateErrorMeta(ResponseCode.SERVICE_UNAVAILABLE, 'Service unavailable'),
-  ...generateErrorMeta(ResponseCode.GATEWAY_TIMEOUT, 'Gateway timeout'),
-  ...generateErrorMeta(
-    ResponseCode.HTTP_VERSION_NOT_SUPPORTED,
-    'HTTP version not supported',
-  ),
-  ...generateErrorMeta(
-    ResponseCode.VARIANT_ALSO_NEGOTIATES,
-    'Variant also negotiates',
-  ),
-  ...generateErrorMeta(
-    ResponseCode.INSUFFICIENT_STORAGE,
-    'Insufficient storage',
-  ),
+  ...generateErrorMeta(ResponseCode.NOT_IMPLEMENTED, 'Not implemented', {
+    retryable: false,
+  }),
+  // 502/503/504 - Gateway/Service errors (RETRYABLE!)
+  ...generateErrorMeta(ResponseCode.BAD_GATEWAY, 'Bad gateway', {
+    retryable: true,
+  }),
+  ...generateErrorMeta(ResponseCode.SERVICE_UNAVAILABLE, 'Service unavailable', {
+    retryable: true,
+  }),
+  ...generateErrorMeta(ResponseCode.GATEWAY_TIMEOUT, 'Gateway timeout', {
+    retryable: true,
+  }),
+  ...generateErrorMeta(ResponseCode.HTTP_VERSION_NOT_SUPPORTED, 'HTTP version not supported'),
+  ...generateErrorMeta(ResponseCode.VARIANT_ALSO_NEGOTIATES, 'Variant also negotiates'),
+  ...generateErrorMeta(ResponseCode.INSUFFICIENT_STORAGE, 'Insufficient storage'),
   ...generateErrorMeta(ResponseCode.LOOP_DETECTED, 'Loop detected'),
   ...generateErrorMeta(ResponseCode.NOT_EXTENDED, 'Not extended'),
   ...generateErrorMeta(
@@ -316,23 +397,12 @@ export const responseMetadata = {
   ...generateErrorMeta(ResponseCode.INVALID_TOKEN, 'Invalid token'),
   ...generateErrorMeta(ResponseCode.SERVER_ERROR, 'Server error'),
   ...generateErrorMeta(ResponseCode.UNAUTHORIZED_CLIENT, 'Unauthorized client'),
-  ...generateErrorMeta(
-    ResponseCode.UNAUTHORIZED_REQUEST,
-    'Unauthorized request',
-  ),
-  ...generateErrorMeta(
-    ResponseCode.UNSUPPORTED_GRANT_TYPE,
-    'Unsupported grant type',
-  ),
-  ...generateErrorMeta(
-    ResponseCode.UNSUPPORTED_RESPONSE_TYPE,
-    'Unsupported response type',
-  ),
+  ...generateErrorMeta(ResponseCode.UNAUTHORIZED_REQUEST, 'Unauthorized request'),
+  ...generateErrorMeta(ResponseCode.UNSUPPORTED_GRANT_TYPE, 'Unsupported grant type'),
+  ...generateErrorMeta(ResponseCode.UNSUPPORTED_RESPONSE_TYPE, 'Unsupported response type'),
   ...generateErrorMeta(ResponseCode.REVOKED_TOKEN, 'Revoked token'),
 };
 
 // If you see error here - probably you didn't add ResponseCode item to responseMetadata
 export type ResponseDataType<Code extends ResponseCode> =
-  (typeof responseMetadata)[Code] extends ResponseMeta<Code, infer T>
-    ? T
-    : never;
+  (typeof responseMetadata)[Code] extends ResponseMeta<Code, infer T> ? T : never;

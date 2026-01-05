@@ -21,6 +21,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@gerts/api-types": "workspace:*",
     "@gerts/core": "workspace:*",
     "@google-cloud/logging-bunyan": "^5.1.0",
     "@r2d2bzh/moleculer-healthcheck-middleware": "^1.0.6",
@@ -46,6 +47,7 @@
   },
   "devDependencies": {
     "@google-cloud/pubsub": "^4.11.0",
+    "@ryoppippi/unplugin-typia": "^2.6.5",
     "@types/bunyan": "^1.8.11",
     "@types/lodash.forin": "^4.4.9",
     "@types/lodash.merge": "^4.6.9",

@@ -38,4 +38,13 @@ export type OrchestraApiGateOptions = {
    * If true, disable OAuth mixin (for internal services without auth)
    */
   disableAuth?: boolean;
+  /**
+   * RFC-030: Use GertsResponse envelope format.
+   * When true, all responses use the unified GertsResponse<T> format.
+   * Can also be enabled via USE_GERTS_ENVELOPE=true environment variable.
+   *
+   * @default false (uses legacy Orchestra format)
+   * @see apps/pipeline/docs/RFC-030-UNIFIED-API-PROTOCOL.md
+   */
+  useGertsEnvelope?: boolean;
 } & Omit<ServiceSchema<ApiSettingsSchema>, 'methods'>;
