@@ -31,4 +31,14 @@ describe('BiMap', () => {
     expect(inv.get(1)).toBe('a');
     expect(inv.get(2)).toBe('b');
   });
+
+  it('handles undefined values without leaving stale inverse entries', () => {
+    const bm = new BiMap<string, number | undefined>();
+    bm.set('a', undefined);
+    bm.set('a', 1);
+
+    expect(bm.get('a')).toBe(1);
+    expect(bm.hasValue(undefined)).toBe(false);
+    expect(bm.isConsistent()).toBe(true);
+  });
 });

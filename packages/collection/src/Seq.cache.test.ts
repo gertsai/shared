@@ -72,6 +72,26 @@ describe('Seq cache semantics', () => {
     expect(calls).toBe(10);
   });
 
+  it('withCache caches empty results', () => {
+    const data: Array<[string, number]> = [
+      ['a', 1],
+      ['b', 2],
+      ['c', 3],
+    ];
+    let calls = 0;
+    const s = new Seq<string, number>(data)
+      .filter((v) => {
+        calls++;
+        return v > 10;
+      })
+      .withCache();
+
+    expect(s.toArray()).toEqual([]);
+    expect(calls).toBe(3);
+    expect(s.toArray()).toEqual([]);
+    expect(calls).toBe(3);
+  });
+
   it('different chains do not share operation-level cache', () => {
     const data: Array<[string, number]> = [
       ['a', 1],
@@ -100,6 +120,36 @@ describe('Seq cache semantics', () => {
 
     expect(f1).toBe(3);
     expect(f2).toBe(3);
+  });
+
+  it('cachedSeq does not cross-cache different operation chains', () => {
+    const data: Array<[string, number]> = [
+      ['a', 1],
+      ['b', 2],
+      ['c', 3],
+    ];
+    const base = cachedSeq(data, 10);
+
+    let calls1 = 0;
+    const r1 = base
+      .map((v) => {
+        calls1++;
+        return v * 2;
+      })
+      .toArray();
+
+    let calls2 = 0;
+    const r2 = base
+      .map((v) => {
+        calls2++;
+        return v + 1;
+      })
+      .toArray();
+
+    expect(r1).toEqual([2, 4, 6]);
+    expect(r2).toEqual([2, 3, 4]);
+    expect(calls1).toBe(3);
+    expect(calls2).toBe(3);
   });
 
   it('toString reflects operations count', () => {

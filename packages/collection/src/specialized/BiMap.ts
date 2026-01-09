@@ -81,16 +81,20 @@ export class BiMap<K, V> extends MutableCollection<K, V> {
    * ```
    */
   override set(key: K, value: V): this {
-    // Remove any existing mappings
-    const existingValue = this.data.get(key);
-    const existingKey = this.inverse.get(value);
-
-    if (existingValue !== undefined) {
-      this.inverse.delete(existingValue);
+    // Remove any existing mappings for this key in forward map
+    if (this.data.has(key)) {
+      // Get the old value and remove it from inverse map
+      // Use Map.prototype.get to get the actual value (including undefined)
+      const oldValue = this.data.get(key);
+      // Delete from inverse - works even if oldValue is undefined
+      this.inverse.delete(oldValue as V);
     }
 
-    if (existingKey !== undefined && !Object.is(existingKey, key)) {
-      this.data.delete(existingKey);
+    const hasExistingKey = this.inverse.has(value);
+    const existingKey = hasExistingKey ? this.inverse.get(value) : undefined;
+
+    if (hasExistingKey && !Object.is(existingKey, key)) {
+      this.data.delete(existingKey as K);
     }
 
     // Set the new mapping
@@ -104,12 +108,13 @@ export class BiMap<K, V> extends MutableCollection<K, V> {
    * Delete a key and its corresponding value
    */
   override delete(key: K): boolean {
-    const value = this.data.get(key);
-    if (value !== undefined) {
-      this.inverse.delete(value);
-      return this.data.delete(key);
+    if (!this.data.has(key)) {
+      return false;
     }
-    return false;
+    const value = this.data.get(key);
+    this.data.delete(key);
+    this.inverse.delete(value as V);
+    return true;
   }
 
   /**
@@ -133,21 +138,54 @@ export class BiMap<K, V> extends MutableCollection<K, V> {
   }
 
   /**
-   * Get key by value
+   * Gets the key associated with the specified value (reverse lookup).
+   *
+   * @param value - The value to look up
+   * @returns The key associated with the value, or undefined if not found
+   * @complexity O(1)
+   *
+   * @example
+   * ```typescript
+   * const bimap = new BiMap([['one', 1], ['two', 2]]);
+   * bimap.getKey(1);  // 'one'
+   * bimap.getKey(3);  // undefined
+   * ```
    */
   getKey(value: V): K | undefined {
     return this.inverse.get(value);
   }
 
   /**
-   * Check if value exists
+   * Checks if a value exists in the BiMap.
+   *
+   * @param value - The value to check
+   * @returns true if the value exists, false otherwise
+   * @complexity O(1)
+   *
+   * @example
+   * ```typescript
+   * const bimap = new BiMap([['one', 1], ['two', 2]]);
+   * bimap.hasValue(1);  // true
+   * bimap.hasValue(3);  // false
+   * ```
    */
   hasValue(value: V): boolean {
     return this.inverse.has(value);
   }
 
   /**
-   * Get the inverse BiMap (values as keys, keys as values)
+   * Creates a new BiMap with keys and values swapped.
+   *
+   * @returns A new BiMap where original values become keys and original keys become values
+   * @complexity O(n)
+   *
+   * @example
+   * ```typescript
+   * const bimap = new BiMap([['one', 1], ['two', 2]]);
+   * const inverted = bimap.invert();
+   * inverted.get(1);    // 'one'
+   * inverted.getKey('one');  // 1
+   * ```
    */
   invert(): BiMap<V, K> {
     const inverted = new BiMap<V, K>();
@@ -158,14 +196,33 @@ export class BiMap<K, V> extends MutableCollection<K, V> {
   }
 
   /**
-   * Get all values (guaranteed unique)
+   * Returns a Set of all unique values in the BiMap.
+   *
+   * @returns A Set containing all values (guaranteed unique by BiMap invariant)
+   * @complexity O(n)
+   *
+   * @example
+   * ```typescript
+   * const bimap = new BiMap([['one', 1], ['two', 2]]);
+   * const values = bimap.uniqueValues();  // Set {1, 2}
+   * ```
    */
   uniqueValues(): Set<V> {
     return new Set(this.inverse.keys());
   }
 
   /**
-   * Ensure consistency between forward and inverse maps
+   * Verifies that the BiMap internal state is consistent.
+   * Checks that forward and inverse maps have the same size and matching entries.
+   *
+   * @returns true if the BiMap is internally consistent, false otherwise
+   * @complexity O(n)
+   *
+   * @example
+   * ```typescript
+   * const bimap = new BiMap([['one', 1]]);
+   * console.log(bimap.isConsistent());  // true
+   * ```
    */
   isConsistent(): boolean {
     if (this.data.size !== this.inverse.size) {

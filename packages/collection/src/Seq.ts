@@ -1,7 +1,56 @@
 /**
  * Lazy Sequence implementation
- * Provides lazy evaluation for chain operations without creating intermediate collections
- * With caching support for improved performance on repeated iterations
+ *
+ * Provides lazy evaluation for chain operations without creating intermediate collections.
+ * Operations are not executed until a terminal operation (toArray, count, first, etc.) is called.
+ * Supports intelligent caching for improved performance on repeated iterations.
+ *
+ * @module Seq
+ *
+ * @example Basic Usage
+ * ```typescript
+ * import { seq, cachedSeq, Seq } from '@gerts/collection';
+ *
+ * // Create from iterable
+ * const s = seq([['a', 1], ['b', 2], ['c', 3]]);
+ *
+ * // Chain operations (lazy - not executed yet)
+ * const result = s
+ *   .filter(([, v]) => v > 1)
+ *   .map(([k, v]) => [k, v * 10])
+ *   .take(2);
+ *
+ * // Terminal operation executes the chain
+ * result.toArray(); // [20, 30]
+ * ```
+ *
+ * @example Lazy Evaluation Benefits
+ * ```typescript
+ * // Without Seq: creates intermediate arrays at each step
+ * const arr = largeArray
+ *   .filter(x => x > 0)     // Creates array
+ *   .map(x => x * 2)        // Creates another array
+ *   .slice(0, 10);          // Creates yet another array
+ *
+ * // With Seq: single pass, no intermediate arrays
+ * const result = seq(largeArray.entries())
+ *   .filter(([, x]) => x > 0)
+ *   .map(([k, x]) => [k, x * 2])
+ *   .take(10)
+ *   .toArray();
+ * // Only iterates until 10 elements are found
+ * ```
+ *
+ * @example Caching for Repeated Iteration
+ * ```typescript
+ * // Create cached Seq for multiple iterations
+ * const cached = cachedSeq(expensiveIterator, 100);
+ * cached.toArray(); // First call: computes and caches
+ * cached.toArray(); // Second call: returns cached result
+ *
+ * // Invalidate cache when source changes
+ * cached.invalidateCache();
+ * ```
  */
 
 import type { BaseCollection } from './core/BaseCollection';
@@ -29,14 +78,25 @@ export interface SeqCacheOptions {
 }
 
 /**
- * Lazy sequence for efficient chaining of collection operations
- * Operations are not executed until terminal operation is called
- * Supports intelligent caching for improved performance
+ * Lazy sequence for efficient chaining of collection operations.
+ *
+ * Operations are not executed until a terminal operation is called.
+ * Supports intelligent caching for improved performance on repeated iterations.
+ *
+ * @template Key - The type of keys in the sequence entries
+ * @template Value - The type of values in the sequence entries
+ *
+ * @example
+ * ```typescript
+ * const result = new Seq([['a', 1], ['b', 2], ['c', 3]])
+ *   .filter(([, v]) => v > 1)
+ *   .map(([k, v]) => [k, v * 10])
+ *   .toArray();
+ * // Result: [20, 30]
+ * ```
  */
 export class Seq<Key, Value> {
-  private operations: Array<
-    (iterable: Iterable<[Key, Value]>) => Iterable<[Key, Value]>
-  > = [];
+  private operations: Array<(iterable: Iterable<[Key, Value]>) => Iterable<[Key, Value]>> = [];
   private source: Iterable<[Key, Value]>;
   private _cache?: Array<[Key, Value]>;
   private _cacheComplete: boolean = false;
@@ -44,17 +104,12 @@ export class Seq<Key, Value> {
   private _cacheOptions: SeqCacheOptions;
   private static _globalCache = new LRUCache<string, Array<[any, any]>>(1000);
 
-  constructor(
-    source: Iterable<[Key, Value]>,
-    options: SeqCacheOptions = { cacheResults: false },
-  ) {
+  constructor(source: Iterable<[Key, Value]>, options: SeqCacheOptions = { cacheResults: false }) {
     this.source = source;
     this._cacheOptions = options;
 
     if (options.cacheResults && options.maxCacheSize) {
-      this._operationCache = new LRUCache<string, Array<[Key, Value]>>(
-        options.maxCacheSize,
-      );
+      this._operationCache = new LRUCache<string, Array<[Key, Value]>>(options.maxCacheSize);
     }
   }
 
@@ -62,10 +117,7 @@ export class Seq<Key, Value> {
    * Creates a Seq from a Collection or any ReadableCollection
    */
   static fromCollection<K, V>(
-    collection:
-      | Collection<K, V>
-      | ReadableCollection<K, V>
-      | BaseCollection<K, V>,
+    collection: Collection<K, V> | ReadableCollection<K, V> | BaseCollection<K, V>,
     options?: SeqCacheOptions,
   ): Seq<K, V> {
     // Store the collection itself, not its iterator
@@ -76,10 +128,7 @@ export class Seq<Key, Value> {
   /**
    * Creates a cached Seq that remembers results
    */
-  static cached<K, V>(
-    source: Iterable<[K, V]>,
-    maxCacheSize: number = 100,
-  ): Seq<K, V> {
+  static cached<K, V>(source: Iterable<[K, V]>, maxCacheSize: number = 100): Seq<K, V> {
     const materialized = Array.from(source);
     const seq = new Seq<K, V>(materialized, {
       cacheResults: true,
@@ -103,9 +152,7 @@ export class Seq<Key, Value> {
     };
     (op as unknown as { __op?: string }).__op = 'filter';
     newSeq.operations.push(
-      op as unknown as (
-        iterable: Iterable<[Key, Value]>,
-      ) => Iterable<[Key, Value]>,
+      op as unknown as (iterable: Iterable<[Key, Value]>) => Iterable<[Key, Value]>,
     );
     return newSeq;
   }
@@ -124,9 +171,7 @@ export class Seq<Key, Value> {
       [Symbol.iterator](): Iterator<[Key, NewValue]> {
         function* gen(): Generator<[Key, NewValue]> {
           // Use base Seq iterator when caching is enabled to preserve generator reuse semantics
-          let iterable: Iterable<[Key, Value]> = useBaseIterator
-            ? getBaseIterable()
-            : src;
+          let iterable: Iterable<[Key, Value]> = useBaseIterator ? getBaseIterable() : src;
           if (!useBaseIterator) {
             for (const operation of ops) {
               if (typeof operation === 'function') {
@@ -144,24 +189,21 @@ export class Seq<Key, Value> {
 
     const newSeq = new Seq<Key, NewValue>(source, this._cacheOptions);
     // Preserve operations count for toString without executing them in new sequence
-    (newSeq as unknown as { operations: Array<unknown> }).operations =
-      new Array(this.operations.length + 1);
+    (newSeq as unknown as { operations: Array<unknown> }).operations = new Array(
+      this.operations.length + 1,
+    );
 
     // Share caches if configured
     if (this._cacheOptions.shareCache) {
-      (newSeq as unknown as { _cache?: Array<[Key, NewValue]> })._cache =
-        (this._cache as unknown as Array<[Key, NewValue]>) ?? undefined;
-      (newSeq as unknown as { _cacheComplete: boolean })._cacheComplete =
-        this._cacheComplete;
+      const maxCacheSize = this._cacheOptions.maxCacheSize;
       (
         newSeq as unknown as {
           _operationCache?: LRUCache<string, Array<[Key, NewValue]>>;
         }
       )._operationCache =
-        (this._operationCache as unknown as LRUCache<
-          string,
-          Array<[Key, NewValue]>
-        >) ?? undefined;
+        this._cacheOptions.cacheResults && maxCacheSize
+          ? new LRUCache<string, Array<[Key, NewValue]>>(maxCacheSize)
+          : undefined;
     }
 
     return newSeq;
@@ -185,9 +227,7 @@ export class Seq<Key, Value> {
     (op as unknown as { __op?: string; __arg?: unknown }).__op = 'take';
     (op as unknown as { __op?: string; __arg?: unknown }).__arg = amount;
     newSeq.operations.push(
-      op as unknown as (
-        iterable: Iterable<[Key, Value]>,
-      ) => Iterable<[Key, Value]>,
+      op as unknown as (iterable: Iterable<[Key, Value]>) => Iterable<[Key, Value]>,
     );
     return newSeq;
   }
@@ -209,9 +249,7 @@ export class Seq<Key, Value> {
     (op as unknown as { __op?: string; __arg?: unknown }).__op = 'skip';
     (op as unknown as { __op?: string; __arg?: unknown }).__arg = amount;
     newSeq.operations.push(
-      op as unknown as (
-        iterable: Iterable<[Key, Value]>,
-      ) => Iterable<[Key, Value]>,
+      op as unknown as (iterable: Iterable<[Key, Value]>) => Iterable<[Key, Value]>,
     );
     return newSeq;
   }
@@ -264,10 +302,7 @@ export class Seq<Key, Value> {
   /**
    * Terminal operation: reduces to single value
    */
-  reduce<R>(
-    reducer: (accumulator: R, value: Value, key: Key) => R,
-    initialValue: R,
-  ): R {
+  reduce<R>(reducer: (accumulator: R, value: Value, key: Key) => R, initialValue: R): R {
     let result = initialValue;
     for (const [key, value] of this) {
       result = reducer(result, value, key);
@@ -345,8 +380,7 @@ export class Seq<Key, Value> {
 
     // Execute operations
     const results: Array<[Key, Value]> = [];
-    const shouldCache =
-      this._cacheOptions.cacheResults || this._cache !== undefined;
+    const shouldCache = this._cacheOptions.cacheResults || this._cache !== undefined;
 
     let iterable: Iterable<[Key, Value]> = this.source;
     for (const operation of this.operations) {
@@ -363,7 +397,7 @@ export class Seq<Key, Value> {
     }
 
     // Cache results if needed
-    if (shouldCache && results.length > 0) {
+    if (shouldCache) {
       this._cache = results;
       this._cacheComplete = true;
 
@@ -418,9 +452,7 @@ export class Seq<Key, Value> {
       cacheResults: true,
       maxCacheSize,
     };
-    newSeq._operationCache = new LRUCache<string, Array<[Key, Value]>>(
-      maxCacheSize,
-    );
+    newSeq._operationCache = new LRUCache<string, Array<[Key, Value]>>(maxCacheSize);
     return newSeq;
   }
 
@@ -440,7 +472,26 @@ export class Seq<Key, Value> {
 }
 
 /**
- * Helper function to create a Seq from various inputs
+ * Creates a Seq from various inputs including iterables and collections.
+ *
+ * This is the recommended way to create a Seq for most use cases.
+ *
+ * @param input - An iterable of key-value pairs or a MutableCollection
+ * @param options - Optional caching configuration
+ * @returns A new Seq instance for lazy evaluation
+ *
+ * @example
+ * ```typescript
+ * // From array of entries
+ * const s1 = seq([['a', 1], ['b', 2]]);
+ *
+ * // From collection
+ * const collection = new MutableCollection([['x', 10]]);
+ * const s2 = seq(collection);
+ *
+ * // With caching enabled
+ * const s3 = seq(data, { cacheResults: true, maxCacheSize: 100 });
+ * ```
  */
 export function seq<K, V>(
   input: Iterable<[K, V]> | MutableCollection<K, V>,
@@ -453,8 +504,29 @@ export function seq<K, V>(
 }
 
 /**
- * Factory function to create a cached Seq
- * Automatically enables caching for improved performance
+ * Creates a cached Seq that remembers results after first iteration.
+ *
+ * This is useful when you need to iterate over the same sequence multiple times.
+ * The source is immediately materialized to ensure stable, replayable iteration.
+ *
+ * @param input - An iterable of key-value pairs or a MutableCollection
+ * @param maxCacheSize - Maximum number of cached operation results (default: 100)
+ * @returns A new cached Seq instance
+ *
+ * @example
+ * ```typescript
+ * // Create cached Seq for repeated iteration
+ * const cached = cachedSeq(expensiveGenerator(), 100);
+ *
+ * // First iteration computes and caches
+ * const first = cached.toArray();
+ *
+ * // Second iteration uses cache (fast)
+ * const second = cached.toArray();
+ *
+ * // Invalidate cache when source changes
+ * cached.invalidateCache();
+ * ```
  */
 export function cachedSeq<K, V>(
   input: Iterable<[K, V]> | MutableCollection<K, V>,

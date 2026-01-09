@@ -48,10 +48,7 @@ import type {
 import type { HasInternalData } from '../types/internal';
 import { INTERNAL_DATA } from '../types/internal';
 import { equalsByObjectIs } from '../utils/equality';
-import {
-  wouldKeyTransformChange,
-  wouldTransformChange,
-} from '../utils/structural';
+import { wouldKeyTransformChange, wouldTransformChange } from '../utils/structural';
 
 //
 
@@ -63,9 +60,7 @@ export const IS_IMMUTABLE = Symbol('@@__IMMUTABLE__@@');
 /**
  * Readonly type for ImmutableCollection
  */
-export type ReadonlyImmutableCollection<K, V> = Readonly<
-  ImmutableCollectionBase<K, V>
->;
+export type ReadonlyImmutableCollection<K, V> = Readonly<ImmutableCollectionBase<K, V>>;
 
 /**
  * Base immutable collection class
@@ -121,24 +116,16 @@ class ImmutableCollectionBase<K, V>
   }
 
   forEach<T = undefined>(
-    callbackfn: (
-      this: T,
-      value: V,
-      key: K,
-      collection: ReadableCollection<K, V>,
-    ) => void,
+    callbackfn: (this: T, value: V, key: K, collection: ReadableCollection<K, V>) => void,
     thisArg?: T,
   ): void {
-    const boundFn =
-      thisArg !== undefined ? callbackfn.bind(thisArg) : callbackfn;
+    const boundFn = thisArg !== undefined ? callbackfn.bind(thisArg) : callbackfn;
     for (const [key, value] of this.data) {
-      (
-        boundFn as (
-          value: V,
-          key: K,
-          collection: ReadableCollection<K, V>,
-        ) => void
-      )(value, key, this);
+      (boundFn as (value: V, key: K, collection: ReadableCollection<K, V>) => void)(
+        value,
+        key,
+        this,
+      );
     }
   }
 
@@ -229,9 +216,7 @@ class ImmutableCollectionBase<K, V>
    * const merged = collection.merge(defaults, overrides);
    * ```
    */
-  merge(
-    ...collections: ReadableCollection<K, V>[]
-  ): ImmutableCollectionBase<K, V> {
+  merge(...collections: ReadableCollection<K, V>[]): ImmutableCollectionBase<K, V> {
     const result = new Map<K, V>();
     for (const [k, v] of this.data) {
       result.set(k, v);
@@ -262,10 +247,7 @@ class ImmutableCollectionBase<K, V>
    * const incremented = collection.update('count', (v) => (v ?? 0) + 1);
    * ```
    */
-  update(
-    key: K,
-    updater: (value: V | undefined) => V,
-  ): ImmutableCollectionBase<K, V> {
+  update(key: K, updater: (value: V | undefined) => V): ImmutableCollectionBase<K, V> {
     const currentValue = this.get(key);
     const newValue = updater(currentValue);
 
@@ -282,9 +264,7 @@ class ImmutableCollectionBase<K, V>
     return findOp(this.data, predicate);
   }
 
-  findKey(
-    predicate: (value: V, key: K, index: number) => boolean,
-  ): K | undefined {
+  findKey(predicate: (value: V, key: K, index: number) => boolean): K | undefined {
     return findKeyOp(this.data, predicate);
   }
 
@@ -300,9 +280,7 @@ class ImmutableCollectionBase<K, V>
    * const positive = collection.filter((v) => v > 0);
    * ```
    */
-  filter(
-    predicate: (value: V, key: K, index: number) => boolean,
-  ): ImmutableCollectionBase<K, V> {
+  filter(predicate: (value: V, key: K, index: number) => boolean): ImmutableCollectionBase<K, V> {
     const filtered = filterOp(this.data, predicate);
 
     // If no items filtered out, return same instance
@@ -313,9 +291,7 @@ class ImmutableCollectionBase<K, V>
     return new ImmutableCollectionBase(filtered);
   }
 
-  filterIter(
-    predicate: (value: V, key: K, index: number) => boolean,
-  ): IterableIterator<[K, V]> {
+  filterIter(predicate: (value: V, key: K, index: number) => boolean): IterableIterator<[K, V]> {
     return filterIterOp(this.data, predicate);
   }
 
@@ -377,9 +353,7 @@ class ImmutableCollectionBase<K, V>
   mapKeys<NK>(
     fn: ((key: K, value: V) => NK) | ((key: K, value: V) => K),
   ): ImmutableCollectionBase<NK, V> | ImmutableCollectionBase<K, V> {
-    if (
-      !wouldKeyTransformChange(this.data, fn as (key: K, value: V) => unknown)
-    ) {
+    if (!wouldKeyTransformChange(this.data, fn as (key: K, value: V) => unknown)) {
       return this as unknown as ImmutableCollectionBase<NK, V>;
     }
     const mapped = mapKeysOp(this.data, fn as (key: K, value: V) => NK);
@@ -396,11 +370,7 @@ class ImmutableCollectionBase<K, V>
 
   // Flat map that returns a collection
   flatMapCollection<NV>(
-    fn: (
-      value: V,
-      key: K,
-      index: number,
-    ) => Iterable<[K, NV]> | ReadableCollection<K, NV>,
+    fn: (value: V, key: K, index: number) => Iterable<[K, NV]> | ReadableCollection<K, NV>,
   ): ImmutableCollectionBase<K, NV> {
     // If collection is empty, return empty collection
     if (this.size === 0) {
@@ -411,9 +381,7 @@ class ImmutableCollectionBase<K, V>
     let index = 0;
     for (const [key, val] of this) {
       const res = fn(val, key, index++);
-      const isReadableCollection = (
-        obj: unknown,
-      ): obj is ReadableCollection<K, NV> =>
+      const isReadableCollection = (obj: unknown): obj is ReadableCollection<K, NV> =>
         typeof obj === 'object' &&
         obj !== null &&
         'entries' in obj &&
@@ -437,10 +405,7 @@ class ImmutableCollectionBase<K, V>
   }
 
   // AggregateOps implementation
-  reduce<R>(
-    reducer: (accumulator: R, value: V, key: K, index: number) => R,
-    initialValue: R,
-  ): R {
+  reduce<R>(reducer: (accumulator: R, value: V, key: K, index: number) => R, initialValue: R): R {
     return reduceOp(this.data, reducer, initialValue);
   }
 
@@ -474,7 +439,7 @@ class ImmutableCollectionBase<K, V>
     const result = unionOp(this.data, other.entries());
 
     // If no new elements were added, return this
-    if (result.size === this.size) {
+    if (result.size === this.size && this.equalsMap(result)) {
       return this;
     }
 
@@ -539,9 +504,7 @@ class ImmutableCollectionBase<K, V>
    * const xor = collection1.symmetricDifference(collection2);
    * ```
    */
-  symmetricDifference(
-    other: ReadableCollection<K, V>,
-  ): ImmutableCollectionBase<K, V> {
+  symmetricDifference(other: ReadableCollection<K, V>): ImmutableCollectionBase<K, V> {
     // If both are empty, return this
     if (this.size === 0 && other.size === 0) {
       return this;
@@ -559,27 +522,17 @@ class ImmutableCollectionBase<K, V>
 
   mergeWithKeep<OV, RV>(
     other: ReadableCollection<K, OV>,
-    whenInSelf: (
-      value: V,
-      key: K,
-    ) => { keep: false } | { keep: true; value: RV },
-    whenInOther: (
-      valueOther: OV,
-      key: K,
-    ) => { keep: false } | { keep: true; value: RV },
-    whenInBoth: (
-      value: V,
-      valueOther: OV,
-      key: K,
-    ) => { keep: false } | { keep: true; value: RV },
+    whenInSelf: (value: V, key: K) => { keep: false } | { keep: true; value: RV },
+    whenInOther: (valueOther: OV, key: K) => { keep: false } | { keep: true; value: RV },
+    whenInBoth: (value: V, valueOther: OV, key: K) => { keep: false } | { keep: true; value: RV },
   ): ImmutableCollectionBase<K, RV> {
     const result = new Map<K, RV>();
     const keys = new Set<K>([...this.keys(), ...other.keys()]);
     for (const key of keys) {
+      const inSelf = this.has(key);
+      const inOther = other.has(key);
       const selfVal = this.get(key);
       const otherVal = other.get(key);
-      const inSelf = selfVal !== undefined;
-      const inOther = otherVal !== undefined;
       if (inSelf && inOther) {
         const res = whenInBoth(selfVal as V, otherVal as OV, key);
         if (res.keep) {
@@ -613,9 +566,7 @@ class ImmutableCollectionBase<K, V>
    * const sorted = collection.sort((a, b) => a[1] - b[1]);
    * ```
    */
-  sort(
-    compareFn?: (a: [K, V], b: [K, V]) => number,
-  ): ImmutableCollectionBase<K, V> {
+  sort(compareFn?: (a: [K, V], b: [K, V]) => number): ImmutableCollectionBase<K, V> {
     // If collection has 0 or 1 element, already sorted
     if (this.size <= 1) {
       return this;
@@ -631,9 +582,7 @@ class ImmutableCollectionBase<K, V>
     if (sortedArray.length === thisArray.length) {
       const sameOrder = sortedArray.every((entry, i) => {
         const thisEntry = thisArray[i];
-        return (
-          Object.is(entry[0], thisEntry[0]) && Object.is(entry[1], thisEntry[1])
-        );
+        return Object.is(entry[0], thisEntry[0]) && Object.is(entry[1], thisEntry[1]);
       });
 
       if (sameOrder) {
@@ -700,9 +649,7 @@ class ImmutableCollectionBase<K, V>
   }
 
   // Type-safe variant with explicit key mapping
-  toObjectWithKey<NK extends string | number | symbol>(
-    mapKey: (key: K) => NK,
-  ): Record<NK, V> {
+  toObjectWithKey<NK extends string | number | symbol>(mapKey: (key: K) => NK): Record<NK, V> {
     const obj = {} as Record<NK, V>;
     for (const [key, value] of this.data) {
       obj[mapKey(key)] = value;
@@ -758,9 +705,7 @@ class ImmutableCollectionBase<K, V>
    * });
    * ```
    */
-  withMutations(
-    fn: (mutable: Map<K, V>) => void,
-  ): ImmutableCollectionBase<K, V> {
+  withMutations(fn: (mutable: Map<K, V>) => void): ImmutableCollectionBase<K, V> {
     const mutableCopy = new Map(this.data);
     fn(mutableCopy);
 
@@ -901,15 +846,13 @@ class ImmutableCollectionBase<K, V>
    * }
    * ```
    */
-  static isImmutable(
-    value: unknown,
-  ): value is ImmutableCollectionBase<unknown, unknown> {
+  static isImmutable(value: unknown): value is ImmutableCollectionBase<unknown, unknown> {
     return Boolean(
       value &&
-        typeof value === 'object' &&
-        value !== null &&
-        IS_IMMUTABLE in value &&
-        value[IS_IMMUTABLE] === true,
+      typeof value === 'object' &&
+      value !== null &&
+      IS_IMMUTABLE in value &&
+      value[IS_IMMUTABLE] === true,
     );
   }
 }

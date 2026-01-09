@@ -50,6 +50,12 @@ import { equalsByObjectIs } from '../utils/equality';
 
 import { PersistentMap } from './PersistentMap';
 
+/**
+ * Symbol for storing cached internal Map representation.
+ * Used to avoid repeated O(N) materialization on every [INTERNAL_DATA]() call.
+ */
+const CACHED_MAP = Symbol('@@gerts/collection/cached-map@@');
+
 export class PersistentCollection<K, V>
   implements
     ReadableCollection<K, V>,
@@ -64,6 +70,13 @@ export class PersistentCollection<K, V>
 {
   protected readonly data: PersistentMap<K, V>;
 
+  /**
+   * Cached Map representation for [INTERNAL_DATA]() access.
+   * Since PersistentCollection is immutable, this cache is valid for the
+   * lifetime of the instance (FIX-021).
+   */
+  private [CACHED_MAP]: Map<K, V> | null = null;
+
   constructor(entries?: Iterable<[K, V]> | PersistentMap<K, V>) {
     if (entries instanceof PersistentMap) {
       this.data = entries;
@@ -72,9 +85,21 @@ export class PersistentCollection<K, V>
     }
   }
 
+  /**
+   * Provides access to internal data as a Map for consumers that expect Map.
+   * Uses lazy caching to avoid O(N) copy on every access (FIX-021).
+   *
+   * Since PersistentCollection is immutable, the cached Map is valid for
+   * the lifetime of this instance. New instances created by set/delete/etc
+   * will have their own cache.
+   *
+   * @returns A Map representation of this collection's data
+   */
   [INTERNAL_DATA](): Map<K, V> {
-    // Expose as a temporary materialized Map for consumers that expect Map
-    return new Map(this.data.entries());
+    if (this[CACHED_MAP] === null) {
+      this[CACHED_MAP] = new Map(this.data.entries());
+    }
+    return this[CACHED_MAP];
   }
 
   // ReadableCollection
@@ -103,24 +128,16 @@ export class PersistentCollection<K, V>
   }
 
   forEach<T = undefined>(
-    callbackfn: (
-      this: T,
-      value: V,
-      key: K,
-      collection: ReadableCollection<K, V>,
-    ) => void,
+    callbackfn: (this: T, value: V, key: K, collection: ReadableCollection<K, V>) => void,
     thisArg?: T,
   ): void {
-    const boundFn =
-      thisArg !== undefined ? callbackfn.bind(thisArg) : callbackfn;
+    const boundFn = thisArg !== undefined ? callbackfn.bind(thisArg) : callbackfn;
     this.data.forEach((value, key) =>
-      (
-        boundFn as (
-          value: V,
-          key: K,
-          collection: ReadableCollection<K, V>,
-        ) => void
-      )(value, key, this),
+      (boundFn as (value: V, key: K, collection: ReadableCollection<K, V>) => void)(
+        value,
+        key,
+        this,
+      ),
     );
   }
 
@@ -160,9 +177,7 @@ export class PersistentCollection<K, V>
     return new PersistentCollection(nextMap);
   }
 
-  merge(
-    ...collections: ReadableCollection<K, V>[]
-  ): PersistentCollection<K, V> {
+  merge(...collections: ReadableCollection<K, V>[]): PersistentCollection<K, V> {
     const result = new Map<K, V>(this.toMap());
     for (const coll of collections) {
       for (const [k, v] of coll.entries()) {
@@ -172,10 +187,7 @@ export class PersistentCollection<K, V>
     return new PersistentCollection(PersistentMap.fromMap(result));
   }
 
-  update(
-    key: K,
-    updater: (value: V | undefined) => V,
-  ): PersistentCollection<K, V> {
+  update(key: K, updater: (value: V | undefined) => V): PersistentCollection<K, V> {
     const current = this.get(key);
     const next = updater(current);
     if (Object.is(current, next)) {
@@ -189,15 +201,11 @@ export class PersistentCollection<K, V>
     return findOp(this.data, predicate);
   }
 
-  findKey(
-    predicate: (value: V, key: K, index: number) => boolean,
-  ): K | undefined {
+  findKey(predicate: (value: V, key: K, index: number) => boolean): K | undefined {
     return findKeyOp(this.data, predicate);
   }
 
-  filter(
-    predicate: (value: V, key: K, index: number) => boolean,
-  ): PersistentCollection<K, V> {
+  filter(predicate: (value: V, key: K, index: number) => boolean): PersistentCollection<K, V> {
     const filtered = filterOp(this.data, predicate);
     if (filtered.length === this.size) {
       return this;
@@ -205,9 +213,7 @@ export class PersistentCollection<K, V>
     return new PersistentCollection(filtered);
   }
 
-  filterIter(
-    predicate: (value: V, key: K, index: number) => boolean,
-  ): IterableIterator<[K, V]> {
+  filterIter(predicate: (value: V, key: K, index: number) => boolean): IterableIterator<[K, V]> {
     return filterIterOp(this.data, predicate);
   }
 
@@ -247,19 +253,13 @@ export class PersistentCollection<K, V>
   }
 
   flatMapCollection<NV>(
-    fn: (
-      value: V,
-      key: K,
-      index: number,
-    ) => Iterable<[K, NV]> | ReadableCollection<K, NV>,
+    fn: (value: V, key: K, index: number) => Iterable<[K, NV]> | ReadableCollection<K, NV>,
   ): PersistentCollection<K, NV> {
     const out = new Map<K, NV>();
     let index = 0;
     for (const [key, val] of this) {
       const res = fn(val, key, index++);
-      const isReadableCollection = (
-        obj: unknown,
-      ): obj is ReadableCollection<K, NV> =>
+      const isReadableCollection = (obj: unknown): obj is ReadableCollection<K, NV> =>
         typeof obj === 'object' && obj !== null && 'entries' in obj;
       const entries: Iterable<[K, NV]> = isReadableCollection(res)
         ? res.entries()
@@ -272,10 +272,7 @@ export class PersistentCollection<K, V>
   }
 
   // AggregateOps
-  reduce<R>(
-    reducer: (accumulator: R, value: V, key: K, index: number) => R,
-    initialValue: R,
-  ): R {
+  reduce<R>(reducer: (accumulator: R, value: V, key: K, index: number) => R, initialValue: R): R {
     return reduceOp(this.data, reducer, initialValue);
   }
 
@@ -309,36 +306,24 @@ export class PersistentCollection<K, V>
     return new PersistentCollection(PersistentMap.fromMap(result));
   }
 
-  symmetricDifference(
-    other: ReadableCollection<K, V>,
-  ): PersistentCollection<K, V> {
+  symmetricDifference(other: ReadableCollection<K, V>): PersistentCollection<K, V> {
     const result = symmetricDifferenceOp(this.data, other.entries());
     return new PersistentCollection(PersistentMap.fromMap(result));
   }
 
   mergeWithKeep<OV, RV>(
     other: ReadableCollection<K, OV>,
-    whenInSelf: (
-      value: V,
-      key: K,
-    ) => { keep: false } | { keep: true; value: RV },
-    whenInOther: (
-      valueOther: OV,
-      key: K,
-    ) => { keep: false } | { keep: true; value: RV },
-    whenInBoth: (
-      value: V,
-      valueOther: OV,
-      key: K,
-    ) => { keep: false } | { keep: true; value: RV },
+    whenInSelf: (value: V, key: K) => { keep: false } | { keep: true; value: RV },
+    whenInOther: (valueOther: OV, key: K) => { keep: false } | { keep: true; value: RV },
+    whenInBoth: (value: V, valueOther: OV, key: K) => { keep: false } | { keep: true; value: RV },
   ): PersistentCollection<K, RV> {
     const result = new Map<K, RV>();
     const keys = new Set<K>([...this.keys(), ...other.keys()]);
     for (const key of keys) {
+      const inSelf = this.has(key);
+      const inOther = other.has(key);
       const selfVal = this.get(key);
       const otherVal = other.get(key);
-      const inSelf = selfVal !== undefined;
-      const inOther = otherVal !== undefined;
       if (inSelf && inOther) {
         const res = whenInBoth(selfVal as V, otherVal as OV, key);
         if (res.keep) {
@@ -360,9 +345,7 @@ export class PersistentCollection<K, V>
   }
 
   // SortOps
-  sort(
-    compareFn?: (a: [K, V], b: [K, V]) => number,
-  ): PersistentCollection<K, V> {
+  sort(compareFn?: (a: [K, V], b: [K, V]) => number): PersistentCollection<K, V> {
     const sorted = sortEntries(this.data, compareFn);
     return new PersistentCollection(sorted);
   }
@@ -385,9 +368,7 @@ export class PersistentCollection<K, V>
     return obj;
   }
 
-  toObjectWithKey<NK extends string | number | symbol>(
-    mapKey: (key: K) => NK,
-  ): Record<NK, V> {
+  toObjectWithKey<NK extends string | number | symbol>(mapKey: (key: K) => NK): Record<NK, V> {
     const obj = {} as Record<NK, V>;
     for (const [key, value] of this.data) {
       obj[mapKey(key)] = value;

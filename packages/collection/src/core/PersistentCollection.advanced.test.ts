@@ -122,8 +122,7 @@ describe('PersistentCollection advanced operations', () => {
       const result = col1.mergeWithKeep(
         col2,
         // whenInSelf - only in col1
-        (value) =>
-          value > 1 ? { keep: true, value: `self:${value}` } : { keep: false },
+        (value) => (value > 1 ? { keep: true, value: `self:${value}` } : { keep: false }),
         // whenInOther - only in col2
         (value) => ({ keep: true, value: `other:${value}` }),
         // whenInBoth - in both collections
@@ -168,6 +167,20 @@ describe('PersistentCollection advanced operations', () => {
       expect(result2.size).toBe(2);
       expect(result2.get('a')).toBe('self');
       expect(result2.get('b')).toBe('self');
+    });
+
+    it('treats undefined values as present in self', () => {
+      const base = new PersistentCollection<string, number | undefined>([['a', undefined]]);
+      const other = new PersistentCollection<string, string>();
+
+      const result = base.mergeWithKeep(
+        other,
+        () => ({ keep: true, value: 'self' }),
+        () => ({ keep: true, value: 'other' }),
+        () => ({ keep: true, value: 'both' }),
+      );
+
+      expect(result.get('a')).toBe('self');
     });
   });
 
@@ -277,10 +290,7 @@ describe('PersistentCollection advanced operations', () => {
 
   describe('Aggregate operations', () => {
     it('should handle groupBy operation', () => {
-      const col = new PersistentCollection<
-        string,
-        { type: string; value: number }
-      >([
+      const col = new PersistentCollection<string, { type: string; value: number }>([
         ['a', { type: 'even', value: 2 }],
         ['b', { type: 'odd', value: 3 }],
         ['c', { type: 'even', value: 4 }],
@@ -423,18 +433,13 @@ describe('PersistentCollection advanced operations', () => {
     });
 
     it('should maintain structural sharing in transformations', () => {
-      const col = new PersistentCollection<
-        string,
-        { value: number; ref: object }
-      >([
+      const col = new PersistentCollection<string, { value: number; ref: object }>([
         ['a', { value: 1, ref: { id: 1 } }],
         ['b', { value: 2, ref: { id: 2 } }],
         ['c', { value: 3, ref: { id: 3 } }],
       ]);
 
-      const mapped = col.mapValues((v) =>
-        v.value === 2 ? { ...v, value: 20 } : v,
-      );
+      const mapped = col.mapValues((v) => (v.value === 2 ? { ...v, value: 20 } : v));
 
       // Unchanged objects should be same reference
       expect(mapped.get('a')).toBe(col.get('a'));

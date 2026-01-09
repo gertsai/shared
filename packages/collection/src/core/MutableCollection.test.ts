@@ -180,9 +180,10 @@ describe('MutableCollection', () => {
         ['x', 1],
         ['y', 2],
       ]);
-      const mapped = (base as any).mapEntriesCollection(
-        (k: string, v: number) => [k.toUpperCase(), v * 10],
-      );
+      const mapped = (base as any).mapEntriesCollection((k: string, v: number) => [
+        k.toUpperCase(),
+        v * 10,
+      ]);
       expect(mapped.get('X')).toBe(10);
       expect(mapped.get('Y')).toBe(20);
       expect(mapped.size).toBe(2);
@@ -276,9 +277,22 @@ describe('MutableCollection', () => {
       expect(collection.get('a')).toBe(10);
       expect(collection.get('d')).toBe(4);
     });
+  });
 
-    // Note: mergeWith and mergeWithKeep methods were removed during refactoring
-    // These can be implemented using merge with custom logic if needed
+  describe('mergeWithKeep', () => {
+    it('treats undefined values as present in self', () => {
+      const base = new MutableCollection<string, number | undefined>([['a', undefined]]);
+      const other = new MutableCollection<string, string>();
+
+      const result = base.mergeWithKeep(
+        other,
+        () => ({ keep: true, value: 'self' }),
+        () => ({ keep: true, value: 'other' }),
+        () => ({ keep: true, value: 'both' }),
+      );
+
+      expect(result.get('a')).toBe('self');
+    });
   });
 
   describe('Static factory methods', () => {
@@ -307,9 +321,7 @@ describe('MutableCollection', () => {
 
     it('should group values', () => {
       const values = [1, 2, 3, 4, 5];
-      const grouped = MutableCollection.groupBy(values, (n) =>
-        n % 2 === 0 ? 'even' : 'odd',
-      );
+      const grouped = MutableCollection.groupBy(values, (n) => (n % 2 === 0 ? 'even' : 'odd'));
 
       expect(grouped.get('odd')).toEqual([1, 3, 5]);
       expect(grouped.get('even')).toEqual([2, 4]);
@@ -323,10 +335,7 @@ describe('MutableCollection', () => {
         ['b', 4],
       ];
 
-      const combined = MutableCollection.combineEntries(
-        entries,
-        (first, second) => first + second,
-      );
+      const combined = MutableCollection.combineEntries(entries, (first, second) => first + second);
 
       expect(combined.get('a')).toBe(4); // 1 + 3
       expect(combined.get('b')).toBe(6); // 2 + 4

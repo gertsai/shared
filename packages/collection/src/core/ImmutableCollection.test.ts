@@ -159,9 +159,10 @@ describe('ImmutableCollection', () => {
         ['x', 1],
         ['y', 2],
       ]);
-      const mapped = (base as any).mapEntriesCollection(
-        (k: string, v: number) => [k.toUpperCase(), v * 10],
-      );
+      const mapped = (base as any).mapEntriesCollection((k: string, v: number) => [
+        k.toUpperCase(),
+        v * 10,
+      ]);
       expect(mapped.get('X')).toBe(10);
       expect(mapped.get('Y')).toBe(20);
       expect(mapped.size).toBe(2);
@@ -195,6 +196,19 @@ describe('ImmutableCollection', () => {
       const result = collection.union(other);
 
       expect(result).toBe(collection);
+    });
+
+    it('should return new instance if union overwrites values', () => {
+      const other = new ImmutableCollection([
+        ['a', 10],
+        ['b', 20],
+      ]);
+
+      const result = collection.union(other);
+
+      expect(result).not.toBe(collection);
+      expect(result.get('a')).toBe(10);
+      expect(result.get('b')).toBe(20);
     });
 
     it('should perform intersection', () => {
@@ -434,6 +448,22 @@ describe('ImmutableCollection', () => {
         ['b', 2],
         ['c', 3],
       ]);
+    });
+  });
+
+  describe('mergeWithKeep', () => {
+    it('treats undefined values as present in self', () => {
+      const base = new ImmutableCollection<string, number | undefined>([['a', undefined]]);
+      const other = new ImmutableCollection<string, string>();
+
+      const result = base.mergeWithKeep(
+        other,
+        () => ({ keep: true, value: 'self' }),
+        () => ({ keep: true, value: 'other' }),
+        () => ({ keep: true, value: 'both' }),
+      );
+
+      expect(result.get('a')).toBe('self');
     });
   });
 
