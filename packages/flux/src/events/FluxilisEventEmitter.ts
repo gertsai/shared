@@ -121,12 +121,16 @@ export class FluxilisEventEmitter<
   /** Flag for tracking async handlers */
   private _asyncListeners: boolean = false;
 
+  /** If true, throws when maxListeners exceeded (DoS protection) */
+  private _enforceMaxListeners: boolean = false;
+
   /**
    * Creates a new FluxilisEventEmitter instance.
    *
    * @param options - Configuration options
    * @param options.maxListeners - Maximum listeners per event before warning (default: 10)
    * @param options.asyncListeners - Enable async listener error handling (default: false)
+   * @param options.enforceMaxListeners - If true, throws when maxListeners exceeded (default: false)
    *
    * @example Default configuration
    * ```typescript
@@ -140,14 +144,32 @@ export class FluxilisEventEmitter<
    *   asyncListeners: true // Enable async error handling
    * });
    * ```
+   *
+   * @example DoS protection
+   * ```typescript
+   * const emitter = new FluxilisEventEmitter({
+   *   maxListeners: 50,
+   *   enforceMaxListeners: true // Throws if exceeded
+   * });
+   * ```
    */
-  constructor(options: { maxListeners?: number; asyncListeners?: boolean } = {}) {
+  constructor(
+    options: {
+      maxListeners?: number;
+      asyncListeners?: boolean;
+      enforceMaxListeners?: boolean;
+    } = {},
+  ) {
     if (options.maxListeners !== undefined) {
       this._maxListeners = options.maxListeners;
     }
 
     if (options.asyncListeners !== undefined) {
       this._asyncListeners = options.asyncListeners;
+    }
+
+    if (options.enforceMaxListeners !== undefined) {
+      this._enforceMaxListeners = options.enforceMaxListeners;
     }
   }
 
@@ -232,6 +254,14 @@ export class FluxilisEventEmitter<
 
     // Check maximum listener count
     if (this._maxListeners > 0 && listeners.length > this._maxListeners) {
+      if (this._enforceMaxListeners) {
+        // Remove the just-added listener
+        listeners.pop();
+        throw new Error(
+          `Maximum listeners (${this._maxListeners}) exceeded for event '${String(event)}'`,
+        );
+      }
+
       console.warn(
         `Possible memory leak: added ${listeners.length} ` +
           `listeners for event '${String(event)}', ` +

@@ -852,4 +852,135 @@ describe('FluxilisEventEmitter', () => {
       expect(typedEmitter.listenerCount('signal')).toBe(0);
     });
   });
+
+  // --- enforceMaxListeners (DoS Protection) ---
+  describe('enforceMaxListeners option', () => {
+    it('should throw when maxListeners exceeded with enforceMaxListeners=true', () => {
+      const strictEmitter = new FluxilisEventEmitter({
+        maxListeners: 3,
+        enforceMaxListeners: true,
+      });
+
+      strictEmitter.on('event', () => {});
+      strictEmitter.on('event', () => {});
+      strictEmitter.on('event', () => {});
+
+      expect(() => strictEmitter.on('event', () => {})).toThrow(
+        "Maximum listeners (3) exceeded for event 'event'",
+      );
+
+      // Only 3 listeners should be registered
+      expect(strictEmitter.listenerCount('event')).toBe(3);
+    });
+
+    it('should only warn when enforceMaxListeners=false (default)', () => {
+      const warningSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const softEmitter = new FluxilisEventEmitter({
+        maxListeners: 2,
+        enforceMaxListeners: false,
+      });
+
+      softEmitter.on('event', () => {});
+      softEmitter.on('event', () => {});
+      softEmitter.on('event', () => {}); // Should warn but allow
+
+      expect(warningSpy).toHaveBeenCalled();
+      expect(softEmitter.listenerCount('event')).toBe(3);
+
+      warningSpy.mockRestore();
+    });
+
+    it('should enforce across different events independently', () => {
+      const strictEmitter = new FluxilisEventEmitter({
+        maxListeners: 2,
+        enforceMaxListeners: true,
+      });
+
+      strictEmitter.on('event1', () => {});
+      strictEmitter.on('event1', () => {});
+      strictEmitter.on('event2', () => {});
+      strictEmitter.on('event2', () => {});
+
+      // event1 is full
+      expect(() => strictEmitter.on('event1', () => {})).toThrow('Maximum listeners (2) exceeded');
+
+      // event2 is also full
+      expect(() => strictEmitter.on('event2', () => {})).toThrow('Maximum listeners (2) exceeded');
+
+      expect(strictEmitter.listenerCount('event1')).toBe(2);
+      expect(strictEmitter.listenerCount('event2')).toBe(2);
+    });
+
+    it('should work with once() listeners', () => {
+      const strictEmitter = new FluxilisEventEmitter({
+        maxListeners: 2,
+        enforceMaxListeners: true,
+      });
+
+      strictEmitter.once('event', () => {});
+      strictEmitter.once('event', () => {});
+
+      expect(() => strictEmitter.once('event', () => {})).toThrow('Maximum listeners (2) exceeded');
+
+      expect(strictEmitter.listenerCount('event')).toBe(2);
+    });
+
+    it('should allow adding after removing when at limit', () => {
+      const strictEmitter = new FluxilisEventEmitter({
+        maxListeners: 2,
+        enforceMaxListeners: true,
+      });
+
+      const listener1 = () => {};
+      const listener2 = () => {};
+
+      strictEmitter.on('event', listener1);
+      strictEmitter.on('event', listener2);
+
+      expect(() => strictEmitter.on('event', () => {})).toThrow('Maximum listeners (2) exceeded');
+
+      // Remove one listener
+      strictEmitter.off('event', listener1);
+
+      // Now we can add one more
+      expect(() => strictEmitter.on('event', () => {})).not.toThrow();
+      expect(strictEmitter.listenerCount('event')).toBe(2);
+    });
+
+    it('should allow unlimited listeners when maxListeners=0 even with enforceMaxListeners=true', () => {
+      const unlimitedEmitter = new FluxilisEventEmitter({
+        maxListeners: 0, // 0 means unlimited
+        enforceMaxListeners: true,
+      });
+
+      // Add many listeners - should not throw
+      for (let i = 0; i < 100; i++) {
+        expect(() => unlimitedEmitter.on('event', () => {})).not.toThrow();
+      }
+
+      expect(unlimitedEmitter.listenerCount('event')).toBe(100);
+    });
+
+    it('should handle dynamic maxListeners changes with enforcement', () => {
+      const emitter = new FluxilisEventEmitter({
+        maxListeners: 5,
+        enforceMaxListeners: true,
+      });
+
+      // Add 5 listeners (at limit)
+      for (let i = 0; i < 5; i++) {
+        emitter.on('event', () => {});
+      }
+
+      // Should throw at 6th
+      expect(() => emitter.on('event', () => {})).toThrow('Maximum listeners (5) exceeded');
+
+      // Increase limit
+      emitter.setMaxListeners(10);
+
+      // Now can add more
+      expect(() => emitter.on('event', () => {})).not.toThrow();
+      expect(emitter.listenerCount('event')).toBe(6);
+    });
+  });
 });
