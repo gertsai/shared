@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createMutableCollection } from '../core/createCollection';
 import { MutableCollection } from '../core/MutableCollection';
+import { InvalidArgumentError } from '../errors';
 import { withDeepOps } from './DeepOps';
 
 describe('DeepOps', () => {
@@ -98,9 +99,7 @@ describe('DeepOps', () => {
   describe('DeepOps compactArrays option', () => {
     it('deleteIn with compactArrays=false leaves undefined holes in arrays', () => {
       // Create collection without compactArrays (default)
-      const base = new MutableCollection<string, any>([
-        ['data', { items: [1, 2, 3, 4, 5] }],
-      ]);
+      const base = new MutableCollection<string, any>([['data', { items: [1, 2, 3, 4, 5] }]]);
       const c = withDeepOps(
         base,
         (es: Iterable<[string, any]>) => new MutableCollection(es),
@@ -117,9 +116,7 @@ describe('DeepOps', () => {
 
     it('deleteIn with compactArrays=true removes undefined elements from arrays', () => {
       // Create collection with compactArrays enabled
-      const base = new MutableCollection<string, any>([
-        ['data', { items: [1, 2, 3, 4, 5] }],
-      ]);
+      const base = new MutableCollection<string, any>([['data', { items: [1, 2, 3, 4, 5] }]]);
       const c = withDeepOps(
         base,
         (es: Iterable<[string, any]>) => new MutableCollection(es),
@@ -191,14 +188,19 @@ describe('DeepOps', () => {
     });
 
     it('deleteIn with compactArrays=false preserves sparse arrays', () => {
-      const c = createMutableCollection<string, any>([
+      // Create collection with compactArrays=false via withDeepOps
+      const base = new MutableCollection<string, any>([
         ['sparse', { arr: [1, undefined, 3, undefined, 5] }],
       ]);
+      const c = withDeepOps(
+        base,
+        (es: Iterable<[string, any]>) => new MutableCollection(es),
+        false,
+        { compactArrays: false }, // Pass option to withDeepOps, not deleteIn
+      );
 
-      // Delete existing element without compacting
-      const c2 = (c as any).deleteIn(['sparse', 'arr', 2], {
-        compactArrays: false,
-      });
+      // Delete existing element - holes are preserved (compactArrays=false)
+      const c2 = c.deleteIn(['sparse', 'arr', 2]);
       const arr = (c2.get('sparse') as any).arr;
 
       expect(arr.length).toBe(5);
@@ -230,6 +232,121 @@ describe('DeepOps', () => {
       expect(matrix[1]).toEqual([4, 6]);
       expect(matrix[0]).toEqual([1, 2, 3]);
       expect(matrix[2]).toEqual([7, 8, 9]);
+    });
+  });
+
+  describe('Prototype Pollution Prevention', () => {
+    it('setIn should reject __proto__ in path', () => {
+      const c = createMutableCollection<string, unknown>([['a', {}]]);
+      expect(() => (c as any).setIn(['__proto__', 'polluted'], true)).toThrow(InvalidArgumentError);
+      expect(() => (c as any).setIn(['a', '__proto__', 'polluted'], true)).toThrow(
+        InvalidArgumentError,
+      );
+      // Verify Object.prototype was not polluted
+      expect(({} as any).polluted).toBeUndefined();
+    });
+
+    it('setIn should reject constructor in path', () => {
+      const c = createMutableCollection<string, unknown>([['a', {}]]);
+      expect(() => (c as any).setIn(['constructor', 'polluted'], true)).toThrow(
+        InvalidArgumentError,
+      );
+      expect(() => (c as any).setIn(['a', 'constructor', 'polluted'], true)).toThrow(
+        InvalidArgumentError,
+      );
+    });
+
+    it('setIn should reject prototype in path', () => {
+      const c = createMutableCollection<string, unknown>([['a', {}]]);
+      expect(() => (c as any).setIn(['prototype', 'polluted'], true)).toThrow(InvalidArgumentError);
+      expect(() => (c as any).setIn(['a', 'prototype', 'polluted'], true)).toThrow(
+        InvalidArgumentError,
+      );
+    });
+
+    it('updateIn should reject unsafe keys', () => {
+      const c = createMutableCollection<string, unknown>([['a', {}]]);
+      expect(() => (c as any).updateIn(['__proto__', 'isAdmin'], () => true)).toThrow(
+        InvalidArgumentError,
+      );
+      expect(() => (c as any).updateIn(['a', 'constructor'], () => true)).toThrow(
+        InvalidArgumentError,
+      );
+      expect(() => (c as any).updateIn(['a', 'prototype'], () => true)).toThrow(
+        InvalidArgumentError,
+      );
+    });
+
+    it('deleteIn should reject unsafe keys', () => {
+      const c = createMutableCollection<string, unknown>([['a', { b: 1 }]]);
+      expect(() => (c as any).deleteIn(['__proto__', 'polluted'])).toThrow(InvalidArgumentError);
+      expect(() => (c as any).deleteIn(['a', 'constructor'])).toThrow(InvalidArgumentError);
+      expect(() => (c as any).deleteIn(['a', 'prototype'])).toThrow(InvalidArgumentError);
+    });
+
+    it('mergeDeep should reject unsafe top-level keys', () => {
+      const c = createMutableCollection<string, unknown>([['a', {}]]);
+      const malicious = new Map<string, unknown>([['__proto__', { polluted: true }]]);
+      expect(() => (c as any).mergeDeep(malicious)).toThrow(InvalidArgumentError);
+    });
+
+    it('mergeDeep should reject unsafe nested keys in objects', () => {
+      const c = createMutableCollection<string, unknown>([['a', { x: 1 }]]);
+      // Use JSON.parse to create an object with __proto__ as an own property
+      // (Normal JS syntax { __proto__: ... } sets the prototype, not an own property)
+      const maliciousObj = JSON.parse('{"__proto__": {"polluted": true}}');
+      const malicious = new Map<string, unknown>([['a', maliciousObj]]);
+      expect(() => (c as any).mergeDeep(malicious)).toThrow(InvalidArgumentError);
+      // Verify Object.prototype was not polluted
+      expect(({} as any).polluted).toBeUndefined();
+    });
+
+    it('mergeDeep should reject unsafe keys in nested Maps', () => {
+      const c = createMutableCollection<string, unknown>([['a', new Map([['safe', 1]])]]);
+      const innerMap = new Map<string, unknown>([['__proto__', { polluted: true }]]);
+      const malicious = new Map<string, unknown>([['a', innerMap]]);
+      expect(() => (c as any).mergeDeep(malicious)).toThrow(InvalidArgumentError);
+    });
+
+    it('mergeDeepWith should reject unsafe keys', () => {
+      const c = createMutableCollection<string, unknown>([['a', { x: 1 }]]);
+      const merger = (_existing: any, incoming: any) => incoming;
+      const malicious = new Map<string, unknown>([['__proto__', { polluted: true }]]);
+      expect(() => (c as any).mergeDeepWith(merger, malicious)).toThrow(InvalidArgumentError);
+    });
+
+    it('mergeDeepWith should reject unsafe nested keys', () => {
+      const c = createMutableCollection<string, unknown>([['a', { x: 1 }]]);
+      const merger = (_existing: any, incoming: any) => incoming;
+      // Use JSON.parse to create an object with 'constructor' as an own property
+      const maliciousObj = JSON.parse('{"constructor": {"polluted": true}}');
+      const malicious = new Map<string, unknown>([['a', maliciousObj]]);
+      expect(() => (c as any).mergeDeepWith(merger, malicious)).toThrow(InvalidArgumentError);
+    });
+
+    it('should allow safe keys that look similar to unsafe keys', () => {
+      const c = createMutableCollection<string, unknown>([['a', {}]]);
+      // These should be allowed
+      expect(() => (c as any).setIn(['__proto', 'safe'], true)).not.toThrow();
+      expect(() => (c as any).setIn(['proto__', 'safe'], true)).not.toThrow();
+      expect(() => (c as any).setIn(['_constructor', 'safe'], true)).not.toThrow();
+      expect(() => (c as any).setIn(['prototyp', 'safe'], true)).not.toThrow();
+    });
+
+    it('should work normally with safe paths after blocking unsafe ones', () => {
+      const c = createMutableCollection<string, unknown>([['root', { nested: { value: 1 } }]]);
+
+      // First, verify unsafe path is blocked
+      expect(() => (c as any).setIn(['root', '__proto__', 'polluted'], true)).toThrow(
+        InvalidArgumentError,
+      );
+
+      // Then verify safe paths still work
+      const c2 = (c as any).setIn(['root', 'nested', 'value'], 42);
+      expect((c2.get('root') as any).nested.value).toBe(42);
+
+      // Verify Object.prototype was not polluted
+      expect(({} as any).polluted).toBeUndefined();
     });
   });
 });

@@ -12,9 +12,14 @@ export interface ReadableCollection<K, V> extends Iterable<[K, V]> {
   entries(): IterableIterator<[K, V]>;
   keys(): IterableIterator<K>;
   values(): IterableIterator<V>;
-  forEach(
-    callbackfn: (value: V, key: K, collection: ReadableCollection<K, V>) => void,
-    thisArg?: any,
+  /**
+   * Executes a callback for each entry in the collection.
+   * @param callbackfn - Function to execute for each entry
+   * @param thisArg - Value to use as `this` when executing the callback
+   */
+  forEach<T = void>(
+    callbackfn: (this: T, value: V, key: K, collection: ReadableCollection<K, V>) => void,
+    thisArg?: T,
   ): void;
   [Symbol.iterator](): IterableIterator<[K, V]>;
   /**
@@ -122,9 +127,12 @@ export interface ConversionOps<K, V> {
 }
 
 /**
- * Utility type for merge operations
+ * Utility type for merge operations.
+ * The key parameter is typed for type safety.
+ * @template K - Key type
+ * @template V - Value type
  */
-export type MergeStrategy<V> = (existing: V, incoming: V, key: any) => V | undefined;
+export type MergeStrategy<K, V> = (existing: V, incoming: V, key: K) => V | undefined;
 
 /**
  * Comparator function type

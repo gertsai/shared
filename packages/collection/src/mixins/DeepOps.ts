@@ -7,7 +7,42 @@
 import type { ReadableCollection } from '../types/interfaces';
 import type { HasInternalData } from '../types/internal';
 import { INTERNAL_DATA } from '../types/internal';
-import { deepClone, deepMerge, isPlainObject } from '../utils/helpers';
+import { deepClone, isPlainObject } from '../utils/helpers';
+import { InvalidArgumentError } from '../errors';
+
+/**
+ * Set of keys that could lead to prototype pollution attacks.
+ * These keys should never be used in deep path operations.
+ */
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/**
+ * Check if a key is unsafe (could lead to prototype pollution)
+ * @param key - The key to check
+ * @returns true if the key is unsafe
+ */
+function isUnsafeKey(key: unknown): boolean {
+  if (typeof key === 'string') {
+    return UNSAFE_KEYS.has(key);
+  }
+  return false;
+}
+
+/**
+ * Validate that a path does not contain any unsafe keys
+ * @param path - The path to validate
+ * @throws {InvalidArgumentError} If the path contains an unsafe key
+ */
+function validatePath(path: ReadonlyArray<unknown>): void {
+  for (const key of path) {
+    if (isUnsafeKey(key)) {
+      throw new InvalidArgumentError(
+        'path',
+        `Path contains unsafe key '${String(key)}' which could lead to prototype pollution`,
+      );
+    }
+  }
+}
 
 /**
  * Interface for deep operations
@@ -81,8 +116,11 @@ export class DeepOpsMixin<K, V> {
 
   /**
    * Set value at nested path (immutable operation)
+   * @throws {InvalidArgumentError} If path contains unsafe keys (__proto__, constructor, prototype)
    */
   setIn<T = unknown>(path: ReadonlyArray<K | string | number>, value: T): ReadableCollection<K, V> {
+    validatePath(path);
+
     if (path.length === 0) {
       return this.createNew(this.data);
     }
@@ -106,11 +144,14 @@ export class DeepOpsMixin<K, V> {
 
   /**
    * Update value at nested path with updater function
+   * @throws {InvalidArgumentError} If path contains unsafe keys (__proto__, constructor, prototype)
    */
   updateIn<T = unknown>(
     path: ReadonlyArray<K | string | number>,
     updater: (value: T | undefined) => T,
   ): ReadableCollection<K, V> {
+    validatePath(path);
+
     const currentValue = this.getIn<T>(path);
     const newValue = updater(currentValue);
     return this.setIn<T>(path, newValue);
@@ -118,8 +159,11 @@ export class DeepOpsMixin<K, V> {
 
   /**
    * Delete value at nested path
+   * @throws {InvalidArgumentError} If path contains unsafe keys (__proto__, constructor, prototype)
    */
   deleteIn(path: ReadonlyArray<K | string | number>): ReadableCollection<K, V> {
+    validatePath(path);
+
     if (path.length === 0) {
       return this.createNew(this.data);
     }
@@ -147,6 +191,7 @@ export class DeepOpsMixin<K, V> {
 
   /**
    * Deep merge multiple collections
+   * @throws {InvalidArgumentError} If any key in the collections is unsafe (__proto__, constructor, prototype)
    */
   mergeDeep(...collections: Array<Map<K, V> | Iterable<[K, V]>>): ReadableCollection<K, V> {
     const result = new Map(this.data);
@@ -155,12 +200,20 @@ export class DeepOpsMixin<K, V> {
       const entries = collection instanceof Map ? collection : new Map(collection);
 
       for (const [key, incoming] of entries) {
+        // Validate top-level key
+        if (isUnsafeKey(key)) {
+          throw new InvalidArgumentError(
+            'key',
+            `Key '${String(key)}' is unsafe and could lead to prototype pollution`,
+          );
+        }
+
         const existing = result.get(key);
 
         if (isPlainObject(existing) && isPlainObject(incoming)) {
           result.set(
             key,
-            deepMerge(
+            this.safeDeepMerge(
               existing as Record<string, unknown>,
               incoming as Record<string, unknown>,
             ) as unknown as V,
@@ -168,6 +221,12 @@ export class DeepOpsMixin<K, V> {
         } else if (existing instanceof Map && incoming instanceof Map) {
           const merged = new Map(existing);
           for (const [k, v] of incoming) {
+            if (isUnsafeKey(k)) {
+              throw new InvalidArgumentError(
+                'key',
+                `Key '${String(k)}' is unsafe and could lead to prototype pollution`,
+              );
+            }
             merged.set(k, v);
           }
           result.set(key, merged as unknown as V);
@@ -182,6 +241,7 @@ export class DeepOpsMixin<K, V> {
 
   /**
    * Deep merge with custom merger function
+   * @throws {InvalidArgumentError} If any key in the collections is unsafe (__proto__, constructor, prototype)
    */
   mergeDeepWith(
     merger: (existing: unknown, incoming: unknown, key: unknown) => unknown,
@@ -193,6 +253,14 @@ export class DeepOpsMixin<K, V> {
       const entries = collection instanceof Map ? collection : new Map(collection);
 
       for (const [key, incoming] of entries) {
+        // Validate top-level key
+        if (isUnsafeKey(key)) {
+          throw new InvalidArgumentError(
+            'key',
+            `Key '${String(key)}' is unsafe and could lead to prototype pollution`,
+          );
+        }
+
         if (result.has(key)) {
           const existing = result.get(key);
           // Deep merge with custom merger
@@ -216,6 +284,7 @@ export class DeepOpsMixin<K, V> {
 
   /**
    * Helper function for deep merging with a custom merger
+   * @throws {InvalidArgumentError} If any property key is unsafe
    */
   private deepMergeWithMerger(
     existing: unknown,
@@ -230,10 +299,23 @@ export class DeepOpsMixin<K, V> {
       };
 
       for (const prop in incoming as Record<string, unknown>) {
+        // Skip inherited properties
+        if (!Object.hasOwn(incoming as Record<string, unknown>, prop)) {
+          continue;
+        }
+
+        // Validate each property key
+        if (isUnsafeKey(prop)) {
+          throw new InvalidArgumentError(
+            'key',
+            `Property '${prop}' is unsafe and could lead to prototype pollution`,
+          );
+        }
+
         const incomingValue = (incoming as Record<string, unknown>)[prop];
         const existingValue = (existing as Record<string, unknown>)[prop];
 
-        if (prop in (existing as Record<string, unknown>)) {
+        if (Object.hasOwn(existing as Record<string, unknown>, prop)) {
           // Property exists in both - merge recursively
           result[prop] = this.deepMergeWithMerger(existingValue, incomingValue, merger, prop);
         } else {
@@ -247,6 +329,46 @@ export class DeepOpsMixin<K, V> {
 
     // Let merger decide for non-object values
     return merger(existing, incoming, key);
+  }
+
+  /**
+   * Safe deep merge that validates all keys
+   * @throws {InvalidArgumentError} If any property key is unsafe
+   */
+  private safeDeepMerge(
+    target: Record<string, unknown>,
+    source: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const result = { ...target };
+
+    for (const key in source) {
+      // Skip inherited properties
+      if (!Object.hasOwn(source, key)) {
+        continue;
+      }
+
+      // Validate each property key
+      if (isUnsafeKey(key)) {
+        throw new InvalidArgumentError(
+          'key',
+          `Property '${key}' is unsafe and could lead to prototype pollution`,
+        );
+      }
+
+      const sourceValue = source[key];
+      const targetValue = result[key];
+
+      if (isPlainObject(sourceValue) && isPlainObject(targetValue)) {
+        result[key] = this.safeDeepMerge(
+          targetValue as Record<string, unknown>,
+          sourceValue as Record<string, unknown>,
+        );
+      } else {
+        result[key] = deepClone(sourceValue);
+      }
+    }
+
+    return result;
   }
 
   /**

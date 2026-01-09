@@ -18,13 +18,9 @@ import {
   toEntries,
   createCollectionLike,
   isEqual,
-  type Comparator,
-  type DeepPartial,
-  type Path,
-  type PathValue,
-  type ValueType,
-  type MergeStrategy,
 } from './helpers';
+// Note: Type imports removed - they don't exist in helpers.ts
+// Use types from '../types/interfaces' if needed
 
 describe('helpers', () => {
   describe('isPlainObject', () => {
@@ -429,12 +425,8 @@ describe('helpers', () => {
     });
 
     it('should throw for invalid batch size', () => {
-      expect(() => Array.from(batch([1, 2, 3], 0))).toThrow(
-        'Batch size must be positive',
-      );
-      expect(() => Array.from(batch([1, 2, 3], -1))).toThrow(
-        'Batch size must be positive',
-      );
+      expect(() => Array.from(batch([1, 2, 3], 0))).toThrow('Batch size must be positive');
+      expect(() => Array.from(batch([1, 2, 3], -1))).toThrow('Batch size must be positive');
     });
   });
 
