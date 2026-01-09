@@ -4,9 +4,23 @@
  * Based on concepts from Clojure and immutable.js
  */
 
-const SHIFT = 5; // 5 bits per level
-const SIZE = 1 << SHIFT; // 32 branches per node
-const MASK = SIZE - 1; // 0x1f
+/**
+ * HAMT configuration constants.
+ * Using const enum for zero-cost abstraction - values are inlined at compile time.
+ */
+export const enum HAMTConstants {
+  /** Bits per level in the trie (5 bits = 32-way branching) */
+  SHIFT = 5,
+  /** Number of branches per node (2^5 = 32) */
+  SIZE = 32,
+  /** Bit mask for extracting index (0x1f) */
+  MASK = 31,
+}
+
+// Local aliases for internal use (const enum values are inlined)
+const SHIFT = HAMTConstants.SHIFT;
+const SIZE = HAMTConstants.SIZE;
+const MASK = HAMTConstants.MASK;
 
 /**
  * Calculate hash code for any value
@@ -35,11 +49,22 @@ function hash(value: unknown): number {
   }
 }
 
+// Shared buffer for float hashing (avoids allocation per call)
+const hashBuffer = new ArrayBuffer(8);
+const hashFloat64 = new Float64Array(hashBuffer);
+const hashUint32 = new Uint32Array(hashBuffer);
+
 function hashNumber(n: number): number {
   if (n !== n) {
     return 0x42108425; // NaN
   }
-  return n | 0; // Convert to 32-bit integer
+  // For integers that fit in 32 bits, use direct conversion
+  if (Number.isInteger(n) && n >= -2147483648 && n <= 2147483647) {
+    return n | 0;
+  }
+  // For floats and large integers, use bit representation
+  hashFloat64[0] = n;
+  return hashUint32[0] ^ hashUint32[1];
 }
 
 function hashString(str: string): number {
@@ -70,13 +95,29 @@ function hashObject(obj: Record<string, unknown>): number {
 }
 
 /**
+ * Sentinel value to distinguish "key not found" from "key exists with undefined value"
+ */
+const NOT_FOUND: unique symbol = Symbol('NOT_FOUND');
+type LookupResult<V> = V | typeof NOT_FOUND;
+
+/**
  * Internal node types for the HAMT structure
  */
 abstract class Node<K, V> {
   abstract get(shift: number, hash: number, key: K): V | undefined;
+  /**
+   * Lookup that distinguishes "not found" from "found undefined"
+   * Returns NOT_FOUND symbol if key doesn't exist
+   */
+  abstract lookup(shift: number, hash: number, key: K): LookupResult<V>;
   abstract set(shift: number, hash: number, key: K, value: V): Node<K, V>;
   abstract delete(shift: number, hash: number, key: K): Node<K, V> | null;
   abstract forEach(fn: (key: K, value: V) => void): void;
+  /**
+   * Lazy iterator over all key-value pairs in the subtree.
+   * Yields entries one at a time without materializing the full collection.
+   */
+  abstract iterateEntries(): Generator<[K, V], void, unknown>;
 }
 
 /**
@@ -96,6 +137,13 @@ class ValueNode<K, V> extends Node<K, V> {
       return this.value;
     }
     return undefined;
+  }
+
+  lookup(shift: number, hash: number, key: K): LookupResult<V> {
+    if (hash === this.hash && Object.is(key, this.key)) {
+      return this.value;
+    }
+    return NOT_FOUND;
   }
 
   set(shift: number, hash: number, key: K, value: V): Node<K, V> {
@@ -120,6 +168,10 @@ class ValueNode<K, V> extends Node<K, V> {
   forEach(fn: (key: K, value: V) => void): void {
     fn(this.key, this.value);
   }
+
+  *iterateEntries(): Generator<[K, V], void, unknown> {
+    yield [this.key, this.value];
+  }
 }
 
 /**
@@ -133,7 +185,7 @@ class CollisionNode<K, V> extends Node<K, V> {
     super();
   }
 
-  get(shift: number, hash: number, key: K): V | undefined {
+  get(_shift: number, hash: number, key: K): V | undefined {
     if (hash !== this.hash) {
       return undefined;
     }
@@ -143,6 +195,18 @@ class CollisionNode<K, V> extends Node<K, V> {
       }
     }
     return undefined;
+  }
+
+  lookup(_shift: number, hash: number, key: K): LookupResult<V> {
+    if (hash !== this.hash) {
+      return NOT_FOUND;
+    }
+    for (const node of this.entries) {
+      if (Object.is(node.key, key)) {
+        return node.value;
+      }
+    }
+    return NOT_FOUND;
   }
 
   set(shift: number, hash: number, key: K, value: V): Node<K, V> {
@@ -170,7 +234,7 @@ class CollisionNode<K, V> extends Node<K, V> {
     return new CollisionNode(this.hash, newEntries);
   }
 
-  delete(shift: number, hash: number, key: K): Node<K, V> | null {
+  delete(_shift: number, hash: number, key: K): Node<K, V> | null {
     if (hash !== this.hash) {
       return this;
     }
@@ -194,6 +258,12 @@ class CollisionNode<K, V> extends Node<K, V> {
       fn(node.key, node.value);
     }
   }
+
+  *iterateEntries(): Generator<[K, V], void, unknown> {
+    for (const node of this.entries) {
+      yield [node.key, node.value];
+    }
+  }
 }
 
 /**
@@ -215,6 +285,16 @@ class BranchNode<K, V> extends Node<K, V> {
 
     const index = popcount(this.bitmap & (bit - 1));
     return this.children[index].get(shift + SHIFT, hash, key);
+  }
+
+  lookup(shift: number, hash: number, key: K): LookupResult<V> {
+    const bit = 1 << ((hash >>> shift) & MASK);
+    if ((this.bitmap & bit) === 0) {
+      return NOT_FOUND;
+    }
+
+    const index = popcount(this.bitmap & (bit - 1));
+    return this.children[index].lookup(shift + SHIFT, hash, key);
   }
 
   set(shift: number, hash: number, key: K, value: V): Node<K, V> {
@@ -276,16 +356,18 @@ class BranchNode<K, V> extends Node<K, V> {
       child.forEach(fn);
     }
   }
+
+  *iterateEntries(): Generator<[K, V], void, unknown> {
+    for (const child of this.children) {
+      yield* child.iterateEntries();
+    }
+  }
 }
 
 /**
  * Merge two nodes when hash collision occurs
  */
-function mergeTwoNodes<K, V>(
-  shift: number,
-  node1: Node<K, V>,
-  node2: Node<K, V>,
-): Node<K, V> {
+function mergeTwoNodes<K, V>(shift: number, node1: Node<K, V>, node2: Node<K, V>): Node<K, V> {
   // Handle ValueNode + ValueNode
   if (node1 instanceof ValueNode && node2 instanceof ValueNode) {
     if (node1.hash === node2.hash) {
@@ -315,12 +397,7 @@ function mergeTwoNodes<K, V>(
   // Handle CollisionNode cases
   if (node1 instanceof CollisionNode && node2 instanceof ValueNode) {
     if (node1.hash === node2.hash) {
-      const updated: Node<K, V> = node1.set(
-        shift,
-        node2.hash,
-        node2.key,
-        node2.value,
-      );
+      const updated: Node<K, V> = node1.set(shift, node2.hash, node2.key, node2.value);
       return updated;
     }
     const bit1 = 1 << ((node1.hash >>> shift) & MASK);
@@ -409,8 +486,15 @@ export class PersistentMap<K, V> {
     return this.root.get(0, hash(key), key);
   }
 
+  /**
+   * Check if key exists in the map.
+   * Uses sentinel-based lookup to correctly handle undefined values.
+   */
   has(key: K): boolean {
-    return this.get(key) !== undefined;
+    if (this.root === null) {
+      return false;
+    }
+    return this.root.lookup(0, hash(key), key) !== NOT_FOUND;
   }
 
   /**
@@ -427,12 +511,12 @@ export class PersistentMap<K, V> {
       return newMap;
     }
 
+    const existed = this.has(key);
     const newRoot = this.root.set(0, h, key, value);
     if (newRoot === this.root) {
       return this;
     }
 
-    const existed = this.get(key) !== undefined;
     const newMap = new PersistentMap<K, V>();
     newMap.root = newRoot;
     newMap._size = this._size + (existed ? 0 : 1);
@@ -448,6 +532,7 @@ export class PersistentMap<K, V> {
       return this;
     }
 
+    const existed = this.has(key);
     const h = hash(key);
     const newRoot = this.root.delete(0, h, key);
 
@@ -455,7 +540,6 @@ export class PersistentMap<K, V> {
       return this;
     }
 
-    const existed = this.get(key) !== undefined;
     const newMap = new PersistentMap<K, V>();
     newMap.root = newRoot;
     newMap._size = this._size - (existed ? 1 : 0);
@@ -480,33 +564,50 @@ export class PersistentMap<K, V> {
       return;
     }
 
-    const boundFn =
-      thisArg !== undefined ? callbackfn.bind(thisArg) : callbackfn;
+    const boundFn = thisArg !== undefined ? callbackfn.bind(thisArg) : callbackfn;
     this.root.forEach((key, value) =>
-      (boundFn as (value: V, key: K, map: PersistentMap<K, V>) => void)(
-        value,
-        key,
-        this,
-      ),
+      (boundFn as (value: V, key: K, map: PersistentMap<K, V>) => void)(value, key, this),
     );
   }
 
+  /**
+   * Lazy iterator over all entries in the map.
+   * Uses true lazy iteration over the HAMT structure without materializing
+   * the full collection into an array first (FIX-020).
+   *
+   * @returns An iterator yielding [key, value] pairs one at a time
+   */
   *entries(): IterableIterator<[K, V]> {
-    const entries: Array<[K, V]> = [];
-    this.forEach((value, key) => {
-      entries.push([key, value]);
-    });
-    yield* entries;
+    if (this.root === null) {
+      return;
+    }
+    yield* this.root.iterateEntries();
   }
 
+  /**
+   * Lazy iterator over all keys in the map.
+   *
+   * @returns An iterator yielding keys one at a time
+   */
   *keys(): IterableIterator<K> {
-    for (const [key] of this.entries()) {
+    if (this.root === null) {
+      return;
+    }
+    for (const [key] of this.root.iterateEntries()) {
       yield key;
     }
   }
 
+  /**
+   * Lazy iterator over all values in the map.
+   *
+   * @returns An iterator yielding values one at a time
+   */
   *values(): IterableIterator<V> {
-    for (const [, value] of this.entries()) {
+    if (this.root === null) {
+      return;
+    }
+    for (const [, value] of this.root.iterateEntries()) {
       yield value;
     }
   }

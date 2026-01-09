@@ -6,6 +6,8 @@
  * @module operations/transform
  */
 
+import { InvalidArgumentError } from '../errors';
+
 /**
  * Maps values in a collection to a new array
  */
@@ -129,9 +131,7 @@ export function* zip<K, V, K2, V2>(
 /**
  * Zips with index
  */
-export function* zipWithIndex<K, V>(
-  iterable: Iterable<[K, V]>,
-): Generator<[[K, V], number]> {
+export function* zipWithIndex<K, V>(iterable: Iterable<[K, V]>): Generator<[[K, V], number]> {
   let index = 0;
   for (const entry of iterable) {
     yield [entry, index++];
@@ -141,12 +141,9 @@ export function* zipWithIndex<K, V>(
 /**
  * Chunks entries into arrays of specified size
  */
-export function* chunk<K, V>(
-  iterable: Iterable<[K, V]>,
-  size: number,
-): Generator<Array<[K, V]>> {
+export function* chunk<K, V>(iterable: Iterable<[K, V]>, size: number): Generator<Array<[K, V]>> {
   if (size <= 0) {
-    throw new Error('Chunk size must be positive');
+    throw new InvalidArgumentError('size', 'must be positive');
   }
 
   let chunk: Array<[K, V]> = [];
@@ -245,10 +242,7 @@ export function reject<K, V>(
 /**
  * Flatten nested arrays in values
  */
-export function flatten<K>(
-  iterable: Iterable<[K, any]>,
-  depth: number = 1,
-): Array<any> {
+export function flatten<K>(iterable: Iterable<[K, any]>, depth: number = 1): Array<any> {
   const result: Array<any> = [];
 
   const flattenHelper = (value: any, currentDepth: number): void => {

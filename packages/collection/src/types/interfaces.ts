@@ -13,11 +13,7 @@ export interface ReadableCollection<K, V> extends Iterable<[K, V]> {
   keys(): IterableIterator<K>;
   values(): IterableIterator<V>;
   forEach(
-    callbackfn: (
-      value: V,
-      key: K,
-      collection: ReadableCollection<K, V>,
-    ) => void,
+    callbackfn: (value: V, key: K, collection: ReadableCollection<K, V>) => void,
     thisArg?: any,
   ): void;
   [Symbol.iterator](): IterableIterator<[K, V]>;
@@ -52,16 +48,10 @@ export interface ImmutableOps<K, V> {
  */
 export interface SearchOps<K, V> {
   find(predicate: (value: V, key: K, index: number) => boolean): V | undefined;
-  findKey(
-    predicate: (value: V, key: K, index: number) => boolean,
-  ): K | undefined;
-  filter(
-    predicate: (value: V, key: K, index: number) => boolean,
-  ): ReadableCollection<K, V>;
+  findKey(predicate: (value: V, key: K, index: number) => boolean): K | undefined;
+  filter(predicate: (value: V, key: K, index: number) => boolean): ReadableCollection<K, V>;
   /** Lazy filter over entries */
-  filterIter(
-    predicate: (value: V, key: K, index: number) => boolean,
-  ): IterableIterator<[K, V]>;
+  filterIter(predicate: (value: V, key: K, index: number) => boolean): IterableIterator<[K, V]>;
   some(predicate: (value: V, key: K, index: number) => boolean): boolean;
   every(predicate: (value: V, key: K, index: number) => boolean): boolean;
   /** Lazy iterators: do not allocate arrays */
@@ -91,10 +81,7 @@ export interface TransformOps<K, V> {
  * Aggregate operations
  */
 export interface AggregateOps<K, V> {
-  reduce<R>(
-    reducer: (accumulator: R, value: V, key: K, index: number) => R,
-    initialValue: R,
-  ): R;
+  reduce<R>(reducer: (accumulator: R, value: V, key: K, index: number) => R, initialValue: R): R;
   groupBy<G>(keySelector: (value: V, key: K) => G): Map<G, Array<[K, V]>>;
   count(predicate?: (value: V, key: K, index: number) => boolean): number;
 }
@@ -106,9 +93,7 @@ export interface SetOps<K, V> {
   union(other: ReadableCollection<K, V>): ReadableCollection<K, V>;
   intersection(other: ReadableCollection<K, V>): ReadableCollection<K, V>;
   difference(other: ReadableCollection<K, V>): ReadableCollection<K, V>;
-  symmetricDifference(
-    other: ReadableCollection<K, V>,
-  ): ReadableCollection<K, V>;
+  symmetricDifference(other: ReadableCollection<K, V>): ReadableCollection<K, V>;
   mergeWithKeep<OV, RV>(
     other: ReadableCollection<K, OV>,
     whenInSelf: (value: V, key: K) => Keep<RV>,
@@ -139,11 +124,7 @@ export interface ConversionOps<K, V> {
 /**
  * Utility type for merge operations
  */
-export type MergeStrategy<V> = (
-  existing: V,
-  incoming: V,
-  key: any,
-) => V | undefined;
+export type MergeStrategy<V> = (existing: V, incoming: V, key: any) => V | undefined;
 
 /**
  * Comparator function type
@@ -169,3 +150,177 @@ export type Reducer<T, R> = (accumulator: R, value: T) => R;
  * Keep type for filtering operations
  */
 export type Keep<V> = { keep: false } | { keep: true; value: V };
+
+// ============================================================================
+// Utility Types
+// ============================================================================
+
+/**
+ * Extract key type from a collection
+ * @example
+ * type K = KeyOf<ReadableCollection<string, number>>; // string
+ */
+export type KeyOf<C> = C extends ReadableCollection<infer K, unknown> ? K : never;
+
+/**
+ * Extract value type from a collection
+ * @example
+ * type V = ValueOf<ReadableCollection<string, number>>; // number
+ */
+export type ValueOf<C> = C extends ReadableCollection<unknown, infer V> ? V : never;
+
+/**
+ * Extract entry type from a collection
+ * @example
+ * type E = EntryOf<ReadableCollection<string, number>>; // [string, number]
+ */
+export type EntryOf<C> = C extends ReadableCollection<infer K, infer V> ? [K, V] : never;
+
+/**
+ * Make all properties of a collection's value type optional (deep)
+ */
+export type DeepPartial<T> = T extends object ? { [P in keyof T]?: DeepPartial<T[P]> } : T;
+
+/**
+ * Make all properties of a collection's value type readonly (deep)
+ */
+export type DeepReadonly<T> = T extends object
+  ? { readonly [P in keyof T]: DeepReadonly<T[P]> }
+  : T;
+
+/**
+ * Extract the return type of a collection method
+ */
+export type CollectionMethodReturn<
+  C extends ReadableCollection<unknown, unknown>,
+  M extends keyof C,
+> = C[M] extends (...args: unknown[]) => infer R ? R : never;
+
+// ============================================================================
+// Template Literal Types
+// ============================================================================
+
+/**
+ * Operation namespace prefixes for categorizing collection operations.
+ */
+export type OperationNamespace = 'search' | 'transform' | 'aggregate' | 'set';
+
+/**
+ * Template literal type for namespaced operation names.
+ * Ensures consistent naming: `{namespace}:{operation}`
+ *
+ * @example
+ * type SearchOp = OperationName<'search', 'find'>; // 'search:find'
+ */
+export type OperationName<N extends OperationNamespace, Op extends string> = `${N}:${Op}`;
+
+/**
+ * All search operation names.
+ */
+export type SearchOperationName =
+  | OperationName<'search', 'find'>
+  | OperationName<'search', 'findKey'>
+  | OperationName<'search', 'filter'>
+  | OperationName<'search', 'some'>
+  | OperationName<'search', 'every'>
+  | OperationName<'search', 'take'>
+  | OperationName<'search', 'skip'>;
+
+/**
+ * All transform operation names.
+ */
+export type TransformOperationName =
+  | OperationName<'transform', 'map'>
+  | OperationName<'transform', 'mapValues'>
+  | OperationName<'transform', 'mapKeys'>
+  | OperationName<'transform', 'flatMap'>
+  | OperationName<'transform', 'sort'>
+  | OperationName<'transform', 'reverse'>
+  | OperationName<'transform', 'chunk'>;
+
+/**
+ * All aggregate operation names.
+ */
+export type AggregateOperationName =
+  | OperationName<'aggregate', 'reduce'>
+  | OperationName<'aggregate', 'groupBy'>
+  | OperationName<'aggregate', 'count'>
+  | OperationName<'aggregate', 'sum'>
+  | OperationName<'aggregate', 'min'>
+  | OperationName<'aggregate', 'max'>;
+
+/**
+ * All set operation names.
+ */
+export type SetOperationName =
+  | OperationName<'set', 'union'>
+  | OperationName<'set', 'intersection'>
+  | OperationName<'set', 'difference'>
+  | OperationName<'set', 'merge'>;
+
+/**
+ * All collection operation names combined.
+ */
+export type CollectionOperationName =
+  | SearchOperationName
+  | TransformOperationName
+  | AggregateOperationName
+  | SetOperationName;
+
+/**
+ * Extract namespace from an operation name.
+ *
+ * @example
+ * type NS = ExtractNamespace<'search:find'>; // 'search'
+ */
+export type ExtractNamespace<T extends string> = T extends `${infer N}:${string}` ? N : never;
+
+/**
+ * Extract operation from an operation name.
+ *
+ * @example
+ * type Op = ExtractOperation<'search:find'>; // 'find'
+ */
+export type ExtractOperation<T extends string> = T extends `${string}:${infer Op}` ? Op : never;
+
+// ============================================================================
+// Additional Utility Types
+// ============================================================================
+
+/**
+ * Make specific properties required in a type.
+ * More precise than Required<T>.
+ *
+ * @example
+ * type User = { name?: string; email?: string; age?: number };
+ * type RequiredUser = RequireFields<User, 'name' | 'email'>;
+ * // { name: string; email: string; age?: number }
+ */
+export type RequireFields<T, K extends keyof T> = T & Required<Pick<T, K>>;
+
+/**
+ * Make specific properties optional in a type.
+ * More precise than Partial<T>.
+ *
+ * @example
+ * type User = { name: string; email: string; age: number };
+ * type OptionalUser = OptionalFields<User, 'age'>;
+ * // { name: string; email: string; age?: number }
+ */
+export type OptionalFields<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
+
+/**
+ * Extract promise type for async operations.
+ *
+ * @example
+ * type Result = UnwrapPromise<Promise<string>>; // string
+ */
+export type UnwrapPromise<T> = T extends Promise<infer U> ? U : T;
+
+/**
+ * Extract array element type.
+ *
+ * @example
+ * type Item = ArrayElement<string[]>; // string
+ */
+export type ArrayElement<T> = T extends readonly (infer U)[] ? U : never;

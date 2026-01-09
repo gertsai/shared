@@ -39,9 +39,7 @@ export interface DeepOps<K, V> {
 export class DeepOpsMixin<K, V> {
   constructor(
     private readonly data: Map<K, V>,
-    private readonly createNew: (
-      entries: Iterable<[K, V]>,
-    ) => ReadableCollection<K, V>,
+    private readonly createNew: (entries: Iterable<[K, V]>) => ReadableCollection<K, V>,
     private readonly isImmutable: boolean = false,
     private readonly options: { compactArrays?: boolean } = {},
   ) {}
@@ -65,9 +63,7 @@ export class DeepOpsMixin<K, V> {
       if (current instanceof Map) {
         current = (current as Map<unknown, unknown>).get(key as unknown);
       } else if (typeof current === 'object') {
-        current = (current as Record<string | number, unknown>)[
-          key as string | number
-        ];
+        current = (current as Record<string | number, unknown>)[key as string | number];
       } else {
         return undefined;
       }
@@ -86,10 +82,7 @@ export class DeepOpsMixin<K, V> {
   /**
    * Set value at nested path (immutable operation)
    */
-  setIn<T = unknown>(
-    path: ReadonlyArray<K | string | number>,
-    value: T,
-  ): ReadableCollection<K, V> {
+  setIn<T = unknown>(path: ReadonlyArray<K | string | number>, value: T): ReadableCollection<K, V> {
     if (path.length === 0) {
       return this.createNew(this.data);
     }
@@ -155,14 +148,11 @@ export class DeepOpsMixin<K, V> {
   /**
    * Deep merge multiple collections
    */
-  mergeDeep(
-    ...collections: Array<Map<K, V> | Iterable<[K, V]>>
-  ): ReadableCollection<K, V> {
+  mergeDeep(...collections: Array<Map<K, V> | Iterable<[K, V]>>): ReadableCollection<K, V> {
     const result = new Map(this.data);
 
     for (const collection of collections) {
-      const entries =
-        collection instanceof Map ? collection : new Map(collection);
+      const entries = collection instanceof Map ? collection : new Map(collection);
 
       for (const [key, incoming] of entries) {
         const existing = result.get(key);
@@ -200,8 +190,7 @@ export class DeepOpsMixin<K, V> {
     const result = new Map(this.data);
 
     for (const collection of collections) {
-      const entries =
-        collection instanceof Map ? collection : new Map(collection);
+      const entries = collection instanceof Map ? collection : new Map(collection);
 
       for (const [key, incoming] of entries) {
         if (result.has(key)) {
@@ -246,12 +235,7 @@ export class DeepOpsMixin<K, V> {
 
         if (prop in (existing as Record<string, unknown>)) {
           // Property exists in both - merge recursively
-          result[prop] = this.deepMergeWithMerger(
-            existingValue,
-            incomingValue,
-            merger,
-            prop,
-          );
+          result[prop] = this.deepMergeWithMerger(existingValue, incomingValue, merger, prop);
         } else {
           // Property only in incoming - add it
           result[prop] = deepClone(incomingValue);
@@ -268,11 +252,7 @@ export class DeepOpsMixin<K, V> {
   /**
    * Recursive helper for setIn
    */
-  private setInRecursive(
-    current: unknown,
-    path: Array<unknown>,
-    value: unknown,
-  ): unknown {
+  private setInRecursive(current: unknown, path: Array<unknown>, value: unknown): unknown {
     if (path.length === 0) {
       return value;
     }
@@ -282,11 +262,7 @@ export class DeepOpsMixin<K, V> {
 
     if (current instanceof Map) {
       const newMap = new Map(current as Map<unknown, unknown>);
-      const next = this.setInRecursive(
-        newMap.get(key as unknown),
-        restPath,
-        value,
-      );
+      const next = this.setInRecursive(newMap.get(key as unknown), restPath, value);
       newMap.set(key as unknown, next);
       return newMap;
     }
@@ -304,9 +280,7 @@ export class DeepOpsMixin<K, V> {
 
     // Create new container if current is not a container
     if (typeof key === 'number') {
-      const arr = Array.isArray(current)
-        ? ([...current] as unknown[])
-        : ([] as unknown[]);
+      const arr = Array.isArray(current) ? ([...current] as unknown[]) : ([] as unknown[]);
       arr[key] = this.setInRecursive(arr[key], restPath, value);
       return arr;
     } else {
@@ -361,10 +335,7 @@ export class DeepOpsMixin<K, V> {
 
     if (current instanceof Map) {
       const newMap = new Map(current as Map<unknown, unknown>);
-      const newValue = this.deleteInRecursive(
-        newMap.get(key as unknown),
-        restPath,
-      );
+      const newValue = this.deleteInRecursive(newMap.get(key as unknown), restPath);
       if (newValue !== undefined) {
         newMap.set(key as unknown, newValue);
       } else {
@@ -419,31 +390,34 @@ export class DeepOpsMixin<K, V> {
  * Apply deep operations mixin to a collection
  */
 export function withDeepOps<
-  T extends ReadableCollection<any, any> &
-    (Partial<{ data: Map<any, any> }> | HasInternalData<any, any>),
+  K,
+  V,
+  T extends ReadableCollection<K, V> & (Partial<{ data: Map<K, V> }> | HasInternalData<K, V>),
 >(
   target: T,
-  createNew: (entries: Iterable<[any, any]>) => T,
+  createNew: (entries: Iterable<[K, V]>) => T,
   isImmutable: boolean = false,
   options: { compactArrays?: boolean } = {},
-): T & DeepOps<any, any> {
-  const mapAccessor = ((): Map<any, any> => {
+): T & DeepOps<K, V> {
+  const mapAccessor = ((): Map<K, V> => {
     const anyTarget = target as unknown as {
-      data?: Map<any, any>;
-    } & HasInternalData<any, any>;
-    if (
-      typeof (anyTarget as HasInternalData<any, any>)[INTERNAL_DATA] ===
-      'function'
-    ) {
-      return (anyTarget as HasInternalData<any, any>)[INTERNAL_DATA]();
+      data?: Map<K, V>;
+    } & HasInternalData<K, V>;
+    if (typeof (anyTarget as HasInternalData<K, V>)[INTERNAL_DATA] === 'function') {
+      return (anyTarget as HasInternalData<K, V>)[INTERNAL_DATA]();
     }
     if (anyTarget.data instanceof Map) {
-      return anyTarget.data as Map<any, any>;
+      return anyTarget.data;
     }
-    return new Map<any, any>(target.entries());
+    return new Map<K, V>(target.entries());
   })();
 
-  const mixin = new DeepOpsMixin(mapAccessor, createNew, isImmutable, options);
+  const mixin = new DeepOpsMixin<K, V>(
+    mapAccessor,
+    createNew as (entries: Iterable<[K, V]>) => ReadableCollection<K, V>,
+    isImmutable,
+    options,
+  );
 
   const methods = [
     'getIn',
@@ -453,12 +427,12 @@ export function withDeepOps<
     'deleteIn',
     'mergeDeep',
     'mergeDeepWith',
-  ] as const satisfies ReadonlyArray<keyof DeepOps<any, any>>;
+  ] as const satisfies ReadonlyArray<keyof DeepOps<K, V>>;
 
   for (const method of methods) {
-    const fn = (mixin as unknown as Record<string, unknown>)[
-      method as string
-    ] as unknown as (...args: unknown[]) => unknown;
+    const fn = (mixin as unknown as Record<string, unknown>)[method as string] as unknown as (
+      ...args: unknown[]
+    ) => unknown;
     Object.defineProperty(target, method, {
       value: fn.bind(mixin),
       enumerable: false,
@@ -466,5 +440,5 @@ export function withDeepOps<
     });
   }
 
-  return target as T & DeepOps<any, any>;
+  return target as T & DeepOps<K, V>;
 }

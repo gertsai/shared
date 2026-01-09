@@ -97,10 +97,7 @@ describe('PersistentMap', () => {
     });
 
     it('should test keys() iterator', () => {
-      const map = new PersistentMap<string, number>()
-        .set('a', 1)
-        .set('b', 2)
-        .set('c', 3);
+      const map = new PersistentMap<string, number>().set('a', 1).set('b', 2).set('c', 3);
 
       const keys = Array.from(map.keys());
       expect(keys.length).toBe(3);
@@ -114,10 +111,7 @@ describe('PersistentMap', () => {
     });
 
     it('should test values() iterator', () => {
-      const map = new PersistentMap<string, number>()
-        .set('a', 1)
-        .set('b', 2)
-        .set('c', 3);
+      const map = new PersistentMap<string, number>().set('a', 1).set('b', 2).set('c', 3);
 
       const values = Array.from(map.values());
       expect(values.length).toBe(3);
@@ -133,9 +127,7 @@ describe('PersistentMap', () => {
     it('should test Symbol.toStringTag', () => {
       const map = new PersistentMap<string, number>();
       expect(map[Symbol.toStringTag]).toBe('PersistentMap');
-      expect(Object.prototype.toString.call(map)).toBe(
-        '[object PersistentMap]',
-      );
+      expect(Object.prototype.toString.call(map)).toBe('[object PersistentMap]');
 
       // Test with populated map
       const populatedMap = map.set('test', 123);
@@ -143,10 +135,7 @@ describe('PersistentMap', () => {
     });
 
     it('should test asMutable() method', () => {
-      const persistent = new PersistentMap<string, number>()
-        .set('a', 1)
-        .set('b', 2)
-        .set('c', 3);
+      const persistent = new PersistentMap<string, number>().set('a', 1).set('b', 2).set('c', 3);
 
       const mutable = persistent.asMutable();
       expect(mutable).toBeInstanceOf(Map);
@@ -198,15 +187,9 @@ describe('PersistentMap', () => {
     });
 
     it('should handle merge operations through entries', () => {
-      const map1 = new PersistentMap<string, number>()
-        .set('a', 1)
-        .set('b', 2)
-        .set('c', 3);
+      const map1 = new PersistentMap<string, number>().set('a', 1).set('b', 2).set('c', 3);
 
-      const map2 = new PersistentMap<string, number>()
-        .set('b', 20)
-        .set('d', 4)
-        .set('e', 5);
+      const map2 = new PersistentMap<string, number>().set('b', 20).set('d', 4).set('e', 5);
 
       // Merge map2 into map1
       let merged = map1;
@@ -245,10 +228,7 @@ describe('PersistentMap', () => {
       const innerMap1 = new PersistentMap<string, number>().set('inner1', 100);
       const innerMap2 = new PersistentMap<string, number>().set('inner2', 200);
 
-      const outerMap = new PersistentMap<
-        string,
-        PersistentMap<string, number>
-      >()
+      const outerMap = new PersistentMap<string, PersistentMap<string, number>>()
         .set('first', innerMap1)
         .set('second', innerMap2);
 
@@ -261,6 +241,60 @@ describe('PersistentMap', () => {
 
       expect(newOuterMap.get('first')?.get('inner1')).toBe(150);
       expect(outerMap.get('first')?.get('inner1')).toBe(100); // Original unchanged
+    });
+
+    it('should correctly handle undefined as value', () => {
+      // FIX: has() should return true when key exists with undefined value
+      const map = new PersistentMap<string, undefined | number>().set('a', undefined).set('b', 42);
+
+      expect(map.has('a')).toBe(true); // Key exists with undefined value
+      expect(map.has('b')).toBe(true);
+      expect(map.has('c')).toBe(false); // Key doesn't exist
+
+      expect(map.get('a')).toBeUndefined();
+      expect(map.get('b')).toBe(42);
+      expect(map.get('c')).toBeUndefined();
+
+      expect(map.size).toBe(2);
+
+      // Delete should work correctly
+      const deleted = map.delete('a');
+      expect(deleted.has('a')).toBe(false);
+      expect(deleted.size).toBe(1);
+    });
+
+    it('should handle float keys with proper hashing', () => {
+      // FIX: Float hashing should preserve precision
+      const map = new PersistentMap<number, string>()
+        .set(3.14159, 'pi')
+        .set(2.71828, 'e')
+        .set(1.41421, 'sqrt2');
+
+      expect(map.get(3.14159)).toBe('pi');
+      expect(map.get(2.71828)).toBe('e');
+      expect(map.get(1.41421)).toBe('sqrt2');
+      expect(map.size).toBe(3);
+
+      // Very close but different floats should be different keys
+      const map2 = map.set(3.141590001, 'almost-pi');
+
+      expect(map2.get(3.14159)).toBe('pi');
+      expect(map2.get(3.141590001)).toBe('almost-pi');
+      expect(map2.size).toBe(4);
+    });
+
+    it('should handle special number values', () => {
+      const map = new PersistentMap<number, string>()
+        .set(Infinity, 'inf')
+        .set(-Infinity, 'neg-inf')
+        .set(0, 'zero')
+        .set(-0, 'neg-zero'); // -0 has same hash as 0 but Object.is(0, -0) = false
+
+      expect(map.get(Infinity)).toBe('inf');
+      expect(map.get(-Infinity)).toBe('neg-inf');
+      expect(map.get(0)).toBe('zero'); // 0 and -0 are different keys per Object.is
+      expect(map.get(-0)).toBe('neg-zero');
+      expect(map.size).toBe(4); // 0 and -0 are separate keys (hash collision, but different by Object.is)
     });
   });
 });
