@@ -1,8 +1,12 @@
 
+
 > @gerts/utils@0.1.0 build /Users/explosovebit/Work/GertsAi/gertsai_codex/packages/utils
 > pnpm run "/^build:(esm|cjs)$/"
 
-. build:esm$ tsc
-. build:cjs$ tsc --outDir dist/cjs --module commonjs
-. build:cjs: Failed
-. build:esm: Failed
+. [96mbuild:esm[39m$ tsc
+[95m└─[39m [95mRunning...[39m
+. [96mbuild:cjs[39m$ tsc --outDir dist/cjs --module commonjs
+[95m└─[39m [95mRunning...[39m
+[1A[95m└─[39m [95mDone in 423ms[39m
+[3A[95m└─[39m [95mDone in 800ms[39m
+[2B
