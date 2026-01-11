@@ -4,7 +4,7 @@
  * Design:
  * - Each mixin is a thin wrapper attaching pure methods onto the collection instance
  * - Methods are non-enumerable and preserve `this` binding
- * - This entrypoint enables subpath imports (`@orchlab/collection/mixins/*`) and tree-shaking
+ * - This entrypoint enables subpath imports (`@gerts/collection/mixins/*`) and tree-shaking
  */
 
 // Extended operations (random, sweep, tap, partition, etc.)
@@ -17,7 +17,4 @@ export { withBatchOps, type BatchOps } from './BatchOps';
 export { withDeepOps, type DeepOps } from './DeepOps';
 
 // Positional access operations (first, last, at, keyAt, etc.)
-export {
-  withPositionalAccess,
-  type PositionalAccessOps,
-} from './PositionalAccess';
+export { withPositionalAccess, type PositionalAccessOps } from './PositionalAccess';

@@ -132,6 +132,34 @@ export class OrderedMap<K, V> extends MutableCollection<K, V> {
     this.tail = null;
   }
 
+  override update(key: K, updater: (value: V | undefined) => V): this {
+    const nextValue = updater(this.data.get(key));
+    return this.set(key, nextValue);
+  }
+
+  override setMany(entries: Iterable<[K, V]>): this {
+    for (const [key, value] of entries) {
+      this.set(key, value);
+    }
+    return this;
+  }
+
+  override deleteMany(keys: Iterable<K>): this {
+    for (const key of keys) {
+      this.delete(key);
+    }
+    return this;
+  }
+
+  override mergeInPlace(...others: MutableCollection<K, V>[]): this {
+    for (const other of others) {
+      for (const [key, value] of other.entries()) {
+        this.set(key, value);
+      }
+    }
+    return this;
+  }
+
   /**
    * Move a key to the front (most recently used)
    */
@@ -574,9 +602,7 @@ export class OrderedMap<K, V> extends MutableCollection<K, V> {
    * Get string representation
    */
   override toString(): string {
-    const entries = [...this.entries()]
-      .map(([k, v]) => `${String(k)}: ${String(v)}`)
-      .join(', ');
+    const entries = [...this.entries()].map(([k, v]) => `${String(k)}: ${String(v)}`).join(', ');
     return `OrderedMap(${this.size}) { ${entries} }`;
   }
 }

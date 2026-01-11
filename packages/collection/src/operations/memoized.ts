@@ -6,7 +6,7 @@
  *
  * @example
  * ```typescript
- * import { memoizedFilter, memoizedMap } from '@orchlab/collection/operations/memoized';
+ * import { memoizedFilter, memoizedMap } from '@gerts/collection/operations/memoized';
  *
  * // Results will be cached
  * const filtered1 = memoizedFilter(collection, x => x > 10);
@@ -36,19 +36,13 @@ export const memoizedMap = memoize(map, CACHE_OPTIONS) as typeof map;
  * Memoized version of mapValues operation
  * Creates new Map with transformed values
  */
-export const memoizedMapValues = memoize(
-  mapValues,
-  CACHE_OPTIONS,
-) as typeof mapValues;
+export const memoizedMapValues = memoize(mapValues, CACHE_OPTIONS) as typeof mapValues;
 
 /**
  * Memoized version of mapKeys operation
  * Creates new Map with transformed keys
  */
-export const memoizedMapKeys = memoize(
-  mapKeys,
-  CACHE_OPTIONS,
-) as typeof mapKeys;
+export const memoizedMapKeys = memoize(mapKeys, CACHE_OPTIONS) as typeof mapKeys;
 
 /**
  * Memoized version of filter operation
@@ -91,10 +85,7 @@ export const memoizedChunk = memoize(chunk, CACHE_OPTIONS) as typeof chunk;
  * Memoized version of partition operation
  * Splits collection based on predicate
  */
-export const memoizedPartition = memoize(
-  partition,
-  CACHE_OPTIONS,
-) as typeof partition;
+export const memoizedPartition = memoize(partition, CACHE_OPTIONS) as typeof partition;
 
 /**
  * Collection operation wrapper that automatically memoizes
@@ -132,9 +123,10 @@ export function withMemoization<T extends (...args: any[]) => any>(
  * const mapped = ops.map(filtered, mapper);
  * ```
  */
-export function createMemoizedBatch<
-  T extends Record<string, (...args: any[]) => any>,
->(operations: T, options = CACHE_OPTIONS): T & { clearCache: () => void } {
+export function createMemoizedBatch<T extends Record<string, (...args: any[]) => any>>(
+  operations: T,
+  options = CACHE_OPTIONS,
+): T & { clearCache: () => void } {
   const memoized: Record<string, any> = {};
 
   for (const [name, op] of Object.entries(operations)) {

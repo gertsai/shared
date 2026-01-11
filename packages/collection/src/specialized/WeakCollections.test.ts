@@ -3,11 +3,14 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 describe('specialized weak collections', () => {
   let originalFR: any;
+  let registeredHeldValues: unknown[] = [];
 
   beforeAll(() => {
     originalFR = (globalThis as any).FinalizationRegistry;
     (globalThis as any).FinalizationRegistry = class {
-      register() {}
+      register(_target: object, heldValue: unknown) {
+        registeredHeldValues.push(heldValue);
+      }
       unregister() {}
     };
   });
@@ -15,7 +18,12 @@ describe('specialized weak collections', () => {
   afterAll(() => {
     (globalThis as any).FinalizationRegistry = originalFR;
   });
+
+  const resetHeldValues = () => {
+    registeredHeldValues = [];
+  };
   it('WeakCollection basic set/get/has/delete and metadata', () => {
+    resetHeldValues();
     const w = new WeakCollection<object, number>();
     const k1 = {};
     const k2 = {};
@@ -26,6 +34,8 @@ describe('specialized weak collections', () => {
     expect(w.getMetadata(k1)).toEqual({ tag: 't' });
     expect(w.delete(k1)).toBe(true);
     expect(w.get(k1)).toBeUndefined();
+    expect(registeredHeldValues[0]).not.toBe(k1);
+    expect(registeredHeldValues[1]).not.toBe(k2);
   });
 
   it('WeakBiMap bidirectional set/get/delete', () => {
@@ -56,6 +66,7 @@ describe('specialized weak collections', () => {
   });
 
   it('WeakCollection filter/mapValues with provided keys iterable', () => {
+    resetHeldValues();
     const w = new WeakCollection<object, number>();
     const k1 = {};
     const k2 = {};
@@ -71,6 +82,14 @@ describe('specialized weak collections', () => {
     expect(mapped.get(k2)).toBe(20);
     expect(mapped.get(k3)).toBe(30);
     expect(mapped.get(k1)).toBeUndefined();
+  });
+
+  it('WeakCollection setWithCallback does not retain key as held value', () => {
+    resetHeldValues();
+    const w = new WeakCollection<object, number>();
+    const key = {};
+    w.setWithCallback(key, 1, () => {});
+    expect(registeredHeldValues[0]).not.toBe(key);
   });
 
   it('WeakValueMap iterators reflect deletes', () => {

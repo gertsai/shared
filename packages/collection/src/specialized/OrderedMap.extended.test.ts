@@ -147,6 +147,45 @@ describe('OrderedMap Extended Tests', () => {
     });
   });
 
+  describe('Batch operations', () => {
+    it('should keep order and consistency with setMany/mergeInPlace', () => {
+      const map = new OrderedMap<string, number>();
+
+      map.setMany([
+        ['a', 1],
+        ['b', 2],
+      ]);
+
+      const other = new OrderedMap<string, number>([
+        ['c', 3],
+        ['a', 10],
+      ]);
+
+      map.mergeInPlace(other);
+
+      expect(Array.from(map.entries())).toEqual([
+        ['a', 10],
+        ['b', 2],
+        ['c', 3],
+      ]);
+      expect(map.isConsistent()).toBe(true);
+    });
+
+    it('should deleteMany without breaking order', () => {
+      const map = new OrderedMap<string, number>([
+        ['a', 1],
+        ['b', 2],
+        ['c', 3],
+        ['d', 4],
+      ]);
+
+      map.deleteMany(['b', 'd']);
+
+      expect(Array.from(map.keys())).toEqual(['a', 'c']);
+      expect(map.isConsistent()).toBe(true);
+    });
+  });
+
   describe('Positional access', () => {
     it('should get/remove entry at index', () => {
       const map = new OrderedMap<string, number>([
@@ -493,9 +532,7 @@ describe('OrderedMap Extended Tests', () => {
       const cloned = original.clone();
 
       expect(cloned).not.toBe(original);
-      expect(Array.from(cloned.entries())).toEqual(
-        Array.from(original.entries()),
-      );
+      expect(Array.from(cloned.entries())).toEqual(Array.from(original.entries()));
 
       // Modify clone shouldn't affect original
       cloned.set('c', 3);

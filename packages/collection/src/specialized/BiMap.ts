@@ -58,6 +58,27 @@ export class BiMap<K, V> extends MutableCollection<K, V> {
     return this;
   }
 
+  override update(key: K, updater: (value: V | undefined) => V): this {
+    const nextValue = updater(this.data.get(key));
+    return this.set(key, nextValue);
+  }
+
+  override deleteMany(keys: Iterable<K>): this {
+    for (const key of keys) {
+      this.delete(key);
+    }
+    return this;
+  }
+
+  override mergeInPlace(...others: MutableCollection<K, V>[]): this {
+    for (const other of others) {
+      for (const [key, value] of other.entries()) {
+        this.set(key, value);
+      }
+    }
+    return this;
+  }
+
   /**
    * Replace existing mapping for value if any, then set new pair
    */

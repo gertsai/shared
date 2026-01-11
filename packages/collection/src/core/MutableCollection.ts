@@ -5,24 +5,14 @@
 
 import { reduce as reduceOp } from '../operations/aggregate';
 import { filter as filterOp } from '../operations/search';
-import {
-  difference,
-  intersection,
-  symmetricDifference,
-  union,
-} from '../operations/set';
+import { difference, intersection, symmetricDifference, union } from '../operations/set';
 import {
   mapKeys as mapKeysOp,
   mapValues as mapValuesOp,
   reverse as reverseEntries,
   sort as sortEntries,
 } from '../operations/transform';
-import type {
-  ReadableCollection,
-  SetOps,
-  SortOps,
-  WritableCollection,
-} from '../types/interfaces';
+import type { ReadableCollection, SetOps, SortOps, WritableCollection } from '../types/interfaces';
 
 import { BaseCollection } from './BaseCollection';
 
@@ -110,9 +100,7 @@ class MutableCollectionBase<K, V>
    * const doubled = collection.mapValues(v => v * 2);
    * ```
    */
-  override mapValues<R>(
-    fn: (value: V, key: K) => R,
-  ): MutableCollectionBase<K, R> {
+  override mapValues<R>(fn: (value: V, key: K) => R): MutableCollectionBase<K, R> {
     const mapped = mapValuesOp(this.data, fn);
     return new MutableCollectionBase(mapped);
   }
@@ -128,9 +116,7 @@ class MutableCollectionBase<K, V>
    * const prefixed = collection.mapKeys(k => `prefix_${k}`);
    * ```
    */
-  override mapKeys<NK>(
-    fn: (key: K, value: V) => NK,
-  ): MutableCollectionBase<NK, V> {
+  override mapKeys<NK>(fn: (key: K, value: V) => NK): MutableCollectionBase<NK, V> {
     const mapped = mapKeysOp(this.data, fn);
     return new MutableCollectionBase(mapped);
   }
@@ -195,36 +181,24 @@ class MutableCollectionBase<K, V>
    * const xor = collection1.symmetricDifference(collection2);
    * ```
    */
-  symmetricDifference(
-    other: ReadableCollection<K, V>,
-  ): MutableCollectionBase<K, V> {
+  symmetricDifference(other: ReadableCollection<K, V>): MutableCollectionBase<K, V> {
     const result = symmetricDifference(this.data, other.entries());
     return new MutableCollectionBase(result);
   }
 
   mergeWithKeep<OV, RV>(
     other: ReadableCollection<K, OV>,
-    whenInSelf: (
-      value: V,
-      key: K,
-    ) => { keep: false } | { keep: true; value: RV },
-    whenInOther: (
-      valueOther: OV,
-      key: K,
-    ) => { keep: false } | { keep: true; value: RV },
-    whenInBoth: (
-      value: V,
-      valueOther: OV,
-      key: K,
-    ) => { keep: false } | { keep: true; value: RV },
+    whenInSelf: (value: V, key: K) => { keep: false } | { keep: true; value: RV },
+    whenInOther: (valueOther: OV, key: K) => { keep: false } | { keep: true; value: RV },
+    whenInBoth: (value: V, valueOther: OV, key: K) => { keep: false } | { keep: true; value: RV },
   ): MutableCollectionBase<K, RV> {
     const result = new Map<K, RV>();
     const keys = new Set<K>([...this.keys(), ...other.keys()]);
     for (const key of keys) {
       const selfVal = this.get(key);
       const otherVal = other.get(key);
-      const inSelf = selfVal !== undefined;
-      const inOther = otherVal !== undefined;
+      const inSelf = this.has(key);
+      const inOther = other.has(key);
       if (inSelf && inOther) {
         const res = whenInBoth(selfVal as V, otherVal as OV, key);
         if (res.keep) {
@@ -257,9 +231,7 @@ class MutableCollectionBase<K, V>
    * collection.sort((a, b) => a[1] - b[1]); // Sort by values
    * ```
    */
-  sort(
-    compareFn?: (a: [K, V], b: [K, V]) => number,
-  ): MutableCollectionBase<K, V> {
+  sort(compareFn?: (a: [K, V], b: [K, V]) => number): MutableCollectionBase<K, V> {
     const entries = [...this.entries()];
     if (compareFn) {
       entries.sort(compareFn);
@@ -612,19 +584,13 @@ class MutableCollectionBase<K, V>
   }
 
   override flatMapCollection<NV>(
-    fn: (
-      value: V,
-      key: K,
-      index: number,
-    ) => Iterable<[K, NV]> | ReadableCollection<K, NV>,
+    fn: (value: V, key: K, index: number) => Iterable<[K, NV]> | ReadableCollection<K, NV>,
   ): MutableCollectionBase<K, NV> {
     const out = new MutableCollectionBase<K, NV>();
     let index = 0;
     for (const [key, val] of this) {
       const res = fn(val, key, index++);
-      const isReadableCollection = (
-        obj: unknown,
-      ): obj is ReadableCollection<K, NV> =>
+      const isReadableCollection = (obj: unknown): obj is ReadableCollection<K, NV> =>
         typeof obj === 'object' &&
         obj !== null &&
         'entries' in obj &&
@@ -659,10 +625,7 @@ class MutableCollectionBase<K, V>
     return reduceOp(this.data, fn, initialValue);
   }
 
-  reduceRight<T>(
-    fn: (accumulator: T, value: V, key: K) => T,
-    initialValue: T,
-  ): T {
+  reduceRight<T>(fn: (accumulator: T, value: V, key: K) => T, initialValue: T): T {
     const entries = [...this.entries()];
     let acc = initialValue;
     for (let i = entries.length - 1; i >= 0; i--) {
@@ -684,9 +647,7 @@ class MutableCollectionBase<K, V>
     return this;
   }
 
-  concat(
-    ...collections: MutableCollectionBase<K, V>[]
-  ): MutableCollectionBase<K, V> {
+  concat(...collections: MutableCollectionBase<K, V>[]): MutableCollectionBase<K, V> {
     const newColl = this.clone();
     for (const coll of collections) {
       for (const [key, val] of coll) {
@@ -698,9 +659,7 @@ class MutableCollectionBase<K, V>
 
   // Removed equals - will be provided by CommonOperations mixin
 
-  toSorted(
-    compareFunction?: (a: V, b: V) => number,
-  ): MutableCollectionBase<K, V> {
+  toSorted(compareFunction?: (a: V, b: V) => number): MutableCollectionBase<K, V> {
     if (compareFunction) {
       const compareFn = (a: [K, V], b: [K, V]) => compareFunction(a[1], b[1]);
       return this.clone().sort(compareFn);
@@ -823,10 +782,7 @@ class MutableCollectionBase<K, V>
     const coll = new MutableCollectionBase<K, V>();
     for (const [key, value] of entries) {
       const current = coll.get(key);
-      coll.set(
-        key,
-        current !== undefined ? combine(current, value, key) : value,
-      );
+      coll.set(key, current !== undefined ? combine(current, value, key) : value);
     }
     return coll;
   }

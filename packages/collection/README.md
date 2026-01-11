@@ -353,6 +353,11 @@ const values = bimap.uniqueValues(); // Set<number>
 
 // Consistency check (for debugging)
 bimap.isConsistent(); // true
+
+// Batch operations preserve bidirectional invariants
+bimap.update('one', () => 10);
+bimap.deleteMany(['two']);
+bimap.mergeInPlace(new BiMap([['four', 4]]));
 ```
 
 **Use Cases:**
@@ -410,6 +415,13 @@ for (const value of mm.valuesFlat()) {
 
 // Group by classifier
 const grouped = mm.groupValuesByClassifier((v) => (v % 2 === 0 ? 'even' : 'odd'));
+
+// Batch operations normalize values and keep totalValues accurate
+mm.setMany([
+  ['colors', [1, 2, 2]],
+  ['sizes', 3],
+]);
+mm.mergeInPlace(new MultiMap([['colors', [4, 5]]]));
 ```
 
 **Use Cases:**
@@ -478,6 +490,11 @@ map.trimTo(5);
 
 // Consistency check
 map.isConsistent(); // true
+
+// Batch operations preserve ordering invariants
+map.setMany([['fourth', 4]]);
+map.mergeInPlace(new OrderedMap([['second', 20]]));
+map.deleteMany(['first']);
 ```
 
 **Use Cases:**
@@ -507,7 +524,8 @@ cache.getOrCompute({ id: 2 }, (k) => `computed for ${k.id}`);
 cache.setMetadata(key, { expires: Date.now() + 60000 });
 cache.getMetadata(key);
 
-// Set with cleanup callback (called when key is GC'd)
+// Set with cleanup callback (best-effort)
+// Callback runs only if the key is still observable via WeakRef at GC time.
 cache.setWithCallback(key, 'value', (k) => {
   console.log('Key was garbage collected');
 });

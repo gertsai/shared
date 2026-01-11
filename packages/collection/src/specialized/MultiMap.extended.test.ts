@@ -59,6 +59,59 @@ describe('MultiMap Extended Tests', () => {
     });
   });
 
+  describe('Batch operations', () => {
+    it('should handle setMany and keep totalValues accurate', () => {
+      const multimap = new MultiMap<string, number>();
+
+      multimap.setMany([
+        ['a', [1, 2, 3]],
+        ['b', 4],
+      ]);
+
+      expect(multimap.size).toBe(2);
+      expect(multimap.totalValues).toBe(4);
+      expect(multimap.getAll('a')).toEqual([1, 2, 3]);
+      expect(multimap.getAll('b')).toEqual([4]);
+    });
+
+    it('should normalize setMany when duplicates are disallowed', () => {
+      const multimap = new MultiMap<string, number>(undefined, {
+        allowDuplicates: false,
+      });
+
+      multimap.setMany([
+        ['a', [1, 1, 2]],
+        ['b', [2, 2]],
+      ]);
+
+      expect(multimap.totalValues).toBe(3);
+      expect(multimap.getAll('a')).toEqual(expect.arrayContaining([1, 2]));
+      expect(multimap.getAll('b')).toEqual([2]);
+    });
+
+    it('should keep totals accurate after update and mergeInPlace', () => {
+      const multimap = new MultiMap<string, number>();
+      multimap.add('a', 1);
+      multimap.add('a', 2);
+      multimap.add('b', 3);
+
+      multimap.update('a', () => new Set([9]));
+
+      expect(multimap.totalValues).toBe(2);
+      expect(multimap.getAll('a')).toEqual([9]);
+
+      const other = new MultiMap<string, number>();
+      other.add('a', 10);
+      other.add('c', 5);
+
+      multimap.mergeInPlace(other);
+
+      expect(multimap.totalValues).toBe(3);
+      expect(multimap.getAll('a')).toEqual([10]);
+      expect(multimap.getAll('c')).toEqual([5]);
+    });
+  });
+
   describe('Add operations', () => {
     it('should add multiple values to same key', () => {
       const multimap = new MultiMap<string, string>();
@@ -277,9 +330,7 @@ describe('MultiMap Extended Tests', () => {
       multimap.add('nums', 5);
       multimap.add('other', 6);
 
-      const grouped = multimap.groupValuesByClassifier((v) =>
-        v % 2 === 0 ? 'even' : 'odd',
-      );
+      const grouped = multimap.groupValuesByClassifier((v) => (v % 2 === 0 ? 'even' : 'odd'));
 
       expect(grouped.get('odd')).toEqual([1, 3, 5]);
       expect(grouped.get('even')).toEqual([2, 4, 6]);

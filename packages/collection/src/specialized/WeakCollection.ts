@@ -16,13 +16,24 @@ export interface IWeakCollection<K extends object, V> {
 
 /**
  * WeakMap-based collection with additional functionality
+ * @template K - Key type (must be an object)
+ * @template V - Value type
+ * @template M - Metadata type (defaults to unknown)
  */
-export class WeakCollection<K extends object, V>
-  implements IWeakCollection<K, V>
-{
+/**
+ * Token object used for FinalizationRegistry unregistration.
+ * Must be an object type as required by FinalizationRegistry.unregister().
+ */
+interface RegistryToken {
+  readonly id: symbol;
+}
+
+export class WeakCollection<K extends object, V, M = unknown> implements IWeakCollection<K, V> {
   private weakMap: WeakMap<K, V>;
-  private registry?: FinalizationRegistry<K>;
-  private metadata?: WeakMap<K, any>;
+  private registry?: FinalizationRegistry<RegistryToken>;
+  private registryHandlers?: Map<symbol, () => void>;
+  private registryTokens?: WeakMap<K, RegistryToken>;
+  private metadata?: WeakMap<K, M>;
   // Track keys via weak references to enable best-effort iteration without preventing GC
   private keyRefs?: Array<WeakRef<K>>;
 
@@ -54,21 +65,9 @@ export class WeakCollection<K extends object, V>
     if (this.keyRefs) {
       this.keyRefs.push(new WeakRef(key));
     }
-    if (typeof FinalizationRegistry !== 'undefined') {
-      if (!this.registry) {
-        this.registry = new FinalizationRegistry((collectedKey: K) => {
-          // Cleanup any stale refs matching collected key
-          if (this.keyRefs) {
-            this.keyRefs = this.keyRefs.filter((ref) => {
-              const k = ref.deref();
-              return k !== undefined && k !== collectedKey;
-            });
-          }
-          this.metadata?.delete(collectedKey);
-        });
-      }
-      this.registry.register(key, key);
-    }
+    this.registerFinalizer(key, () => {
+      this.cleanupKeyRefs();
+    });
     return this;
   }
 
@@ -83,6 +82,7 @@ export class WeakCollection<K extends object, V>
    * Delete a key
    */
   delete(key: K): boolean {
+    this.unregisterFinalizer(key);
     if (this.metadata) {
       this.metadata.delete(key);
     }
@@ -98,8 +98,11 @@ export class WeakCollection<K extends object, V>
 
   /**
    * Set metadata for a key
+   * @param key - The key to set metadata for
+   * @param metadata - The metadata value
+   * @returns this for chaining
    */
-  setMetadata(key: K, metadata: any): this {
+  setMetadata(key: K, metadata: M): this {
     if (!this.metadata) {
       this.metadata = new WeakMap();
     }
@@ -109,8 +112,10 @@ export class WeakCollection<K extends object, V>
 
   /**
    * Get metadata for a key
+   * @param key - The key to get metadata for
+   * @returns The metadata value or undefined if not set
    */
-  getMetadata(key: K): any {
+  getMetadata(key: K): M | undefined {
     return this.metadata?.get(key);
   }
 
@@ -120,12 +125,14 @@ export class WeakCollection<K extends object, V>
   setWithCallback(key: K, value: V, callback: (key: K) => void): this {
     this.set(key, value);
 
-    if (typeof FinalizationRegistry !== 'undefined') {
-      if (!this.registry) {
-        this.registry = new FinalizationRegistry(callback);
+    const keyRef = typeof WeakRef !== 'undefined' ? new WeakRef(key) : undefined;
+    this.registerFinalizer(key, () => {
+      this.cleanupKeyRefs();
+      const liveKey = keyRef?.deref();
+      if (liveKey !== undefined) {
+        callback(liveKey);
       }
-      this.registry.register(key, key);
-    }
+    });
     return this;
   }
 
@@ -148,10 +155,7 @@ export class WeakCollection<K extends object, V>
   /**
    * Create a filtered view (returns a new WeakCollection)
    */
-  filter(
-    predicate: (value: V, key: K) => boolean,
-    keys?: Iterable<K>,
-  ): WeakCollection<K, V> {
+  filter(predicate: (value: V, key: K) => boolean, keys?: Iterable<K>): WeakCollection<K, V> {
     const filtered = new WeakCollection<K, V>();
     const it = keys ?? this.keys();
     for (const key of it) {
@@ -166,10 +170,7 @@ export class WeakCollection<K extends object, V>
   /**
    * Transform values (returns a new WeakCollection)
    */
-  mapValues<R>(
-    fn: (value: V, key: K) => R,
-    keys?: Iterable<K>,
-  ): WeakCollection<K, R> {
+  mapValues<R>(fn: (value: V, key: K) => R, keys?: Iterable<K>): WeakCollection<K, R> {
     const mapped = new WeakCollection<K, R>();
     const it = keys ?? this.keys();
     for (const key of it) {
@@ -190,15 +191,62 @@ export class WeakCollection<K extends object, V>
       return;
     }
     // Clean and yield living keys
-    const nextRefs: Array<WeakRef<K>> = [];
+    this.cleanupKeyRefs();
+    if (!this.keyRefs) {
+      return;
+    }
     for (const ref of this.keyRefs) {
       const k = ref.deref();
       if (k !== undefined && this.has(k)) {
-        nextRefs.push(ref);
         yield k;
       }
     }
-    this.keyRefs = nextRefs;
+  }
+
+  private cleanupKeyRefs(): void {
+    if (!this.keyRefs) {
+      return;
+    }
+    this.keyRefs = this.keyRefs.filter((ref) => ref.deref() !== undefined);
+  }
+
+  private registerFinalizer(key: K, handler: () => void): void {
+    if (typeof FinalizationRegistry === 'undefined') {
+      return;
+    }
+
+    if (!this.registry) {
+      this.registryHandlers = new Map();
+      this.registryTokens = new WeakMap();
+      this.registry = new FinalizationRegistry((token: RegistryToken) => {
+        const callback = this.registryHandlers?.get(token.id);
+        if (callback) {
+          callback();
+          this.registryHandlers?.delete(token.id);
+        }
+      });
+    }
+
+    const existingToken = this.registryTokens?.get(key);
+    if (existingToken) {
+      this.registry.unregister(existingToken);
+      this.registryHandlers?.delete(existingToken.id);
+    }
+
+    const token: RegistryToken = { id: Symbol('weak-collection-finalizer') };
+    this.registryTokens?.set(key, token);
+    this.registryHandlers?.set(token.id, handler);
+    this.registry.register(key, token, token);
+  }
+
+  private unregisterFinalizer(key: K): void {
+    const token = this.registryTokens?.get(key);
+    if (!token || !this.registry) {
+      return;
+    }
+    this.registry.unregister(token);
+    this.registryHandlers?.delete(token.id);
+    this.registryTokens?.delete(key);
   }
 }
 
