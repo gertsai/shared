@@ -1,61 +1,48 @@
 {
-  "$schema": "https://json.schemastore.org/package.json",
   "name": "@gerts/fetch",
-  "version": "0.2.0",
-  "description": "A rest full client for the Orchestra API",
-  "private": false,
-  "main": "dist/cjs/index.js",
-  "types": "dist/esm/index.d.ts",
-  "module": "dist/esm/index.js",
-  "private": true,
-  "scripts": {
-    "prepublish": "pnpm run build:cjs && pnpm run build:esm",
-    "build": "pnpm run prepublish",
-    "build:cjs": "tsc -p tsconfig.cjs.json && pnpm dlx tsc-alias -p tsconfig.cjs.json",
-    "build:esm": "tsc -p tsconfig.esm.json && pnpm dlx tsc-alias -p tsconfig.esm.json",
-    "test": "vitest run",
-    "test:watch": "vitest"
-  },
-  "contributors": [
-    "Eli Rum <explosivebit@gmail.com>"
-  ],
-  "keywords": [
-    "orchestra",
-    "orch",
-    "api",
-    "fetch",
-    "client",
-    "node",
-    "web",
-    "rest"
-  ],
+  "version": "0.1.0",
+  "description": "HTTP client wrapper for gerts.ai using undici with Fetch API compatibility",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "import": {
-        "types": "./dist/esm/index.d.ts",
-        "default": "./dist/esm/index.js"
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
       },
       "require": {
-        "types": "./dist/cjs/index.d.ts",
-        "default": "./dist/cjs/index.js"
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
       }
     }
   },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
   "files": [
-    "dist"
+    "dist/**/*"
   ],
   "dependencies": {
-    "undici": "^5.25.2"
+    "undici": "^7.0.0"
   },
   "devDependencies": {
-    "@types/node": "18.17.9",
-    "esbuild-plugin-version-injector": "^1.2.0",
-    "tsc-alias": "^1.8.10",
-    "tsup": "^7.2.0",
-    "typescript": "^5.2.2",
-    "vitest": "3.2.4"
+    "typescript": "^5.3.0",
+    "vitest": "^3.2.4",
+    "vite-tsconfig-paths": "^5.1.4"
   },
-  "engines": {
-    "node": ">=18.17.1"
+  "keywords": [
+    "http",
+    "fetch",
+    "undici",
+    "client",
+    "gerts"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gertsai/gertsai_codex.git",
+    "directory": "packages/fetch"
   }
 }

@@ -1,46 +1,17 @@
 {
   "extends": "../../tsconfig.base.json",
-  "ts-node": {
-    "require": [
-      "tsconfig-paths/register"
-    ]
-  },
   "compilerOptions": {
-    "declaration": false,
-    "noUncheckedIndexedAccess": false,
-    "exactOptionalPropertyTypes": false,
-    "forceConsistentCasingInFileNames": true,
-    "target": "ESNext",
-    "module": "ESNext",
-    "lib": [
-      "ESNext"
-    ],
-    "esModuleInterop": true,
-    "moduleResolution": "Node",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "declaration": true,
+    "declarationMap": true,
     "skipLibCheck": true,
-    "strict": true,
-    "allowJs": true,
-    "noEmit": true,
-    "resolveJsonModule": true,
-    "allowSyntheticDefaultImports": true,
-    "noImplicitOverride": true,
-    "types": [
-      "node"
-    ],
+    "noEmitOnError": false,
+    "module": "CommonJS",
+    "moduleResolution": "node",
     "baseUrl": ".",
-    "outDir": "dist",
-    "paths": {
-      "$fetch": [
-        "./src"
-      ]
-    },
-    "strictNullChecks": true
+    "esModuleInterop": true
   },
-  "include": [
-    "./**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "**/node_modules/*"
-  ]
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts", "__tests__"]
 }

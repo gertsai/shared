@@ -1,94 +1,240 @@
-import http from 'node:http';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { createServer, IncomingMessage, ServerResponse, Server } from 'node:http';
+import { AddressInfo } from 'node:net';
+import { httpCaller, makeRequest, resolveBody } from '../src/fetchers/undiciFetcher';
+import { FormData as UndiciFormData } from 'undici';
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-
-import { httpCaller } from '../dist/cjs/index.js';
-
-let server: http.Server;
-let baseUrl: string;
-
-beforeAll(async () => {
-  server = http.createServer((req, res) => {
-    if (req.url === '/json') {
-      res.statusCode = 200;
-      res.setHeader('content-type', 'application/json');
-      res.end(JSON.stringify({ hello: 'world', n: 42 }));
-      return;
-    }
-    if (req.url === '/text') {
-      res.statusCode = 200;
-      res.setHeader('content-type', 'text/plain');
-      res.end('hello');
-      return;
-    }
-    if (req.url === '/status404') {
-      res.statusCode = 404;
-      res.setHeader('content-type', 'text/plain');
-      res.end('not found');
-      return;
-    }
-    if (req.url === '/stream') {
-      res.statusCode = 200;
-      res.setHeader('content-type', 'text/plain');
-      res.setHeader('transfer-encoding', 'chunked');
-      res.write('part1');
-      setTimeout(() => {
-        res.write('-part2');
-        res.end('-end');
-      }, 10);
-      return;
-    }
-    res.statusCode = 200;
-    res.setHeader('content-type', 'text/plain');
-    res.end('ok');
+describe('resolveBody', () => {
+  it('should return null for null/undefined', async () => {
+    expect(await resolveBody(null)).toBeNull();
+    expect(await resolveBody(undefined)).toBeNull();
   });
 
-  await new Promise<void>((resolve) =>
-    server.listen(0, '127.0.0.1', () => resolve()),
-  );
-  const address = server.address();
-  if (address && typeof address === 'object') {
-    baseUrl = `http://127.0.0.1:${address.port}`;
-  }
+  it('should return string as-is', async () => {
+    const body = 'hello world';
+    expect(await resolveBody(body)).toBe(body);
+  });
+
+  it('should return Uint8Array as-is', async () => {
+    const body = new Uint8Array([1, 2, 3]);
+    expect(await resolveBody(body)).toBe(body);
+  });
+
+  it('should convert ArrayBuffer to Uint8Array', async () => {
+    const buffer = new ArrayBuffer(3);
+    const view = new Uint8Array(buffer);
+    view.set([1, 2, 3]);
+
+    const result = await resolveBody(buffer);
+    expect(result).toBeInstanceOf(Uint8Array);
+    expect(Array.from(result as Uint8Array)).toEqual([1, 2, 3]);
+  });
+
+  it('should convert URLSearchParams to string', async () => {
+    const params = new URLSearchParams({ foo: 'bar', baz: 'qux' });
+    expect(await resolveBody(params)).toBe('foo=bar&baz=qux');
+  });
+
+  it('should convert DataView to Uint8Array', async () => {
+    const buffer = new ArrayBuffer(3);
+    const view = new Uint8Array(buffer);
+    view.set([4, 5, 6]);
+    const dataView = new DataView(buffer);
+
+    const result = await resolveBody(dataView);
+    expect(result).toBeInstanceOf(Uint8Array);
+    expect(Array.from(result as Uint8Array)).toEqual([4, 5, 6]);
+  });
+
+  it('should handle undici FormData', async () => {
+    const formData = new UndiciFormData();
+    formData.append('name', 'test');
+
+    const result = await resolveBody(formData);
+    expect(result).toBe(formData);
+  });
+
+  it('should convert sync iterable to Buffer', async () => {
+    const chunks = [new Uint8Array([1, 2]), new Uint8Array([3, 4])];
+    const iterable: Iterable<Uint8Array> = {
+      [Symbol.iterator]: () => chunks[Symbol.iterator](),
+    };
+
+    const result = await resolveBody(iterable);
+    expect(result).toBeInstanceOf(Buffer);
+    expect(Array.from(result as Buffer)).toEqual([1, 2, 3, 4]);
+  });
+
+  it('should convert async iterable to Buffer', async () => {
+    async function* generator(): AsyncGenerator<Uint8Array> {
+      yield new Uint8Array([5, 6]);
+      yield new Uint8Array([7, 8]);
+    }
+
+    const result = await resolveBody(generator());
+    expect(result).toBeInstanceOf(Buffer);
+    expect(Array.from(result as Buffer)).toEqual([5, 6, 7, 8]);
+  });
+
+  it('should throw TypeError for unsupported body type', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(resolveBody({ foo: 'bar' } as any)).rejects.toThrow(TypeError);
+  });
 });
 
-afterAll(async () => {
-  if (server) {
+describe('httpCaller / makeRequest', () => {
+  let server: Server;
+  let baseUrl: string;
+
+  beforeAll(async () => {
+    server = createServer((req: IncomingMessage, res: ServerResponse) => {
+      const url = new URL(req.url!, `http://${req.headers.host}`);
+
+      // Echo endpoint
+      if (url.pathname === '/echo') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        let body = '';
+        req.on('data', (chunk) => (body += chunk));
+        req.on('end', () => {
+          res.end(
+            JSON.stringify({
+              method: req.method,
+              headers: req.headers,
+              body: body || null,
+              query: Object.fromEntries(url.searchParams),
+            }),
+          );
+        });
+        return;
+      }
+
+      // JSON endpoint
+      if (url.pathname === '/json') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ message: 'hello', number: 42 }));
+        return;
+      }
+
+      // Text endpoint
+      if (url.pathname === '/text') {
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end('Hello, World!');
+        return;
+      }
+
+      // Status codes
+      if (url.pathname === '/status') {
+        const code = parseInt(url.searchParams.get('code') || '200', 10);
+        res.writeHead(code, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: code }));
+        return;
+      }
+
+      // Headers echo
+      if (url.pathname === '/headers') {
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'X-Custom-Header': 'test-value',
+        });
+        res.end(JSON.stringify({ receivedHeaders: req.headers }));
+        return;
+      }
+
+      // 404
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Not Found' }));
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    const { port } = server.address() as AddressInfo;
+    baseUrl = `http://127.0.0.1:${port}`;
+  });
+
+  afterAll(async () => {
     await new Promise<void>((resolve) => server.close(() => resolve()));
-  }
-});
-
-describe('httpCaller', () => {
-  it('JSON response', async () => {
-    const res = await httpCaller(`${baseUrl}/json`, { method: 'GET' });
-    expect(res.ok).toBe(true);
-    expect(res.status).toBe(200);
-    expect(res.headers.get('content-type')).toBe('application/json');
-    const body = await res.json();
-    expect(body).toEqual({ hello: 'world', n: 42 });
   });
 
-  it('text response', async () => {
-    const res = await httpCaller(`${baseUrl}/text`, { method: 'GET' });
-    expect(res.ok).toBe(true);
-    const text = await res.text();
-    expect(text).toBe('hello');
+  it('should make GET request and parse JSON', async () => {
+    const response = await httpCaller(`${baseUrl}/json`);
+
+    expect(response.ok).toBe(true);
+    expect(response.status).toBe(200);
+    expect(response.statusText).toBe('OK');
+
+    const data = (await response.json()) as { message: string; number: number };
+    expect(data.message).toBe('hello');
+    expect(data.number).toBe(42);
   });
 
-  it('non-OK status', async () => {
-    const res = await httpCaller(`${baseUrl}/status404`, { method: 'GET' });
-    expect(res.ok).toBe(false);
-    expect(res.status).toBe(404);
-    const text = await res.text();
-    expect(text).toBe('not found');
+  it('should make GET request and parse text', async () => {
+    const response = await httpCaller(`${baseUrl}/text`);
+
+    expect(response.ok).toBe(true);
+    const text = await response.text();
+    expect(text).toBe('Hello, World!');
   });
 
-  it('streaming body available', async () => {
-    const res = await httpCaller(`${baseUrl}/stream`, { method: 'GET' });
-    expect(res.ok).toBe(true);
-    // ResponseLike requires body to be Readable or ReadableStream
-    expect(res.body).not.toBeNull();
-    const text = await res.text();
-    expect(text).toBe('part1-part2-end');
+  it('should make POST request with JSON body', async () => {
+    const response = await makeRequest(`${baseUrl}/echo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'test' }),
+    });
+
+    expect(response.ok).toBe(true);
+    const data = (await response.json()) as { method: string; body: string };
+    expect(data.method).toBe('POST');
+    expect(JSON.parse(data.body)).toEqual({ name: 'test' });
+  });
+
+  it('should handle 404 status correctly', async () => {
+    const response = await httpCaller(`${baseUrl}/nonexistent`);
+
+    expect(response.ok).toBe(false);
+    expect(response.status).toBe(404);
+  });
+
+  it('should handle 500 status correctly', async () => {
+    const response = await httpCaller(`${baseUrl}/status?code=500`);
+
+    expect(response.ok).toBe(false);
+    expect(response.status).toBe(500);
+  });
+
+  it('should include response headers', async () => {
+    const response = await httpCaller(`${baseUrl}/headers`);
+
+    expect(response.headers.get('x-custom-header')).toBe('test-value');
+    expect(response.headers.get('content-type')).toBe('application/json');
+  });
+
+  it('should send custom headers', async () => {
+    const response = await httpCaller(`${baseUrl}/echo`, {
+      method: 'GET',
+      headers: { 'X-Test-Header': 'my-value' },
+    });
+
+    const data = (await response.json()) as { headers: Record<string, string> };
+    expect(data.headers['x-test-header']).toBe('my-value');
+  });
+
+  it('should track bodyUsed state', async () => {
+    const response = await httpCaller(`${baseUrl}/json`);
+
+    expect(response.bodyUsed).toBe(false);
+    await response.json();
+    expect(response.bodyUsed).toBe(true);
+  });
+
+  it('should handle URLSearchParams body', async () => {
+    const params = new URLSearchParams({ foo: 'bar', baz: 'qux' });
+    const response = await makeRequest(`${baseUrl}/echo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params,
+    });
+
+    const data = (await response.json()) as { body: string };
+    expect(data.body).toBe('foo=bar&baz=qux');
   });
 });
