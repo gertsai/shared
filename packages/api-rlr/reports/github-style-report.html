@@ -1,0 +1,668 @@
+<!doctype html>
+<html
+  lang="en"
+  data-theme="light"
+>
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>Test Results - API-RLR</title>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css"
+    />
+    <style>
+      :root {
+        --color-canvas-default: #ffffff;
+        --color-canvas-subtle: #f6f8fa;
+        --color-border-default: #d0d7de;
+        --color-border-muted: #d8dee4;
+        --color-fg-default: #24292f;
+        --color-fg-muted: #57606a;
+        --color-fg-subtle: #6e7781;
+        --color-success-fg: #1a7f37;
+        --color-success-emphasis: #1f883d;
+        --color-success-subtle: #dafbe1;
+        --color-danger-fg: #cf222e;
+        --color-danger-emphasis: #da3633;
+        --color-danger-subtle: #ffebe9;
+        --color-attention-fg: #9a6700;
+        --color-attention-emphasis: #bf8700;
+        --color-attention-subtle: #fff8c5;
+        --color-accent-fg: #0969da;
+        --color-accent-emphasis: #0860ca;
+        --color-accent-subtle: #ddf4ff;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica,
+          Arial, sans-serif;
+        background: var(--color-canvas-default);
+        color: var(--color-fg-default);
+        line-height: 1.5;
+      }
+
+      .header {
+        background: var(--color-canvas-subtle);
+        border-bottom: 1px solid var(--color-border-default);
+        padding: 16px 0;
+      }
+
+      .container {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 0 16px;
+      }
+
+      .header-content {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .header-title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .header-title h1 {
+        font-size: 20px;
+        font-weight: 600;
+      }
+
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 500;
+      }
+
+      .status-badge.success {
+        background: var(--color-success-subtle);
+        color: var(--color-success-fg);
+      }
+
+      .status-badge.failure {
+        background: var(--color-danger-subtle);
+        color: var(--color-danger-fg);
+      }
+
+      .status-badge.warning {
+        background: var(--color-attention-subtle);
+        color: var(--color-attention-fg);
+      }
+
+      .summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin: 24px 0;
+      }
+
+      .summary-card {
+        background: var(--color-canvas-subtle);
+        border: 1px solid var(--color-border-default);
+        border-radius: 6px;
+        padding: 16px;
+      }
+
+      .summary-card-title {
+        font-size: 12px;
+        color: var(--color-fg-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+      }
+
+      .summary-card-value {
+        font-size: 24px;
+        font-weight: 600;
+      }
+
+      .summary-card-subtitle {
+        font-size: 12px;
+        color: var(--color-fg-subtle);
+        margin-top: 4px;
+      }
+
+      .test-results {
+        margin: 32px 0;
+      }
+
+      .test-suite {
+        border: 1px solid var(--color-border-default);
+        border-radius: 6px;
+        margin-bottom: 16px;
+        overflow: hidden;
+      }
+
+      .test-suite-header {
+        background: var(--color-canvas-subtle);
+        padding: 12px 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .test-suite-header:hover {
+        background: #f3f4f6;
+      }
+
+      .test-suite-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 500;
+      }
+
+      .test-suite-stats {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        font-size: 14px;
+      }
+
+      .test-list {
+        border-top: 1px solid var(--color-border-default);
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+      }
+
+      .test-suite.expanded .test-list {
+        max-height: 3000px;
+      }
+
+      .test-detail {
+        padding: 8px 16px 8px 32px;
+        background: rgba(246, 248, 250, 0.5);
+        border-left: 3px solid var(--color-accent-emphasis);
+        font-size: 13px;
+        color: var(--color-fg-muted);
+        display: none;
+      }
+
+      .test-item.expanded .test-detail {
+        display: block;
+      }
+
+      .test-item {
+        border-bottom: 1px solid var(--color-border-muted);
+        font-size: 14px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+
+      .test-item:hover {
+        background: var(--color-canvas-subtle);
+      }
+
+      .test-item-header {
+        padding: 12px 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .test-item:last-child {
+        border-bottom: none;
+      }
+
+      .test-name {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .test-duration {
+        color: var(--color-fg-muted);
+        font-size: 12px;
+      }
+
+      .icon {
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+      }
+
+      .icon-success {
+        color: var(--color-success-emphasis);
+      }
+
+      .icon-failure {
+        color: var(--color-danger-emphasis);
+      }
+
+      .icon-skip {
+        color: var(--color-fg-muted);
+      }
+
+      .chevron {
+        transition: transform 0.2s;
+      }
+
+      .test-suite.expanded .chevron {
+        transform: rotate(90deg);
+      }
+
+      .coverage-section {
+        margin: 32px 0;
+      }
+
+      .coverage-title {
+        font-size: 20px;
+        font-weight: 600;
+        margin-bottom: 16px;
+      }
+
+      .coverage-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 16px;
+      }
+
+      .coverage-item {
+        background: var(--color-canvas-subtle);
+        border: 1px solid var(--color-border-default);
+        border-radius: 6px;
+        padding: 16px;
+      }
+
+      .coverage-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+
+      .coverage-label {
+        font-weight: 500;
+      }
+
+      .coverage-percentage {
+        font-weight: 600;
+        color: var(--color-success-fg);
+      }
+
+      .coverage-bar {
+        height: 8px;
+        background: var(--color-border-muted);
+        border-radius: 4px;
+        overflow: hidden;
+      }
+
+      .coverage-fill {
+        height: 100%;
+        background: var(--color-success-emphasis);
+        transition: width 0.5s ease;
+      }
+
+      .footer {
+        margin-top: 48px;
+        padding: 24px 0;
+        border-top: 1px solid var(--color-border-default);
+        text-align: center;
+        color: var(--color-fg-muted);
+        font-size: 14px;
+      }
+
+      @media (max-width: 768px) {
+        .summary {
+          grid-template-columns: 1fr;
+        }
+
+        .test-suite-stats {
+          flex-direction: column;
+          align-items: flex-end;
+          gap: 4px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <div class="container">
+        <div class="header-content">
+          <div class="header-title">
+            <svg
+              class="icon icon-success"
+              fill="currentColor"
+              viewBox="0 0 16 16"
+            >
+              <path
+                d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"
+              />
+            </svg>
+            <h1>Test Results</h1>
+            <span class="status-badge success">All checks passed</span>
+          </div>
+          <div style="color: var(--color-fg-muted); font-size: 14px">
+            API-RLR v0.1.3
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="summary">
+        <div class="summary-card">
+          <div class="summary-card-title">Total Tests</div>
+          <div
+            class="summary-card-value"
+            style="color: var(--color-success-emphasis)"
+          >
+            171
+          </div>
+          <div class="summary-card-subtitle">All passed</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-card-title">Test Suites</div>
+          <div class="summary-card-value">26</div>
+          <div class="summary-card-subtitle">100% success</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-card-title">Duration</div>
+          <div class="summary-card-value">5.31s</div>
+          <div class="summary-card-subtitle">With Redis integration</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-card-title">Coverage</div>
+          <div class="summary-card-value">75%</div>
+          <div class="summary-card-subtitle">Statements covered</div>
+        </div>
+      </div>
+
+      <div class="test-results">
+        <div
+          class="test-suite"
+          onclick="toggleSuite(this)"
+        >
+          <div class="test-suite-header">
+            <div class="test-suite-title">
+              <svg
+                class="chevron icon"
+                fill="currentColor"
+                viewBox="0 0 16 16"
+              >
+                <path
+                  d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z"
+                />
+              </svg>
+              <span>Unit Tests</span>
+            </div>
+            <div class="test-suite-stats">
+              <span style="color: var(--color-success-fg)">✓ 156 passed</span>
+              <span style="color: var(--color-fg-muted)">19 files</span>
+            </div>
+          </div>
+          <div class="test-list">
+            <div
+              class="test-item"
+              onclick="toggleTest(this)"
+            >
+              <div class="test-item-header">
+                <div class="test-name">
+                  <svg
+                    class="icon icon-success"
+                    fill="currentColor"
+                    viewBox="0 0 16 16"
+                  >
+                    <path
+                      d="M8 16A8 8 0 1 1 8 0a8 8 0 0 1 0 16Zm3.78-9.72a.751.751 0 0 0-.018-1.042.751.751 0 0 0-1.042-.018L7 9.94 5.28 8.22a.751.751 0 0 0-1.042.018.751.751 0 0 0-.018 1.042l2.25 2.25a.75.75 0 0 0 1.06 0Z"
+                    />
+                  </svg>
+                  <span>ResilientRedisAdapter</span>
+                </div>
+                <span class="test-duration">231ms</span>
+              </div>
+              <div class="test-detail">
+                <strong>File:</strong>
+                src/adapters/ResilientRedisAdapter.test.ts<br />
+                <strong>Tests:</strong> 13 passed<br />
+                <strong>Features:</strong> Circuit Breaker, Retry Policy,
+                Fallback Strategies
+              </div>
+            </div>
+            <div
+              class="test-item"
+              onclick="toggleTest(this)"
+            >
+              <div class="test-item-header">
+                <div class="test-name">
+                  <svg
+                    class="icon icon-success"
+                    fill="currentColor"
+                    viewBox="0 0 16 16"
+                  >
+                    <path
+                      d="M8 16A8 8 0 1 1 8 0a8 8 0 0 1 0 16Zm3.78-9.72a.751.751 0 0 0-.018-1.042.751.751 0 0 0-1.042-.018L7 9.94 5.28 8.22a.751.751 0 0 0-1.042.018.751.751 0 0 0-.018 1.042l2.25 2.25a.75.75 0 0 0 1.06 0Z"
+                    />
+                  </svg>
+                  <span>RateLimitHealthCheck</span>
+                </div>
+                <span class="test-duration">1108ms</span>
+              </div>
+              <div class="test-detail">
+                <strong>File:</strong>
+                src/health/RateLimitHealthCheck.test.ts<br />
+                <strong>Tests:</strong> 10 passed<br />
+                <strong>Features:</strong> Health monitoring, Redis
+                connectivity, Performance metrics
+              </div>
+            </div>
+            <div
+              class="test-item"
+              onclick="toggleTest(this)"
+            >
+              <div class="test-item-header">
+                <div class="test-name">
+                  <svg
+                    class="icon icon-success"
+                    fill="currentColor"
+                    viewBox="0 0 16 16"
+                  >
+                    <path
+                      d="M8 16A8 8 0 1 1 8 0a8 8 0 0 1 0 16Zm3.78-9.72a.751.751 0 0 0-.018-1.042.751.751 0 0 0-1.042-.018L7 9.94 5.28 8.22a.751.751 0 0 0-1.042.018.751.751 0 0 0-.018 1.042l2.25 2.25a.75.75 0 0 0 1.06 0Z"
+                    />
+                  </svg>
+                  <span>ConfigValidator</span>
+                </div>
+                <span class="test-duration">15ms</span>
+              </div>
+              <div class="test-detail">
+                <strong>File:</strong>
+                src/validators/ConfigValidator.test.ts<br />
+                <strong>Tests:</strong> 15 passed<br />
+                <strong>Features:</strong> Configuration validation, Type
+                checking, Route validation
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          class="test-suite"
+          onclick="toggleSuite(this)"
+        >
+          <div class="test-suite-header">
+            <div class="test-suite-title">
+              <svg
+                class="chevron icon"
+                fill="currentColor"
+                viewBox="0 0 16 16"
+              >
+                <path
+                  d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z"
+                />
+              </svg>
+              <span>Integration Tests (Redis)</span>
+            </div>
+            <div class="test-suite-stats">
+              <span style="color: var(--color-success-fg)">✓ 15 passed</span>
+              <span style="color: var(--color-fg-muted)">7 files</span>
+            </div>
+          </div>
+          <div class="test-list">
+            <div class="test-item">
+              <div class="test-name">
+                <svg
+                  class="icon icon-success"
+                  fill="currentColor"
+                  viewBox="0 0 16 16"
+                >
+                  <path
+                    d="M8 16A8 8 0 1 1 8 0a8 8 0 0 1 0 16Zm3.78-9.72a.751.751 0 0 0-.018-1.042.751.751 0 0 0-1.042-.018L7 9.94 5.28 8.22a.751.751 0 0 0-1.042.018.751.751 0 0 0-.018 1.042l2.25 2.25a.75.75 0 0 0 1.06 0Z"
+                  />
+                </svg>
+                <span>GCRA Algorithm (Lua)</span>
+              </div>
+              <span class="test-duration">~500ms</span>
+            </div>
+            <div class="test-item">
+              <div class="test-name">
+                <svg
+                  class="icon icon-success"
+                  fill="currentColor"
+                  viewBox="0 0 16 16"
+                >
+                  <path
+                    d="M8 16A8 8 0 1 1 8 0a8 8 0 0 1 0 16Zm3.78-9.72a.751.751 0 0 0-.018-1.042.751.751 0 0 0-1.042-.018L7 9.94 5.28 8.22a.751.751 0 0 0-1.042.018.751.751 0 0 0-.018 1.042l2.25 2.25a.75.75 0 0 0 1.06 0Z"
+                  />
+                </svg>
+                <span>Sliding Window (Lua)</span>
+              </div>
+              <span class="test-duration">~150ms</span>
+            </div>
+            <div class="test-item">
+              <div class="test-name">
+                <svg
+                  class="icon icon-success"
+                  fill="currentColor"
+                  viewBox="0 0 16 16"
+                >
+                  <path
+                    d="M8 16A8 8 0 1 1 8 0a8 8 0 0 1 0 16Zm3.78-9.72a.751.751 0 0 0-.018-1.042.751.751 0 0 0-1.042-.018L7 9.94 5.28 8.22a.751.751 0 0 0-1.042.018.751.751 0 0 0-.018 1.042l2.25 2.25a.75.75 0 0 0 1.06 0Z"
+                  />
+                </svg>
+                <span>Middleware Integration</span>
+              </div>
+              <span class="test-duration">29ms</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="coverage-section">
+        <h2 class="coverage-title">Code Coverage</h2>
+        <div class="coverage-grid">
+          <div class="coverage-item">
+            <div class="coverage-header">
+              <span class="coverage-label">Statements</span>
+              <span class="coverage-percentage">75.23%</span>
+            </div>
+            <div class="coverage-bar">
+              <div
+                class="coverage-fill"
+                style="width: 75.23%"
+              ></div>
+            </div>
+          </div>
+          <div class="coverage-item">
+            <div class="coverage-header">
+              <span class="coverage-label">Branches</span>
+              <span class="coverage-percentage">70.15%</span>
+            </div>
+            <div class="coverage-bar">
+              <div
+                class="coverage-fill"
+                style="width: 70.15%"
+              ></div>
+            </div>
+          </div>
+          <div class="coverage-item">
+            <div class="coverage-header">
+              <span class="coverage-label">Functions</span>
+              <span class="coverage-percentage">77.94%</span>
+            </div>
+            <div class="coverage-bar">
+              <div
+                class="coverage-fill"
+                style="width: 77.94%"
+              ></div>
+            </div>
+          </div>
+          <div class="coverage-item">
+            <div class="coverage-header">
+              <span class="coverage-label">Lines</span>
+              <span class="coverage-percentage">75.23%</span>
+            </div>
+            <div class="coverage-bar">
+              <div
+                class="coverage-fill"
+                style="width: 75.23%"
+              ></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer">
+        Generated on 22 Aug 2024 at 15:12:03 • Vitest 3.2.4 • Node.js v22
+      </div>
+    </div>
+
+    <script>
+      function toggleSuite(element) {
+        element.classList.toggle('expanded');
+      }
+
+      function toggleTest(element) {
+        event.stopPropagation();
+        element.classList.toggle('expanded');
+      }
+
+      // Animate coverage bars on load
+      window.addEventListener('load', () => {
+        const bars = document.querySelectorAll('.coverage-fill');
+        setTimeout(() => {
+          bars.forEach((bar) => {
+            bar.style.width = bar.style.width;
+          });
+        }, 100);
+
+        // Auto-expand first test suite
+        setTimeout(() => {
+          const firstSuite = document.querySelector('.test-suite');
+          if (firstSuite) {
+            firstSuite.classList.add('expanded');
+          }
+        }, 300);
+      });
+
+      // Keyboard shortcuts
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          document.querySelectorAll('.expanded').forEach((el) => {
+            el.classList.remove('expanded');
+          });
+        }
+      });
+    </script>
+  </body>
+</html>
