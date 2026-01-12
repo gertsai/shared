@@ -1,13 +1,32 @@
 // Types
 export {
+  // Enums
   UserType,
+  // Type aliases
   type ClientPlatform,
+  type GraphRAGSearchMode,
+  // Interfaces
   type MutationMarks,
   type Operator,
   type RequestMeta,
   type GraphRAGSettings,
   type IDestroyable,
   type UsersMetaType,
+  // Type guards
+  isMutationMarks,
+  isOperator,
+  isRequestMeta,
+  isGraphRAGSettings,
+  // Factory functions
+  createMutationMarks,
+  createOperator,
+  createSystemOperator,
+  createRequestMeta,
+  createGraphRAGSettings,
+  // Constants
+  DEFAULT_TIMEOUT,
+  DEFAULT_GRAPHRAG_SETTINGS,
+  // Deprecated Zod-compatible schemas (for backwards compatibility)
   MutationMarksSchema,
   OperatorSchema,
   RequestMetaSchema,
