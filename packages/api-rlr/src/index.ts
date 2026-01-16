@@ -50,3 +50,9 @@ export type { RequestContextData } from './context/RequestContext';
 // Export test utilities
 export { RateLimitTestUtils } from './test-utils/RateLimitTestUtils';
 export type { SimulationResult, MockHeaders } from './test-utils/RateLimitTestUtils';
+
+// Export adapters
+export { RedisAdapter } from './adapters/RedisAdapter';
+export { PostgreSQLAdapter } from './adapters/PostgreSQLAdapter';
+export type { PostgreSQLAdapterConfig } from './adapters/PostgreSQLAdapter';
+export type { StorageAdapter, SlidingWindowResult, GCRAResult } from './adapters/StorageAdapter';

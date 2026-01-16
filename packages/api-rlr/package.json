@@ -48,6 +48,7 @@
   },
   "devDependencies": {
     "@gerts/api-core": "workspace:*",
+    "@gerts/database": "workspace:*",
     "@types/lodash.clonedeep": "^4.5.9",
     "@types/lodash.debounce": "^4.0.9",
     "@types/lodash.get": "^4.4.9",
