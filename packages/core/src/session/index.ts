@@ -1,13 +1,32 @@
 // Types
 export {
+  // Enums
   UserType,
+  // Type aliases
   type ClientPlatform,
+  type GraphRAGSearchMode,
+  // Interfaces
   type MutationMarks,
   type Operator,
   type RequestMeta,
   type GraphRAGSettings,
   type IDestroyable,
   type UsersMetaType,
+  // Type guards
+  isMutationMarks,
+  isOperator,
+  isRequestMeta,
+  isGraphRAGSettings,
+  // Factory functions
+  createMutationMarks,
+  createOperator,
+  createSystemOperator,
+  createRequestMeta,
+  createGraphRAGSettings,
+  // Constants
+  DEFAULT_TIMEOUT,
+  DEFAULT_GRAPHRAG_SETTINGS,
+  // Deprecated Zod-compatible schemas (for backwards compatibility)
   MutationMarksSchema,
   OperatorSchema,
   RequestMetaSchema,
@@ -28,3 +47,36 @@ export {
   type OrchestraSession,
   type GertsSession,
 } from './session-context';
+
+// Tenant Config types
+export {
+  // Types
+  type TenantLLMProvider,
+  type TenantLLMConfig,
+  type EmbeddingProvider,
+  type EmbeddingConfig,
+  type PromptConfig,
+  type OntologyBinding,
+  type GraphRAGMode,
+  type GraphRAGConfig,
+  type LocaleConfig,
+  type RateLimitConfig,
+  type FeatureFlags,
+  type IngestionConfig,
+  type CommunityLevel,
+  type TenantConfig,
+  type TenantConfigCreate,
+  type TenantConfigUpdate,
+  type ResolvedTenantConfig,
+  // Runtime type guards
+  isTenantLLMConfig,
+  isEmbeddingConfig,
+  isTenantConfig,
+  isTenantConfigCreate,
+  isTenantConfigUpdate,
+  // Defaults & Helpers
+  DEFAULT_TENANT_CONFIG,
+  mergeTenantConfigWithDefaults,
+  applyTenantConfigUpdate,
+  calculateConfigHash,
+} from './tenant-config';
