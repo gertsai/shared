@@ -1,0 +1,62 @@
+{
+  "name": "@gerts/auth-openfga",
+  "version": "0.1.0",
+  "description": "OpenFGA integration for gerts.ai authorization (Zanzibar-style ReBAC)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    },
+    "./queries": {
+      "import": {
+        "types": "./dist/queries/index.d.ts",
+        "default": "./dist/queries/index.js"
+      }
+    },
+    "./mutations": {
+      "import": {
+        "types": "./dist/mutations/index.d.ts",
+        "default": "./dist/mutations/index.js"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@gerts/auth": "workspace:*",
+    "@openfga/sdk": "^0.8.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^3.0.0"
+  },
+  "keywords": [
+    "auth",
+    "authorization",
+    "openfga",
+    "zanzibar",
+    "rbac",
+    "rebac",
+    "gerts"
+  ],
+  "author": "gerts.ai",
+  "license": "MIT"
+}
