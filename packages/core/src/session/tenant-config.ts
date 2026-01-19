@@ -675,3 +675,127 @@ export function calculateConfigHash(config: TenantConfig): string {
   }
   return Math.abs(hash).toString(16).padStart(8, '0');
 }
+
+// ============================================================================
+// Sanitized Config (for inter-service propagation)
+// ============================================================================
+
+/**
+ * Sanitized LLM configuration without sensitive fields
+ *
+ * Removes: apiKeyRef, baseUrl (credentials that should not leak via ctx.meta)
+ * Keeps: provider, model, temperature, maxTokens, timeout
+ *
+ * @security RISK-003 - Prevents credential leak via inter-service calls
+ */
+export type SanitizedTenantLLMConfig = Omit<TenantLLMConfig, 'apiKeyRef' | 'baseUrl'>;
+
+/**
+ * Sanitized Embedding configuration without sensitive fields
+ *
+ * Removes: apiKeyRef, baseUrl (credentials that should not leak via ctx.meta)
+ * Keeps: provider, model, dimension, batchSize
+ *
+ * @security RISK-003 - Prevents credential leak via inter-service calls
+ */
+export type SanitizedEmbeddingConfig = Omit<EmbeddingConfig, 'apiKeyRef' | 'baseUrl'>;
+
+/**
+ * Sanitized TenantConfig for safe propagation via ctx.meta
+ *
+ * This type represents a TenantConfig with sensitive fields removed from
+ * llm and embedding configurations. Use this for inter-service communication
+ * where credentials should not be exposed.
+ *
+ * @security RISK-003 - Prevents credential leak via inter-service calls
+ *
+ * @example
+ * ```typescript
+ * // In session middleware
+ * ctx.meta.tenantConfig = sanitizeTenantConfig(response.data);  // Safe for propagation
+ * ctx.locals.tenantConfig = response.data;  // Full config, server-side only
+ * ```
+ */
+export type SanitizedTenantConfig = Omit<TenantConfig, 'llm' | 'embedding'> & {
+  /** Sanitized LLM configuration (without apiKeyRef, baseUrl) */
+  llm: SanitizedTenantLLMConfig;
+  /** Sanitized Embedding configuration (without apiKeyRef, baseUrl) */
+  embedding: SanitizedEmbeddingConfig;
+};
+
+/**
+ * Sanitizes TenantConfig for safe propagation via ctx.meta
+ *
+ * Removes sensitive fields from LLM and Embedding configs:
+ * - apiKeyRef: Vault reference to API key
+ * - baseUrl: Custom endpoint URL (may contain auth tokens)
+ *
+ * Use this function when passing TenantConfig through ctx.meta to prevent
+ * credential leakage during inter-service calls.
+ *
+ * @param config - Full TenantConfig with sensitive fields
+ * @returns SanitizedTenantConfig safe for inter-service propagation
+ *
+ * @security RISK-003 - Prevents credential leak via inter-service calls
+ *
+ * @example
+ * ```typescript
+ * // In session middleware (line ~732)
+ * import { sanitizeTenantConfig } from '@gerts/core';
+ *
+ * // BEFORE (vulnerable)
+ * ctx.meta.tenantConfig = response.data;
+ *
+ * // AFTER (safe)
+ * ctx.meta.tenantConfig = sanitizeTenantConfig(response.data);  // Safe for propagation
+ * ctx.locals.tenantConfig = response.data;  // Full config, server-side only
+ * ```
+ */
+export function sanitizeTenantConfig(config: TenantConfig): SanitizedTenantConfig {
+  // Destructure to remove sensitive LLM fields
+  const { apiKeyRef: _llmApiKey, baseUrl: _llmBaseUrl, ...sanitizedLlm } = config.llm;
+
+  // Destructure to remove sensitive Embedding fields
+  const {
+    apiKeyRef: _embeddingApiKey,
+    baseUrl: _embeddingBaseUrl,
+    ...sanitizedEmbedding
+  } = config.embedding;
+
+  // Return config with sanitized nested objects
+  return {
+    ...config,
+    llm: sanitizedLlm,
+    embedding: sanitizedEmbedding,
+  };
+}
+
+/**
+ * Check if value is a SanitizedTenantConfig
+ *
+ * Validates that the config is a valid TenantConfig structure
+ * AND does not contain sensitive fields (apiKeyRef, baseUrl).
+ *
+ * @param value - Value to check
+ * @returns True if value is a valid SanitizedTenantConfig
+ *
+ * @security RISK-003 - Runtime validation for sanitized configs
+ */
+export function isSanitizedTenantConfig(value: unknown): value is SanitizedTenantConfig {
+  // First check if it's a valid TenantConfig structure
+  if (!isTenantConfig(value)) return false;
+
+  const config = value as TenantConfig;
+
+  // Verify LLM config does NOT have sensitive fields
+  if ('apiKeyRef' in config.llm || 'baseUrl' in config.llm) {
+    return false;
+  }
+
+  // Verify Embedding config does NOT have sensitive fields
+  if ('apiKeyRef' in config.embedding || 'baseUrl' in config.embedding) {
+    return false;
+  }
+
+  return true;
+}

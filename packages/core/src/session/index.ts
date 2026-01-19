@@ -68,15 +68,22 @@ export {
   type TenantConfigCreate,
   type TenantConfigUpdate,
   type ResolvedTenantConfig,
+  // Sanitized types (RISK-003)
+  type SanitizedTenantLLMConfig,
+  type SanitizedEmbeddingConfig,
+  type SanitizedTenantConfig,
   // Runtime type guards
   isTenantLLMConfig,
   isEmbeddingConfig,
   isTenantConfig,
   isTenantConfigCreate,
   isTenantConfigUpdate,
+  isSanitizedTenantConfig,
   // Defaults & Helpers
   DEFAULT_TENANT_CONFIG,
   mergeTenantConfigWithDefaults,
   applyTenantConfigUpdate,
   calculateConfigHash,
+  // Sanitization (RISK-003)
+  sanitizeTenantConfig,
 } from './tenant-config';
