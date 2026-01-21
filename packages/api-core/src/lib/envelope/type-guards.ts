@@ -4,6 +4,8 @@
  * Runtime type guards for safe type narrowing without unsafe assertions.
  * These guards are used by response-wrapper.ts to validate data structures.
  *
+ * SEC-002: Also includes tenant ID validation to prevent Redis injection.
+ *
  * @packageDocumentation
  */
 
@@ -352,4 +354,73 @@ export function extractPackageInfo(pkg: unknown): { name: string; version: strin
     name: typeof obj.name === 'string' ? obj.name : defaults.name,
     version: typeof obj.version === 'string' ? obj.version : defaults.version,
   };
+}
+
+// ============================================================================
+// SEC-002: Tenant ID Validation
+// ============================================================================
+
+/**
+ * Regex pattern for valid tenant ID format
+ *
+ * Allows:
+ * - Alphanumeric characters (a-z, A-Z, 0-9)
+ * - Underscores and hyphens
+ * - Length 1-64 characters
+ *
+ * Blocks:
+ * - CRLF injection (\r\n)
+ * - Null bytes
+ * - Spaces and special characters
+ */
+export const TENANT_ID_REGEX = /^[a-zA-Z0-9_-]{1,64}$/;
+
+/**
+ * Validate tenant ID format to prevent Redis/log injection attacks
+ *
+ * SEC-002: This validation is CRITICAL for rate limiting bucket keys.
+ * Without validation, attackers could inject Redis commands via CRLF.
+ *
+ * @param tenantId - Tenant ID from request header
+ * @returns Validated tenant ID or null if invalid
+ *
+ * @example
+ * ```typescript
+ * const tenantId = validateTenantIdFormat(req.headers['x-tenant-id']);
+ * if (tenantId) {
+ *   return `tenant:${tenantId}`;  // Safe to use in Redis key
+ * } else {
+ *   return `ip:${clientIp}`;      // Fallback to IP-based key
+ * }
+ * ```
+ */
+export function validateTenantIdFormat(tenantId: string | undefined | null): string | null {
+  if (!tenantId || typeof tenantId !== 'string') {
+    return null;
+  }
+
+  // Quick length check before regex
+  if (tenantId.length === 0 || tenantId.length > 64) {
+    return null;
+  }
+
+  if (!TENANT_ID_REGEX.test(tenantId)) {
+    // Log warning for potential attack attempts (but don't expose in response)
+    if (process.env.NODE_ENV !== 'test') {
+      console.warn(`[SEC-002] Invalid tenant ID format rejected: ${tenantId.slice(0, 20)}...`);
+    }
+    return null;
+  }
+
+  return tenantId;
+}
+
+/**
+ * Check if tenant ID format is valid (boolean version)
+ *
+ * @param tenantId - Tenant ID to check
+ * @returns True if valid format
+ */
+export function isTenantIdValid(tenantId: string | undefined | null): tenantId is string {
+  return validateTenantIdFormat(tenantId) !== null;
 }

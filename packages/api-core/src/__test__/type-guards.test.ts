@@ -16,6 +16,10 @@ import {
   extractUsageInfo,
   extractPackageInfo,
   wantsLegacyFormat,
+  // SEC-002: Tenant ID validation
+  validateTenantIdFormat,
+  isTenantIdValid,
+  TENANT_ID_REGEX,
 } from '../lib/envelope/type-guards';
 
 // ============================================================================
@@ -354,6 +358,103 @@ describe('Request Format Detection', () => {
           headers: { accept: ['application/json', 'application/vnd.orchestra+json'] },
         }),
       ).toBe(true);
+    });
+  });
+});
+
+// ============================================================================
+// SEC-002: Tenant ID Validation Tests
+// ============================================================================
+
+describe('Tenant ID Validation (SEC-002)', () => {
+  describe('validateTenantIdFormat', () => {
+    it('should accept valid alphanumeric tenant IDs', () => {
+      expect(validateTenantIdFormat('tenant123')).toBe('tenant123');
+      expect(validateTenantIdFormat('TENANT')).toBe('TENANT');
+      expect(validateTenantIdFormat('12345')).toBe('12345');
+    });
+
+    it('should accept underscores and hyphens', () => {
+      expect(validateTenantIdFormat('tenant_123')).toBe('tenant_123');
+      expect(validateTenantIdFormat('tenant-123')).toBe('tenant-123');
+      expect(validateTenantIdFormat('tenant_test-123')).toBe('tenant_test-123');
+    });
+
+    it('should accept single character tenant IDs', () => {
+      expect(validateTenantIdFormat('a')).toBe('a');
+      expect(validateTenantIdFormat('1')).toBe('1');
+    });
+
+    it('should accept 64 character tenant IDs', () => {
+      const maxLength = 'a'.repeat(64);
+      expect(validateTenantIdFormat(maxLength)).toBe(maxLength);
+    });
+
+    it('should reject empty string', () => {
+      expect(validateTenantIdFormat('')).toBe(null);
+    });
+
+    it('should reject null/undefined', () => {
+      expect(validateTenantIdFormat(null)).toBe(null);
+      expect(validateTenantIdFormat(undefined)).toBe(null);
+    });
+
+    it('should reject IDs over 64 characters', () => {
+      const tooLong = 'a'.repeat(65);
+      expect(validateTenantIdFormat(tooLong)).toBe(null);
+    });
+
+    it('should reject special characters', () => {
+      expect(validateTenantIdFormat('tenant@123')).toBe(null);
+      expect(validateTenantIdFormat('tenant.123')).toBe(null);
+      expect(validateTenantIdFormat('tenant/123')).toBe(null);
+      expect(validateTenantIdFormat('tenant 123')).toBe(null);
+    });
+
+    it('should reject CRLF injection attempts', () => {
+      expect(validateTenantIdFormat('evil\r\nSET hack 1')).toBe(null);
+      expect(validateTenantIdFormat('tenant\n')).toBe(null);
+      expect(validateTenantIdFormat('tenant\r')).toBe(null);
+    });
+
+    it('should reject null byte injection', () => {
+      expect(validateTenantIdFormat('tenant\0evil')).toBe(null);
+    });
+
+    it('should reject Redis command injection', () => {
+      expect(validateTenantIdFormat('*3\r\n$3\r\nSET')).toBe(null);
+    });
+
+    it('should reject path traversal attempts', () => {
+      expect(validateTenantIdFormat('../../../etc/passwd')).toBe(null);
+      expect(validateTenantIdFormat('..\\..\\etc')).toBe(null);
+    });
+  });
+
+  describe('isTenantIdValid', () => {
+    it('should return true for valid tenant IDs', () => {
+      expect(isTenantIdValid('valid-tenant')).toBe(true);
+      expect(isTenantIdValid('tenant_123')).toBe(true);
+    });
+
+    it('should return false for invalid tenant IDs', () => {
+      expect(isTenantIdValid('')).toBe(false);
+      expect(isTenantIdValid(null)).toBe(false);
+      expect(isTenantIdValid('invalid@tenant')).toBe(false);
+    });
+  });
+
+  describe('TENANT_ID_REGEX', () => {
+    it('should match valid patterns', () => {
+      expect(TENANT_ID_REGEX.test('abc')).toBe(true);
+      expect(TENANT_ID_REGEX.test('ABC123')).toBe(true);
+      expect(TENANT_ID_REGEX.test('a-b_c')).toBe(true);
+    });
+
+    it('should not match invalid patterns', () => {
+      expect(TENANT_ID_REGEX.test('')).toBe(false);
+      expect(TENANT_ID_REGEX.test('a@b')).toBe(false);
+      expect(TENANT_ID_REGEX.test('a b')).toBe(false);
     });
   });
 });

@@ -1,0 +1,297 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="141" failures="0" errors="0" time="0.230787542">
+    <testsuite name="src/__test__/apiController.test.ts" timestamp="2026-01-21T12:40:25.654Z" hostname="MacBook-Pro-explosovebit.local" tests="16" failures="0" errors="0" skipped="0" time="0.010371667">
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; Correct session factory" time="0.000863792">
+        </testcase>
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; Create controller" time="0.000302875">
+        </testcase>
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; Resolve controller" time="0.000139708">
+        </testcase>
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; ApiController/actions &gt; Register an action" time="0.000362875">
+        </testcase>
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; ApiController/actions &gt; Re-registering action throws error" time="0.00069925">
+        </testcase>
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; ApiController/actions &gt; Action schema is valid" time="0.000440833">
+        </testcase>
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; ApiController/actions &gt; Action params validated" time="0.000988834">
+        </testcase>
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; ApiController/actions &gt; Validate response" time="0.000133708">
+        </testcase>
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; ApiController/actions &gt; Generate service schema" time="0.000272458">
+        </testcase>
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; ApiController/actions/auth &gt; Optional Auth Action" time="0.000391291">
+        </testcase>
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; ApiController/actions/auth &gt; Required Auth Action" time="0.000144166">
+        </testcase>
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; ApiController/actions/errors &gt; Object Error converted to OrchestraError" time="0.003733917">
+        </testcase>
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; ApiController/actions/errors &gt; Regular error converted to OrchestraError" time="0.000298375">
+        </testcase>
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; ApiController/actions/errors &gt; OrchestraError is thrown" time="0.000106125">
+        </testcase>
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; ApiController/actions/errors &gt; Unknown OrchestraError is thrown" time="0.000106042">
+        </testcase>
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; ApiController/actions/call &gt; Moleculer context called" time="0.000731875">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/__test__/configLoader.test.ts" timestamp="2026-01-21T12:40:25.674Z" hostname="MacBook-Pro-explosovebit.local" tests="1" failures="0" errors="0" skipped="0" time="0.00560875">
+        <testcase classname="src/__test__/configLoader.test.ts" name="Load config" time="0.002211875">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/__test__/moleculer.test.ts" timestamp="2026-01-21T12:40:25.675Z" hostname="MacBook-Pro-explosovebit.local" tests="5" failures="0" errors="0" skipped="0" time="0.198843167">
+        <testcase classname="src/__test__/moleculer.test.ts" name="Moleculer Service &gt; Has registered action" time="0.000601834">
+        </testcase>
+        <testcase classname="src/__test__/moleculer.test.ts" name="Moleculer Service &gt; Action is called" time="0.001329083">
+        </testcase>
+        <testcase classname="src/__test__/moleculer.test.ts" name="Moleculer Service &gt; Api Gate &gt; Call get endpoint" time="0.039486">
+        </testcase>
+        <testcase classname="src/__test__/moleculer.test.ts" name="Moleculer Service &gt; Api Gate &gt; Fail Call POST endpoint with wrong parameters" time="0.032667834">
+        </testcase>
+        <testcase classname="src/__test__/moleculer.test.ts" name="Moleculer Service &gt; Api Gate &gt; Get not found error on undefined action" time="0.002044834">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/__test__/response-wrapper.test.ts" timestamp="2026-01-21T12:40:25.675Z" hostname="MacBook-Pro-explosovebit.local" tests="41" failures="0" errors="0" skipped="0" time="0.005317625">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Array Detection &gt; should detect entity list from path" time="0.000740083">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Array Detection &gt; should detect relationship list from path" time="0.000069625">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Array Detection &gt; should detect community list from path" time="0.000049458">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Array Detection &gt; should detect chunk list from path" time="0.000061167">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Array Detection &gt; should default to list for unknown array path" time="0.000052417">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Object Type Detection &gt; should detect query result" time="0.00005475">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Object Type Detection &gt; should detect query analysis" time="0.000044209">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Object Type Detection &gt; should detect entity" time="0.000038417">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Object Type Detection &gt; should detect relationship" time="0.000054583">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Object Type Detection &gt; should detect community" time="0.000060125">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Object Type Detection &gt; should detect job status" time="0.000040292">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Object Type Detection &gt; should detect stats" time="0.000047625">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Object Type Detection &gt; should detect health" time="0.000049666">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Object Type Detection &gt; should detect graph export" time="0.000032417">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Path-Based Detection &gt; should detect query from path" time="0.000036916">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Path-Based Detection &gt; should detect ingest job from path" time="0.000034375">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Path-Based Detection &gt; should detect scheduler from path" time="0.000032292">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Path-Based Detection &gt; should detect vector from path" time="0.000029375">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="getIdPrefix &gt; should return correct prefix for query types" time="0.000089334">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="getIdPrefix &gt; should return correct prefix for entity types" time="0.000065">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="getIdPrefix &gt; should return correct prefix for relationship types" time="0.000058417">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="getIdPrefix &gt; should return correct prefix for community types" time="0.000042375">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="getIdPrefix &gt; should return correct prefix for document types" time="0.000088958">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="getIdPrefix &gt; should return correct prefix for job types" time="0.000064459">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="getIdPrefix &gt; should return correct prefix for system types" time="0.0000395">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="getIdPrefix &gt; should return lst for unknown types" time="0.000030584">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapSuccessResponse &gt; should wrap successful response" time="0.000825709">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapSuccessResponse &gt; should include usage info when present" time="0.00015425">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapSuccessResponse &gt; should include trace ID when present in meta" time="0.000054375">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapSuccessResponse &gt; should include legacy fields" time="0.000090541">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapSuccessResponse &gt; should use default tenant when not in meta" time="0.00005325">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapErrorResponse &gt; should wrap error response" time="0.000578333">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapErrorResponse &gt; should map response codes to error types" time="0.0001445">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapErrorResponse &gt; should detect retryable errors" time="0.0000775">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapErrorResponse &gt; should include retry_after for rate limit errors" time="0.000044458">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapErrorResponse &gt; should detect stage from path" time="0.000096375">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapErrorResponse &gt; should include legacy fields" time="0.00005175">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapErrorResponse &gt; should use error message when provided" time="0.000097416">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="buildResponsePayload &gt; should include legacy fields when requested" time="0.000106042">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="buildResponsePayload &gt; should exclude legacy fields when not requested" time="0.000042709">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="buildResponsePayload &gt; should preserve main GertsResponse fields" time="0.000083417">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/__test__/type-guards.test.ts" timestamp="2026-01-21T12:40:25.685Z" hostname="MacBook-Pro-explosovebit.local" tests="58" failures="0" errors="0" skipped="0" time="0.006524458">
+        <testcase classname="src/__test__/type-guards.test.ts" name="OrchestraInfo Guards &gt; isOrchestraInfo &gt; should return true for valid OrchestraInfo" time="0.000981875">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="OrchestraInfo Guards &gt; isOrchestraInfo &gt; should return false for invalid types" time="0.000320916">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="OrchestraInfo Guards &gt; isOrchestraInfo &gt; should return false for invalid field types" time="0.000159042">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="OrchestraInfo Guards &gt; assertOrchestraInfo &gt; should not throw for valid OrchestraInfo" time="0.000622708">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="OrchestraInfo Guards &gt; assertOrchestraInfo &gt; should throw for invalid OrchestraInfo" time="0.000178042">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="OrchestraInfo Guards &gt; getOrchestraInfo &gt; should return value if valid" time="0.0003135">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="OrchestraInfo Guards &gt; getOrchestraInfo &gt; should return fallback for invalid value" time="0.000080584">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; isTenantContextMeta &gt; should return true for valid context meta" time="0.000086667">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; isTenantContextMeta &gt; should return false for non-objects" time="0.000067875">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractTenantId &gt; should extract tenant ID from valid meta" time="0.000137459">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractTenantId &gt; should return fallback for missing tenant ID" time="0.000180334">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractTenantId &gt; should return fallback for empty tenant ID" time="0.000053292">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractTenantId &gt; should return fallback for non-string tenant ID" time="0.000057">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractTenantId &gt; should return fallback for invalid meta" time="0.000046583">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractTraceId &gt; should extract trace ID from valid meta" time="0.000055125">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractTraceId &gt; should return undefined for missing trace ID" time="0.0000535">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractTraceId &gt; should return undefined for empty trace ID" time="0.000031833">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractTraceId &gt; should return undefined for invalid meta" time="0.000031083">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; isUsageInfo &gt; should return true for valid UsageInfo" time="0.000058417">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; isUsageInfo &gt; should return true for UsageInfo with optional fields" time="0.000039625">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; isUsageInfo &gt; should return false for missing required fields" time="0.000042834">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; isUsageInfo &gt; should return false for negative values" time="0.000037875">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; isUsageInfo &gt; should return false for non-numeric values" time="0.000031375">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; isUsageInfo &gt; should return false for invalid optional fields" time="0.000031291">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; extractUsageInfo &gt; should extract usage from data.usage" time="0.000065875">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; extractUsageInfo &gt; should extract usage from data._meta" time="0.000091083">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; extractUsageInfo &gt; should return undefined for missing usage" time="0.000044541">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; extractUsageInfo &gt; should return undefined for invalid data" time="0.000052834">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; extractUsageInfo &gt; should return undefined for invalid usage object" time="0.000045292">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="PackageJson Guards &gt; extractPackageInfo &gt; should extract name and version from valid package.json" time="0.000106417">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="PackageJson Guards &gt; extractPackageInfo &gt; should return defaults for missing fields" time="0.000046292">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="PackageJson Guards &gt; extractPackageInfo &gt; should return defaults for non-string fields" time="0.000050541">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="PackageJson Guards &gt; extractPackageInfo &gt; should return defaults for invalid input" time="0.000057875">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="PackageJson Guards &gt; extractPackageInfo &gt; should handle partial package.json" time="0.000067167">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="Request Format Detection &gt; wantsLegacyFormat &gt; should return false for null/undefined request" time="0.000061208">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="Request Format Detection &gt; wantsLegacyFormat &gt; should return false for empty request" time="0.000031084">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="Request Format Detection &gt; wantsLegacyFormat &gt; should detect legacy format from query param" time="0.000041459">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="Request Format Detection &gt; wantsLegacyFormat &gt; should detect legacy format from query param array" time="0.000046292">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="Request Format Detection &gt; wantsLegacyFormat &gt; should detect legacy format from Accept header" time="0.000035958">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="Request Format Detection &gt; wantsLegacyFormat &gt; should detect legacy format from Accept header with multiple types" time="0.000030125">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="Request Format Detection &gt; wantsLegacyFormat &gt; should return false for standard Accept header" time="0.000029125">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="Request Format Detection &gt; wantsLegacyFormat &gt; should handle Accept header as array" time="0.000029959">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should accept valid alphanumeric tenant IDs" time="0.000119292">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should accept underscores and hyphens" time="0.000053042">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should accept single character tenant IDs" time="0.000040542">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should accept 64 character tenant IDs" time="0.000039625">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should reject empty string" time="0.0000505">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should reject null/undefined" time="0.000036417">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should reject IDs over 64 characters" time="0.000028334">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should reject special characters" time="0.000062667">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should reject CRLF injection attempts" time="0.00005325">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should reject null byte injection" time="0.000028208">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should reject Redis command injection" time="0.000026708">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should reject path traversal attempts" time="0.000035959">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; isTenantIdValid &gt; should return true for valid tenant IDs" time="0.000060875">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; isTenantIdValid &gt; should return false for invalid tenant IDs" time="0.00004375">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; TENANT_ID_REGEX &gt; should match valid patterns" time="0.000055084">
+        </testcase>
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; TENANT_ID_REGEX &gt; should not match invalid patterns" time="0.000044583">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/lib/common/ip-utils.test.ts" timestamp="2026-01-21T12:40:25.689Z" hostname="MacBook-Pro-explosovebit.local" tests="20" failures="0" errors="0" skipped="0" time="0.004121875">
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="extractClientIp &gt; X-Real-IP handling &gt; should use X-Real-IP when present" time="0.001391833">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="extractClientIp &gt; X-Real-IP handling &gt; should trim X-Real-IP value" time="0.0001555">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="extractClientIp &gt; X-Real-IP handling &gt; should skip invalid X-Real-IP" time="0.000167375">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="extractClientIp &gt; X-Forwarded-For handling (SEC-001) &gt; should use LAST IP by default to prevent spoofing" time="0.000237334">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="extractClientIp &gt; X-Forwarded-For handling (SEC-001) &gt; should use first IP when configured for backwards compat" time="0.000079167">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="extractClientIp &gt; X-Forwarded-For handling (SEC-001) &gt; should handle single IP in X-Forwarded-For" time="0.000067375">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="extractClientIp &gt; X-Forwarded-For handling (SEC-001) &gt; should skip invalid IPs in chain" time="0.000057125">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="extractClientIp &gt; socket fallback &gt; should use socket IP when no proxy headers" time="0.00006625">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="extractClientIp &gt; socket fallback &gt; should strip IPv6-mapped IPv4 prefix" time="0.000065875">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="extractClientIp &gt; socket fallback &gt; should return unknown when no IP available" time="0.000065042">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="extractClientIp &gt; configuration options &gt; should skip X-Real-IP when not trusted" time="0.000051958">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="extractClientIp &gt; configuration options &gt; should skip X-Forwarded-For when not trusted" time="0.000121084">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="extractClientIp &gt; configuration options &gt; should fall back to socket when no headers trusted" time="0.000059958">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="isValidIpFormat &gt; IPv4 validation &gt; should accept valid IPv4" time="0.000105084">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="isValidIpFormat &gt; IPv4 validation &gt; should reject invalid IPv4 octets" time="0.000075792">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="isValidIpFormat &gt; IPv6 validation &gt; should accept valid IPv6" time="0.000074917">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="isValidIpFormat &gt; injection prevention &gt; should reject CRLF injection attempts" time="0.000306584">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="isValidIpFormat &gt; injection prevention &gt; should reject null byte injection" time="0.000039042">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="isValidIpFormat &gt; injection prevention &gt; should reject overly long strings" time="0.00004075">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="isValidIpFormat &gt; injection prevention &gt; should reject empty/null values" time="0.000057166">
+        </testcase>
+    </testsuite>
+</testsuites>

@@ -1,10 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
-import type {
-  Message,
-  Subscription,
-  SubscriptionOptions,
-} from '@google-cloud/pubsub';
+import type { Message, Subscription, SubscriptionOptions } from '@google-cloud/pubsub';
 import type { OrchestraSession } from '@gerts/core';
 import { UserType, defaultSession } from '@gerts/core';
 import { Queue, Worker } from 'bullmq';
@@ -68,18 +64,12 @@ const createSimpleFallbackLogger = (
   serviceName: string,
   serviceVersion: string,
 ): LoggerInstance => ({
-  fatal: (...args: any[]) =>
-    console.error(`[${serviceVersion}.${serviceName}] FATAL:`, ...args),
-  error: (...args: any[]) =>
-    console.error(`[${serviceVersion}.${serviceName}] ERROR:`, ...args),
-  warn: (...args: any[]) =>
-    console.warn(`[${serviceVersion}.${serviceName}] WARN:`, ...args),
-  info: (...args: any[]) =>
-    console.info(`[${serviceVersion}.${serviceName}] INFO:`, ...args),
-  debug: (...args: any[]) =>
-    console.debug(`[${serviceVersion}.${serviceName}] DEBUG:`, ...args),
-  trace: (...args: any[]) =>
-    console.trace(`[${serviceVersion}.${serviceName}] TRACE:`, ...args),
+  fatal: (...args: any[]) => console.error(`[${serviceVersion}.${serviceName}] FATAL:`, ...args),
+  error: (...args: any[]) => console.error(`[${serviceVersion}.${serviceName}] ERROR:`, ...args),
+  warn: (...args: any[]) => console.warn(`[${serviceVersion}.${serviceName}] WARN:`, ...args),
+  info: (...args: any[]) => console.info(`[${serviceVersion}.${serviceName}] INFO:`, ...args),
+  debug: (...args: any[]) => console.debug(`[${serviceVersion}.${serviceName}] DEBUG:`, ...args),
+  trace: (...args: any[]) => console.trace(`[${serviceVersion}.${serviceName}] TRACE:`, ...args),
 });
 
 /**
@@ -131,25 +121,97 @@ export class ApiController<
   private static _broker: ServiceBroker | undefined;
 
   /**
+   * Whether BullMQ workers should be created (API Gateway mode = false)
+   * @private
+   */
+  private static _workersEnabled = true;
+
+  /**
+   * List of enabled worker queue names (if null, all workers are enabled when _workersEnabled=true)
+   * @private
+   */
+  private static _enabledWorkers: Set<string> | null = null;
+
+  /**
    * Start the broker and load the services
    * @param brokerConfig - The broker configuration
    * @param services - Additional services to load
    * @param repl - Whether to start the repl
+   * @param enabledServices - Optional list of service names to load (e.g., ['v1.queue', 'v1.admin']).
+   *                          If undefined, all registered services are loaded.
    * @returns The broker
+   *
+   * @example
+   * ```typescript
+   * // Load all services (default)
+   * ApiController.Start({ brokerConfig, services: [ApiService] });
+   *
+   * // Load only specific services (for worker nodes)
+   * ApiController.Start({
+   *   brokerConfig,
+   *   services: [ApiService],
+   *   enabledServices: ['v1.queue', 'v1.llm', 'v1.graph'],
+   * });
+   *
+   * // API Gateway mode: services without workers (jobs go to Redis, not processed locally)
+   * ApiController.Start({
+   *   brokerConfig,
+   *   services: [ApiService],
+   *   enabledServices: ['v1.admin', 'v1.files'],
+   *   workersEnabled: false,
+   * });
+   *
+   * // Worker mode: workers only (process jobs from Redis)
+   * ApiController.Start({
+   *   brokerConfig,
+   *   services: [],  // No API service
+   *   enabledServices: ['v1.queue', 'v1.llm', 'v1.graph'],
+   *   workersEnabled: true,
+   * });
+   *
+   * // Selective workers: only specific queue workers
+   * ApiController.Start({
+   *   brokerConfig,
+   *   services: [ApiService],
+   *   enabledServices: ['v1.queue'],
+   *   enabledWorkers: ['gerts-jobs'],  // Only gerts-jobs, not iam-jobs
+   * });
+   * ```
    */
   public static Start({
     brokerConfig,
     services,
     repl = true,
+    enabledServices,
+    workersEnabled = true,
+    enabledWorkers,
+    replOptions,
   }: {
     brokerConfig: BrokerOptions;
     services: ServiceSchema[];
     repl?: boolean;
+    /** Service names to load (e.g., 'v1.queue'). If undefined, all services are loaded. */
+    enabledServices?: string[];
+    /** Enable BullMQ workers. Set to false for API Gateway mode (jobs added but not processed). Default: true */
+    workersEnabled?: boolean;
+    /** Specific worker queue names to enable (e.g., ['gerts-jobs', 'iam-jobs']). If undefined, all workers are enabled. */
+    enabledWorkers?: string[];
+    /** Options passed to broker.repl (e.g., customCommands, delimiter) */
+    replOptions?: Record<string, unknown>;
   }) {
+    // Store workersEnabled for use in service started() handlers
+    ApiController._workersEnabled = workersEnabled;
+    ApiController._enabledWorkers = enabledWorkers?.length ? new Set(enabledWorkers) : null;
     const loadServices = (broker: ServiceBroker) => {
       const controllers = ApiController.controllers;
+      const enabled = enabledServices?.length ? new Set(enabledServices) : null;
 
-      for (const controller of Object.values(controllers)) {
+      for (const [fullName, controller] of Object.entries(controllers)) {
+        // Skip services not in enabledServices (if specified)
+        if (enabled && !enabled.has(fullName)) {
+          broker.logger.info(`⏭️  Skipping service: ${fullName} (not in SERVICES)`);
+          continue;
+        }
         broker.createService(controller.generateServiceSchema());
       }
 
@@ -163,11 +225,17 @@ export class ApiController<
     // Save broker reference to access its logger
     ApiController._broker = broker;
 
+    if (replOptions) {
+      const opts = replOptions as { customCommands?: unknown; delimiter?: unknown };
+      if (opts.customCommands) broker.options.replCommands = opts.customCommands as any;
+      if (typeof opts.delimiter === 'string') broker.options.replDelimiter = opts.delimiter;
+    }
+
     loadServices(broker);
 
     return broker.start().then(() => {
       if (repl) {
-        broker.repl();
+        broker.repl(replOptions as any);
       }
 
       return broker;
@@ -187,8 +255,7 @@ export class ApiController<
    * List of registered controllers
    * @private
    */
-  private static _controllers: Record<string, ApiController<string, string>> =
-    {};
+  private static _controllers: Record<string, ApiController<string, string>> = {};
 
   public static get controllers() {
     return this._controllers;
@@ -229,11 +296,10 @@ export class ApiController<
     S extends ServiceContextBase = ServiceContextBase,
   >(version: V, name: N): ApiController<V, N, S> {
     // @ts-ignore
-    return (ApiController._controllers[`${version}.${name}`] ??=
-      new ApiController({
-        name,
-        version,
-      }));
+    return (ApiController._controllers[`${version}.${name}`] ??= new ApiController({
+      name,
+      version,
+    }));
   }
 
   /**
@@ -258,7 +324,7 @@ export class ApiController<
    * Controller options
    * @private
    */
-  private readonly _options: ApiControllerOptions<ServiceVersion, ServiceName>;
+  private _options: ApiControllerOptions<ServiceVersion, ServiceName>;
 
   /**
    * Logger instance (available after service starts)
@@ -288,17 +354,15 @@ export class ApiController<
    * List of started handlers
    * @private
    */
-  private _startedHandlers: Array<
-    LifecycleHandler<ServiceVersion, ServiceName, ServiceContext>
-  > = [];
+  private _startedHandlers: Array<LifecycleHandler<ServiceVersion, ServiceName, ServiceContext>> =
+    [];
 
   /**
    * List of stopped handlers
    * @private
    */
-  private _stoppedHandlers: Array<
-    LifecycleHandler<ServiceVersion, ServiceName, ServiceContext>
-  > = [];
+  private _stoppedHandlers: Array<LifecycleHandler<ServiceVersion, ServiceName, ServiceContext>> =
+    [];
 
   constructor(options: ApiControllerOptions<ServiceVersion, ServiceName>) {
     // Duplicate options to prevent ability of modifying passed object
@@ -306,6 +370,77 @@ export class ApiController<
     // Logger will be set during service start or via broker
     this._logger = undefined;
   }
+
+  /**
+   * Set service dependencies.
+   * Moleculer will wait for these services before calling started handler.
+   *
+   * @param dependencies - Array of service names or dependency objects
+   *
+   * @example
+   * ```typescript
+   * // Wait for queue service before starting
+   * controller.setDependencies(['v1.queue']);
+   *
+   * // Object form with version
+   * controller.setDependencies([{ name: 'queue', version: 'v1' }]);
+   * ```
+   */
+  setDependencies(
+    dependencies: NonNullable<ApiControllerOptions<ServiceVersion, ServiceName>['dependencies']>,
+  ): void {
+    this._options = { ...this._options, dependencies };
+  }
+
+  /**
+   * Set REST base path for moleculer-web autoAliases.
+   * When set, moleculer-web uses this as base path instead of 'version.name'.
+   *
+   * @param basePath - Base path for REST routes (use '/' to avoid path duplication)
+   *
+   * @example
+   * ```typescript
+   * // Route is '/api/v1/queue', service is 'v1.queue'
+   * // Without restBasePath: autoAliases generates /api/v1/queue/v1/queue/...
+   * // With restBasePath '/': autoAliases generates /api/v1/queue/...
+   * controller.setRestBasePath('/');
+   * ```
+   */
+  setRestBasePath(basePath: string): void {
+    this._options = { ...this._options, restBasePath: basePath };
+  }
+
+  /**
+   * Moleculer channels for reliable messaging via Redis Streams.
+   * @private
+   */
+  private _channels: Record<string, unknown> = {};
+
+  /**
+   * Set channels for moleculer-channels middleware.
+   * Enables at-least-once message delivery via Redis Streams.
+   *
+   * @param channels - Channel handlers object (same format as Moleculer service schema)
+   *
+   * @example
+   * ```typescript
+   * controller.setChannels({
+   *   'queue.job.completed': {
+   *     group: 'etl-workers',
+   *     maxRetries: 3,
+   *     deadLettering: { enabled: true, queueName: 'dlq.queue.job.completed' },
+   *     context: true,
+   *     async handler(ctx) {
+   *       // Handle job completion
+   *     },
+   *   },
+   * });
+   * ```
+   */
+  setChannels(channels: Record<string, unknown>): void {
+    this._channels = { ...this._channels, ...channels };
+  }
+
   /**
    * Add a handler to be called when the service starts.
    * Use this to initialize your custom service context properties.
@@ -322,9 +457,7 @@ export class ApiController<
    * });
    * ```
    */
-  addStartedHandler(
-    handler: LifecycleHandler<ServiceVersion, ServiceName, ServiceContext>,
-  ): void {
+  addStartedHandler(handler: LifecycleHandler<ServiceVersion, ServiceName, ServiceContext>): void {
     this._startedHandlers.push(handler);
   }
 
@@ -344,9 +477,7 @@ export class ApiController<
    * });
    * ```
    */
-  addStoppedHandler(
-    handler: LifecycleHandler<ServiceVersion, ServiceName, ServiceContext>,
-  ): void {
+  addStoppedHandler(handler: LifecycleHandler<ServiceVersion, ServiceName, ServiceContext>): void {
     this._stoppedHandlers.push(handler);
   }
 
@@ -359,21 +490,13 @@ export class ApiController<
     ActionName extends string,
     AuthType extends ActionAuthType,
     ParamsValidator extends TypiaValidator<any>,
-    ParamsType extends ParamsValidator extends TypiaValidator<infer T>
-      ? T
-      : never,
+    ParamsType extends ParamsValidator extends TypiaValidator<infer T> ? T : never,
     ResponseValidator extends TypiaValidator<any>,
-    ResponseType extends ResponseValidator extends TypiaValidator<infer T>
-      ? T
-      : never,
+    ResponseType extends ResponseValidator extends TypiaValidator<infer T> ? T : never,
     Rest extends RestConfig<any, any> | undefined = undefined,
     // Pass ServiceContext from class to ActionHandler for proper type inference
-    Handler extends ActionHandler<AuthType, ParamsType, ResponseType, ServiceContext> = ActionHandler<
-      AuthType,
-      ParamsType,
-      ResponseType,
-      ServiceContext
-    >,
+    Handler extends ActionHandler<AuthType, ParamsType, ResponseType, ServiceContext> =
+      ActionHandler<AuthType, ParamsType, ResponseType, ServiceContext>,
   >(
     actionName: ActionName,
     actionOptions: ActionOptions<
@@ -401,20 +524,15 @@ export class ApiController<
     Rest
   > {
     if (this._registeredActions[actionName]) {
-      throw new Error(
-        `Action '${actionName}' is already registered in this controller`,
-      );
+      throw new Error(`Action '${actionName}' is already registered in this controller`);
     }
 
-    const path =
-      `${this._options.version}.${this._options.name}.${actionName}` as const;
+    const path = `${this._options.version}.${this._options.name}.${actionName}` as const;
 
     let rest = actionOptions.rest
       ? typeof actionOptions.rest === 'object'
         ? `${actionOptions.rest.method} /${this._options.version}/${this._options.name}${actionOptions.rest.path}`
-        : actionOptions.rest
-            .split(' ')
-            .join(` /${this._options.version}/${this._options.name}`)
+        : actionOptions.rest.split(' ').join(` /${this._options.version}/${this._options.name}`)
       : undefined;
 
     if (rest?.endsWith('/') && rest.length > 0) {
@@ -445,9 +563,7 @@ export class ApiController<
     QueueStatusType extends QueueProcessingStatus,
   >(
     queueName: QueueName,
-    handlers:
-      | QueueOptions<Name, Concurrency, Handler>
-      | QueueOptions<Name, Concurrency, Handler>[],
+    handlers: QueueOptions<Name, Concurrency, Handler> | QueueOptions<Name, Concurrency, Handler>[],
     on?: QueueStatusType,
   ): ApiControllerRegisteredQueue<QueueName, Concurrency, QueueStatusType> {
     const optionsArray = Array.isArray(handlers) ? handlers : [handlers];
@@ -478,17 +594,10 @@ export class ApiController<
     QueueStatusType extends QueueProcessingStatus,
   >(
     topicName: TopicName,
-    subscriptionOptions?: SubscribeOptions<
-      SubscriptionName,
-      Options,
-      Handler,
-      QueueStatusType
-    >,
+    subscriptionOptions?: SubscribeOptions<SubscriptionName, Options, Handler, QueueStatusType>,
   ): ApiControllerSubscribedTopics<TopicName, Options> {
     if (this._subscribedTopics[topicName]) {
-      throw new Error(
-        `Subscription on '${topicName}' is already registered in this controller`,
-      );
+      throw new Error(`Subscription on '${topicName}' is already registered in this controller`);
     }
 
     return (this._subscribedTopics[topicName] = {
@@ -504,15 +613,10 @@ export class ApiController<
    * based on provided actionOptions
    * @param action - registered action
    */
-  private _createActionSchema(
-    action: ApiControllerRegisteredAction<any, any, any, any, any, any>,
-  ) {
+  private _createActionSchema(action: ApiControllerRegisteredAction<any, any, any, any, any, any>) {
     return {
       rest: action.options.rest,
-      handler: async function (
-        this: Moleculer.Service,
-        ctx: Moleculer.Context<any, ContextMeta>,
-      ) {
+      handler: async function (this: Moleculer.Service, ctx: Moleculer.Context<any, ContextMeta>) {
         let session: OrchestraSession | undefined;
 
         try {
@@ -545,10 +649,7 @@ export class ApiController<
             );
           }
 
-          if (
-            action.options.auth === 'required' ||
-            action.options.auth === 'optional'
-          ) {
+          if (action.options.auth === 'required' || action.options.auth === 'optional') {
             if (action.options.auth === 'required' && !ctx.meta.user_uuid) {
               this.logger.error(
                 'Cannot call an action with required authorization. No user found in meta',
@@ -575,33 +676,30 @@ export class ApiController<
               }
             : undefined;
 
-          const { code, message, data, raw } = await action.options.handler.call(
-            this,
-            {
-              session,
-              // Raw Moleculer context (for broker.call, meta, etc.)
-              ctx,
-              // Typed service with custom context
-              service: this,
-              params,
-              // Wrap addJob to auto-inject trace context (user can override)
-              addJob: (name: string, jobName: string, payload: any, opts: any) =>
-                this.addJob(name, jobName, { _traceContext: traceContext, ...payload }, opts),
-              getQueue: this.getQueue,
-              files: file
-                ? [
-                    {
-                      stream: file,
-                      meta: fileMeta,
-                    },
-                  ]
-                : [],
-              call: (...args: [string, Record<string, any>]) =>
-                ctx.call(...args).then((res: any) => res.data),
-              logger: this.logger,
-              respond,
-            },
-          );
+          const { code, message, data, raw } = await action.options.handler.call(this, {
+            session,
+            // Raw Moleculer context (for broker.call, meta, etc.)
+            ctx,
+            // Typed service with custom context
+            service: this,
+            params,
+            // Wrap addJob to auto-inject trace context (user can override)
+            addJob: (name: string, jobName: string, payload: any, opts: any) =>
+              this.addJob(name, jobName, { _traceContext: traceContext, ...payload }, opts),
+            getQueue: this.getQueue,
+            files: file
+              ? [
+                  {
+                    stream: file,
+                    meta: fileMeta,
+                  },
+                ]
+              : [],
+            call: (...args: [string, Record<string, any>]) =>
+              ctx.call(...args).then((res: any) => res.data),
+            logger: this.logger,
+            respond,
+          });
 
           // Raw response mode: return data directly without Orchestra wrapping
           // Used for streaming responses (SSE, WebSockets) where data is a Readable stream
@@ -633,8 +731,7 @@ export class ApiController<
             }
           }
 
-          const finalCode =
-            code ?? action.options.responseCode ?? ResponseCode.SUCCESS;
+          const finalCode = code ?? action.options.responseCode ?? ResponseCode.SUCCESS;
 
           return {
             success: true,
@@ -678,10 +775,7 @@ export class ApiController<
           ...(handler.concurrency && { concurrency: handler.concurrency }),
           // Store original handler for BullMQ Worker to call with proper context
           _originalHandler: handler.handler,
-          handler: async function (
-            this: Moleculer.Service,
-            job: Job,
-          ): Promise<unknown> {
+          handler: async function (this: Moleculer.Service, job: Job): Promise<unknown> {
             // Extract trace context from job data (propagated from parent request)
             // Uses JobDataWithTraceContext intersection type for type safety
             const jobData = (job.data || {}) as JobDataWithTraceContext;
@@ -689,10 +783,9 @@ export class ApiController<
 
             // Create span for queue job processing (links to parent trace)
             const tracer = this.broker.tracer;
-            const span = traceContext?.sampled && tracer
-              ? tracer.startSpan(
-                  `queue.${queue.name || 'unknown'}.${handler.name || job.name}`,
-                  {
+            const span =
+              traceContext?.sampled && tracer
+                ? tracer.startSpan(`queue.${queue.name || 'unknown'}.${handler.name || job.name}`, {
                     parentID: traceContext.parentId,
                     traceID: traceContext.traceId,
                     sampled: traceContext.sampled,
@@ -702,9 +795,8 @@ export class ApiController<
                       'queue.job.name': job.name,
                       'queue.handler': handler.name || 'anonymous',
                     },
-                  },
-                )
-              : null;
+                  })
+                : null;
 
             try {
               const result = await handler.handler.call(this, {
@@ -732,7 +824,9 @@ export class ApiController<
                         },
                       }
                     : opts;
-                  return this.broker.call(action, params, callOpts).then((res: unknown) => (res as { data: unknown }).data);
+                  return this.broker
+                    .call(action, params, callOpts)
+                    .then((res: unknown) => (res as { data: unknown }).data);
                 },
                 logger: this.logger,
                 traceContext,
@@ -772,9 +866,7 @@ export class ApiController<
     };
   }
 
-  _createSubscriberSchema(
-    subscription: ApiControllerSubscribedTopics<any, any, any>,
-  ) {
+  _createSubscriberSchema(subscription: ApiControllerSubscribedTopics<any, any, any>) {
     return {
       ...(subscription.options.name && {
         subscriptionName: subscription.options.name,
@@ -830,15 +922,19 @@ export class ApiController<
    */
   generateServiceSchema(): CoreServiceSchema {
     // Save reference to controller for use in started/stopped methods
-    const controller = this satisfies ApiController<
-      ServiceVersion,
-      ServiceName,
-      ServiceContext
-    >;
+    const controller = this satisfies ApiController<ServiceVersion, ServiceName, ServiceContext>;
 
     return {
       name: this._options.name,
       version: this._options.version,
+      // Moleculer service dependencies (wait for these services before started handler)
+      ...(this._options.dependencies?.length && {
+        dependencies: this._options.dependencies,
+      }),
+      // REST base path for autoAliases (prevents v1.name duplication in routes)
+      ...(this._options.restBasePath !== undefined && {
+        settings: { rest: this._options.restBasePath },
+      }),
       actions: Object.entries(this._registeredActions).reduce(
         (actions, [actionKey, action]) =>
           Object.assign(actions, {
@@ -855,6 +951,10 @@ export class ApiController<
           }),
         {},
       ),
+      // Moleculer channels for reliable messaging (at-least-once via Redis Streams)
+      ...(Object.keys(this._channels).length > 0 && {
+        channels: this._channels,
+      }),
       $subscriptions: {},
       subscriptions: Object.entries(this._subscribedTopics).reduce(
         (subscribes, [subscriptionName, subscription]) => {
@@ -892,12 +992,7 @@ export class ApiController<
            * @param {Any} opts - Job options
            * @returns {Promise<Job>}
            */
-          async addJob(
-            name: string,
-            jobName: string,
-            payload: any,
-            opts: any,
-          ): Promise<Job> {
+          async addJob(name: string, jobName: string, payload: any, opts: any): Promise<Job> {
             const queue = this.getQueue(name);
             return queue.add(jobName || '*', payload || {}, opts || {});
           },
@@ -932,12 +1027,9 @@ export class ApiController<
             const [existsSubs] = await subscription.exists();
 
             if (!existsSubs) {
-              [subscription] = await topic.createSubscription(
-                subscriptionName,
-                {
-                  enableMessageOrdering: true,
-                },
-              );
+              [subscription] = await topic.createSubscription(subscriptionName, {
+                enableMessageOrdering: true,
+              });
               this.logger.info(
                 `Subscription created: `,
                 // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
@@ -969,11 +1061,7 @@ export class ApiController<
         // Execute user-defined started handlers
         for (const handler of controller._startedHandlers) {
           try {
-            const context: LifecycleHandlerContext<
-              ServiceVersion,
-              ServiceName,
-              ServiceContext
-            > = {
+            const context: LifecycleHandlerContext<ServiceVersion, ServiceName, ServiceContext> = {
               version: controller._options.version,
               name: controller._options.name,
               logger: this.logger,
@@ -990,12 +1078,25 @@ export class ApiController<
         }
 
         // BullMQ: Create workers for each registered queue handler
+        // Skip if workersEnabled=false (API Gateway mode - only adds jobs, doesn't process)
         if (ApiController._config.queue && this.schema.queues) {
           const service = this;
 
           _forIn(this.schema.queues, (fn: any, queueName: string) => {
-            // Ensure queue exists for addJob
+            // Ensure queue exists for addJob (always needed for job creation)
             this.getQueue(queueName);
+
+            // Skip worker creation if workers are disabled (API Gateway mode)
+            if (!ApiController._workersEnabled) {
+              this.logger?.info(`⏭️  Skipping worker: ${queueName} (WORKERS_ENABLED=false)`);
+              return;
+            }
+
+            // Skip worker if not in enabledWorkers list (selective worker mode)
+            if (ApiController._enabledWorkers && !ApiController._enabledWorkers.has(queueName)) {
+              this.logger?.info(`⏭️  Skipping worker: ${queueName} (not in WORKERS)`);
+              return;
+            }
 
             // Build handlers map for routing (use _originalHandler for proper context)
             const handlersMap = new Map<string, { handler: any; concurrency: number }>();
@@ -1078,7 +1179,9 @@ export class ApiController<
             this.$workers[queueName] = worker;
 
             const handlerNames = Array.from(handlersMap.keys()).join(', ');
-            this.logger?.info(`🚀 BullMQ Worker started: ${queueName} (handlers: ${handlerNames}, concurrency: ${maxConcurrency})`);
+            this.logger?.info(
+              `🚀 BullMQ Worker started: ${queueName} (handlers: ${handlerNames}, concurrency: ${maxConcurrency})`,
+            );
           });
         }
 
@@ -1089,9 +1192,7 @@ export class ApiController<
               fn.subscriptionName,
               name,
             );
-            subscription.on('message', (message) =>
-              fn.handler.call(this, subscription, message),
-            );
+            subscription.on('message', (message) => fn.handler.call(this, subscription, message));
 
             if (fn.on) {
               Object.entries(fn.on).forEach(([event, handler]) => {
@@ -1114,11 +1215,7 @@ export class ApiController<
         // Execute user-defined stopped handlers
         for (const handler of controller._stoppedHandlers) {
           try {
-            const context: LifecycleHandlerContext<
-              ServiceVersion,
-              ServiceName,
-              ServiceContext
-            > = {
+            const context: LifecycleHandlerContext<ServiceVersion, ServiceName, ServiceContext> = {
               version: controller._options.version,
               name: controller._options.name,
               logger: this.logger,
@@ -1213,10 +1310,7 @@ export class ApiController<
     }
 
     // 3. Use simple fallback logger (lowest priority - always available)
-    return createSimpleFallbackLogger(
-      this._options.name,
-      this._options.version,
-    );
+    return createSimpleFallbackLogger(this._options.name, this._options.version);
   }
 
   /**

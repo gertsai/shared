@@ -9,12 +9,7 @@ import type {
 } from '@google-cloud/pubsub';
 import type { StatusError } from '@google-cloud/pubsub/build/src/message-stream';
 import type { OrchestraSession, UserType } from '@gerts/core';
-import type {
-  Job,
-  Queue,
-  JobsOptions,
-  ConnectionOptions as BullMQConnectionType,
-} from 'bullmq';
+import type { Job, Queue, JobsOptions, ConnectionOptions as BullMQConnectionType } from 'bullmq';
 import type { ServiceSchema } from 'moleculer';
 import type Moleculer from 'moleculer';
 
@@ -50,7 +45,15 @@ export interface ServiceContextBase {}
 /**
  * Job status enum for BullMQ compatibility
  */
-export type JobStatus = 'completed' | 'waiting' | 'active' | 'delayed' | 'failed' | 'paused' | 'prioritized' | 'waiting-children';
+export type JobStatus =
+  | 'completed'
+  | 'waiting'
+  | 'active'
+  | 'delayed'
+  | 'failed'
+  | 'paused'
+  | 'prioritized'
+  | 'waiting-children';
 
 /**
  * Type to prevent extra properties in object
@@ -139,11 +142,60 @@ export type ApiControllerConfigOptions = {
 };
 
 /**
+ * Known services registry for type-safe dependencies.
+ * Extend this interface via declaration merging in your application.
+ *
+ * @example
+ * ```typescript
+ * // In your app (e.g., apps/pipeline/src/services/types.ts)
+ * declare module '@gerts/api-core' {
+ *   interface KnownServices {
+ *     'v1.queue': true;
+ *     'v1.graph': true;
+ *     'v1.ingest': true;
+ *   }
+ * }
+ * ```
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface KnownServices {}
+
+/**
+ * Service name type - uses KnownServices if extended, otherwise falls back to string
+ */
+export type ServiceName = keyof KnownServices extends never ? string : keyof KnownServices;
+
+/**
+ * Service dependency definition for Moleculer
+ * @see https://moleculer.services/docs/0.14/services.html#Dependencies
+ */
+export type ServiceDependency =
+  | ServiceName // Type-safe service name (or string if KnownServices is empty)
+  | {
+      name: string;
+      version?: string | number;
+    };
+
+/**
  * ApiController instance options
  */
 export type ApiControllerOptions<V extends string, N extends string> = {
   name: N;
   version: V;
+  /**
+   * Service dependencies (Moleculer will wait for these services before starting)
+   * @example ['v1.queue'] - wait for queue service
+   * @example [{ name: 'queue', version: 'v1' }] - object form
+   */
+  dependencies?: ServiceDependency[];
+  /**
+   * REST base path for autoAliases in moleculer-web.
+   * When set, Moleculer-web will use this as the base path instead of 'version.name'.
+   * Use '/' if route.path already includes the full path (e.g., '/api/v1/queue').
+   * @example '/' - actions will be at route.path directly (no version.name prefix)
+   * @example '/jobs' - actions will be at route.path/jobs/...
+   */
+  restBasePath?: string;
 };
 
 /**
@@ -168,10 +220,7 @@ type ValueOf<T> = T[keyof T];
 export type ActionCallFunction = <
   // fix circular type reference
   Path extends T['path'],
-  Types extends Extract<
-    T,
-    { path: Path }
-  > extends ApiControllerRegisteredAction<
+  Types extends Extract<T, { path: Path }> extends ApiControllerRegisteredAction<
     Path,
     infer RestPath,
     infer AuthType,
@@ -198,10 +247,7 @@ export type ActionCallFunction = <
 export type QueueActionCallFunction = <
   // fix circular type reference
   Path extends T['path'],
-  Types extends Extract<
-    T,
-    { path: Path }
-  > extends ApiControllerRegisteredAction<
+  Types extends Extract<T, { path: Path }> extends ApiControllerRegisteredAction<
     Path,
     infer RestPath,
     infer AuthType,
@@ -303,12 +349,7 @@ export type ActionHandlerCtx<
    * ```
    */
   service: Moleculer.Service & ServiceContext;
-  addJob: (
-    name: string,
-    jobName?: string,
-    payload?: any,
-    opts?: any,
-  ) => Promise<Job>;
+  addJob: (name: string, jobName?: string, payload?: any, opts?: any) => Promise<Job>;
   getQueue: (jobName: string) => Job;
   respond: (
     data: ResponseType,
@@ -364,8 +405,9 @@ export type RestConfig<Method extends RestMethod, Path extends string> =
   | `${Method} /${Path}`
   | RestSchema<Method, Path>;
 
-export type ServiceNameToPath<T extends string> =
-  T extends `${infer S}.${infer P}` ? `${S}/${ServiceNameToPath<P>}` : T;
+export type ServiceNameToPath<T extends string> = T extends `${infer S}.${infer P}`
+  ? `${S}/${ServiceNameToPath<P>}`
+  : T;
 
 /**
  * Action options for registering an action
@@ -382,18 +424,20 @@ export type ServiceNameToPath<T extends string> =
 export type ActionOptions<
   AuthType extends ActionAuthType = any,
   ParamsValidator = TypiaValidator<any>,
-  ParamsType extends ParamsValidator extends TypiaValidator<infer T>
-    ? T
-    : never = any,
+  ParamsType extends ParamsValidator extends TypiaValidator<infer T> ? T : never = any,
   ResponseValidator = TypiaValidator<any>,
-  ResponseType extends ResponseValidator extends TypiaValidator<infer T>
-    ? T
-    : never = any,
+  ResponseType extends ResponseValidator extends TypiaValidator<infer T> ? T : never = any,
   Rest extends RestConfig<any, any> | undefined = any,
   ServiceContext extends ServiceContextBase = ServiceContextBase,
   Handler extends ActionHandler<AuthType, ParamsType, ResponseType, ServiceContext> = any,
 > = {
   auth: AuthType;
+  /**
+   * Required scopes for this action (RFC-050 IAM).
+   * Checked by apiKeyMiddleware when auth is 'required'.
+   * @example ['admin.users:read', 'admin.users:write']
+   */
+  scopes?: string[];
   rest?: Rest | undefined;
   params: ParamsValidator;
   response: ResponseValidator;
@@ -478,9 +522,7 @@ export type QueueHandlerCtx<T extends Job = Job> = {
 /**
  * Queue handler
  */
-export type QueueHandler<T extends Job = Job> = (
-  params: QueueHandlerCtx<T>,
-) => any;
+export type QueueHandler<T extends Job = Job> = (params: QueueHandlerCtx<T>) => any;
 
 /**
  * Queue Status Handlers
@@ -504,12 +546,7 @@ export type QueueProcessingStatus = {
    * @param data - Job data object
    * @param status - Job status
    */
-  active?: (
-    this: Moleculer.Service,
-    job: Job,
-    data: any,
-    status: JobStatus,
-  ) => void;
+  active?: (this: Moleculer.Service, job: Job, data: any, status: JobStatus) => void;
 
   /**
    * A job successfully completed with a `result`.
@@ -517,12 +554,7 @@ export type QueueProcessingStatus = {
    * @param result - result job
    * @param status - status job
    */
-  completed?: (
-    this: Moleculer.Service,
-    job: Job,
-    result: any,
-    status: JobStatus,
-  ) => void;
+  completed?: (this: Moleculer.Service, job: Job, result: any, status: JobStatus) => void;
 
   /**
    * Will listen globally, to instances of this queue...
@@ -596,11 +628,7 @@ export type QueueProcessingStatus = {
    * A job failed to extend lock. This will be useful to debug redis connection issues and jobs getting restarted because workers are not able to extend locks.
    * @param job - Job object
    */
-  lockExtensionFailed?: (
-    this: Moleculer.Service,
-    job: Job,
-    error: Error,
-  ) => any;
+  lockExtensionFailed?: (this: Moleculer.Service, job: Job, error: Error) => any;
 };
 
 /**
@@ -623,10 +651,7 @@ export type ApiControllerRegisteredQueue<
 /**
  * Registered queues in the controller
  */
-export type ApiControllerQueues = Record<
-  string,
-  ApiControllerRegisteredQueue<any, any>
->;
+export type ApiControllerQueues = Record<string, ApiControllerRegisteredQueue<any, any>>;
 
 /**
  * Parameters to transfer to the queue
@@ -680,9 +705,7 @@ export type ActionHandler<
 > = (
   this: Moleculer.Service & ServiceContext,
   params: ActionHandlerCtx<AuthType, ParamsType, ResponseType, ServiceContext>,
-) =>
-  | ActionHandlerResponse<ResponseType>
-  | Promise<ActionHandlerResponse<ResponseType>>;
+) => ActionHandlerResponse<ResponseType> | Promise<ActionHandlerResponse<ResponseType>>;
 
 export interface CoreServiceSchema extends ServiceSchema {
   queues?: ApiControllerQueues;
@@ -720,12 +743,7 @@ export type SubscriberHandlerCtx = {
   message: Message;
   subscription: Subscription;
   logger: CtxLoggerType;
-  addJob: (
-    name: string,
-    jobName?: string,
-    payload?: any,
-    opts?: any,
-  ) => Promise<Job>;
+  addJob: (name: string, jobName?: string, payload?: any, opts?: any) => Promise<Job>;
   getQueue: (jobName: string) => Job;
   meta: {
     isEmulator: boolean;
@@ -737,10 +755,7 @@ export type SubscriberHandlerCtx = {
 /**
  * Subscribe handler
  */
-export type SubscribeHandler = (
-  this: Moleculer.Service,
-  params: SubscriberHandlerCtx,
-) => any;
+export type SubscribeHandler = (this: Moleculer.Service, params: SubscriberHandlerCtx) => any;
 
 /**
  * Parameters to transfer to the subscription
@@ -776,10 +791,7 @@ export type ApiControllerSubscribedTopics<
 /**
  * Registered subscribed on topics in the controller
  */
-export type ApiControllerSubscriptions = Record<
-  string,
-  ApiControllerSubscribedTopics<any, any>
->;
+export type ApiControllerSubscriptions = Record<string, ApiControllerSubscribedTopics<any, any>>;
 
 /**
  * Lifecycle handler context for started/stopped events

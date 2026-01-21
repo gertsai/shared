@@ -33,6 +33,10 @@ export {
   isUsageInfo,
   extractUsageInfo,
   extractPackageInfo,
+  // SEC-002: Tenant validation
+  validateTenantIdFormat,
+  isTenantIdValid,
+  TENANT_ID_REGEX,
   // Types
   type OrchestraInfo,
   type TenantContextMeta,
