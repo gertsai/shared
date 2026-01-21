@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import tsconfigPaths from 'vite-tsconfig-paths';
+import UnpluginTypia from '@ryoppippi/unplugin-typia/vite';
 
 export default defineConfig({
   plugins: [
@@ -8,6 +9,8 @@ export default defineConfig({
       ignoreConfigErrors: true,
       loose: true,
     }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    UnpluginTypia() as any,
   ],
   test: {
     environment: 'node',

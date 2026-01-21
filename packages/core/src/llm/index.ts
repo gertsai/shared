@@ -35,13 +35,21 @@ export type {
   LLMToolCompletedEvent,
   LLMToolFailedEvent,
 } from './types';
+export type {
+  LLMRouterSelectionEvent,
+  ModelRouterCapabilities,
+  ModelRouterCostEstimate,
+  ModelRouterOption,
+  ModelRouterRequest,
+  ModelRouterSelection,
+  ModelRouterSelectionResult,
+  ModelRouterResponse,
+  RouterCapability,
+  RouterTaskType,
+} from './router-types';
 
 // Legacy constants (deprecated - use model-registry functions instead)
-export {
-  LLM_CONTEXT_WINDOWS,
-  OPENAI_MODELS,
-  ANTHROPIC_MODELS,
-} from './types';
+export { LLM_CONTEXT_WINDOWS, OPENAI_MODELS, ANTHROPIC_MODELS } from './types';
 
 // Base class and errors
 export { BaseLLM, LLMContextLengthExceededError, LLMCallError } from './base';
@@ -49,7 +57,11 @@ export type { LLMCapabilities } from './base';
 
 // Providers
 export { OpenAIProvider, type OpenAIConfig } from './providers/openai';
-export { AnthropicProvider, type AnthropicConfig, type AnthropicThinkingConfig } from './providers/anthropic';
+export {
+  AnthropicProvider,
+  type AnthropicConfig,
+  type AnthropicThinkingConfig,
+} from './providers/anthropic';
 export { GeminiProvider, type GeminiConfig } from './providers/gemini';
 
 // Router

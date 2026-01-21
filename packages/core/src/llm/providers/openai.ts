@@ -10,7 +10,12 @@
  */
 
 import type { EventBus } from '../../event-bus';
-import { BaseLLM, LLMCallError, type LLMCapabilities } from '../base';
+import {
+  BaseLLM,
+  LLMCallError,
+  LLMContextLengthExceededError,
+  type LLMCapabilities,
+} from '../base';
 import type {
   LLMConfig,
   LLMMessage,
@@ -139,14 +144,14 @@ export class OpenAIProvider extends BaseLLM {
         provider: 'openai',
         apiKey: config.apiKey ?? process.env.OPENAI_API_KEY,
       },
-      eventBus
+      eventBus,
     );
 
     this.organization = config.organization;
     this.project = config.project;
     this.reasoningEffort = config.reasoningEffort;
-    this.isO1Model = config.model.toLowerCase().includes('o1') ||
-                     config.model.toLowerCase().includes('o3');
+    this.isO1Model =
+      config.model.toLowerCase().includes('o1') || config.model.toLowerCase().includes('o3');
   }
 
   /**
@@ -170,10 +175,7 @@ export class OpenAIProvider extends BaseLLM {
   /**
    * Call OpenAI chat completion API.
    */
-  async call(
-    messages: LLMMessage[],
-    options?: LLMCallOptions
-  ): Promise<LLMResponse> {
+  async call(messages: LLMMessage[], options?: LLMCallOptions): Promise<LLMResponse> {
     const startTime = Date.now();
     this.emitCallStarted(messages, options?.tools);
 
@@ -182,11 +184,7 @@ export class OpenAIProvider extends BaseLLM {
       const params = this.prepareParams(formattedMessages, options);
 
       if (!this.apiKey) {
-        throw new LLMCallError(
-          'OpenAI API key is required',
-          'openai',
-          this.model
-        );
+        throw new LLMCallError('OpenAI API key is required', 'openai', this.model);
       }
 
       const response = await this.makeRequest(params);
@@ -221,11 +219,7 @@ export class OpenAIProvider extends BaseLLM {
       if (llmResponse.toolCalls && options?.availableFunctions) {
         for (const toolCall of llmResponse.toolCalls) {
           const args = JSON.parse(toolCall.function.arguments);
-          await this.handleToolExecution(
-            toolCall.function.name,
-            args,
-            options.availableFunctions
-          );
+          await this.handleToolExecution(toolCall.function.name, args, options.availableFunctions);
         }
       }
 
@@ -236,20 +230,10 @@ export class OpenAIProvider extends BaseLLM {
       this.emitCallFailed(errorMsg, startTime);
 
       if (this.isContextLengthError(error)) {
-        throw new LLMCallError(
-          `Context window exceeded for model ${this.model}`,
-          'openai',
-          this.model,
-          error
-        );
+        throw new LLMContextLengthExceededError(`Context window exceeded for model ${this.model}`);
       }
 
-      throw new LLMCallError(
-        `OpenAI API call failed: ${errorMsg}`,
-        'openai',
-        this.model,
-        error
-      );
+      throw new LLMCallError(`OpenAI API call failed: ${errorMsg}`, 'openai', this.model, error);
     }
   }
 
@@ -258,7 +242,7 @@ export class OpenAIProvider extends BaseLLM {
    */
   override async *stream(
     messages: LLMMessage[],
-    options?: LLMCallOptions
+    options?: LLMCallOptions,
   ): AsyncGenerator<string, void, unknown> {
     const startTime = Date.now();
     this.emitCallStarted(messages, options?.tools);
@@ -269,11 +253,7 @@ export class OpenAIProvider extends BaseLLM {
       params.stream = true;
 
       if (!this.apiKey) {
-        throw new LLMCallError(
-          'OpenAI API key is required',
-          'openai',
-          this.model
-        );
+        throw new LLMCallError('OpenAI API key is required', 'openai', this.model);
       }
 
       const response = await fetch(`${this.getBaseUrl()}/chat/completions`, {
@@ -342,12 +322,7 @@ export class OpenAIProvider extends BaseLLM {
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       this.emitCallFailed(errorMsg, startTime);
-      throw new LLMCallError(
-        `OpenAI streaming failed: ${errorMsg}`,
-        'openai',
-        this.model,
-        error
-      );
+      throw new LLMCallError(`OpenAI streaming failed: ${errorMsg}`, 'openai', this.model, error);
     }
   }
 
@@ -395,7 +370,7 @@ export class OpenAIProvider extends BaseLLM {
 
   private prepareParams(
     messages: OpenAIMessage[],
-    options?: LLMCallOptions
+    options?: LLMCallOptions,
   ): Record<string, unknown> {
     const params: Record<string, unknown> = {
       model: this.model,
@@ -485,9 +460,7 @@ export class OpenAIProvider extends BaseLLM {
     }
   }
 
-  private mapFinishReason(
-    reason: string | undefined
-  ): LLMResponse['finishReason'] {
+  private mapFinishReason(reason: string | undefined): LLMResponse['finishReason'] {
     switch (reason) {
       case 'stop':
         return 'stop';

@@ -7,7 +7,8 @@
     "declaration": true,
     "declarationMap": true,
     "module": "CommonJS",
-    "moduleResolution": "node"
+    "moduleResolution": "node",
+    "plugins": [{ "transform": "typia/lib/transform" }]
   },
   "include": ["src/**/*"],
   "exclude": ["dist", "node_modules", "**/*.test.ts"]

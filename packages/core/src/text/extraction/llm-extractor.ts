@@ -4,55 +4,96 @@
  *
  * Implements entity and relationship extraction using LLM providers.
  * Features:
- * - Structured output parsing with Zod validation
+ * - Structured output parsing with Typia compile-time validation
  * - Batch processing with configurable concurrency
  * - Retry logic for failed extractions
  * - Customizable prompt templates
  * - Automatic entity type normalization
  */
 
-import { z } from 'zod';
+import typia from 'typia';
 import type { IEntityExtractor, ExtractionOptions, BatchOptions } from './entity-extractor';
 import type { ExtractionResult } from './types';
-import type { Entity, Triplet, EntityType } from './schemas';
+import type { Entity, Triplet } from './schemas';
+import { normalizeEntityType } from './schemas';
 import type { TextNode } from '../nodes/text-node';
 import type { BaseLLM } from '../../llm/base';
-import { ZodOutputParser } from '../parsers/zod-parser';
+import { TypiaOutputParser, type TypiaValidator } from '../parsers/typia-parser';
 import { randomUUID } from 'crypto';
 
-/**
- * LLM extraction response schema.
- * Defines the expected structure of LLM output.
- */
-export const LLMExtractionSchema = z.object({
-  entities: z.array(
-    z.object({
-      name: z.string(),
-      type: z.string(),
-      aliases: z.array(z.string()).optional(),
-      properties: z.record(z.string(), z.unknown()).optional(),
-      confidence: z.number(),
-      mentions: z.array(
-        z.object({
-          text: z.string(),
-          startIndex: z.number(),
-          endIndex: z.number(),
-        })
-      ),
-    })
-  ),
-  relationships: z.array(
-    z.object({
-      subject: z.string(), // Entity name
-      predicate: z.string(),
-      object: z.string(), // Entity name
-      confidence: z.number(),
-      evidence: z.string().optional(),
-    })
-  ),
-});
+// ============================================================================
+// LLM Extraction Response Types
+// ============================================================================
 
-type LLMExtractionResponse = z.infer<typeof LLMExtractionSchema>;
+/**
+ * Single mention in LLM response.
+ */
+interface LLMMention {
+  text: string;
+  startIndex: number;
+  endIndex: number;
+}
+
+/**
+ * Single entity in LLM response.
+ */
+interface LLMEntity {
+  name: string;
+  type: string;
+  aliases?: string[];
+  properties?: Record<string, unknown>;
+  confidence: number;
+  mentions: LLMMention[];
+}
+
+/**
+ * Single relationship in LLM response.
+ */
+interface LLMRelationship {
+  subject: string;
+  predicate: string;
+  object: string;
+  confidence: number;
+  evidence?: string;
+}
+
+/**
+ * LLM extraction response structure.
+ */
+export interface LLMExtractionResponse {
+  entities: LLMEntity[];
+  relationships: LLMRelationship[];
+}
+
+// ============================================================================
+// Typia Validator
+// ============================================================================
+
+/**
+ * Compile-time generated validator for LLM extraction response.
+ */
+export const validateLLMExtractionResponse: TypiaValidator<LLMExtractionResponse> =
+  typia.createValidate<LLMExtractionResponse>();
+
+/**
+ * Legacy compatibility: LLMExtractionSchema with safeParse API.
+ * @deprecated Use validateLLMExtractionResponse instead
+ */
+export const LLMExtractionSchema = {
+  safeParse: (
+    data: unknown,
+  ): { success: true; data: LLMExtractionResponse } | { success: false; error: unknown } => {
+    const result = validateLLMExtractionResponse(data);
+    if (result.success) {
+      return { success: true, data: result.data };
+    }
+    return { success: false, error: result.errors };
+  },
+};
+
+// ============================================================================
+// Prompt Template
+// ============================================================================
 
 /**
  * Default extraction prompt template.
@@ -95,11 +136,15 @@ Respond in JSON format matching this schema:
   "relationships": [...]
 }`.trim();
 
+// ============================================================================
+// LLM Entity Extractor
+// ============================================================================
+
 /**
  * LLMEntityExtractor - LLM-based entity extraction.
  *
  * Extracts entities and relationships using a language model with
- * structured output validation via Zod schemas.
+ * structured output validation via Typia compile-time validators.
  *
  * @example
  * ```typescript
@@ -117,13 +162,36 @@ export class LLMEntityExtractor implements IEntityExtractor {
   readonly name = 'llm-extractor';
 
   private promptTemplate: string = DEFAULT_PROMPT_TEMPLATE;
-  private parser: ZodOutputParser<typeof LLMExtractionSchema>;
+  private parser: TypiaOutputParser<LLMExtractionResponse>;
 
   constructor(
     private readonly llm: BaseLLM,
-    private readonly defaultOptions: ExtractionOptions = {}
+    private readonly defaultOptions: ExtractionOptions = {},
   ) {
-    this.parser = new ZodOutputParser(LLMExtractionSchema);
+    // Schema description for format instructions
+    const schemaDescription = {
+      entities: [
+        {
+          name: 'string',
+          type: 'PERSON | ORGANIZATION | LOCATION | EVENT | CONCEPT | PRODUCT | DATE | QUANTITY | CUSTOM',
+          aliases: ['string'],
+          properties: {},
+          confidence: 'number (0-1)',
+          mentions: [{ text: 'string', startIndex: 'number', endIndex: 'number' }],
+        },
+      ],
+      relationships: [
+        {
+          subject: 'string (entity name)',
+          predicate: 'string (relationship type)',
+          object: 'string (entity name)',
+          confidence: 'number (0-1)',
+          evidence: 'string (optional)',
+        },
+      ],
+    };
+
+    this.parser = new TypiaOutputParser(validateLLMExtractionResponse, schemaDescription);
   }
 
   /**
@@ -242,9 +310,9 @@ export class LLMEntityExtractor implements IEntityExtractor {
    * Convert LLM entities to validated Entity objects.
    */
   private convertEntities(
-    parsed: LLMExtractionResponse['entities'],
+    parsed: LLMEntity[],
     chunkId: string,
-    options: ExtractionOptions
+    options: ExtractionOptions,
   ): Entity[] {
     const minConfidence = options.minConfidence ?? 0;
     const maxEntities = options.maxEntitiesPerChunk ?? Infinity;
@@ -253,7 +321,7 @@ export class LLMEntityExtractor implements IEntityExtractor {
       .filter((e) => e.confidence >= minConfidence)
       .slice(0, maxEntities)
       .map((e) => {
-        const entityType = this.normalizeEntityType(e.type);
+        const entityType = normalizeEntityType(e.type);
 
         return {
           id: randomUUID(),
@@ -265,7 +333,7 @@ export class LLMEntityExtractor implements IEntityExtractor {
           confidence: e.confidence,
           sourceChunkId: chunkId,
           mentions: e.mentions,
-        };
+        } as Entity;
       });
   }
 
@@ -273,10 +341,10 @@ export class LLMEntityExtractor implements IEntityExtractor {
    * Convert LLM relationships to validated Triplet objects.
    */
   private convertTriplets(
-    parsed: LLMExtractionResponse['relationships'],
+    parsed: LLMRelationship[],
     entities: Entity[],
     chunkId: string,
-    options: ExtractionOptions
+    options: ExtractionOptions,
   ): Triplet[] {
     const minConfidence = options.minConfidence ?? 0;
 
@@ -332,33 +400,11 @@ export class LLMEntityExtractor implements IEntityExtractor {
   }
 
   /**
-   * Normalize entity type to valid EntityType.
-   */
-  private normalizeEntityType(type: string): EntityType {
-    const normalized = type.toUpperCase();
-    const validTypes: EntityType[] = [
-      'PERSON',
-      'ORGANIZATION',
-      'LOCATION',
-      'EVENT',
-      'CONCEPT',
-      'PRODUCT',
-      'DATE',
-      'QUANTITY',
-      'CUSTOM',
-    ];
-
-    return validTypes.includes(normalized as EntityType)
-      ? (normalized as EntityType)
-      : 'CUSTOM';
-  }
-
-  /**
    * Process batch with concurrency control and retry logic.
    */
   private async processBatchWithConcurrency(
     batch: TextNode[],
-    options: BatchOptions
+    options: BatchOptions,
   ): Promise<ExtractionResult[]> {
     const concurrency = options.concurrency ?? 3;
     const results: ExtractionResult[] = [];
@@ -391,7 +437,7 @@ export class LLMEntityExtractor implements IEntityExtractor {
    */
   private async extractWithRetry(
     chunk: TextNode,
-    options: BatchOptions
+    options: BatchOptions,
   ): Promise<ExtractionResult> {
     const maxRetries = options.retryOnFailure ? (options.maxRetries ?? 3) : 0;
     let lastError: Error | null = null;

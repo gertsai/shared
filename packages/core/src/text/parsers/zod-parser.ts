@@ -34,7 +34,7 @@ export interface ZodOutputParserOptions {
 export class ZodOutputParser<T extends ZodSchema> {
   constructor(
     private readonly schema: T,
-    private readonly options: ZodOutputParserOptions = {}
+    private readonly options: ZodOutputParserOptions = {},
   ) {}
 
   /**
@@ -62,13 +62,19 @@ export class ZodOutputParser<T extends ZodSchema> {
           throw new Error(
             `JSON parsing error: ${error.message}. Fix attempt also failed: ${
               fixError instanceof Error ? fixError.message : String(fixError)
-            }`
+            }`,
           );
         }
       }
 
       if (error instanceof ZodError) {
-        throw new Error(`Validation error: ${error.errors.map(e => e.message).join(', ')}`);
+        const formattedErrors = error.errors
+          .map((e) => {
+            const path = e.path.join('.');
+            return path ? `${path}: ${e.message}` : e.message;
+          })
+          .join('; ');
+        throw new Error(`Validation error: ${formattedErrors}`);
       }
 
       throw error;
@@ -86,7 +92,7 @@ export class ZodOutputParser<T extends ZodSchema> {
     return `Respond in JSON format. The JSON must match this schema:\n${JSON.stringify(
       this.getSchemaDescription(),
       null,
-      2
+      2,
     )}`;
   }
 
@@ -152,22 +158,6 @@ export class ZodOutputParser<T extends ZodSchema> {
    * @private
    */
   private getSchemaDescription(): unknown {
-    // Simplified schema description
-    if (this.schema instanceof z.ZodObject) {
-      const shape = this.schema.shape;
-      const description: Record<string, unknown> = {};
-
-      for (const [key, value] of Object.entries(shape)) {
-        description[key] = this.describeZodType(value as ZodSchema);
-      }
-
-      return description;
-    }
-
-    if (this.schema instanceof z.ZodArray) {
-      return { type: 'array', items: this.describeZodType((this.schema as z.ZodArray<ZodSchema>).element) };
-    }
-
     return this.describeZodType(this.schema);
   }
 
@@ -182,13 +172,41 @@ export class ZodOutputParser<T extends ZodSchema> {
     if (schema instanceof z.ZodString) return 'string';
     if (schema instanceof z.ZodNumber) return 'number';
     if (schema instanceof z.ZodBoolean) return 'boolean';
-    if (schema instanceof z.ZodArray) return ['array'];
-    if (schema instanceof z.ZodObject) return 'object';
-    if (schema instanceof z.ZodEnum) return (schema as z.ZodEnum<[string, ...string[]]>).options;
+
+    if (schema instanceof z.ZodArray) {
+      return {
+        type: 'array',
+        items: this.describeZodType((schema as z.ZodArray<ZodSchema>).element),
+      };
+    }
+
+    if (schema instanceof z.ZodObject) {
+      const shape = schema.shape;
+      const description: Record<string, unknown> = {};
+
+      for (const [key, value] of Object.entries(shape)) {
+        description[key] = this.describeZodType(value as ZodSchema);
+      }
+      return description;
+    }
+
+    if (schema instanceof z.ZodEnum) {
+      return {
+        type: 'enum',
+        options: (schema as z.ZodEnum<[string, ...string[]]>).options,
+      };
+    }
+
     if (schema instanceof z.ZodOptional) {
       const innerType = this.describeZodType((schema as z.ZodOptional<ZodSchema>).unwrap());
+      // If innerType is an object (string/number etc are just strings), attach optional flag
+      if (typeof innerType === 'object' && innerType !== null) {
+        return { ...innerType, optional: true };
+      }
       return { type: innerType, optional: true };
     }
+
+    // Fallback for other types
     return 'unknown';
   }
 }

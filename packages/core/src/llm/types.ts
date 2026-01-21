@@ -263,10 +263,7 @@ export type LLMProvider =
  */
 
 // Re-export constants from model-registry for backwards compatibility
-export {
-  CONTEXT_WINDOW_USAGE_RATIO,
-  DEFAULT_CONTEXT_WINDOW_SIZE,
-} from './model-registry';
+export { CONTEXT_WINDOW_USAGE_RATIO, DEFAULT_CONTEXT_WINDOW_SIZE } from './model-registry';
 
 // Legacy exports for backwards compatibility - use model-registry functions instead
 /** @deprecated Use getContextWindowSize() from model-registry instead */
@@ -284,6 +281,7 @@ export type LLMEventType =
   | 'llm.call.completed'
   | 'llm.call.failed'
   | 'llm.call.streamed'
+  | 'llm.router.selection'
   | 'llm.tool.started'
   | 'llm.tool.completed'
   | 'llm.tool.failed';
