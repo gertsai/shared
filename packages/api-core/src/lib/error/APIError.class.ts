@@ -223,13 +223,3 @@ export class APIError<CODE extends ResponseCode = ResponseCode> extends GertsErr
     return JSON.stringify(this.toJSON());
   }
 }
-
-/**
- * @deprecated Use APIError instead. Will be removed in v1.0.
- */
-export const OrchestraError = APIError;
-
-/**
- * @deprecated Use APIErrorOptions instead. Will be removed in v1.0.
- */
-export type OrchestraErrorOptions = APIErrorOptions;

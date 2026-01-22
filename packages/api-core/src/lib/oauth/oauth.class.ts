@@ -16,7 +16,7 @@ import OAuth2Server, {
 
 import config from '../../config';
 import { ResponseCode } from '../apiResponse';
-import { OrchestraError } from '../error';
+import { APIError } from '../error';
 
 interface User {
   id: string;
@@ -222,7 +222,7 @@ export class OAuth extends Service {
                 return;
               }
 
-              throw new OrchestraError(
+              throw new APIError(
                 ResponseCode.NOT_AUTHORIZED__USER_INACTIVE,
               );
             } catch (err) {
@@ -230,11 +230,11 @@ export class OAuth extends Service {
               if (err instanceof AuthProviderError) {
                 switch (err.code) {
                   case AuthErrorCode.TOKEN_EXPIRED:
-                    throw new OrchestraError(
+                    throw new APIError(
                       ResponseCode.NOT_AUTHORIZED__TOKEN_EXPIRED,
                     );
                   case AuthErrorCode.TOKEN_INVALID:
-                    throw new OrchestraError(
+                    throw new APIError(
                       ResponseCode.NOT_AUTHORIZED__TOKEN_INVALID,
                     );
                 }
@@ -248,20 +248,20 @@ export class OAuth extends Service {
 
                 switch (code) {
                   case 'auth/id-token-expired':
-                    throw new OrchestraError(
+                    throw new APIError(
                       ResponseCode.NOT_AUTHORIZED__TOKEN_EXPIRED,
                     );
                   case 'auth/argument-error':
-                    throw new OrchestraError(
+                    throw new APIError(
                       ResponseCode.NOT_AUTHORIZED__TOKEN_INVALID,
                     );
                 }
               }
 
-              if (err instanceof OrchestraError) {
+              if (err instanceof APIError) {
                 throw err;
               }
-              throw new OrchestraError(ResponseCode.NOT_AUTHORIZED);
+              throw new APIError(ResponseCode.NOT_AUTHORIZED);
             }
           }
 
