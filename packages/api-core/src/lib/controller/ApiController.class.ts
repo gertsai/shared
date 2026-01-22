@@ -616,6 +616,9 @@ export class ApiController<
   private _createActionSchema(action: ApiControllerRegisteredAction<any, any, any, any, any, any>) {
     return {
       rest: action.options.rest,
+      // Pass auth and scopes for auth-moleculer middleware
+      auth: action.options.auth,
+      scopes: action.options.scopes,
       handler: async function (this: Moleculer.Service, ctx: Moleculer.Context<any, ContextMeta>) {
         let session: OrchestraSession | undefined;
 

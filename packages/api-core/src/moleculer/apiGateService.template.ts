@@ -222,6 +222,30 @@ export const createApiService = (
           message: err.message,
         },
       );
+    } else if (
+      // Duck typing for AuthenticationError/AuthorizationError from @gerts/auth-moleculer
+      // These have statusCode: 401 or 403, and type: 'AUTHENTICATION_ERROR' | 'AUTHORIZATION_ERROR'
+      typeof (err as { statusCode?: number }).statusCode === 'number' &&
+      typeof (err as { type?: string }).type === 'string' &&
+      ((err as { statusCode?: number }).statusCode === 401 ||
+        (err as { statusCode?: number }).statusCode === 403)
+    ) {
+      const authErr = err as unknown as {
+        statusCode: 401 | 403;
+        code?: string;
+        type: string;
+      };
+      // Map statusCode to ResponseCode
+      const responseCode =
+        authErr.statusCode === 401 ? ResponseCode.NOT_AUTHORIZED : ResponseCode.FORBIDDEN;
+
+      response = new OrchestraApiResponse(
+        responseCode,
+        { code: authErr.code },
+        {
+          message: err.message,
+        },
+      );
     } else {
       response = new OrchestraApiResponse(
         ResponseCode.INTERNAL_ERROR,
