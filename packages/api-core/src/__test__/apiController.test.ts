@@ -3,7 +3,7 @@ import { UserType } from '@gerts/core';
 import typia from 'typia';
 
 import type { ActionOptions } from '..';
-import { ApiController, OrchestraError, ResponseCode } from '..';
+import { ApiController, APIError, ResponseCode } from '..';
 
 import type { validParamsMock } from './__mocks__';
 import {
@@ -139,7 +139,7 @@ describe('ApiController', () => {
           moleculerServiceMock,
           invalidParamsContextMock,
         ),
-      ).rejects.toThrow(OrchestraError);
+      ).rejects.toThrow(APIError);
     });
 
     test('Validate response', async () => {
@@ -148,7 +148,7 @@ describe('ApiController', () => {
           moleculerServiceMock,
           validParamsContextMock,
         ),
-      ).rejects.toThrow(OrchestraError);
+      ).rejects.toThrow(APIError);
     });
 
     test('Generate service schema', () => {
@@ -234,7 +234,7 @@ describe('ApiController', () => {
       // Should throw error
       await expect(
         schema.handler.call(moleculerServiceMock, validParamsContextMock),
-      ).rejects.toThrow(OrchestraError);
+      ).rejects.toThrow(APIError);
 
       // Should pass
       await expect(
@@ -252,7 +252,7 @@ describe('ApiController', () => {
       name: 'service_name',
     });
 
-    test('Object Error converted to OrchestraError', async () => {
+    test('Object Error converted to APIError', async () => {
       const schema = controller['_createActionSchema']({
         path: 'test',
         name: 'test',
@@ -264,7 +264,7 @@ describe('ApiController', () => {
           response: responseValidate,
           handler() {
             throw JSON.parse(
-              new OrchestraError(ResponseCode.FORBIDDEN).toJSON(),
+              new APIError(ResponseCode.FORBIDDEN).toJSON(),
             );
           },
         },
@@ -272,10 +272,10 @@ describe('ApiController', () => {
 
       await expect(
         schema.handler.call(moleculerServiceMock, validParamsContextMock),
-      ).rejects.toThrowError(OrchestraError);
+      ).rejects.toThrowError(APIError);
     });
 
-    test('Regular error converted to OrchestraError', async () => {
+    test('Regular error converted to APIError', async () => {
       const schema = controller['_createActionSchema']({
         path: 'test',
         name: 'test',
@@ -293,10 +293,10 @@ describe('ApiController', () => {
 
       await expect(
         schema.handler.call(moleculerServiceMock, validParamsContextMock),
-      ).rejects.toThrowError(OrchestraError);
+      ).rejects.toThrowError(APIError);
     });
 
-    test('OrchestraError is thrown', async () => {
+    test('APIError is thrown', async () => {
       const schema = controller['_createActionSchema']({
         path: 'test',
         name: 'test',
@@ -307,17 +307,17 @@ describe('ApiController', () => {
           params: paramsValidate,
           response: responseValidate,
           handler() {
-            throw new OrchestraError(ResponseCode.FORBIDDEN);
+            throw new APIError(ResponseCode.FORBIDDEN);
           },
         },
       });
 
       await expect(
         schema.handler.call(moleculerServiceMock, validParamsContextMock),
-      ).rejects.toThrowError(OrchestraError);
+      ).rejects.toThrowError(APIError);
     });
 
-    test('Unknown OrchestraError is thrown', async () => {
+    test('Unknown APIError is thrown', async () => {
       const schema = controller['_createActionSchema']({
         path: 'test',
         name: 'test',
@@ -335,7 +335,7 @@ describe('ApiController', () => {
 
       await expect(
         schema.handler.call(moleculerServiceMock, validParamsContextMock),
-      ).rejects.toThrowError(OrchestraError);
+      ).rejects.toThrowError(APIError);
     });
   });
 

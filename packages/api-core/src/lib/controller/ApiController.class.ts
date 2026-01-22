@@ -14,7 +14,7 @@ import { ServiceBroker } from 'moleculer';
 import config from '../../config';
 import { ResponseCode } from '../apiResponse';
 import type { ContextMeta, TypiaValidator } from '../common';
-import { OrchestraError } from '../error';
+import { APIError } from '../error';
 
 import type {
   ActionAuthType,
@@ -646,7 +646,7 @@ export class ApiController<
           const requestIsValid = action.options.params(params);
 
           if (!requestIsValid.success) {
-            throw new OrchestraError(
+            throw new APIError(
               ResponseCode.BAD_REQUEST__INVALID_PARAMS,
               requestIsValid.errors,
             );
@@ -659,7 +659,7 @@ export class ApiController<
                 action,
               );
 
-              throw new OrchestraError(ResponseCode.NOT_AUTHORIZED);
+              throw new APIError(ResponseCode.NOT_AUTHORIZED);
             }
 
             if (ctx.meta.user_uuid && ctx.meta.user_type) {
@@ -719,7 +719,7 @@ export class ApiController<
                 action.options.strictResponseValidation === true ||
                 ApiController._config.strictResponseValidation === true
               ) {
-                throw new OrchestraError(
+                throw new APIError(
                   ResponseCode.BAD_REQUEST__INVALID_RESPONSE,
                   responseIsValid.errors,
                 );
@@ -743,23 +743,23 @@ export class ApiController<
             data,
           };
         } catch (err: unknown) {
-          if (err instanceof OrchestraError) {
+          if (err instanceof APIError) {
             throw err;
           }
 
           // @ts-ignore
           if (err.__ORCHESTRA_ERROR__ === true) {
             // @ts-ignore
-            throw OrchestraError.fromJSON(err);
+            throw APIError.fromJSON(err);
           }
 
           if (err instanceof Error) {
-            throw OrchestraError.fromError(err);
+            throw APIError.fromError(err);
           }
 
           this.logger.error('Unknown error occurred', err);
 
-          throw new OrchestraError(ResponseCode.INTERNAL_ERROR);
+          throw new APIError(ResponseCode.INTERNAL_ERROR);
         } finally {
           this.logger.info('Action finished', action.name);
           session?.$destroy();
@@ -845,23 +845,23 @@ export class ApiController<
               }
               span?.finish();
 
-              if (err instanceof OrchestraError) {
+              if (err instanceof APIError) {
                 throw err;
               }
 
               // @ts-ignore
               if (err.__ORCHESTRA_ERROR__ === true) {
                 // @ts-ignore
-                throw OrchestraError.fromJSON(err);
+                throw APIError.fromJSON(err);
               }
 
               if (err instanceof Error) {
-                throw OrchestraError.fromError(err);
+                throw APIError.fromError(err);
               }
 
               this.logger.error('Unknown error occurred', err);
 
-              throw new OrchestraError(ResponseCode.INTERNAL_ERROR);
+              throw new APIError(ResponseCode.INTERNAL_ERROR);
             }
           },
         };
@@ -897,23 +897,23 @@ export class ApiController<
             logger: this.logger,
           });
         } catch (err: unknown) {
-          if (err instanceof OrchestraError) {
+          if (err instanceof APIError) {
             throw err;
           }
 
           // @ts-ignore
           if (err.__ORCHESTRA_ERROR__ === true) {
             // @ts-ignore
-            throw OrchestraError.fromJSON(err);
+            throw APIError.fromJSON(err);
           }
 
           if (err instanceof Error) {
-            throw OrchestraError.fromError(err);
+            throw APIError.fromError(err);
           }
 
           this.logger.error('Unknown error occurred', err);
 
-          throw new OrchestraError(ResponseCode.INTERNAL_ERROR);
+          throw new APIError(ResponseCode.INTERNAL_ERROR);
         }
       },
     };
@@ -1006,7 +1006,7 @@ export class ApiController<
             topicName: string,
           ): Promise<Subscription> {
             if (!ApiController._config.pubSub) {
-              throw new OrchestraError(ResponseCode.INTERNAL_ERROR);
+              throw new APIError(ResponseCode.INTERNAL_ERROR);
             }
             const topic = ApiController._config.pubSub.topic(topicName);
             const [exists] = await topic.exists();

@@ -9,7 +9,7 @@ import MoleculerWebMixin from 'moleculer-web';
 import type { ActionHandlerResponse } from '../lib';
 import {
   OrchestraApiResponse,
-  OrchestraError,
+  APIError,
   ResponseCode,
   wrapSuccessResponse,
   wrapErrorResponse,
@@ -182,12 +182,12 @@ export const createApiService = (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let response: OrchestraApiResponse<any>;
 
-    if (err instanceof OrchestraError) {
+    if (err instanceof APIError) {
       response = new OrchestraApiResponse(err.code, err.data, {
         message: err.message,
       });
     } else if ((err as { __ORCHESTRA_ERROR__?: boolean }).__ORCHESTRA_ERROR__ === true) {
-      const orchErr = err as OrchestraError;
+      const orchErr = err as APIError;
       response = new OrchestraApiResponse(orchErr.code, orchErr.data, {
         message: err.message,
       });
