@@ -10,6 +10,7 @@
 import { FluxilisEventEmitter } from '../events/FluxilisEventEmitter';
 import type { DataStreamOptions, IDataStream } from '../types';
 import { createDeferred, isPromise } from '../utils';
+import { FastFIFO } from './FastFIFO';
 
 /**
  * Events emitted by DataStream.
@@ -106,7 +107,8 @@ interface StreamState {
  */
 export class DataStream<T> implements IDataStream<T> {
   /** Data buffer */
-  private _buffer: T[] = [];
+  /** Internal FIFO buffer with O(1) operations (FIX-022) */
+  private _buffer = new FastFIFO<T>();
 
   /** Event emitter */
   private _eventEmitter: FluxilisEventEmitter;
@@ -525,7 +527,7 @@ export class DataStream<T> implements IDataStream<T> {
     }
 
     // Clear buffer immediately (no flush)
-    this._buffer.length = 0;
+    this._buffer.clear();
 
     // Mark as ended
     this._state.ended = true;
