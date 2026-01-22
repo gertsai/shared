@@ -86,6 +86,9 @@ describe('httpCaller / makeRequest', () => {
   let server: Server;
   let baseUrl: string;
 
+  /** Security config to allow localhost for testing */
+  const testSecurity = { security: { allowLocalhost: true } };
+
   beforeAll(async () => {
     server = createServer((req: IncomingMessage, res: ServerResponse) => {
       const url = new URL(req.url!, `http://${req.headers.host}`);
@@ -155,7 +158,7 @@ describe('httpCaller / makeRequest', () => {
   });
 
   it('should make GET request and parse JSON', async () => {
-    const response = await httpCaller(`${baseUrl}/json`);
+    const response = await httpCaller(`${baseUrl}/json`, testSecurity);
 
     expect(response.ok).toBe(true);
     expect(response.status).toBe(200);
@@ -167,7 +170,7 @@ describe('httpCaller / makeRequest', () => {
   });
 
   it('should make GET request and parse text', async () => {
-    const response = await httpCaller(`${baseUrl}/text`);
+    const response = await httpCaller(`${baseUrl}/text`, testSecurity);
 
     expect(response.ok).toBe(true);
     const text = await response.text();
@@ -179,6 +182,7 @@ describe('httpCaller / makeRequest', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: 'test' }),
+      ...testSecurity,
     });
 
     expect(response.ok).toBe(true);
@@ -188,21 +192,21 @@ describe('httpCaller / makeRequest', () => {
   });
 
   it('should handle 404 status correctly', async () => {
-    const response = await httpCaller(`${baseUrl}/nonexistent`);
+    const response = await httpCaller(`${baseUrl}/nonexistent`, testSecurity);
 
     expect(response.ok).toBe(false);
     expect(response.status).toBe(404);
   });
 
   it('should handle 500 status correctly', async () => {
-    const response = await httpCaller(`${baseUrl}/status?code=500`);
+    const response = await httpCaller(`${baseUrl}/status?code=500`, testSecurity);
 
     expect(response.ok).toBe(false);
     expect(response.status).toBe(500);
   });
 
   it('should include response headers', async () => {
-    const response = await httpCaller(`${baseUrl}/headers`);
+    const response = await httpCaller(`${baseUrl}/headers`, testSecurity);
 
     expect(response.headers.get('x-custom-header')).toBe('test-value');
     expect(response.headers.get('content-type')).toBe('application/json');
@@ -212,6 +216,7 @@ describe('httpCaller / makeRequest', () => {
     const response = await httpCaller(`${baseUrl}/echo`, {
       method: 'GET',
       headers: { 'X-Test-Header': 'my-value' },
+      ...testSecurity,
     });
 
     const data = (await response.json()) as { headers: Record<string, string> };
@@ -219,7 +224,7 @@ describe('httpCaller / makeRequest', () => {
   });
 
   it('should track bodyUsed state', async () => {
-    const response = await httpCaller(`${baseUrl}/json`);
+    const response = await httpCaller(`${baseUrl}/json`, testSecurity);
 
     expect(response.bodyUsed).toBe(false);
     await response.json();
@@ -232,6 +237,7 @@ describe('httpCaller / makeRequest', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: params,
+      ...testSecurity,
     });
 
     const data = (await response.json()) as { body: string };
