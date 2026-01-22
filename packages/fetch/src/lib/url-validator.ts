@@ -61,15 +61,27 @@ const LINK_LOCAL_IPV4_END = 0xa9feffff; // 169.254.255.255
 /** Cloud metadata IP (AWS, GCP, Azure) */
 const CLOUD_METADATA_IP = 0xa9fea9fe; // 169.254.169.254
 
+/** Internal config type with resolved defaults */
+type ResolvedConfig = {
+  allowLocalhost: boolean;
+  allowPrivateNetworks: boolean;
+  allowLinkLocal: boolean;
+  allowCloudMetadata: boolean;
+  allowedProtocols: string[];
+  blockedHostnames: string[];
+  allowedHostnames: string[] | undefined;
+  maxUrlLength: number;
+};
+
 /** Default configuration */
-const DEFAULT_CONFIG: Required<UrlValidatorConfig> = {
+const DEFAULT_CONFIG: ResolvedConfig = {
   allowLocalhost: false,
   allowPrivateNetworks: false,
   allowLinkLocal: false,
   allowCloudMetadata: false,
   allowedProtocols: ['http:', 'https:'],
   blockedHostnames: [],
-  allowedHostnames: undefined as unknown as string[],
+  allowedHostnames: undefined,
   maxUrlLength: 2048,
 };
 
@@ -157,7 +169,17 @@ export function validateUrl(
   urlString: string,
   config: UrlValidatorConfig = {},
 ): UrlValidationResult {
-  const cfg = { ...DEFAULT_CONFIG, ...config };
+  // Merge with defaults, ensuring arrays are never undefined
+  const cfg: ResolvedConfig = {
+    allowLocalhost: config.allowLocalhost ?? DEFAULT_CONFIG.allowLocalhost,
+    allowPrivateNetworks: config.allowPrivateNetworks ?? DEFAULT_CONFIG.allowPrivateNetworks,
+    allowLinkLocal: config.allowLinkLocal ?? DEFAULT_CONFIG.allowLinkLocal,
+    allowCloudMetadata: config.allowCloudMetadata ?? DEFAULT_CONFIG.allowCloudMetadata,
+    allowedProtocols: config.allowedProtocols ?? DEFAULT_CONFIG.allowedProtocols,
+    blockedHostnames: config.blockedHostnames ?? DEFAULT_CONFIG.blockedHostnames,
+    allowedHostnames: config.allowedHostnames ?? DEFAULT_CONFIG.allowedHostnames,
+    maxUrlLength: config.maxUrlLength ?? DEFAULT_CONFIG.maxUrlLength,
+  };
 
   // Check URL length
   if (urlString.length > cfg.maxUrlLength) {
