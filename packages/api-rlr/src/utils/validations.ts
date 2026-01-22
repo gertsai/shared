@@ -1,6 +1,6 @@
 import { isIP } from 'node:net';
 
-import { OrchestraError, ResponseCode } from '@orchdev/api-core';
+import { APIError, ResponseCode } from '@gerts/api-core';
 import type { IncomingRequest } from 'moleculer-web';
 
 import type { Store } from './types.js';
@@ -119,8 +119,9 @@ export const validations = {
     const prefixedKey = `${store.config.prefix ?? ''}${key}`;
 
     if (keys.includes(prefixedKey)) {
-      throw new OrchestraError(
+      throw new APIError(
         ResponseCode.BAD_REQUEST__INVALID_PARAMS,
+        undefined,
         `The hit count for ${key} was incremented more than once for a single request.`,
       );
     }
