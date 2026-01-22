@@ -56,4 +56,14 @@ export type {
   HttpMethod,
   FetcherFunction,
   HttpErrorResponse,
+  FetchSecurityConfig,
 } from './lib/types';
+
+// Re-export URL validation utilities (FIX-005: SSRF protection)
+export {
+  validateUrl,
+  assertSafeUrl,
+  createUrlValidator,
+} from './lib/url-validator';
+
+export type { UrlValidatorConfig, UrlValidationResult } from './lib/url-validator';

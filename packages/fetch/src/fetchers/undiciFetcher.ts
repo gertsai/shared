@@ -13,7 +13,14 @@ import { types } from 'node:util';
 import { Headers, FormData as UndiciFormData, request } from 'undici';
 import type { RequestInit } from 'undici';
 
-import type { ResponseLike, RequestOptions } from '../lib/types';
+import type { ResponseLike, RequestOptions, FetchSecurityConfig } from '../lib/types';
+import { validateUrl, type UrlValidatorConfig } from '../lib/url-validator';
+
+/** Default maximum body size: 50MB */
+const DEFAULT_MAX_BODY_SIZE = 50 * 1024 * 1024;
+
+/** Default request timeout: 30 seconds */
+const DEFAULT_TIMEOUT_MS = 30_000;
 
 /** Undici request options type */
 export type UndiciRequestOptions = Exclude<Parameters<typeof request>[1], undefined>;
@@ -47,6 +54,7 @@ export type UndiciRequestOptions = Exclude<Parameters<typeof request>[1], undefi
  */
 export async function resolveBody(
   body: RequestInit['body'],
+  maxBodySize: number = DEFAULT_MAX_BODY_SIZE,
 ): Promise<Exclude<UndiciRequestOptions['body'], undefined>> {
   if (body == null) {
     return null;
@@ -90,16 +98,33 @@ export async function resolveBody(
     return globalToUndiciFormData(body as unknown);
   }
 
-  // Handle sync iterables
+  // Handle sync iterables with size limit (FIX-006: prevent DoS)
   if (typeof (body as Iterable<Uint8Array>)[Symbol.iterator] === 'function') {
-    const chunks = [...(body as Iterable<Uint8Array>)];
+    const chunks: Uint8Array[] = [];
+    let totalSize = 0;
+    for (const chunk of body as Iterable<Uint8Array>) {
+      totalSize += chunk.length;
+      if (totalSize > maxBodySize) {
+        throw new Error(
+          `Request body exceeds maximum size limit of ${maxBodySize} bytes (received ${totalSize}+)`,
+        );
+      }
+      chunks.push(chunk);
+    }
     return Buffer.concat(chunks);
   }
 
-  // Handle async iterables
+  // Handle async iterables with size limit (FIX-006: prevent DoS)
   if (typeof (body as AsyncIterable<Uint8Array>)[Symbol.asyncIterator] === 'function') {
     const chunks: Uint8Array[] = [];
+    let totalSize = 0;
     for await (const chunk of body as AsyncIterable<Uint8Array>) {
+      totalSize += chunk.length;
+      if (totalSize > maxBodySize) {
+        throw new Error(
+          `Request body exceeds maximum size limit of ${maxBodySize} bytes (received ${totalSize}+)`,
+        );
+      }
       chunks.push(chunk);
     }
     return Buffer.concat(chunks);
@@ -161,13 +186,16 @@ function convertHeaders(headers: Record<string, string | string[] | undefined>):
  * Makes an HTTP request using undici and returns a Fetch API-like response.
  *
  * @param url - Target URL for the request
- * @param init - Request initialization options
+ * @param init - Request initialization options (with security config)
  * @returns Promise resolving to ResponseLike object
+ * @throws {Error} If URL fails SSRF validation or body exceeds size limit
  *
  * @description This is the low-level request function that:
- * 1. Resolves the body to an undici-compatible format
- * 2. Makes the request using undici
- * 3. Normalizes the response to Fetch API shape
+ * 1. Validates URL against SSRF attacks (FIX-005)
+ * 2. Resolves the body with size limits (FIX-006)
+ * 3. Applies request timeout (FIX-007)
+ * 4. Makes the request using undici
+ * 5. Normalizes the response to Fetch API shape
  *
  * @example
  * ```typescript
@@ -175,6 +203,11 @@ function convertHeaders(headers: Record<string, string | string[] | undefined>):
  *   method: 'POST',
  *   headers: { 'Content-Type': 'application/json' },
  *   body: JSON.stringify({ name: 'test' }),
+ *   timeout: 5000, // 5 second timeout
+ *   security: {
+ *     ssrfProtection: true, // enabled by default
+ *     maxBodySize: 10 * 1024 * 1024, // 10MB limit
+ *   },
  * });
  *
  * if (response.ok) {
@@ -182,10 +215,39 @@ function convertHeaders(headers: Record<string, string | string[] | undefined>):
  * }
  * ```
  */
-export async function makeRequest(url: string, init: RequestInit = {}): Promise<ResponseLike> {
+export async function makeRequest(
+  url: string,
+  init: RequestOptions = {},
+): Promise<ResponseLike> {
+  const { security = {}, timeout, ...restInit } = init;
+
+  // FIX-005: SSRF protection - validate URL before making request
+  const ssrfProtection = security.ssrfProtection ?? true;
+  if (ssrfProtection) {
+    const validation = validateUrl(url, {
+      allowLocalhost: security.allowLocalhost ?? false,
+      allowPrivateNetworks: security.allowPrivateNetworks ?? false,
+      allowedHostnames: security.allowedHostnames,
+      blockedHostnames: security.blockedHostnames,
+    });
+
+    if (!validation.valid) {
+      throw new Error(`SSRF blocked: ${validation.error}`);
+    }
+  }
+
+  // FIX-006: Apply body size limit
+  const maxBodySize = security.maxBodySize ?? DEFAULT_MAX_BODY_SIZE;
+
+  // FIX-007: Apply timeout (default 30s)
+  const timeoutMs = timeout ?? DEFAULT_TIMEOUT_MS;
+
   const options: UndiciRequestOptions = {
-    ...init,
-    body: await resolveBody(init.body),
+    ...restInit,
+    body: await resolveBody(restInit.body, maxBodySize),
+    // undici uses bodyTimeout and headersTimeout
+    bodyTimeout: timeoutMs,
+    headersTimeout: timeoutMs,
   };
 
   const res = await request(url, options);
@@ -225,10 +287,11 @@ export async function makeRequest(url: string, init: RequestInit = {}): Promise<
  * const response = await httpCaller('https://api.example.com/users', {
  *   method: 'GET',
  *   headers: { Authorization: 'Bearer token' },
+ *   timeout: 10000, // 10 second timeout
  * });
  * ```
  */
-export async function httpCaller(url: string, init: RequestInit = {}): Promise<ResponseLike> {
+export async function httpCaller(url: string, init: RequestOptions = {}): Promise<ResponseLike> {
   return makeRequest(url, init);
 }
 

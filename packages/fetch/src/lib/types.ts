@@ -17,15 +17,35 @@ export interface ResponseLike extends Pick<
 }
 
 /**
+ * Security configuration for fetch operations.
+ */
+export interface FetchSecurityConfig {
+  /** Enable SSRF protection via URL validation. Default: true */
+  ssrfProtection?: boolean;
+  /** Allow localhost URLs. Default: false */
+  allowLocalhost?: boolean;
+  /** Allow private network IPs. Default: false */
+  allowPrivateNetworks?: boolean;
+  /** Maximum request body size in bytes. Default: 50MB */
+  maxBodySize?: number;
+  /** Allowed hostnames (whitelist mode). Default: undefined (all allowed) */
+  allowedHostnames?: string[];
+  /** Blocked hostnames (blacklist mode). Default: [] */
+  blockedHostnames?: string[];
+}
+
+/**
  * Request options extending undici's RequestInit with additional features.
  */
-export interface RequestOptions extends RequestInit {
-  /** Request timeout in milliseconds */
+export interface RequestOptions extends Omit<RequestInit, 'headers'> {
+  /** Request timeout in milliseconds. Default: 30000 */
   timeout?: number;
   /** Number of retry attempts */
   retries?: number;
   /** Custom headers to merge */
-  headers?: Record<string, string>;
+  headers?: Record<string, string> | Headers | [string, string][];
+  /** Security configuration */
+  security?: FetchSecurityConfig;
 }
 
 /**
