@@ -9,6 +9,7 @@ export * from './guards';
 export * from './lexo-rank';
 export * from './logger';
 export * from './object';
+export * from './security';
 export * from './sort';
 export * from './string';
 export * from './timestamp';
