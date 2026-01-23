@@ -165,7 +165,7 @@ export class GertsFgaClient {
   /**
    * Checks if a user has a specific relation on an object.
    *
-   * @example
+   * @example Standard check (RBAC/ReBAC)
    * ```typescript
    * const allowed = await client.check({
    *   userId: '123',
@@ -175,17 +175,44 @@ export class GertsFgaClient {
    * });
    * // → { allowed: true }
    * ```
+   *
+   * @example Check with ABAC context
+   * ```typescript
+   * const allowed = await client.check({
+   *   userId: '123',
+   *   relation: 'can_view',
+   *   resourceType: 'sensitive_project',
+   *   resourceId: 'secret',
+   *   context: {
+   *     current_time: new Date().toISOString(),
+   *     user_ip: '10.0.1.50',
+   *     allowed_cidrs: ['10.0.0.0/8'],
+   *     user_clearance: 2,
+   *     resource_sensitivity: 1,
+   *   },
+   * });
+   * ```
    */
   async check(request: FgaCheckRequest): Promise<FgaCheckResponse> {
     const client = await this.getClient();
 
-    const result = await this.withRetry(() =>
-      client.check({
-        user: userString(request.userId),
-        relation: request.relation,
-        object: objectString(request.resourceType, request.resourceId),
-      }),
-    );
+    const checkRequest: {
+      user: string;
+      relation: string;
+      object: string;
+      context?: Record<string, unknown>;
+    } = {
+      user: userString(request.userId),
+      relation: request.relation,
+      object: objectString(request.resourceType, request.resourceId),
+    };
+
+    // Add ABAC context if provided
+    if (request.context && Object.keys(request.context).length > 0) {
+      checkRequest.context = request.context as Record<string, unknown>;
+    }
+
+    const result = await this.withRetry(() => client.check(checkRequest));
 
     return { allowed: result.allowed ?? false };
   }
@@ -193,18 +220,35 @@ export class GertsFgaClient {
   /**
    * Batch check multiple permissions in one request.
    * Requires OpenFGA v1.8.0+
+   *
+   * Note: Each request can have its own ABAC context.
    */
   async batchCheck(
     requests: FgaCheckRequest[],
   ): Promise<Array<{ request: FgaCheckRequest; allowed: boolean }>> {
     const client = await this.getClient();
 
-    const checks = requests.map((req, index) => ({
-      user: userString(req.userId),
-      relation: req.relation,
-      object: objectString(req.resourceType, req.resourceId),
-      correlationId: String(index),
-    }));
+    const checks = requests.map((req, index) => {
+      const check: {
+        user: string;
+        relation: string;
+        object: string;
+        correlationId: string;
+        context?: Record<string, unknown>;
+      } = {
+        user: userString(req.userId),
+        relation: req.relation,
+        object: objectString(req.resourceType, req.resourceId),
+        correlationId: String(index),
+      };
+
+      // Add ABAC context if provided
+      if (req.context && Object.keys(req.context).length > 0) {
+        check.context = req.context as Record<string, unknown>;
+      }
+
+      return check;
+    });
 
     const { result } = await this.withRetry(() => client.batchCheck({ checks }));
 
@@ -221,7 +265,7 @@ export class GertsFgaClient {
   /**
    * Lists objects of a type that a user has access to.
    *
-   * @example
+   * @example Standard list
    * ```typescript
    * const projects = await client.listObjects({
    *   userId: '123',
@@ -230,17 +274,41 @@ export class GertsFgaClient {
    * });
    * // → ['project:demo', 'project:test']
    * ```
+   *
+   * @example List with ABAC context (only returns objects user can access now)
+   * ```typescript
+   * const projects = await client.listObjects({
+   *   userId: '123',
+   *   relation: 'can_view',
+   *   resourceType: 'sensitive_project',
+   *   context: {
+   *     current_time: new Date().toISOString(),
+   *     user_ip: '10.0.1.50',
+   *     allowed_cidrs: ['10.0.0.0/8'],
+   *   },
+   * });
+   * ```
    */
   async listObjects(request: FgaListObjectsRequest): Promise<string[]> {
     const client = await this.getClient();
 
-    const result = await this.withRetry(() =>
-      client.listObjects({
-        user: userString(request.userId),
-        relation: request.relation,
-        type: request.resourceType,
-      }),
-    );
+    const listRequest: {
+      user: string;
+      relation: string;
+      type: string;
+      context?: Record<string, unknown>;
+    } = {
+      user: userString(request.userId),
+      relation: request.relation,
+      type: request.resourceType,
+    };
+
+    // Add ABAC context if provided
+    if (request.context && Object.keys(request.context).length > 0) {
+      listRequest.context = request.context as Record<string, unknown>;
+    }
+
+    const result = await this.withRetry(() => client.listObjects(listRequest));
 
     return result.objects ?? [];
   }
@@ -272,12 +340,14 @@ export class GertsFgaClient {
       }),
     );
 
-    return (result.users ?? []).map((u) => {
-      if ('object' in u && u.object) {
-        return `${u.object.type}:${u.object.id}`;
-      }
-      return '';
-    }).filter(Boolean);
+    return (result.users ?? [])
+      .map((u) => {
+        if ('object' in u && u.object) {
+          return `${u.object.type}:${u.object.id}`;
+        }
+        return '';
+      })
+      .filter(Boolean);
   }
 
   // ---------------------------------------------------------------------------
@@ -369,7 +439,11 @@ export class GertsFgaClient {
   /**
    * Adds a user to a tenant.
    */
-  async addUserToTenant(userId: string, tenantId: string, role: 'member' | 'admin' = 'member'): Promise<void> {
+  async addUserToTenant(
+    userId: string,
+    tenantId: string,
+    role: 'member' | 'admin' = 'member',
+  ): Promise<void> {
     await this.writeTuples([
       {
         user: userString(userId),

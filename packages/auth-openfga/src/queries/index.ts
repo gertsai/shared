@@ -3,10 +3,12 @@
  *
  * Functions for checking permissions and listing accessible resources.
  * These are called by middleware and services for authorization.
+ *
+ * All permission check functions now support optional ABAC context.
  */
 
 import { getFgaClient } from '../client.js';
-import type { FgaCheckRequest, FgaCheckResponse, FgaResourceType } from '../types.js';
+import type { FgaCheckRequest, FgaCheckResponse, FgaResourceType, ABACContext } from '../types.js';
 
 // =============================================================================
 // Permission Checks
@@ -32,81 +34,118 @@ export async function checkPermission(request: FgaCheckRequest): Promise<FgaChec
 
 /**
  * Checks if a user can view a resource.
+ *
+ * @param userId - User ID
+ * @param resourceType - Resource type
+ * @param resourceId - Resource ID
+ * @param context - Optional ABAC context for conditional checks
  */
 export async function canView(
   userId: string,
   resourceType: FgaResourceType,
   resourceId: string,
+  context?: ABACContext,
 ): Promise<boolean> {
   const result = await checkPermission({
     userId,
     relation: 'can_view',
     resourceType,
     resourceId,
+    context,
   });
   return result.allowed;
 }
 
 /**
  * Checks if a user can edit a resource.
+ *
+ * @param userId - User ID
+ * @param resourceType - Resource type
+ * @param resourceId - Resource ID
+ * @param context - Optional ABAC context for conditional checks
  */
 export async function canEdit(
   userId: string,
   resourceType: FgaResourceType,
   resourceId: string,
+  context?: ABACContext,
 ): Promise<boolean> {
   const result = await checkPermission({
     userId,
     relation: 'can_edit',
     resourceType,
     resourceId,
+    context,
   });
   return result.allowed;
 }
 
 /**
  * Checks if a user can delete a resource.
+ *
+ * @param userId - User ID
+ * @param resourceType - Resource type
+ * @param resourceId - Resource ID
+ * @param context - Optional ABAC context for conditional checks
  */
 export async function canDelete(
   userId: string,
   resourceType: FgaResourceType,
   resourceId: string,
+  context?: ABACContext,
 ): Promise<boolean> {
   const result = await checkPermission({
     userId,
     relation: 'can_delete',
     resourceType,
     resourceId,
+    context,
   });
   return result.allowed;
 }
 
 /**
  * Checks if a user can manage a resource.
+ *
+ * @param userId - User ID
+ * @param resourceType - Resource type
+ * @param resourceId - Resource ID
+ * @param context - Optional ABAC context for conditional checks
  */
 export async function canManage(
   userId: string,
   resourceType: FgaResourceType,
   resourceId: string,
+  context?: ABACContext,
 ): Promise<boolean> {
   const result = await checkPermission({
     userId,
     relation: 'can_manage',
     resourceType,
     resourceId,
+    context,
   });
   return result.allowed;
 }
 
 /**
  * Checks if a user can execute a query.
+ *
+ * @param userId - User ID
+ * @param queryId - Query ID
+ * @param context - Optional ABAC context (e.g., for business hours check)
  */
-export async function canExecuteQuery(userId: string, queryId: string): Promise<boolean> {
+export async function canExecuteQuery(
+  userId: string,
+  queryId: string,
+  context?: ABACContext,
+): Promise<boolean> {
   const result = await checkPermission({
     userId,
     relation: 'can_execute',
     resourceType: 'query',
     resourceId: queryId,
+    context,
   });
   return result.allowed;
 }

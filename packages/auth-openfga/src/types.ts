@@ -1,6 +1,11 @@
 /**
  * OpenFGA Types for gerts.ai
  * Based on: infra/openfga/model.fga
+ *
+ * Supports RBAC + ReBAC + ABAC authorization:
+ * - RBAC: role-based access via role assignments
+ * - ReBAC: relationship-based access via team/project hierarchy
+ * - ABAC: attribute-based access via contextual conditions
  */
 
 // =============================================================================
@@ -11,7 +16,131 @@
  * All resource types defined in OpenFGA model.
  * Maps to `type X` declarations in model.fga
  */
-export type FgaResourceType = 'user' | 'tenant' | 'role' | 'team' | 'project' | 'entity' | 'query' | 'api_key';
+export type FgaResourceType =
+  | 'user'
+  | 'tenant'
+  | 'role'
+  | 'team'
+  | 'project'
+  | 'sensitive_project' // High-security project with mandatory ABAC
+  | 'entity'
+  | 'query'
+  | 'api_key'
+  | 'document'; // Document with sensitivity levels
+
+// =============================================================================
+// ABAC Context Types
+// =============================================================================
+
+/**
+ * Time-based ABAC context.
+ * Used for business hours and time-restricted access.
+ */
+export interface ABACTimeContext {
+  /** Current timestamp (ISO 8601 format) */
+  current_time: string;
+}
+
+/**
+ * Network-based ABAC context.
+ * Used for IP whitelisting and CIDR range checks.
+ */
+export interface ABACNetworkContext {
+  /** User's IP address */
+  user_ip: string;
+  /** Allowed CIDR ranges (e.g., ["10.0.0.0/8", "192.168.0.0/16"]) */
+  allowed_cidrs?: string[];
+  /** IP whitelist */
+  whitelist?: string[];
+}
+
+/**
+ * Geo-location ABAC context.
+ * Used for country/region-based access control.
+ */
+export interface ABACGeoContext {
+  /** User's country code (ISO 3166-1 alpha-2, e.g., "US", "DE") */
+  user_country: string;
+  /** Allowed country codes */
+  allowed_countries?: string[];
+  /** Blocked country codes (sanctions, etc.) */
+  blocked_countries?: string[];
+}
+
+/**
+ * Resource attribute ABAC context.
+ * Used for sensitivity levels and resource status checks.
+ */
+export interface ABACResourceContext {
+  /** User's security clearance level (0=public, 1=internal, 2=confidential, 3=secret) */
+  user_clearance?: number;
+  /** Resource sensitivity level */
+  resource_sensitivity?: number;
+  /** Resource status (active, archived, deleted) */
+  resource_status?: string;
+}
+
+/**
+ * Combined ABAC context for all conditions.
+ * Pass to check() for attribute-based authorization.
+ *
+ * @example
+ * ```typescript
+ * const context: ABACContext = {
+ *   current_time: new Date().toISOString(),
+ *   user_ip: req.ip,
+ *   user_country: 'US',
+ *   allowed_cidrs: ['10.0.0.0/8'],
+ *   user_clearance: 2,
+ *   resource_sensitivity: 1,
+ *   resource_status: 'active',
+ * };
+ *
+ * const result = await checkPermission({
+ *   userId: 'alice',
+ *   relation: 'can_view',
+ *   resourceType: 'sensitive_project',
+ *   resourceId: 'project-123',
+ *   context,
+ * });
+ * ```
+ */
+export interface ABACContext
+  extends
+    Partial<ABACTimeContext>,
+    Partial<ABACNetworkContext>,
+    Partial<ABACGeoContext>,
+    Partial<ABACResourceContext> {}
+
+/**
+ * Security clearance levels for ABAC.
+ */
+export const CLEARANCE_LEVELS = {
+  PUBLIC: 0,
+  INTERNAL: 1,
+  CONFIDENTIAL: 2,
+  SECRET: 3,
+} as const;
+
+export type ClearanceLevel = (typeof CLEARANCE_LEVELS)[keyof typeof CLEARANCE_LEVELS];
+
+/**
+ * Resource status values for ABAC.
+ */
+export const RESOURCE_STATUS = {
+  ACTIVE: 'active',
+  ARCHIVED: 'archived',
+  DELETED: 'deleted',
+  DRAFT: 'draft',
+  PUBLISHED: 'published',
+} as const;
+
+export type ResourceStatus = (typeof RESOURCE_STATUS)[keyof typeof RESOURCE_STATUS];
+
+/**
+ * Common blocked countries for sanctions compliance.
+ */
+export const BLOCKED_COUNTRIES_OFAC = ['CU', 'IR', 'KP', 'SY', 'RU'] as const;
 
 /**
  * Relations for each resource type.
@@ -21,10 +150,57 @@ export interface FgaRelations {
   tenant: 'member' | 'admin';
   role: 'assignee' | 'can_manage' | 'parent_role';
   team: 'member' | 'lead' | 'admin' | 'parent' | 'inherited_member';
-  project: 'tenant' | 'viewer' | 'editor' | 'admin' | 'can_view' | 'can_edit' | 'can_delete' | 'can_manage';
-  entity: 'project' | 'viewer' | 'editor' | 'admin' | 'can_view' | 'can_edit' | 'can_delete';
-  query: 'project' | 'executor' | 'can_execute';
-  api_key: 'owner' | 'tenant' | 'can_view' | 'can_revoke' | 'can_rotate';
+  // Standard project (optional ABAC)
+  project:
+    | 'tenant'
+    | 'viewer'
+    | 'editor'
+    | 'admin'
+    | 'viewer_business_hours' // ABAC: time-restricted
+    | 'editor_business_hours'
+    | 'viewer_secure' // ABAC: network-restricted
+    | 'editor_secure'
+    | 'viewer_geo' // ABAC: geo-restricted
+    | 'viewer_full_secure' // ABAC: time + network
+    | 'can_view'
+    | 'can_edit'
+    | 'can_delete'
+    | 'can_manage';
+  // Sensitive project (mandatory ABAC)
+  sensitive_project:
+    | 'tenant'
+    | 'viewer'
+    | 'editor'
+    | 'admin'
+    | 'cleared_viewer' // ABAC: clearance-based
+    | 'cleared_editor'
+    | 'can_view'
+    | 'can_edit'
+    | 'can_delete'
+    | 'can_manage';
+  entity:
+    | 'project'
+    | 'viewer'
+    | 'editor'
+    | 'admin'
+    | 'sensitive_viewer'
+    | 'can_view'
+    | 'can_edit'
+    | 'can_delete';
+  query: 'project' | 'executor' | 'executor_business_hours' | 'can_execute';
+  api_key: 'owner' | 'tenant' | 'owner_secure' | 'can_view' | 'can_revoke' | 'can_rotate';
+  // Document with sensitivity levels
+  document:
+    | 'project'
+    | 'viewer'
+    | 'editor'
+    | 'admin'
+    | 'cleared_viewer' // ABAC: clearance-based
+    | 'cleared_editor'
+    | 'active_viewer' // ABAC: status-based
+    | 'can_view'
+    | 'can_edit'
+    | 'can_delete';
 }
 
 /**
@@ -42,7 +218,15 @@ export type FgaPermission =
 /**
  * Role relations that represent access levels.
  */
-export type FgaAccessLevel = 'viewer' | 'editor' | 'admin' | 'member' | 'lead' | 'assignee' | 'executor' | 'owner';
+export type FgaAccessLevel =
+  | 'viewer'
+  | 'editor'
+  | 'admin'
+  | 'member'
+  | 'lead'
+  | 'assignee'
+  | 'executor'
+  | 'owner';
 
 // =============================================================================
 // Tuple Types
@@ -83,6 +267,35 @@ export interface FgaWriteRequest {
 
 /**
  * Check request: "Can user X do relation Y on object Z?"
+ *
+ * @example Standard check (RBAC/ReBAC only)
+ * ```typescript
+ * const request: FgaCheckRequest = {
+ *   userId: 'alice',
+ *   relation: 'can_view',
+ *   resourceType: 'project',
+ *   resourceId: 'demo',
+ * };
+ * ```
+ *
+ * @example Check with ABAC context
+ * ```typescript
+ * const request: FgaCheckRequest = {
+ *   userId: 'alice',
+ *   relation: 'can_view',
+ *   resourceType: 'sensitive_project',
+ *   resourceId: 'secret-project',
+ *   context: {
+ *     current_time: new Date().toISOString(),
+ *     user_ip: '10.0.1.50',
+ *     allowed_cidrs: ['10.0.0.0/8'],
+ *     user_country: 'US',
+ *     blocked_countries: ['RU', 'KP'],
+ *     user_clearance: 2,
+ *     resource_sensitivity: 1,
+ *   },
+ * };
+ * ```
  */
 export interface FgaCheckRequest {
   /** User ID (will be prefixed with "user:") */
@@ -93,8 +306,11 @@ export interface FgaCheckRequest {
   resourceType: FgaResourceType;
   /** Resource ID */
   resourceId: string;
-  /** Optional context for ABAC conditions */
-  context?: Record<string, unknown>;
+  /**
+   * ABAC context for conditional authorization.
+   * Required for ABAC-enabled relations (e.g., viewer_secure, cleared_viewer).
+   */
+  context?: ABACContext;
 }
 
 /**
@@ -120,8 +336,8 @@ export interface FgaListObjectsRequest {
   relation: string;
   /** Resource type to list */
   resourceType: FgaResourceType;
-  /** Optional context */
-  context?: Record<string, unknown>;
+  /** ABAC context for conditional filtering */
+  context?: ABACContext;
 }
 
 /**
