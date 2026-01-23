@@ -55,9 +55,11 @@ describe('ResilientRedisAdapter', () => {
       const result = await adapter.incrementSW('test-key', 60000, 100, Date.now());
 
       // Should get deny fallback after retries fail
+      // SW format: [allow, totalHits, remaining, resetMs]
       expect(result[0]).toBe(0); // denied
-      expect(result[1]).toBe(100); // limit
-      expect(result[2]).toBe(60000); // timeFrame
+      expect(result[1]).toBe(100); // totalHits = limit
+      expect(result[2]).toBe(0); // remaining = 0
+      expect(result[3]).toBe(60000); // resetMs = timeFrame
 
       expect(mockIncrementSW).toHaveBeenCalledTimes(3);
     });
@@ -162,8 +164,9 @@ describe('ResilientRedisAdapter', () => {
 
       const result = await adapter.incrementSW('test-key', 60000, 100, Date.now());
 
-      // Should return "allow" response
-      expect(result).toEqual([1, 1, 60000]);
+      // Should return "allow" response with correct SW format:
+      // [allow=1, totalHits=1, remaining=limit-1, resetMs=timeFrame]
+      expect(result).toEqual([1, 1, 99, 60000]);
     });
 
     it('denies requests when fallback strategy is "deny"', async () => {
@@ -178,8 +181,9 @@ describe('ResilientRedisAdapter', () => {
 
       const result = await adapter.incrementSW('test-key', 60000, 100, Date.now());
 
-      // Should return "deny" response
-      expect(result).toEqual([0, 100, 60000]);
+      // Should return "deny" response with correct SW format:
+      // [allow=0, totalHits=limit, remaining=0, resetMs=timeFrame]
+      expect(result).toEqual([0, 100, 0, 60000]);
     });
 
     it('uses cached result when available', async () => {
@@ -230,8 +234,9 @@ describe('ResilientRedisAdapter', () => {
       vi.advanceTimersByTime(1001);
 
       // Second call should fail and return deny response (no cache)
+      // SW format: [allow=0, totalHits=limit, remaining=0, resetMs=timeFrame]
       const result = await adapter.incrementSW('test-key', 60000, 100, Date.now());
-      expect(result).toEqual([0, 100, 60000]); // Deny response
+      expect(result).toEqual([0, 100, 0, 60000]);
 
       vi.useRealTimers();
     });
@@ -269,8 +274,10 @@ describe('ResilientRedisAdapter', () => {
 
       const result = await adapter.gcraCheck('test-key', 60000, 100, 5, Date.now());
 
-      // Should return "allow" response for GCRA
-      expect(result).toEqual([1, 100, 0]);
+      // Should return "allow" response for GCRA:
+      // [allow=1, remaining=burst, retryAfter=0]
+      // burst=5 in this test
+      expect(result).toEqual([1, 5, 0]);
     });
   });
 
@@ -324,8 +331,9 @@ describe('ResilientRedisAdapter', () => {
       adapter.clearCache();
 
       // Should return deny response (no cache)
+      // SW format: [allow=0, totalHits=limit, remaining=0, resetMs=timeFrame]
       const result = await adapter.incrementSW('test-key', 60000, 100, Date.now());
-      expect(result).toEqual([0, 100, 60000]);
+      expect(result).toEqual([0, 100, 0, 60000]);
     });
   });
 });

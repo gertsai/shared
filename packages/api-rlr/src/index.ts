@@ -38,6 +38,10 @@ export { LimiterStrategy, DraftVersionType, Methods } from './utils/types';
 // Export new services for advanced usage
 export { PathNormalizer } from './services/PathNormalizer';
 export { KeyGenerator } from './services/KeyGenerator';
+export { RouteResolver, type RouteMatch } from './services/RouteResolver';
+
+// Export RouteConfig type for benchmarks and advanced usage
+export type { RouteType as RouteConfig } from './utils/types';
 
 // Export improvements
 export { RateLimitPresets, RoutePresets, withPreset } from './presets/RateLimitPresets';

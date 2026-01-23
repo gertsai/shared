@@ -314,23 +314,22 @@ export class ResilientRedisAdapter implements StorageAdapter {
     }
 
     // Apply fallback strategy
+    // GCRA returns: [allow, remaining, retryAfter] (3 elements)
+    // Sliding Window returns: [allow, totalHits, remaining, resetMs] (4 elements)
     switch (this.options.fallbackStrategy) {
       case 'allow':
         // Allow the request when Redis is down
         console.warn('[ResilientRedisAdapter] Allowing request due to Redis failure');
         return context.burst !== undefined
-          ? [1, context.limit, 0] // GCRA: [allow, remaining, retryAfter]
-          : // Sliding Window incrementSW returns: [allow, totalHits, remaining, reset]
-            // Fallback matches test expectation: first hit allowed, reset=timeFrame
-            [1, 1, context.timeFrame];
+          ? [1, context.burst, 0] // GCRA: [allow=1, remaining=burst, retryAfter=0]
+          : [1, 1, context.limit - 1, context.timeFrame]; // SW: [allow=1, totalHits=1, remaining=limit-1, reset]
 
       case 'deny':
         // Deny the request when Redis is down
         console.warn('[ResilientRedisAdapter] Denying request due to Redis failure');
         return context.burst !== undefined
-          ? [0, 0, context.timeFrame] // GCRA: deny with full retry time
-          : // Sliding Window deny shape expected by incrementSW tests: [allow, totalHits, ttl]
-            [0, context.limit, context.timeFrame];
+          ? [0, 0, context.timeFrame] // GCRA: [allow=0, remaining=0, retryAfter=timeFrame]
+          : [0, context.limit, 0, context.timeFrame]; // SW: [allow=0, totalHits=limit, remaining=0, reset]
 
       case 'cache':
         // Only use cache, already tried above
