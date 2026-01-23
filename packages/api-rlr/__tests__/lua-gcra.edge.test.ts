@@ -33,26 +33,31 @@ describe.skipIf(!RUN)('Lua GCRA edge-cases', () => {
     )) as [number, number, number];
   };
 
-  it('remaining equals burst after first allow, decreases thereafter', async () => {
+  it('remaining decreases with each request until blocked', async () => {
     const key = 'lua:edge:gcra:remaining';
     await redis.del(key);
     const burst = 2;
     const now = Date.now();
 
+    // First request: remaining = burst - 1 = 1 (one slot used)
     const r1 = await call(key, burst, now);
-    expect(r1[0]).toBe(1);
-    expect(r1[1]).toBe(burst); // remaining == burst immediately after allow
+    expect(r1[0]).toBe(1); // allowed
+    expect(r1[1]).toBe(1); // remaining after first request
 
+    // Second request (almost immediately): remaining = 0
     const r2 = await call(key, burst, now + 1);
-    expect(r2[0]).toBe(1);
-    expect(r2[1]).toBe(burst);
+    expect(r2[0]).toBe(1); // still allowed (within burst)
+    expect(r2[1]).toBe(0); // no remaining burst capacity
 
-    // exceed burst -> block
+    // Third request: still allowed but at the edge
     const r3 = await call(key, burst, now + 2);
-    expect(r3[0]).toBe(1);
+    expect(r3[0]).toBe(1); // allowed (on the edge)
+    expect(r3[1]).toBe(0); // no remaining
 
+    // Fourth request: blocked (exceeded burst)
     const r4 = await call(key, burst, now + 30);
-    expect(r4[0]).toBe(0);
+    expect(r4[0]).toBe(0); // blocked
+    expect(r4[1]).toBe(0); // no remaining when blocked
     expect(r4[2]).toBeGreaterThan(0); // retryAfter > 0
   });
 

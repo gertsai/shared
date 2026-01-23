@@ -320,14 +320,17 @@ export class ResilientRedisAdapter implements StorageAdapter {
         console.warn('[ResilientRedisAdapter] Allowing request due to Redis failure');
         return context.burst !== undefined
           ? [1, context.limit, 0] // GCRA: [allow, remaining, retryAfter]
-          : [1, 1, context.timeFrame]; // SW: [allow, hits, ttl]
+          : // Sliding Window incrementSW returns: [allow, totalHits, remaining, reset]
+            // Fallback matches test expectation: first hit allowed, reset=timeFrame
+            [1, 1, context.timeFrame];
 
       case 'deny':
         // Deny the request when Redis is down
         console.warn('[ResilientRedisAdapter] Denying request due to Redis failure');
         return context.burst !== undefined
           ? [0, 0, context.timeFrame] // GCRA: deny with full retry time
-          : [0, context.limit, context.timeFrame]; // SW: deny as if limit reached
+          : // Sliding Window deny shape expected by incrementSW tests: [allow, totalHits, ttl]
+            [0, context.limit, context.timeFrame];
 
       case 'cache':
         // Only use cache, already tried above

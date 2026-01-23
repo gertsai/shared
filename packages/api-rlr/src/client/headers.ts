@@ -22,6 +22,10 @@ export const setDraft6Headers = (
     response.setHeader('X-RateLimit-Bucket', info.bucketId);
   }
 
+  // Scope and global flags for client-side bucketing
+  response.setHeader('X-RateLimit-Scope', info.scope ?? 'endpoint');
+  response.setHeader('X-RateLimit-Global', (info.global ?? false).toString());
+
   // Retry-After in whole seconds (ceil), never 0 if there is any wait
   const retrySeconds = Math.ceil(info.expiryTime / 1000);
   // Back-compat header: absolute reset time in seconds since epoch
@@ -32,12 +36,6 @@ export const setDraft6Headers = (
   // Also set standard header for clients
   response.setHeader('Retry-After', retrySeconds.toString());
   response.setHeader('X-RateLimit-Retry', Math.floor(Date.now() + info.expiryTime));
-
-  // res.setHeader('RateLimit-Limit', rateLimit);
-  // res.setHeader('RateLimit-Remaining', remaining >= 0 ? remaining : 0);
-  // res.setHeader('RateLimit-Reset', Math.ceil(expiry / 1000));
-  // res.setHeader('RateLimit-Reset-After', Math.ceil(expiry / 1000));
-  // console.log('resetSeconds: ', resetSeconds);
 };
 
 export const setDraft7Headers = (
@@ -60,4 +58,11 @@ export const setDraft7Headers = (
   if (info.bucketId) {
     response.setHeader('X-RateLimit-Bucket', info.bucketId);
   }
+
+  // Scope and global flags for client-side bucketing
+  response.setHeader('X-RateLimit-Scope', info.scope ?? 'endpoint');
+  response.setHeader('X-RateLimit-Global', (info.global ?? false).toString());
+
+  // Standard Retry-After header
+  response.setHeader('Retry-After', resetSeconds.toString());
 };

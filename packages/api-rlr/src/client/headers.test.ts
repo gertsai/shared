@@ -58,6 +58,38 @@ describe('headers', () => {
       expect(headers['X-RateLimit-Bucket']).toBe('get:/api/users');
     });
 
+    it('sets scope header with default value', () => {
+      const info = {
+        limit: 100,
+        timeFrame: 60000,
+        totalHits: 25,
+        remainingHits: 75,
+        expiryTime: 45000,
+      } satisfies RateLimitInfo;
+
+      setDraft6Headers(mockResponse, info, 60000);
+
+      expect(headers['X-RateLimit-Scope']).toBe('endpoint');
+      expect(headers['X-RateLimit-Global']).toBe('false');
+    });
+
+    it('sets scope header with custom value', () => {
+      const info = {
+        limit: 100,
+        timeFrame: 60000,
+        totalHits: 25,
+        remainingHits: 75,
+        expiryTime: 45000,
+        scope: 'tenant' as const,
+        global: true,
+      };
+
+      setDraft6Headers(mockResponse, info, 60000);
+
+      expect(headers['X-RateLimit-Scope']).toBe('tenant');
+      expect(headers['X-RateLimit-Global']).toBe('true');
+    });
+
     it('sets GCRA strategy in policy header', () => {
       const info = {
         limit: 100,
@@ -159,6 +191,39 @@ describe('headers', () => {
       setDraft7Headers(mockResponse, info, 30000);
 
       expect(headers['X-RateLimit-Bucket']).toBe('post:/api/messages');
+    });
+
+    it('sets scope and global headers with defaults', () => {
+      const info = {
+        limit: 100,
+        timeFrame: 60000,
+        totalHits: 25,
+        remainingHits: 75,
+        expiryTime: 45000,
+      } satisfies RateLimitInfo;
+
+      setDraft7Headers(mockResponse, info, 60000);
+
+      expect(headers['X-RateLimit-Scope']).toBe('endpoint');
+      expect(headers['X-RateLimit-Global']).toBe('false');
+      expect(headers['Retry-After']).toBe('45');
+    });
+
+    it('sets scope and global headers with custom values', () => {
+      const info = {
+        limit: 100,
+        timeFrame: 60000,
+        totalHits: 25,
+        remainingHits: 75,
+        expiryTime: 45000,
+        scope: 'user' as const,
+        global: true,
+      };
+
+      setDraft7Headers(mockResponse, info, 60000);
+
+      expect(headers['X-RateLimit-Scope']).toBe('user');
+      expect(headers['X-RateLimit-Global']).toBe('true');
     });
 
     it('calculates reset seconds correctly', () => {

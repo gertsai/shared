@@ -72,6 +72,12 @@ export type Store = {
   ) => Promise<void | GatewayResponse>;
 };
 
+/**
+ * Rate limit scope determines the isolation level of the rate limit.
+ * Used for client-side bucketing and retry logic.
+ */
+export type RateLimitScope = 'user' | 'global' | 'endpoint' | 'tenant' | 'ip';
+
 export type RateLimitInfo = {
   limit: number;
   timeFrame: number;
@@ -84,6 +90,10 @@ export type RateLimitInfo = {
   serviceLimit?: number;
   /** Optional server bucket id to help clients align bucketing */
   bucketId?: string;
+  /** Scope of the rate limit (endpoint, user, tenant, ip, global) */
+  scope?: RateLimitScope;
+  /** Whether this is a global rate limit that applies across all endpoints */
+  global?: boolean;
 };
 
 export type AugmentedRequest = Request & {

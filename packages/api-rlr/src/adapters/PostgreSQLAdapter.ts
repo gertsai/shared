@@ -281,7 +281,8 @@ export class PostgreSQLAdapter implements StorageAdapter {
           expiresAt,
         );
 
-        remaining = L;
+        // Remaining capacity after this request (matches GCRA Lua formula)
+        remaining = Math.max(0, Math.floor((now + L * I - newTat) / I));
       } else {
         // Request blocked
         allow = 0;

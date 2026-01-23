@@ -504,7 +504,8 @@ describe('PostgreSQLAdapter (mock)', () => {
       );
 
       expect(allow).toBe(1);
-      expect(remaining).toBe(3);
+      // For a new bucket, remaining = burst - 1 (one request just spent)
+      expect(remaining).toBe(2);
       expect(retryAfter).toBe(0);
     });
 

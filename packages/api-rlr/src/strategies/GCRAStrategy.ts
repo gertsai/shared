@@ -15,7 +15,9 @@ export class GCRAStrategy implements RateLimitStrategy {
     const remainingHits = Number(out?.[1] ?? 0);
     const retryAfter = Number(out?.[2] ?? 0);
     const expiryTime = retryAfter;
-    const totalHits = allow ? 1 : limit;
+    // totalHits должен отражать фактическое число использованных запросов в текущем окне.
+    // GCRA возвращает remainingHits = сколько ещё можно сейчас. Поэтому totalHits = limit - remaining.
+    const totalHits = Math.max(0, limit - remainingHits);
     return { allow, totalHits, remainingHits, expiryTime, retryAfter };
   }
 }

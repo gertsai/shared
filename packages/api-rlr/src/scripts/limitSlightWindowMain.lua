@@ -5,7 +5,7 @@ local timeFrame = tonumber(ARGV[1]) -- timeFrame in milliseconds
 local rateLimit = tonumber(ARGV[2]) -- requests per timeFrame
 local currentTime = tonumber(ARGV[3]) -- current time in milliseconds
 
-redis.replicate_commands()
+-- redis.replicate_commands() is deprecated in Redis 7+. Commented out to avoid warnings
 
 local quarterTimeFrame = timeFrame / 4
 local currentWindowStart = currentTime - (currentTime % timeFrame)
@@ -45,4 +45,3 @@ else
     -- allow=0, totalHits (at limit), remaining=0, reset
     return {0, rateLimit, 0, resetTime}
 end
-

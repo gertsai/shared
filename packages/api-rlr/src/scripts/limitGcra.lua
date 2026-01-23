@@ -27,21 +27,22 @@ local earliest = tat - (L * I)
 local allow = 0
 local retryAfter = 0
 
+-- Calculate remaining capacity using GCRA formula
+-- Formula from: https://jameslao.com/post/gcra-rate-limit-status/
+-- R = (P - (TAT - now)) / T where P = L * I, T = I
+-- Simplified: R = L - (newTat - now) / I = (now + L*I - newTat) / I
+local remaining = 0
+
 if now >= earliest then
   allow = 1
   local newTat = math.max(tat, now) + I
   redis.call('SET', key, newTat)
   redis.call('PEXPIRE', key, timeFrame * 2)
+  -- How many more requests can fit before hitting the limit?
+  remaining = math.max(0, math.floor((now + L * I - newTat) / I))
 else
   allow = 0
   retryAfter = earliest - now
-end
-
--- remaining is approximate; compute based on distance to limit edge
-local remaining = 0
-if allow == 1 then
-  remaining = L
-else
   remaining = 0
 end
 

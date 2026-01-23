@@ -77,9 +77,9 @@ export class MiddlewareFactory {
     const store = config.store() as RLRRedis;
     g.__RLR_STORES__[key] = store;
 
-    // Setup cleanup handlers once
+    // Setup cleanup handlers once (will close ALL stores on shutdown)
     if (!g.__RLR_CLEANED__) {
-      this.setupCleanupHandlers(store);
+      this.setupCleanupHandlers();
       g.__RLR_CLEANED__ = true;
     }
 
@@ -117,15 +117,25 @@ export class MiddlewareFactory {
 
   /**
    * Setup cleanup handlers for graceful shutdown
+   * Closes ALL stores in the singleton registry
    */
-  private static setupCleanupHandlers(store: RLRRedis): void {
+  private static setupCleanupHandlers(): void {
     const cleanup = () => {
-      try {
-        // @ts-ignore -- Safe: ioredis types may vary
-        store.quit?.();
-      } catch {
-        // Ignore cleanup errors
+      const g = globalThis as GlobalWithRLR;
+      const stores = g.__RLR_STORES__ || {};
+
+      // Close all registered stores
+      for (const [_key, store] of Object.entries(stores)) {
+        try {
+          // @ts-ignore -- Safe: ioredis types may vary
+          store.quit?.();
+        } catch {
+          // Ignore cleanup errors for individual stores
+        }
       }
+
+      // Clear the registry
+      g.__RLR_STORES__ = {};
     };
 
     process.once('SIGINT', cleanup);

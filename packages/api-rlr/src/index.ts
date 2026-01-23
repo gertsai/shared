@@ -27,7 +27,12 @@ export function RLRMiddleware<MReq = MolReq, MRes = MolRes, MNext = NextFunction
 export default RLRMiddleware;
 
 // Export types
-export type { RateLimitOptions, RequestHandler } from './utils/types';
+export type {
+  RateLimitOptions,
+  RequestHandler,
+  RateLimitInfo,
+  RateLimitScope,
+} from './utils/types';
 export { LimiterStrategy, DraftVersionType, Methods } from './utils/types';
 
 // Export new services for advanced usage
@@ -50,6 +55,9 @@ export type { RequestContextData } from './context/RequestContext';
 // Export test utilities
 export { RateLimitTestUtils } from './test-utils/RateLimitTestUtils';
 export type { SimulationResult, MockHeaders } from './test-utils/RateLimitTestUtils';
+
+// Export errors
+export { RateLimitError } from './errors/RateLimitError';
 
 // Export adapters
 export { RedisAdapter } from './adapters/RedisAdapter';
