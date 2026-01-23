@@ -42,7 +42,8 @@
   ],
   "scripts": {
     "build": "tspc --build tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "postinstall": "ts-patch install -s"
   },
   "dependencies": {
     "gpt-tokenizer": "^2.5.0",
