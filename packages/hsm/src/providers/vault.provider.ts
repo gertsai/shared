@@ -170,7 +170,11 @@ export class VaultProvider implements HSMProvider {
         case 'token':
           this._token = this.config.token ?? null;
           if (!this._token) {
-            throw new HSMError('Token required for token auth', HSMErrorCodes.CONFIG_ERROR, 'vault');
+            throw new HSMError(
+              'Token required for token auth',
+              HSMErrorCodes.CONFIG_ERROR,
+              'vault',
+            );
           }
           break;
 
@@ -305,9 +309,12 @@ export class VaultProvider implements HSMProvider {
         };
       }
 
-      // Check key availability
+      // Check key availability (direct request, no ensureConnected check)
       try {
-        await this.getKeyInfo();
+        await this.request<VaultKeyResponse>(
+          'GET',
+          `/v1/${this.config.transitMount}/keys/${this.config.keyName}`,
+        );
         keyAvailable = true;
       } catch (err) {
         this.logger.warn('Key not available', {
@@ -500,7 +507,10 @@ export class VaultProvider implements HSMProvider {
 
     const beforeInfo = await this.getKeyInfo();
 
-    await this.request('POST', `/v1/${this.config.transitMount}/keys/${this.config.keyName}/rotate`);
+    await this.request(
+      'POST',
+      `/v1/${this.config.transitMount}/keys/${this.config.keyName}/rotate`,
+    );
 
     const afterInfo = await this.getKeyInfo();
 
