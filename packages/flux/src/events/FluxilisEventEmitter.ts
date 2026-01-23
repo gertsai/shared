@@ -115,6 +115,9 @@ export class FluxilisEventEmitter<
   /** Storage of listeners by event name */
   private _events: Map<keyof TEventMap, ListenerInfo[]> = new Map();
 
+  /** Events currently being emitted (FIX-024: for copy-on-write optimization) */
+  private _emitting: Set<keyof TEventMap> = new Set();
+
   /** Maximum number of listeners per event */
   private _maxListeners: number = 10;
 
@@ -242,7 +245,13 @@ export class FluxilisEventEmitter<
       this._events.set(event, []);
     }
 
-    const listeners = this._events.get(event)!;
+    // FIX-024: Copy-on-write - if currently emitting this event, clone the array
+    // to avoid modifying it during iteration
+    let listeners = this._events.get(event)!;
+    if (this._emitting.has(event)) {
+      listeners = [...listeners];
+      this._events.set(event, listeners);
+    }
 
     // Insert listener according to priority (highest priority first)
     const index = listeners.findIndex((info) => info.priority < priority);
@@ -292,12 +301,17 @@ export class FluxilisEventEmitter<
       return this;
     }
 
-    const listeners = this._events.get(event)!;
-
     if (!listener) {
       // If no listener specified, remove all listeners for the event
       this._events.delete(event);
       return this;
+    }
+
+    // FIX-024: Copy-on-write - if currently emitting this event, clone the array
+    let listeners = this._events.get(event)!;
+    if (this._emitting.has(event)) {
+      listeners = [...listeners];
+      this._events.set(event, listeners);
     }
 
     // Find and remove specific listener
@@ -386,7 +400,9 @@ export class FluxilisEventEmitter<
       return false;
     }
 
-    const listeners = this._events.get(event)!.slice();
+    // FIX-024: No slice() - use copy-on-write in on()/off() instead
+    // This avoids O(N) array copy on every emit
+    const listeners = this._events.get(event)!;
     if (listeners.length === 0) {
       return false;
     }
@@ -394,26 +410,34 @@ export class FluxilisEventEmitter<
     // Track one-time listeners for removal
     const onceListeners: ListenerInfo['listener'][] = [];
 
-    // Call listeners
-    for (const info of listeners) {
-      try {
-        const result = info.listener(...args);
+    // FIX-024: Mark this event as "emitting" so on()/off() will copy-on-write
+    this._emitting.add(event);
 
-        // If async listener mode enabled and result is promise
-        if (this._asyncListeners && isPromise(result)) {
-          // Handle errors from async listeners
-          result.catch((err) => {
-            console.error(`Error in async listener for event '${String(event)}':`, err);
-          });
-        }
+    try {
+      // Call listeners
+      for (const info of listeners) {
+        try {
+          const result = info.listener(...args);
 
-        // Mark one-time listeners for removal
-        if (info.once) {
-          onceListeners.push(info.listener);
+          // If async listener mode enabled and result is promise
+          if (this._asyncListeners && isPromise(result)) {
+            // Handle errors from async listeners
+            result.catch((err) => {
+              console.error(`Error in async listener for event '${String(event)}':`, err);
+            });
+          }
+
+          // Mark one-time listeners for removal
+          if (info.once) {
+            onceListeners.push(info.listener);
+          }
+        } catch (err) {
+          console.error(`Error in listener for event '${String(event)}':`, err);
         }
-      } catch (err) {
-        console.error(`Error in listener for event '${String(event)}':`, err);
       }
+    } finally {
+      // FIX-024: Clear emitting flag
+      this._emitting.delete(event);
     }
 
     // Remove one-time listeners
@@ -472,7 +496,8 @@ export class FluxilisEventEmitter<
       return false;
     }
 
-    const listeners = this._events.get(event)!.slice();
+    // FIX-024: No slice() - use copy-on-write in on()/off() instead
+    const listeners = this._events.get(event)!;
     if (listeners.length === 0) {
       return false;
     }
@@ -483,23 +508,31 @@ export class FluxilisEventEmitter<
     // Array of promises from async listeners
     const promises: Promise<void>[] = [];
 
-    // Call listeners
-    for (const info of listeners) {
-      try {
-        const result = info.listener(...args);
+    // FIX-024: Mark this event as "emitting" so on()/off() will copy-on-write
+    this._emitting.add(event);
 
-        // If result is promise, add to array
-        if (isPromise(result)) {
-          promises.push(result);
-        }
+    try {
+      // Call listeners
+      for (const info of listeners) {
+        try {
+          const result = info.listener(...args);
 
-        // Mark one-time listeners for removal
-        if (info.once) {
-          onceListeners.push(info.listener);
+          // If result is promise, add to array
+          if (isPromise(result)) {
+            promises.push(result);
+          }
+
+          // Mark one-time listeners for removal
+          if (info.once) {
+            onceListeners.push(info.listener);
+          }
+        } catch (err) {
+          console.error(`Error in listener for event '${String(event)}':`, err);
         }
-      } catch (err) {
-        console.error(`Error in listener for event '${String(event)}':`, err);
       }
+    } finally {
+      // FIX-024: Clear emitting flag
+      this._emitting.delete(event);
     }
 
     // Wait for all async listeners to complete

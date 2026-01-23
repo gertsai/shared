@@ -983,4 +983,117 @@ describe('FluxilisEventEmitter', () => {
       expect(emitter.listenerCount('event')).toBe(6);
     });
   });
+
+  // --- Copy-on-Write Behavior (FIX-024) ---
+  describe('Copy-on-Write during emit', () => {
+    it('should safely handle listener adding new listener during emit', () => {
+      const calls: number[] = [];
+      const listener2 = () => calls.push(2);
+
+      // Listener that adds another listener during emit
+      const listener1 = () => {
+        calls.push(1);
+        emitter.on('test', listener2);
+      };
+
+      emitter.on('test', listener1);
+      emitter.emit('test');
+
+      // listener1 was called, listener2 was added but NOT called in this emit
+      expect(calls).toEqual([1]);
+      expect(emitter.listenerCount('test')).toBe(2);
+
+      // Second emit should call both
+      emitter.emit('test');
+      expect(calls).toEqual([1, 1, 2]);
+    });
+
+    it('should safely handle listener removing itself during emit', () => {
+      const calls: number[] = [];
+
+      const selfRemovingListener = () => {
+        calls.push(1);
+        emitter.off('test', selfRemovingListener);
+      };
+      const permanentListener = () => calls.push(2);
+
+      emitter.on('test', selfRemovingListener);
+      emitter.on('test', permanentListener);
+
+      emitter.emit('test');
+
+      // Both should have been called
+      expect(calls).toEqual([1, 2]);
+      // selfRemovingListener should be removed
+      expect(emitter.listenerCount('test')).toBe(1);
+
+      // Second emit should only call permanent listener
+      emitter.emit('test');
+      expect(calls).toEqual([1, 2, 2]);
+    });
+
+    it('should safely handle listener removing other listener during emit', () => {
+      const calls: number[] = [];
+
+      const listener2 = () => calls.push(2);
+      const listener1 = () => {
+        calls.push(1);
+        emitter.off('test', listener2);
+      };
+
+      emitter.on('test', listener1);
+      emitter.on('test', listener2);
+
+      emitter.emit('test');
+
+      // Both should be called in first emit (copy-on-write protects iteration)
+      expect(calls).toEqual([1, 2]);
+      // listener2 should be removed
+      expect(emitter.listenerCount('test')).toBe(1);
+    });
+
+    it('should handle multiple modifications during single emit', () => {
+      const calls: string[] = [];
+      const newListener = () => calls.push('new');
+
+      const modifier = () => {
+        calls.push('modifier');
+        // Remove self
+        emitter.off('test', modifier);
+        // Add new listener
+        emitter.on('test', newListener);
+      };
+      const stable = () => calls.push('stable');
+
+      emitter.on('test', modifier);
+      emitter.on('test', stable);
+
+      emitter.emit('test');
+      expect(calls).toEqual(['modifier', 'stable']);
+      expect(emitter.listenerCount('test')).toBe(2); // stable + newListener
+
+      emitter.emit('test');
+      expect(calls).toEqual(['modifier', 'stable', 'stable', 'new']);
+    });
+
+    it('should handle async emit with copy-on-write', async () => {
+      const calls: number[] = [];
+      const listener2 = async () => calls.push(2);
+
+      const listener1 = async () => {
+        calls.push(1);
+        emitter.on('test', listener2);
+      };
+
+      emitter.on('test', listener1);
+      await emitter.emitAsync('test');
+
+      // Only listener1 called in first emit
+      expect(calls).toEqual([1]);
+      expect(emitter.listenerCount('test')).toBe(2);
+
+      await emitter.emitAsync('test');
+      expect(calls).toEqual([1, 1, 2]);
+    });
+  });
 });

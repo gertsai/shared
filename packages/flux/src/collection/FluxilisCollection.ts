@@ -388,6 +388,55 @@ export class FluxilisCollection<K extends FluxilisKey, V> extends MutableCollect
     return this._ttlTimers.size;
   }
 
+  /**
+   * Destroys the collection, clearing all data and timers.
+   * Call this when you're done with the collection to prevent timer leaks.
+   *
+   * @remarks
+   * This method clears all entries and TTL timers. After calling destroy(),
+   * the collection can still be used (it's just empty), but it's recommended
+   * to discard the reference.
+   *
+   * @example
+   * ```typescript
+   * const cache = new FluxilisCollection<string, Data>();
+   * cache.setWithTTL('key', data, 60000);
+   *
+   * // When done with the cache
+   * cache.destroy();
+   * ```
+   */
+  destroy(): void {
+    // Clear all TTL timers first (prevents callbacks firing during clear)
+    for (const timer of this._ttlTimers.values()) {
+      clearTimeout(timer);
+    }
+    this._ttlTimers.clear();
+
+    // Clear all data
+    super.clear();
+
+    // Emit clear event for cleanup listeners
+    this._eventEmitter.emit('clear');
+  }
+
+  /**
+   * Symbol.dispose implementation for `using` keyword (ES2024).
+   * Allows automatic cleanup when used with `using` declaration.
+   *
+   * @example
+   * ```typescript
+   * {
+   *   using cache = new FluxilisCollection<string, Data>();
+   *   cache.setWithTTL('key', data, 60000);
+   *   // ... use cache
+   * } // Automatically calls destroy() when scope exits
+   * ```
+   */
+  [Symbol.dispose](): void {
+    this.destroy();
+  }
+
   // =========================================================================
   // Additional utility methods (flux-specific)
   // =========================================================================
