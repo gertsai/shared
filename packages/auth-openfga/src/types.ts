@@ -39,6 +39,8 @@ export type FgaResourceType =
 export interface ABACTimeContext {
   /** Current timestamp (ISO 8601 format) */
   current_time: string;
+  /** Current hour (0-23 UTC) - for local pre-checks without parsing timestamp */
+  current_hour?: number;
 }
 
 /**
@@ -123,6 +125,29 @@ export const CLEARANCE_LEVELS = {
 } as const;
 
 export type ClearanceLevel = (typeof CLEARANCE_LEVELS)[keyof typeof CLEARANCE_LEVELS];
+
+// =============================================================================
+// Trusted Proxy Configuration (SEC-006: IP/Geo spoofing prevention)
+// =============================================================================
+
+/**
+ * Configuration for trusted proxy validation.
+ * Used to securely extract client IP and geo data.
+ *
+ * @example
+ * ```typescript
+ * const config: TrustedProxyConfig = {
+ *   trustedProxies: ['10.0.0.0/8', ...CLOUDFLARE_IPV4_RANGES],
+ *   trustedGeoHeaders: ['cf-ipcountry'],
+ * };
+ * ```
+ */
+export interface TrustedProxyConfig {
+  /** CIDR ranges of trusted proxy servers (e.g., Cloudflare, internal LBs) */
+  trustedProxies: string[];
+  /** Headers to trust for geo-location (only from trusted proxies) */
+  trustedGeoHeaders: 'cf-ipcountry'[];
+}
 
 /**
  * Resource status values for ABAC.

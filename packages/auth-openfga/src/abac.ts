@@ -3,10 +3,16 @@
  *
  * Utilities for building ABAC context from HTTP requests.
  * Extracts IP address, geo-location, and other attributes.
+ *
+ * SEC-006: Secure IP and Geo extraction with trusted proxy validation.
  */
 
 import type { ABACContext } from './types.js';
 import { CLEARANCE_LEVELS, RESOURCE_STATUS, BLOCKED_COUNTRIES_OFAC } from './types.js';
+import { isTrustedProxy, isCloudflareIp, DEFAULT_TRUSTED_PROXIES } from './cloudflare-ips.js';
+
+// Re-export trusted proxy utilities
+export { isTrustedProxy, isCloudflareIp, DEFAULT_TRUSTED_PROXIES } from './cloudflare-ips.js';
 
 // Re-export types for convenience
 export type { ClearanceLevel, ResourceStatus } from './types.js';
@@ -208,13 +214,59 @@ export function buildABACContext(
 // =============================================================================
 
 /**
- * Extracts client IP address from request.
- * Handles X-Forwarded-For, X-Real-IP, and direct connection.
+ * Extracts client IP address from request SECURELY.
+ *
+ * SEC-006: Only trusts X-Forwarded-For when request comes from a trusted proxy.
+ * Takes RIGHTMOST non-trusted IP from XFF to prevent spoofing.
+ *
+ * @example
+ * // Request from Cloudflare with XFF: "spoofed, real-client, cloudflare-edge"
+ * // Direct IP: 103.21.244.50 (Cloudflare)
+ * // Result: real-client (rightmost non-trusted)
  */
-export function extractClientIp(request: ABACRequestInfo): string {
+export function extractClientIp(
+  request: ABACRequestInfo,
+  trustedProxies: readonly string[] = DEFAULT_TRUSTED_PROXIES,
+): string {
+  const headers = request.headers ?? {};
+  const directIp = request.ip;
+
+  // If no direct IP, can't validate proxy chain
+  if (!directIp || !isValidIp(directIp)) {
+    return '0.0.0.0';
+  }
+
+  // Only trust XFF if request came from a known proxy
+  if (isTrustedProxy(directIp, trustedProxies)) {
+    const xff = headers['x-forwarded-for'];
+    if (xff) {
+      // Take RIGHTMOST non-trusted IP (prevents client spoofing leftmost)
+      const ips = xff.split(',').map((ip) => ip.trim());
+      for (let i = ips.length - 1; i >= 0; i--) {
+        const ip = ips[i];
+        if (isValidIp(ip) && !isTrustedProxy(ip, trustedProxies)) {
+          return ip;
+        }
+      }
+    }
+
+    // X-Real-IP as fallback
+    const xri = headers['x-real-ip'];
+    if (xri && isValidIp(xri)) return xri;
+  }
+
+  // Fallback to direct connection IP
+  return directIp;
+}
+
+/**
+ * Legacy extractClientIp without proxy validation.
+ * @deprecated Use extractClientIp with trustedProxies parameter.
+ */
+export function extractClientIpUnsafe(request: ABACRequestInfo): string {
   const headers = request.headers ?? {};
 
-  // X-Forwarded-For (first IP in chain)
+  // X-Forwarded-For (first IP in chain) - INSECURE!
   const xff = headers['x-forwarded-for'];
   if (xff) {
     const firstIp = xff.split(',')[0].trim();
@@ -232,17 +284,45 @@ export function extractClientIp(request: ABACRequestInfo): string {
 }
 
 /**
- * Extracts country code from request.
- * Uses Cloudflare CF-IPCountry or X-Country-Code headers.
+ * Extracts country code from request SECURELY.
+ *
+ * SEC-007: Only trusts CF-IPCountry when request comes from Cloudflare IP.
+ * Custom x-country-code header is NEVER trusted (can be spoofed).
  */
-export function extractCountryCode(request: ABACRequestInfo): string {
+export function extractCountryCode(
+  request: ABACRequestInfo,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _trustedProxies: readonly string[] = DEFAULT_TRUSTED_PROXIES,
+): string {
+  const headers = request.headers ?? {};
+  const directIp = request.ip;
+
+  // Only trust CF-IPCountry if request came from Cloudflare
+  if (directIp && isCloudflareIp(directIp)) {
+    const cfCountry = headers['cf-ipcountry'];
+    if (cfCountry && cfCountry.length === 2) {
+      return cfCountry.toUpperCase();
+    }
+  }
+
+  // x-country-code is NOT trusted - removed for security
+  // Attackers could send: curl -H "x-country-code: US" from sanctioned country
+
+  return 'XX'; // Unknown - requires GeoIP lookup in production
+}
+
+/**
+ * Legacy extractCountryCode without proxy validation.
+ * @deprecated Use extractCountryCode with trustedProxies parameter.
+ */
+export function extractCountryCodeUnsafe(request: ABACRequestInfo): string {
   const headers = request.headers ?? {};
 
-  // Cloudflare
+  // Cloudflare - INSECURE without IP validation!
   const cfCountry = headers['cf-ipcountry'];
   if (cfCountry && cfCountry.length === 2) return cfCountry.toUpperCase();
 
-  // Custom header
+  // Custom header - INSECURE, can be spoofed!
   const xCountry = headers['x-country-code'];
   if (xCountry && xCountry.length === 2) return xCountry.toUpperCase();
 

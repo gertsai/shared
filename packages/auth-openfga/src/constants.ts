@@ -104,6 +104,34 @@ export const ACTION_TO_RELATION: Record<string, string> = {
 };
 
 // =============================================================================
+// Subject Types (SEC-009: Explicit subject type for correct authorization)
+// =============================================================================
+
+/**
+ * Subject types for OpenFGA authorization checks.
+ *
+ * CRITICAL: IAM event sourcing writes tuples with specific subject types.
+ * Authorization checks MUST use the same subject type as the written tuples.
+ *
+ * @example
+ * IAM writes: user:USER-123 → viewer → project:P1
+ * Check must use: subjectString('user', 'USER-123')
+ * NOT: subjectString('user', 'KEY-ABC') ← This would never match!
+ */
+export type SubjectType = 'user' | 'api_key' | 'team' | 'tenant' | 'role';
+
+/**
+ * Creates a subject string with explicit type.
+ * Use this for all OpenFGA authorization checks.
+ *
+ * @example subjectString('user', '123') → 'user:123'
+ * @example subjectString('api_key', 'abc') → 'api_key:abc'
+ */
+export function subjectString(type: SubjectType, id: string): string {
+  return `${type}:${id}`;
+}
+
+// =============================================================================
 // Tuple Helpers
 // =============================================================================
 
@@ -113,6 +141,16 @@ export const ACTION_TO_RELATION: Record<string, string> = {
  */
 export function userString(userId: string): string {
   return `${FGA_TYPES.USER}:${userId}`;
+}
+
+/**
+ * Creates an api_key string for OpenFGA.
+ * Use when the subject is the API key itself (not the owner).
+ *
+ * @example apiKeyString('key-abc') → 'api_key:key-abc'
+ */
+export function apiKeyString(keyId: string): string {
+  return `${FGA_TYPES.API_KEY}:${keyId}`;
 }
 
 /**

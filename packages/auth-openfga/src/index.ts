@@ -73,6 +73,8 @@ export type {
   ABACResourceContext,
   ClearanceLevel,
   ResourceStatus,
+  // Trusted Proxy types (SEC-006)
+  TrustedProxyConfig,
 } from './types.js';
 
 // ABAC constants
@@ -87,15 +89,30 @@ export {
   buildResourceContext,
   extractClientIp,
   extractCountryCode,
+  // Legacy (deprecated)
+  extractClientIpUnsafe,
+  extractCountryCodeUnsafe,
   isValidIp,
   isWithinBusinessHours,
   isClearanceSufficient,
   isCountryAllowed,
   preCheckABAC,
   DEFAULT_ABAC_POLICY,
+  // Trusted proxy utilities (SEC-006)
+  isTrustedProxy,
+  isCloudflareIp,
+  DEFAULT_TRUSTED_PROXIES,
 } from './abac.js';
 
 export type { ABACRequestInfo, ABACResourceInfo, ABACPolicy } from './abac.js';
+
+// Cloudflare IP ranges (SEC-006)
+export {
+  CLOUDFLARE_IPV4_RANGES,
+  CLOUDFLARE_IPV6_RANGES,
+  PRIVATE_IP_RANGES,
+  isIpInCidr,
+} from './cloudflare-ips.js';
 
 // Constants
 export {
@@ -104,6 +121,9 @@ export {
   FGA_DEFAULT_CONFIG,
   METHOD_TO_RELATION,
   ACTION_TO_RELATION,
+  // Subject helpers (SEC-009)
+  subjectString,
+  apiKeyString,
   userString,
   teamMemberString,
   roleAssigneeString,
@@ -111,6 +131,9 @@ export {
   parseObjectString,
   parseUserString,
 } from './constants.js';
+
+// Subject types (SEC-009)
+export type { SubjectType } from './constants.js';
 
 // Queries
 export {
