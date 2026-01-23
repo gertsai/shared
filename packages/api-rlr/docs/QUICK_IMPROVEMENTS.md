@@ -1,4 +1,4 @@
-# Quick Improvements for @orchdev/api-rlr
+# Quick Improvements for @gerts/api-rlr
 
 ## 🚀 Immediate Improvements (Can be done now)
 

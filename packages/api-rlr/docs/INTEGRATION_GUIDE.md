@@ -2,7 +2,7 @@
 
 ## 🎯 Overview
 
-We've successfully integrated two new modular services into the `@orchdev/api-rlr` package to improve code organization and maintainability:
+We've successfully integrated two new modular services into the `@gerts/api-rlr` package to improve code organization and maintainability:
 
 1. **PathNormalizer** - Centralizes path normalization logic
 2. **KeyGenerator** - Manages Redis key generation and validation
@@ -25,7 +25,7 @@ We've successfully integrated two new modular services into the `@orchdev/api-rl
 **Usage Example**:
 
 ```typescript
-import { PathNormalizer } from '@orchdev/api-rlr';
+import { PathNormalizer } from '@gerts/api-rlr';
 
 const normalizer = new PathNormalizer();
 
@@ -55,7 +55,7 @@ normalizer.matches('/users/ABC123DEF456', '/users/:id');
 **Usage Example**:
 
 ```typescript
-import { KeyGenerator } from '@orchdev/api-rlr';
+import { KeyGenerator } from '@gerts/api-rlr';
 
 const generator = new KeyGenerator('rlr:');
 
@@ -141,7 +141,7 @@ pnpm test
 The services are now exported from the main package:
 
 ```typescript
-import { RLRMiddleware, PathNormalizer, KeyGenerator } from '@orchdev/api-rlr';
+import { RLRMiddleware, PathNormalizer, KeyGenerator } from '@gerts/api-rlr';
 
 // Use services independently for custom implementations
 const normalizer = new PathNormalizer();

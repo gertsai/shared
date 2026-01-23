@@ -1,4 +1,4 @@
-# Architecture Improvements for @orchdev/api-rlr
+# Architecture Improvements for @gerts/api-rlr
 
 ## 📊 Current Architecture Analysis
 

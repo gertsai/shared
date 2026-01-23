@@ -52,9 +52,9 @@ It is necessary to create a .npmrc file in the place where the package is used a
 
 ```sh
 # Using npm
-> pnpm add @orchdev/api-rlr
+> pnpm add @gerts/api-rlr
 # Using yarn or pnpm
-> yarn/pnpm add @orchdev/api-rlr
+> yarn/pnpm add @gerts/api-rlr
 ```
 
 ## Usage
@@ -68,13 +68,13 @@ Import it in a CommonJS project (`type: commonjs` or no `type` field in
 `package.json`) as follows:
 
 ```ts
-const { RLRMiddleware } = require('@orchdev/api-rlr');
+const { RLRMiddleware } = require('@gerts/api-rlr');
 ```
 
 Import it in a ESM project (`type: module` in `package.json`) as follows:
 
 ```ts
-import { RLRMiddleware } from '@orchdev/api-rlr';
+import { RLRMiddleware } from '@gerts/api-rlr';
 ```
 
 ### Examples
@@ -82,8 +82,8 @@ import { RLRMiddleware } from '@orchdev/api-rlr';
 Global middleware with Redis store and GCRA strategy (recommended for webhook follow‑up/pull endpoints):
 
 ```ts
-import { createApiService } from '@orchdev/api-core';
-import RLRMiddleware from '@orchdev/api-rlr';
+import { createApiService } from '@gerts/api-core';
+import RLRMiddleware from '@gerts/api-rlr';
 import RedisClient from 'ioredis';
 
 import pjson from '../../package.json';
@@ -307,8 +307,8 @@ Notes:
 
 ```ts
 // api/services/src/mol-services/api.service.ts
-import { createApiService } from '@orchdev/api-core';
-import RLRMiddleware from '@orchdev/api-rlr';
+import { createApiService } from '@gerts/api-core';
+import RLRMiddleware from '@gerts/api-rlr';
 import RedisClient from 'ioredis';
 import jwt from 'jsonwebtoken';
 
