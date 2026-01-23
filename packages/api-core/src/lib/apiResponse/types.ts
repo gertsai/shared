@@ -156,8 +156,20 @@ export interface ErrorMetaOptions {
   stage?: GertsProcessingStage;
 }
 
-const anyValidator = typia.createValidate<any>();
-const neverValidator = typia.createValidate<never>();
+// Lazy validators to avoid top-level typia.createValidate() calls
+// which fail when module is loaded before unplugin-typia transforms
+let _anyValidator: ReturnType<typeof typia.createValidate<any>> | undefined;
+let _neverValidator: ReturnType<typeof typia.createValidate<never>> | undefined;
+
+const getAnyValidator = () => {
+  if (!_anyValidator) _anyValidator = typia.createValidate<any>();
+  return _anyValidator;
+};
+
+const getNeverValidator = () => {
+  if (!_neverValidator) _neverValidator = typia.createValidate<never>();
+  return _neverValidator;
+};
 
 /**
  * Helper to generate responseMeta for success responses.
@@ -176,7 +188,7 @@ const generateResponseMeta = <
 ) =>
   ({
     [code]: {
-      validator: validator ?? neverValidator,
+      validator: validator ?? getNeverValidator(),
       meta: {
         success: true,
         message,
@@ -222,7 +234,7 @@ const generateErrorMeta = <
 ) =>
   ({
     [code]: {
-      validator: validator ?? neverValidator,
+      validator: validator ?? getNeverValidator(),
       meta: {
         success: false,
         message,
@@ -235,15 +247,19 @@ const generateErrorMeta = <
   }) as unknown as Record<CODE, ResponseMeta<CODE, DATA>>;
 
 export const responseMetadata = {
-  ...generateResponseMeta(ResponseCode.SUCCESS, 'Success', anyValidator),
-  ...generateResponseMeta(ResponseCode.SUCCESS_CREATED, 'Success; Created', anyValidator),
-  ...generateResponseMeta(ResponseCode.SUCCESS_ACCEPTED, 'Success; Accepted', anyValidator),
+  ...generateResponseMeta(ResponseCode.SUCCESS, 'Success', getAnyValidator()),
+  ...generateResponseMeta(ResponseCode.SUCCESS_CREATED, 'Success; Created', getAnyValidator()),
+  ...generateResponseMeta(ResponseCode.SUCCESS_ACCEPTED, 'Success; Accepted', getAnyValidator()),
   ...generateResponseMeta(
     ResponseCode.SUCCESS_PARTIAL_RESPONSE,
     'Success; Partial response',
-    anyValidator,
+    getAnyValidator(),
   ),
-  ...generateResponseMeta(ResponseCode.SUCCESS_NO_RESPONSE, 'Success; No response', anyValidator),
+  ...generateResponseMeta(
+    ResponseCode.SUCCESS_NO_RESPONSE,
+    'Success; No response',
+    getAnyValidator(),
+  ),
   //
   ...generateErrorMeta(ResponseCode.MULTIPLE_CHOICES, 'Multiple choices'),
   ...generateErrorMeta(ResponseCode.PERMANENTLY_MOVED, 'Permanently moved'),

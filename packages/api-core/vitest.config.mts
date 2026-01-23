@@ -1,15 +1,19 @@
 import { defineConfig } from 'vitest/config';
 import tsconfigPaths from 'vite-tsconfig-paths';
-import unpluginTypia from '@ryoppippi/unplugin-typia/vite';
+import untypia from '@ryoppippi/unplugin-typia';
 
 export default defineConfig({
   plugins: [
+    // typia transform - must come first
+    // @ts-expect-error - vite version mismatch
+    untypia.vite({
+      tsconfig: './tsconfig.json',
+    }),
     tsconfigPaths({
       projects: ['../../tsconfig.base.json'],
       ignoreConfigErrors: true,
       loose: true,
     }),
-    unpluginTypia(),
   ],
   test: {
     environment: 'node',
