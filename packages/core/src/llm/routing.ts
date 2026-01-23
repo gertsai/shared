@@ -23,7 +23,7 @@ import {
   getMostCapableModel,
   calculateCost,
   type ModelInfo,
-  type AI_PROVIDER_TYPE,
+  type Provider as AI_PROVIDER_TYPE,
 } from './model-registry';
 import type {
   LLMRouterSelectionEvent,

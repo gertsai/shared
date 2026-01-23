@@ -90,14 +90,17 @@ export const HTTP_TO_ERROR_KIND: Record<number, ErrorKind> = {
   401: ErrorKind.Unauthenticated,
   403: ErrorKind.PermissionDenied,
   404: ErrorKind.NotFound,
+  408: ErrorKind.DeadlineExceeded, // Request Timeout
   409: ErrorKind.AlreadyExists,
   412: ErrorKind.FailedPrecondition,
+  413: ErrorKind.OutOfRange, // Payload Too Large
   429: ErrorKind.ResourceExhausted,
   499: ErrorKind.Cancelled,
   500: ErrorKind.Internal,
   501: ErrorKind.Unimplemented,
   503: ErrorKind.Unavailable,
-  504: ErrorKind.DeadlineExceeded,
+  504: ErrorKind.DeadlineExceeded, // Gateway Timeout
+  507: ErrorKind.ResourceExhausted, // Insufficient Storage
 };
 
 /**
