@@ -336,4 +336,88 @@ describe('ResilientRedisAdapter', () => {
       expect(result).toEqual([0, 100, 0, 60000]);
     });
   });
+
+  describe('LRU cache eviction', () => {
+    it('evicts oldest entries when cache reaches maxSize', async () => {
+      const mockIncrementSW = vi.fn().mockImplementation((key: string) => {
+        // Return different results per key for tracking
+        const keyNum = parseInt(key.split('-')[1]) || 1;
+        return Promise.resolve([1, keyNum, 10, 1000]);
+      });
+
+      mockStore.incrementSW = mockIncrementSW;
+
+      adapter = new ResilientRedisAdapter(mockStore, {
+        retryAttempts: 1,
+        fallbackStrategy: 'allow', // Use 'allow' so missing cache doesn't throw
+        cacheSize: 3, // Small cache to test eviction
+        cacheTTL: 60000,
+      });
+
+      // Fill cache with 3 keys
+      await adapter.incrementSW('key-1', 60000, 100, Date.now());
+      await adapter.incrementSW('key-2', 60000, 100, Date.now());
+      await adapter.incrementSW('key-3', 60000, 100, Date.now());
+
+      // Add 4th key - should evict key-1 (oldest)
+      await adapter.incrementSW('key-4', 60000, 100, Date.now());
+
+      // Now make Redis fail
+      mockIncrementSW.mockRejectedValue(new Error('Redis down'));
+
+      // key-2, key-3, key-4 should use cache
+      const r2 = await adapter.incrementSW('key-2', 60000, 100, Date.now());
+      const r3 = await adapter.incrementSW('key-3', 60000, 100, Date.now());
+      const r4 = await adapter.incrementSW('key-4', 60000, 100, Date.now());
+
+      expect(r2[1]).toBe(2); // from cache
+      expect(r3[1]).toBe(3); // from cache
+      expect(r4[1]).toBe(4); // from cache
+
+      // key-1 was evicted, should fall back to 'allow' strategy
+      // SW allow format: [1, 1, limit-1, timeFrame]
+      const r1 = await adapter.incrementSW('key-1', 60000, 100, Date.now());
+      expect(r1[0]).toBe(1); // allowed (fallback)
+      expect(r1[1]).toBe(1); // totalHits = 1 (fallback default)
+    });
+
+    it('updates cache on each successful call (LRU refresh)', async () => {
+      const mockIncrementSW = vi.fn().mockResolvedValue([1, 50, 50, 1000]);
+
+      mockStore.incrementSW = mockIncrementSW;
+
+      adapter = new ResilientRedisAdapter(mockStore, {
+        retryAttempts: 1,
+        fallbackStrategy: 'allow', // Use 'allow' so missing cache doesn't throw
+        cacheSize: 2,
+        cacheTTL: 60000,
+      });
+
+      // Add key-1 and key-2
+      await adapter.incrementSW('key-1', 60000, 100, Date.now());
+      await adapter.incrementSW('key-2', 60000, 100, Date.now());
+
+      // Access key-1 again (refreshes its LRU position)
+      await adapter.incrementSW('key-1', 60000, 100, Date.now());
+
+      // Add key-3 - should evict key-2 (now oldest), not key-1
+      await adapter.incrementSW('key-3', 60000, 100, Date.now());
+
+      // Make Redis fail
+      mockIncrementSW.mockRejectedValue(new Error('Redis down'));
+
+      // key-1 should be in cache (was refreshed)
+      const r1 = await adapter.incrementSW('key-1', 60000, 100, Date.now());
+      expect(r1[1]).toBe(50); // from cache
+
+      // key-3 should be in cache
+      const r3 = await adapter.incrementSW('key-3', 60000, 100, Date.now());
+      expect(r3[1]).toBe(50); // from cache
+
+      // key-2 was evicted, should use fallback
+      const r2 = await adapter.incrementSW('key-2', 60000, 100, Date.now());
+      expect(r2[0]).toBe(1); // fallback allow (no cache)
+      expect(r2[1]).toBe(1); // totalHits = 1 (fallback)
+    });
+  });
 });

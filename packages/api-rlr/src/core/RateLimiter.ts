@@ -11,6 +11,7 @@ import { RouteResolver } from '../services/RouteResolver';
 import { StrategyFactory } from '../strategies/StrategyFactory';
 import type { IncomingRequest, RateLimitInfo, RateLimitOptions, RouteType } from '../utils/types';
 import { LimiterStrategy } from '../utils/types';
+import { isWhitelisted } from '../utils/security';
 
 export interface RateLimitDecision {
   allowed: boolean;
@@ -143,9 +144,13 @@ export class RateLimiter {
 
   /**
    * Check if subject is whitelisted
+   * Uses constant-time comparison to prevent timing attacks (CWE-208)
    */
   private isWhitelisted(subject: string): boolean {
-    return Boolean(this.config.whiteList?.includes(subject));
+    if (!this.config.whiteList || this.config.whiteList.length === 0) {
+      return false;
+    }
+    return isWhitelisted(subject, this.config.whiteList);
   }
 
   /**

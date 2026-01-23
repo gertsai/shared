@@ -16,6 +16,7 @@ import { RouteResolver } from '../services/RouteResolver';
 import { StrategyFactory } from '../strategies/StrategyFactory';
 import { DefaultConfig } from '../utils/constants';
 import { parseScriptResponse } from '../utils/parser';
+import { isWhitelisted } from '../utils/security';
 import type {
   ClientRateLimitInfo,
   NextFunction,
@@ -270,10 +271,9 @@ export class RateLimitRequest extends EventEmitter implements Store {
       let timeFrame = this.config.timeFrame;
       let strategy: LimiterStrategy = this.config.strategy ?? LimiterStrategy.SLIDING_WINDOW;
 
-      if (this.config?.whiteList && this.config.whiteList.length) {
-        if (this.config.whiteList.includes(ip as string)) {
-          return next && next();
-        }
+      // Use constant-time comparison to prevent timing attacks (CWE-208)
+      if (this.config?.whiteList && isWhitelisted(ip as string, this.config.whiteList)) {
+        return next && next();
       }
 
       let customRoute: RouteType | undefined;

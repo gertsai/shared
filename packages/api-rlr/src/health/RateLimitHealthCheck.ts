@@ -98,12 +98,38 @@ export class RateLimitHealthCheck {
 
   /**
    * Cleanup test keys from previous health checks
+   * Uses SCAN instead of KEYS to avoid blocking Redis (CWE-400)
    */
   async cleanup(): Promise<void> {
     try {
-      const keys = await this.store.keys(`${this.testKeyPrefix}*`);
-      if (keys.length > 0) {
-        await this.store.del(...keys);
+      // Use SCAN iterator instead of KEYS to avoid blocking Redis
+      // KEYS is O(N) and blocks the server - dangerous in production
+      const pattern = `${this.testKeyPrefix}*`;
+      const keysToDelete: string[] = [];
+
+      // Use scanStream if available (ioredis), fallback to manual SCAN
+      if (typeof this.store.scanStream === 'function') {
+        const stream = this.store.scanStream({ match: pattern, count: 100 });
+        for await (const keys of stream) {
+          keysToDelete.push(...(keys as string[]));
+        }
+      } else {
+        // Manual SCAN iteration for compatibility
+        let cursor = '0';
+        do {
+          const [nextCursor, keys] = await this.store.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+          cursor = nextCursor;
+          keysToDelete.push(...keys);
+        } while (cursor !== '0');
+      }
+
+      if (keysToDelete.length > 0) {
+        // Delete in batches to avoid large commands
+        const batchSize = 1000;
+        for (let i = 0; i < keysToDelete.length; i += batchSize) {
+          const batch = keysToDelete.slice(i, i + batchSize);
+          await this.store.del(...batch);
+        }
       }
     } catch (err) {
       if (this.debug) {
