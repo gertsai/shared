@@ -90,6 +90,12 @@ export class LRUCache<K, V> {
   /**
    * Sets a value in the cache
    * Evicts least recently used item if size limit is reached
+   *
+   * @remarks
+   * Note: We use delete+set to move existing keys to the end of the Map
+   * (maintaining LRU order). This is O(1) amortized but has higher constant
+   * factor than a linked-list-based LRU. For high-performance scenarios,
+   * consider using a dedicated LRU library with doubly-linked list.
    */
   set(key: K, value: V): void {
     // Don't cache if maxSize is 0
@@ -97,12 +103,11 @@ export class LRUCache<K, V> {
       return;
     }
 
-    // Remove if exists (to update position)
-    if (this.cache.has(key)) {
-      this.cache.delete(key);
-    }
+    // Delete existing key to update position (no has() check needed - delete is safe on missing keys)
+    // FIX-023: Removed redundant has() check before delete
+    this.cache.delete(key);
 
-    // Evict oldest if at capacity
+    // Evict oldest if at capacity (after delete, so we don't evict the key we're about to set)
     if (this.cache.size >= this.maxSize) {
       const firstKey = this.cache.keys().next().value;
       if (firstKey !== undefined) {
@@ -165,12 +170,7 @@ export function memoize<T extends (...args: any[]) => any>(
   fn: T,
   options: MemoizeOptions = {},
 ): T & { clearCache: () => void; getCacheSize: () => number } {
-  const {
-    maxSize = 100,
-    ttl,
-    weak = false,
-    keyGenerator = defaultKeyGenerator,
-  } = options;
+  const { maxSize = 100, ttl, weak = false, keyGenerator = defaultKeyGenerator } = options;
 
   // Choose cache implementation based on options
   const cache =
@@ -191,10 +191,7 @@ export function memoize<T extends (...args: any[]) => any>(
         }
 
         // Check TTL
-        if (
-          ttl === undefined ||
-          (ttl > 0 && Date.now() - entry.timestamp < ttl)
-        ) {
+        if (ttl === undefined || (ttl > 0 && Date.now() - entry.timestamp < ttl)) {
           entry.hits++;
           return entry.value;
         }
@@ -204,10 +201,7 @@ export function memoize<T extends (...args: any[]) => any>(
 
       if (entry) {
         // Check TTL
-        if (
-          ttl === undefined ||
-          (ttl > 0 && Date.now() - entry.timestamp < ttl)
-        ) {
+        if (ttl === undefined || (ttl > 0 && Date.now() - entry.timestamp < ttl)) {
           entry.hits++;
           return entry.value;
         }
@@ -222,12 +216,7 @@ export function memoize<T extends (...args: any[]) => any>(
       hits: 0,
     };
 
-    if (
-      weak &&
-      cache instanceof WeakMap &&
-      typeof key === 'object' &&
-      key !== null
-    ) {
+    if (weak && cache instanceof WeakMap && typeof key === 'object' && key !== null) {
       cache.set(key, entry);
     } else if (cache instanceof LRUCache) {
       cache.set(key as string, entry);
@@ -267,10 +256,7 @@ export function memoizeCollectionOp<K, V, R>(
   // Use WeakMap for collection references
   const cache = new WeakMap<ReadableCollection<K, V>, Map<string, R>>();
 
-  return function memoizedOp(
-    collection: ReadableCollection<K, V>,
-    ...args: any[]
-  ): R {
+  return function memoizedOp(collection: ReadableCollection<K, V>, ...args: any[]): R {
     // Get or create cache for this collection
     if (!cache.has(collection)) {
       cache.set(collection, new Map());
@@ -366,9 +352,7 @@ export function memoizeReducer<T, R>(
  * @param collection - The collection to hash
  * @returns Hash string
  */
-export function hashCollection<K, V>(
-  collection: ReadableCollection<K, V>,
-): string {
+export function hashCollection<K, V>(collection: ReadableCollection<K, V>): string {
   const entries = Array.from(collection.entries()).sort((a, b) => {
     const keyA = String(a[0]);
     const keyB = String(b[0]);
@@ -396,10 +380,7 @@ export function memoizeMethod<T extends (...args: any[]) => any>(
   let lastChangeToken: string | number = detectChanges();
   const cache = new Map<string, ReturnType<T>>();
 
-  return function memoizedMethod(
-    this: any,
-    ...args: Parameters<T>
-  ): ReturnType<T> {
+  return function memoizedMethod(this: any, ...args: Parameters<T>): ReturnType<T> {
     // Check if collection has changed
     const currentToken = detectChanges();
     if (currentToken !== lastChangeToken) {
