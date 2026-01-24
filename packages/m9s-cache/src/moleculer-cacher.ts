@@ -1,3 +1,7 @@
+import BaseCacher from 'moleculer/src/cachers/base.js';
+import Serializers from 'moleculer/src/serializers/index.js';
+import { METRIC } from 'moleculer/src/metrics/index.js';
+import type { ServiceBroker } from 'moleculer';
 import { CacheStore } from './cache-store';
 import { generateTags } from './tag-utils';
 import type {
@@ -9,7 +13,6 @@ import type {
   MoleculerCacheOptions,
 } from './types';
 import type { CacheLockProvider } from './types';
-import { resolveMoleculerInternals, type BrokerLike } from './moleculer-internals';
 
 export interface M9sCacheCacherOptions {
   driver: CacheDriver;
@@ -21,8 +24,6 @@ export interface M9sCacheCacherOptions {
   tagPrefix?: string;
   lockProvider?: CacheLockProvider;
 }
-
-const { BaseCacher, Serializers, METRIC } = resolveMoleculerInternals();
 
 class MoleculerSerializerAdapter implements CacheSerializer {
   constructor(
@@ -65,7 +66,7 @@ export class M9sCacheCacher extends BaseCacher {
     this.lockProvider = options.lockProvider;
   }
 
-  init(broker: BrokerLike): void {
+  init(broker: ServiceBroker): void {
     super.init(broker);
 
     const serializer = Serializers.resolve(this.opts.serializer);
