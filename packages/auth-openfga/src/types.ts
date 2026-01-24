@@ -240,6 +240,106 @@ export type FgaPermission =
   | 'can_revoke'
   | 'can_rotate';
 
+// =============================================================================
+// Type-Safe Generics for OpenFGA Check (RFC-055)
+// =============================================================================
+
+/**
+ * Resource types that support permission checks.
+ * Excludes 'user' which is primarily a subject, not a resource.
+ */
+export type CheckableResourceType = Exclude<FgaResourceType, 'user'>;
+
+/**
+ * Extract valid relations for a specific resource type.
+ * Falls back to string for unknown resource types.
+ *
+ * @example
+ * type ProjectRelations = RelationFor<'project'>;
+ * // => 'viewer' | 'editor' | 'admin' | 'can_view' | ...
+ */
+export type RelationFor<T extends FgaResourceType> = T extends keyof FgaRelations
+  ? FgaRelations[T]
+  : string;
+
+/**
+ * Type-safe OpenFGA check configuration.
+ *
+ * Provides:
+ * - IDE autocomplete for resourceType (from FgaResourceType)
+ * - IDE autocomplete for relation (based on resourceType via FgaRelations)
+ * - IDE autocomplete for resourceIdFromParams (based on ParamsType keys)
+ *
+ * @template ResourceType - The OpenFGA resource type
+ * @template ParamsType - The action params type (for extracting valid param keys)
+ *
+ * @example
+ * ```typescript
+ * // Full type safety:
+ * openFgaCheck: {
+ *   resourceType: 'project',        // <- autocomplete: 'project' | 'team' | ...
+ *   relation: 'can_view',           // <- autocomplete: only valid for 'project'
+ *   resourceIdFromParams: 'id',     // <- autocomplete: keys from ParamsType
+ * }
+ * ```
+ */
+export type TypedOpenFgaCheck<
+  ResourceType extends CheckableResourceType = CheckableResourceType,
+  ParamsType extends Record<string, unknown> = Record<string, unknown>,
+> = {
+  /**
+   * Resource type in OpenFGA model.
+   * @see infra/openfga/model.fga
+   */
+  resourceType: ResourceType;
+
+  /**
+   * Relation to check - only valid relations for this resourceType are shown.
+   * Typically use permission relations: can_view, can_edit, can_delete, etc.
+   */
+  relation: RelationFor<ResourceType>;
+
+  /**
+   * Parameter name containing the resource ID.
+   * Only keys from ParamsType are allowed.
+   */
+  resourceIdFromParams: Extract<keyof ParamsType, string>;
+};
+
+/**
+ * OpenFGA check config with static resource ID.
+ * Use when resource ID is known at compile time (rare case).
+ */
+export type StaticOpenFgaCheck<ResourceType extends CheckableResourceType = CheckableResourceType> =
+  {
+    resourceType: ResourceType;
+    relation: RelationFor<ResourceType>;
+    /** Static resource ID (use instead of resourceIdFromParams) */
+    resourceId: string;
+  };
+
+/**
+ * Helper to create type-safe OpenFGA check.
+ * Use when you want explicit typing without inline type annotations.
+ *
+ * @example
+ * ```typescript
+ * const check = createOpenFgaCheck<'project', { id: string }>({
+ *   resourceType: 'project',
+ *   relation: 'can_view',
+ *   resourceIdFromParams: 'id', // <- must be keyof { id: string }
+ * });
+ * ```
+ */
+export function createOpenFgaCheck<
+  ResourceType extends CheckableResourceType,
+  ParamsType extends Record<string, unknown>,
+>(
+  config: TypedOpenFgaCheck<ResourceType, ParamsType>,
+): TypedOpenFgaCheck<ResourceType, ParamsType> {
+  return config;
+}
+
 /**
  * Role relations that represent access levels.
  */

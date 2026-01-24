@@ -8,7 +8,16 @@
  */
 
 import { getFgaClient } from '../client.js';
-import type { FgaCheckRequest, FgaCheckResponse, FgaResourceType, ABACContext } from '../types.js';
+import { isDenied } from '../deny/index.js';
+import { getPermissionCache } from '../cache/index.js';
+import type {
+  FgaCheckRequest,
+  FgaCheckResponse,
+  FgaResourceType,
+  ABACContext,
+  FgaExpandRequest,
+  FgaExpandNode,
+} from '../types.js';
 
 // =============================================================================
 // Permission Checks
@@ -16,6 +25,12 @@ import type { FgaCheckRequest, FgaCheckResponse, FgaResourceType, ABACContext } 
 
 /**
  * Checks if a user has a specific permission on a resource.
+ *
+ * Flow:
+ * 1. Check deny ledger first (instant revoke)
+ * 2. If denied, return false immediately
+ * 3. Check cache for existing result
+ * 4. If not cached, check OpenFGA and cache result
  *
  * @example
  * ```typescript
@@ -28,8 +43,47 @@ import type { FgaCheckRequest, FgaCheckResponse, FgaResourceType, ABACContext } 
  * ```
  */
 export async function checkPermission(request: FgaCheckRequest): Promise<FgaCheckResponse> {
+  // 1. Check deny ledger first (instant revoke)
+  const denyResult = await isDenied({
+    userId: request.userId,
+    resourceType: request.resourceType,
+    resourceId: request.resourceId,
+    relation: request.relation,
+  });
+
+  if (denyResult.denied) {
+    return {
+      allowed: false,
+      resolution: `Denied: ${denyResult.reason ?? 'Access revoked'}`,
+    };
+  }
+
+  // 2. Check cache (skip for requests with ABAC context as they're dynamic)
+  const cache = getPermissionCache();
+  const cacheKey = {
+    userId: request.userId,
+    relation: request.relation,
+    resourceType: request.resourceType,
+    resourceId: request.resourceId,
+  };
+
+  if (!request.context) {
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+  }
+
+  // 3. Proceed to OpenFGA check
   const client = getFgaClient();
-  return client.check(request);
+  const result = await client.check(request);
+
+  // 4. Cache result (only for non-ABAC requests)
+  if (!request.context) {
+    cache.set(cacheKey, result);
+  }
+
+  return result;
 }
 
 /**
@@ -310,4 +364,128 @@ export async function getAccessSummary(
     canDelete: results[2]?.allowed ?? false,
     canManage: results[3]?.allowed ?? false,
   };
+}
+
+// =============================================================================
+// Explain Operations
+// =============================================================================
+
+/**
+ * Expands a relation to explain authorization paths.
+ *
+ * @example
+ * ```typescript
+ * const tree = await expandPermission({
+ *   relation: 'can_view',
+ *   resourceType: 'project',
+ *   resourceId: 'demo',
+ * });
+ * ```
+ */
+export async function expandPermission(request: FgaExpandRequest): Promise<FgaExpandNode> {
+  const client = getFgaClient();
+  return client.expand(request);
+}
+
+/**
+ * Explains why a user has (or doesn't have) access to a resource.
+ * Combines check + expand for a complete picture.
+ *
+ * @example
+ * ```typescript
+ * const explanation = await explainAccess({
+ *   userId: 'alice',
+ *   relation: 'can_view',
+ *   resourceType: 'project',
+ *   resourceId: 'demo',
+ * });
+ * // → { allowed: true, reason: 'direct', paths: [...] }
+ * ```
+ */
+export async function explainAccess(request: FgaCheckRequest): Promise<{
+  allowed: boolean;
+  reason: 'direct' | 'inherited' | 'role' | 'team' | 'denied' | 'no_relation';
+  paths: string[][];
+  expandTree?: FgaExpandNode;
+}> {
+  const client = getFgaClient();
+
+  // First check if allowed
+  const checkResult = await client.check(request);
+
+  // Then expand to find paths
+  let expandTree: FgaExpandNode | undefined;
+  const paths: string[][] = [];
+
+  try {
+    expandTree = await client.expand({
+      relation: request.relation,
+      resourceType: request.resourceType,
+      resourceId: request.resourceId,
+    });
+
+    // Extract paths from tree
+    extractPaths(expandTree, [], paths, request.userId);
+  } catch {
+    // Expand might fail if no tuples exist
+  }
+
+  // Determine reason
+  let reason: 'direct' | 'inherited' | 'role' | 'team' | 'denied' | 'no_relation' = 'no_relation';
+
+  if (checkResult.allowed) {
+    // Analyze paths to determine reason
+    const userKey = `user:${request.userId}`;
+    const hasDirect = paths.some((p) => p.length === 1 && p[0] === userKey);
+    const hasTeamPath = paths.some((p) => p.some((node) => node.startsWith('team:')));
+    const hasRolePath = paths.some((p) => p.some((node) => node.startsWith('role:')));
+
+    if (hasDirect) {
+      reason = 'direct';
+    } else if (hasRolePath) {
+      reason = 'role';
+    } else if (hasTeamPath) {
+      reason = 'team';
+    } else if (paths.length > 0) {
+      reason = 'inherited';
+    }
+  } else {
+    reason = 'denied';
+  }
+
+  return {
+    allowed: checkResult.allowed,
+    reason,
+    paths,
+    expandTree,
+  };
+}
+
+/**
+ * Extracts user paths from expand tree.
+ */
+function extractPaths(
+  node: FgaExpandNode,
+  currentPath: string[],
+  allPaths: string[][],
+  targetUser: string,
+): void {
+  if (node.type === 'leaf') {
+    if (node.users) {
+      for (const user of node.users) {
+        const newPath = [...currentPath, user];
+        // Only add paths that lead to target user
+        if (user === `user:${targetUser}` || user.includes('#')) {
+          allPaths.push(newPath);
+        }
+      }
+    }
+    if (node.computed) {
+      allPaths.push([...currentPath, `computed:${node.computed}`]);
+    }
+  } else if (node.children) {
+    for (const child of node.children) {
+      extractPaths(child, currentPath, allPaths, targetUser);
+    }
+  }
 }

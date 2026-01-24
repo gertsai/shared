@@ -51,6 +51,11 @@ export type {
   FgaRelations,
   FgaPermission,
   FgaAccessLevel,
+  // Type-safe OpenFGA generics (RFC-055)
+  CheckableResourceType,
+  RelationFor,
+  TypedOpenFgaCheck,
+  StaticOpenFgaCheck,
   FgaTuple,
   FgaTupleKey,
   FgaWriteRequest,
@@ -78,7 +83,12 @@ export type {
 } from './types.js';
 
 // ABAC constants
-export { CLEARANCE_LEVELS, RESOURCE_STATUS, BLOCKED_COUNTRIES_OFAC } from './types.js';
+export {
+  CLEARANCE_LEVELS,
+  RESOURCE_STATUS,
+  BLOCKED_COUNTRIES_OFAC,
+  createOpenFgaCheck,
+} from './types.js';
 
 // ABAC utilities
 export {
@@ -155,6 +165,9 @@ export {
   listProjectAdmins,
   listTeamMembers,
   getAccessSummary,
+  // Explain operations (B2.3)
+  expandPermission,
+  explainAccess,
 } from './queries/index.js';
 
 // Mutations
@@ -176,4 +189,43 @@ export {
   setProjectTenant,
   onApiKeyCreated,
   onApiKeyDeleted,
+  // Bulk Operations (B3.2)
+  bulkGrantAccess,
+  bulkRevokeAccess,
+  bulkGrantToResources,
+  bulkRevokeFromResources,
+  bulkWriteTuples,
+  bulkDeleteTuples,
 } from './mutations/index.js';
+
+export type { BulkOperationOptions, BulkOperationResult } from './mutations/index.js';
+
+// Deny Layer (B3.1: Instant Revoke)
+export {
+  denyAccess,
+  restoreAccess,
+  isDenied,
+  listDeniedAccess,
+  getDenyLedger,
+  setDenyLedger,
+  resetDenyLedger,
+  InMemoryDenyLedger,
+} from './deny/index.js';
+
+export type { DenyEntry, DenyCheckRequest, DenyCheckResult, DenyLedger } from './deny/index.js';
+
+// Permission Cache (B3.3: Event-Driven Invalidation)
+export {
+  PermissionCache,
+  getPermissionCache,
+  setPermissionCache,
+  resetPermissionCache,
+  createInvalidationHandler,
+  INVALIDATION_EVENTS,
+} from './cache/index.js';
+
+export type {
+  PermissionCacheKey,
+  PermissionCacheConfig,
+  PermissionChangeEvent,
+} from './cache/index.js';

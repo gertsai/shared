@@ -18,6 +18,8 @@ import type {
   FgaListUsersRequest,
   FgaTupleKey,
   FgaResourceType,
+  FgaExpandRequest,
+  FgaExpandNode,
 } from './types.js';
 import { FGA_DEFAULT_CONFIG, userString, objectString } from './constants.js';
 
@@ -348,6 +350,107 @@ export class GertsFgaClient {
         return '';
       })
       .filter(Boolean);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Expand Operations (for explain/audit)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Expands a relation to show the authorization tree.
+   * Used for explaining why a user has (or doesn't have) access.
+   *
+   * @example
+   * ```typescript
+   * const tree = await client.expand({
+   *   relation: 'can_view',
+   *   resourceType: 'project',
+   *   resourceId: 'demo',
+   * });
+   * // Returns tree showing all paths that grant can_view
+   * ```
+   */
+  async expand(request: FgaExpandRequest): Promise<FgaExpandNode> {
+    const client = await this.getClient();
+
+    const result = await this.withRetry(() =>
+      client.expand({
+        relation: request.relation,
+        object: objectString(request.resourceType, request.resourceId),
+      }),
+    );
+
+    return this.convertExpandTree(result.tree);
+  }
+
+  /**
+   * Converts OpenFGA expand response to our typed structure.
+   */
+  private convertExpandTree(tree: unknown): FgaExpandNode {
+    if (!tree || typeof tree !== 'object') {
+      return { type: 'leaf', users: [] };
+    }
+
+    const t = tree as Record<string, unknown>;
+
+    // Leaf node with direct users
+    if (t.leaf && typeof t.leaf === 'object') {
+      const leaf = t.leaf as Record<string, unknown>;
+      const users: string[] = [];
+
+      if (leaf.users && typeof leaf.users === 'object') {
+        const usersObj = leaf.users as {
+          users?: Array<{ object?: { type?: string; id?: string } }>;
+        };
+        if (usersObj.users) {
+          for (const u of usersObj.users) {
+            if (u.object?.type && u.object?.id) {
+              users.push(`${u.object.type}:${u.object.id}`);
+            }
+          }
+        }
+      }
+
+      return { type: 'leaf', users };
+    }
+
+    // Union node (OR)
+    if (t.union && typeof t.union === 'object') {
+      const union = t.union as { nodes?: unknown[] };
+      return {
+        type: 'union',
+        children: (union.nodes ?? []).map((n) => this.convertExpandTree(n)),
+      };
+    }
+
+    // Intersection node (AND)
+    if (t.intersection && typeof t.intersection === 'object') {
+      const intersection = t.intersection as { nodes?: unknown[] };
+      return {
+        type: 'intersection',
+        children: (intersection.nodes ?? []).map((n) => this.convertExpandTree(n)),
+      };
+    }
+
+    // Exclusion node (NOT)
+    if (t.difference && typeof t.difference === 'object') {
+      const diff = t.difference as { base?: unknown; subtract?: unknown };
+      return {
+        type: 'exclusion',
+        children: [this.convertExpandTree(diff.base), this.convertExpandTree(diff.subtract)],
+      };
+    }
+
+    // Computed relation
+    if (t.computed && typeof t.computed === 'object') {
+      const computed = t.computed as { userset?: string };
+      return {
+        type: 'leaf',
+        computed: computed.userset,
+      };
+    }
+
+    return { type: 'leaf', users: [] };
   }
 
   // ---------------------------------------------------------------------------
