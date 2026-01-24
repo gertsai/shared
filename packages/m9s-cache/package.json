@@ -3,8 +3,11 @@
   "version": "0.0.1",
   "description": "Moleculer-compatible cache abstraction with Redis/Valkey driver support",
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "import": {
@@ -22,7 +25,7 @@
     "src"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc --build tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
@@ -30,9 +33,15 @@
   "peerDependencies": {
     "ioredis": "^5.8.0",
     "moleculer": "^0.14.0",
-    "redlock": "^5.0.0"
+    "redlock": "5.0.0-beta.2"
   },
   "peerDependenciesMeta": {
+    "ioredis": {
+      "optional": true
+    },
+    "moleculer": {
+      "optional": true
+    },
     "redlock": {
       "optional": true
     }
@@ -41,8 +50,8 @@
     "@types/node": "^22.0.0",
     "ioredis": "^5.8.0",
     "moleculer": "^0.14.35",
-    "redlock": "^5.0.0",
-    "typescript": "^5.3.0",
+    "redlock": "5.0.0-beta.2",
+    "typescript": "^5.9.2",
     "vitest": "^3.0.0",
     "vite-tsconfig-paths": "^5.1.4"
   },

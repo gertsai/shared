@@ -1,12 +1,31 @@
-import type { CacheTagConfig } from './types';
+import type { CacheTagConfig, TagVersionMap } from './types.js';
 
 /**
  * Generate tag versions from cached content.
+ *
+ * Extracts entity IDs and timestamps from response data based on path configuration.
+ * Used for tag-based cache invalidation.
+ *
+ * @example
+ * ```typescript
+ * const response = {
+ *   users: [
+ *     { id: 1, updatedAt: 1000 },
+ *     { id: 2, updatedAt: 2000 }
+ *   ]
+ * };
+ *
+ * const tags = generateTags(response, [{
+ *   name: 'User',
+ *   path: ['users', '*'],
+ *   idField: 'id',
+ *   timestampField: 'updatedAt'
+ * }]);
+ *
+ * // Result: { 'User:1': 1000, 'User:2': 2000 }
+ * ```
  */
-export function generateTags(
-  content: unknown,
-  config: CacheTagConfig[] = [],
-): Record<string, number> {
+export function generateTags(content: unknown, config: CacheTagConfig[] = []): TagVersionMap {
   if (!config.length) return {};
 
   const result: Record<string, number> = {};
