@@ -141,10 +141,10 @@ export const createApiService = (
   ) => {
     const payload = {
       ...orchResponse.info,
-      tracking_id: res.$ctx.id,
+      tracking_id: res.$ctx?.id,
       app: {
         name: config.MOLECULER_NODE_NAME,
-        node_id: res.$ctx.nodeID,
+        node_id: res.$ctx?.nodeID,
         package: packageJson.name,
         version: packageJson.version,
       },

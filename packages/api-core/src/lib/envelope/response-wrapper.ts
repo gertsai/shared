@@ -231,14 +231,14 @@ export function wrapSuccessResponse<T>(
   const objectType = detectObjectType(responseData, path);
   const prefix = getIdPrefix(objectType);
 
-  // Extract tenant from meta using type guard
-  const tenantId = extractTenantId(ctx.meta, 'default');
+  // Extract tenant from meta using type guard (ctx may be undefined in early middleware errors)
+  const tenantId = ctx ? extractTenantId(ctx.meta, 'default') : 'default';
 
   // Extract usage using type guard
   const usage = extractUsageInfo(responseData);
 
   // Extract trace ID using type guard
-  const traceId = extractTraceId(ctx.meta);
+  const traceId = ctx ? extractTraceId(ctx.meta) : undefined;
 
   // Extract package info safely
   const pkgInfo = extractPackageInfo(packageJson);
@@ -255,12 +255,12 @@ export function wrapSuccessResponse<T>(
     ...(traceId !== undefined ? { trace_id: traceId } : {}),
   };
 
-  // Include legacy fields for backward compatibility
+  // Include legacy fields for backward compatibility (ctx may be undefined in early middleware errors)
   const legacy = {
-    tracking_id: ctx.id,
+    tracking_id: ctx?.id,
     app: {
       name: nodeName || 'gerts-api',
-      node_id: ctx.nodeID,
+      node_id: ctx?.nodeID,
       package: pkgInfo.name,
       version: pkgInfo.version,
     },
@@ -322,11 +322,11 @@ export function wrapErrorResponse(
   // Determine if retryable
   const retryable = RETRYABLE_ERROR_CODES.has(errorCode);
 
-  // Extract tenant from meta using type guard
-  const tenantId = extractTenantId(ctx.meta, '');
+  // Extract tenant from meta using type guard (ctx may be undefined in early middleware errors)
+  const tenantId = ctx ? extractTenantId(ctx.meta, '') : '';
 
   // Extract trace ID using type guard
-  const traceId = extractTraceId(ctx.meta);
+  const traceId = ctx ? extractTraceId(ctx.meta) : undefined;
 
   // Detect stage
   const stage = detectStageFromPath(path);
@@ -350,9 +350,9 @@ export function wrapErrorResponse(
     ...(traceId !== undefined ? { trace_id: traceId } : {}),
   };
 
-  // Legacy fields for backward compatibility
+  // Legacy fields for backward compatibility (ctx may be undefined in early middleware errors)
   const legacy = {
-    tracking_id: ctx.id,
+    tracking_id: ctx?.id,
     code: info.code,
     http_code: info.http_code,
     errors: info.errors,

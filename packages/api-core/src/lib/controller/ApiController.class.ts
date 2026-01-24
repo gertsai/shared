@@ -646,15 +646,12 @@ export class ApiController<
           const requestIsValid = action.options.params(params);
 
           if (!requestIsValid.success) {
-            throw new APIError(
-              ResponseCode.BAD_REQUEST__INVALID_PARAMS,
-              requestIsValid.errors,
-            );
+            throw new APIError(ResponseCode.BAD_REQUEST__INVALID_PARAMS, requestIsValid.errors);
           }
 
           if (action.options.auth === 'required' || action.options.auth === 'optional') {
             if (action.options.auth === 'required' && !ctx.meta.user_uuid) {
-              this.logger.error(
+              this.logger?.error(
                 'Cannot call an action with required authorization. No user found in meta',
                 action,
               );
@@ -707,7 +704,7 @@ export class ApiController<
           // Raw response mode: return data directly without Orchestra wrapping
           // Used for streaming responses (SSE, WebSockets) where data is a Readable stream
           if (raw === true) {
-            this.logger.info('Action returning raw response', action.name);
+            this.logger?.info('Action returning raw response', action.name);
             return data;
           }
 
@@ -724,7 +721,7 @@ export class ApiController<
                   responseIsValid.errors,
                 );
               } else {
-                this.logger.error(
+                this.logger?.error(
                   action.name,
                   // Log action metadata
                   'Response validation failed',
@@ -757,11 +754,11 @@ export class ApiController<
             throw APIError.fromError(err);
           }
 
-          this.logger.error('Unknown error occurred', err);
+          this.logger?.error('Unknown error occurred', err);
 
           throw new APIError(ResponseCode.INTERNAL_ERROR);
         } finally {
-          this.logger.info('Action finished', action.name);
+          this.logger?.info('Action finished', action.name);
           session?.$destroy();
         }
       },
@@ -859,7 +856,7 @@ export class ApiController<
                 throw APIError.fromError(err);
               }
 
-              this.logger.error('Unknown error occurred', err);
+              this.logger?.error('Unknown error occurred', err);
 
               throw new APIError(ResponseCode.INTERNAL_ERROR);
             }
@@ -911,7 +908,7 @@ export class ApiController<
             throw APIError.fromError(err);
           }
 
-          this.logger.error('Unknown error occurred', err);
+          this.logger?.error('Unknown error occurred', err);
 
           throw new APIError(ResponseCode.INTERNAL_ERROR);
         }
@@ -1013,13 +1010,13 @@ export class ApiController<
 
             if (!exists) {
               await ApiController._config.pubSub.createTopic(topicName);
-              this.logger.info(
+              this.logger?.info(
                 `Topic created: `,
                 // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
                 color(topicName).red.underline + '',
               );
             } else {
-              this.logger.info(
+              this.logger?.info(
                 `Topic exists: `,
                 // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
                 color(topicName).green.underline + '',
@@ -1033,13 +1030,13 @@ export class ApiController<
               [subscription] = await topic.createSubscription(subscriptionName, {
                 enableMessageOrdering: true,
               });
-              this.logger.info(
+              this.logger?.info(
                 `Subscription created: `,
                 // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
                 color(subscriptionName).black.bgWhite + '',
               );
             } else {
-              this.logger.info(
+              this.logger?.info(
                 `Subscription exists: `,
                 // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
                 color(subscriptionName).black.bgWhite + ' ',
