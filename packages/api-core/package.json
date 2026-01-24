@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@gerts/api-types": "workspace:*",
+    "@gerts/auth-openfga": "workspace:*",
     "@gerts/core": "workspace:*",
     "@google-cloud/logging-bunyan": "^5.1.0",
     "@r2d2bzh/moleculer-healthcheck-middleware": "^1.0.6",
