@@ -421,6 +421,135 @@ export type ServiceNameToPath<T extends string> = T extends `${infer S}.${infer 
  * @template ServiceContext - Custom service context (default: ServiceContextBase)
  * @template Handler - Action handler type
  */
+// Import type-safe generics from auth-openfga for internal use
+import type {
+  TypedOpenFgaCheck as _TypedOpenFgaCheck,
+  StaticOpenFgaCheck as _StaticOpenFgaCheck,
+  CheckableResourceType,
+  RelationFor,
+} from '@gerts/auth-openfga';
+
+// Re-export for consumers
+export type {
+  TypedOpenFgaCheck,
+  StaticOpenFgaCheck,
+  CheckableResourceType,
+  RelationFor,
+} from '@gerts/auth-openfga';
+
+export { createOpenFgaCheck } from '@gerts/auth-openfga';
+
+/**
+ * Legacy OpenFGA check configuration (string-based).
+ * @deprecated Use TypedOpenFgaCheck<ResourceType, ParamsType> for type safety.
+ *
+ * @example
+ * ```typescript
+ * // OLD (string-based, no autocomplete):
+ * openFgaCheck: {
+ *   relation: 'viewer',
+ *   resourceType: 'project',
+ *   resourceIdFromParams: 'id',
+ * }
+ *
+ * // NEW (type-safe with autocomplete):
+ * openFgaCheck: {
+ *   resourceType: 'project',        // <- autocomplete
+ *   relation: 'can_view',           // <- only project relations
+ *   resourceIdFromParams: 'id',     // <- keys from ParamsType
+ * }
+ * ```
+ */
+export type OpenFgaCheckConfig = {
+  /** Relation to check (viewer, editor, admin, etc.) */
+  relation: string;
+  /** Resource type in OpenFGA model (project, team, tenant, etc.) */
+  resourceType: string;
+  /** Parameter name containing resource ID */
+  resourceIdFromParams: string;
+};
+
+/**
+ * ABAC requirements for action-level attribute checks.
+ * Used by auth-moleculer middleware for fail-fast checks before OpenFGA.
+ *
+ * @example
+ * ```typescript
+ * abac: {
+ *   blockSanctionedCountries: true,
+ *   requireBusinessHours: true,
+ *   requireClearance: 2, // CONFIDENTIAL
+ * }
+ * ```
+ */
+export type ABACRequirements = {
+  /** Block requests from OFAC sanctioned countries */
+  blockSanctionedCountries?: boolean;
+  /** Require request during business hours (9-18 UTC) */
+  requireBusinessHours?: boolean;
+  /** Minimum clearance level required (0=public, 1=internal, 2=confidential, 3=secret) */
+  requireClearance?: number;
+  /** Require active resource status (not archived/suspended) */
+  requireActiveResource?: boolean;
+};
+
+/**
+ * Discriminated union for type-safe OpenFGA check.
+ *
+ * Creates a union where selecting `resourceType` automatically constrains
+ * `relation` to only valid relations for that resource type.
+ *
+ * @template ParamsType - Action params type for resourceIdFromParams validation
+ *
+ * @example
+ * ```typescript
+ * // After typing resourceType: 'project', IDE shows only project relations
+ * openFgaCheck: {
+ *   resourceType: 'project',
+ *   relation: 'can_view',  // <- autocomplete: 'viewer' | 'editor' | 'can_view' | ...
+ *   resourceIdFromParams: 'id',
+ * }
+ * ```
+ */
+export type OpenFgaCheckDiscriminatedUnion<
+  ParamsType extends Record<string, unknown> = Record<string, unknown>,
+> = {
+  [R in CheckableResourceType]: {
+    /** Resource type - determines available relations */
+    resourceType: R;
+    /** Relation to check - only valid relations for this resourceType */
+    relation: RelationFor<R>;
+    /** Parameter name containing resource ID - must be key from ParamsType */
+    resourceIdFromParams: Extract<keyof ParamsType, string>;
+  };
+}[CheckableResourceType];
+
+/**
+ * Action options for registering an action with full type safety.
+ *
+ * @template AuthType - Authentication type
+ * @template ParamsValidator - Typia validator for params
+ * @template ParamsType - Inferred params type (auto-derived from validator)
+ * @template ResponseValidator - Typia validator for response
+ * @template ResponseType - Inferred response type
+ * @template Rest - REST configuration
+ * @template ServiceContext - Custom service context (default: ServiceContextBase)
+ * @template Handler - Action handler type
+ *
+ * @example
+ * ```typescript
+ * controller.register('projects.get', {
+ *   auth: 'required',
+ *   params: typia.createValidate<GetProjectParams>(),
+ *   openFgaCheck: {
+ *     resourceType: 'project',        // <- autocomplete: all resource types
+ *     relation: 'can_view',           // <- autocomplete: only project relations!
+ *     resourceIdFromParams: 'id',     // <- autocomplete: keys from GetProjectParams
+ *   },
+ *   handler: async ({ params, respond }) => { ... }
+ * });
+ * ```
+ */
 export type ActionOptions<
   AuthType extends ActionAuthType = any,
   ParamsValidator = TypiaValidator<any>,
@@ -438,6 +567,31 @@ export type ActionOptions<
    * @example ['admin.users:read', 'admin.users:write']
    */
   scopes?: string[];
+  /**
+   * OpenFGA permission check configuration (RFC-055 ABAC).
+   * When set, middleware verifies ReBAC permission before executing action.
+   *
+   * **Type-safe discriminated union:**
+   * - `resourceType`: autocomplete shows all valid resource types
+   * - `relation`: after selecting resourceType, shows only valid relations for it
+   * - `resourceIdFromParams`: constrained to keys from ParamsType
+   *
+   * @see OpenFgaCheckDiscriminatedUnion
+   */
+  openFgaCheck?: ParamsType extends Record<string, unknown>
+    ? OpenFgaCheckDiscriminatedUnion<ParamsType>
+    : OpenFgaCheckConfig;
+  /**
+   * ABAC requirements for attribute-based checks (RFC-055).
+   * Fail-fast checks performed before OpenFGA call.
+   * @see ABACRequirements
+   */
+  abac?: ABACRequirements;
+  /**
+   * Resource sensitivity level (0-3) for clearance checks.
+   * 0=public, 1=internal, 2=confidential, 3=secret
+   */
+  resourceSensitivity?: number;
   rest?: Rest | undefined;
   params: ParamsValidator;
   response: ResponseValidator;
