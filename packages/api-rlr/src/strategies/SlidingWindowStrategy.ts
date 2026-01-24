@@ -9,8 +9,8 @@ export class SlidingWindowStrategy implements RateLimitStrategy {
   constructor(private readonly adapter: StorageAdapter) {}
 
   async execute(args: StrategyExecuteArgs): Promise<StrategyResult> {
-    const { key, limit, timeFrame, now } = args;
-    const values = await this.adapter.incrementSW(key, timeFrame, limit, now);
+    const { key, limit, timeFrame, now, cost } = args;
+    const values = await this.adapter.incrementSW(key, timeFrame, limit, now, cost);
 
     // If Lua returns 4 elements, first is allow flag (1|0)
     let allowFlag = 1;

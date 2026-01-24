@@ -25,6 +25,8 @@ export interface LimitsConfig {
   timeFrame: number;
   strategy: LimiterStrategy;
   burst?: number;
+  /** Cost of this request in tokens (default: 1) */
+  cost?: number;
 }
 
 /**
@@ -51,7 +53,9 @@ export class RateLimiter {
    */
   async checkLimit(request: IncomingRequest): Promise<RateLimitDecision> {
     const context = new RequestContext(request);
-    const now = Date.now();
+
+    // Use Redis/Valkey time if configured, otherwise use local time
+    const now = await this.getCurrentTime();
 
     // Extract request information
     const subject = this.resolveSubject(request, context);
@@ -97,6 +101,7 @@ export class RateLimiter {
       timeFrame: limits.timeFrame,
       now,
       burst: limits.burst || 3, // Default burst value
+      cost: limits.cost, // Cost-based rate limiting
     });
 
     // Store result in context
@@ -163,6 +168,7 @@ export class RateLimiter {
       timeFrame: this.config.timeFrame,
       strategy: this.config.strategy || LimiterStrategy.SLIDING_WINDOW,
       burst: this.config.burst,
+      cost: this.config.cost, // Default cost from global config
     };
 
     // Apply route overrides
@@ -173,6 +179,7 @@ export class RateLimiter {
         timeFrame: route.timeFrame ?? limits.timeFrame,
         strategy: route.strategy ?? limits.strategy,
         burst: route.burst ?? limits.burst,
+        cost: route.cost ?? limits.cost, // Route-specific cost
       };
     }
 
@@ -262,6 +269,23 @@ export class RateLimiter {
       context,
       strategy: LimiterStrategy.SLIDING_WINDOW,
     };
+  }
+
+  /**
+   * Get current time - uses Redis TIME if useRedisTime is enabled
+   * This helps avoid clock skew issues in distributed systems
+   */
+  private async getCurrentTime(): Promise<number> {
+    if (this.config.useRedisTime && this.adapter.getTime) {
+      try {
+        return await this.adapter.getTime();
+      } catch (error) {
+        // Fallback to local time if Redis TIME fails
+        console.warn('[RateLimiter] Failed to get Redis time, falling back to local time:', error);
+        return Date.now();
+      }
+    }
+    return Date.now();
   }
 
   /**

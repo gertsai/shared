@@ -219,6 +219,7 @@ describe('RateLimiter', () => {
         expect.any(Number),
         expect.any(Number),
         expect.any(Number),
+        undefined, // cost (defaults to undefined)
       );
     });
 
@@ -236,6 +237,7 @@ describe('RateLimiter', () => {
         expect.any(Number),
         expect.any(Number),
         expect.any(Number),
+        undefined, // cost (defaults to undefined)
       );
     });
   });

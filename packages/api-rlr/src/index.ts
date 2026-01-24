@@ -63,8 +63,23 @@ export type { SimulationResult, MockHeaders } from './test-utils/RateLimitTestUt
 // Export errors
 export { RateLimitError } from './errors/RateLimitError';
 
+// Export header utilities for client integration
+export { setDraft6Headers, setDraft7Headers } from './client/headers';
+
 // Export adapters
 export { RedisAdapter } from './adapters/RedisAdapter';
 export { PostgreSQLAdapter } from './adapters/PostgreSQLAdapter';
 export type { PostgreSQLAdapterConfig } from './adapters/PostgreSQLAdapter';
-export type { StorageAdapter, SlidingWindowResult, GCRAResult } from './adapters/StorageAdapter';
+export { MemoryAdapter } from './adapters/MemoryAdapter';
+export type { MemoryAdapterConfig } from './adapters/MemoryAdapter';
+export type {
+  StorageAdapter,
+  SlidingWindowResult,
+  GCRAResult,
+  LeakyBucketResult,
+} from './adapters/StorageAdapter';
+
+// Export strategies
+export { LeakyBucketStrategy } from './strategies/LeakyBucketStrategy';
+export { GCRAStrategy } from './strategies/GCRAStrategy';
+export { SlidingWindowStrategy } from './strategies/SlidingWindowStrategy';

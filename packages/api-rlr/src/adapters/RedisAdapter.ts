@@ -32,4 +32,18 @@ export class RedisAdapter implements StorageAdapter {
     }
     return this.store.gcraCheck(key, timeFrame, limit, burst, now);
   }
+
+  /**
+   * Get current time from Redis server
+   * Uses Redis TIME command which returns [seconds, microseconds]
+   * Converts to milliseconds for consistency with Date.now()
+   */
+  async getTime(): Promise<number> {
+    const time = await this.store.time();
+    // Redis TIME returns [seconds, microseconds] - may be strings or numbers
+    const seconds = typeof time[0] === 'string' ? parseInt(time[0], 10) : Number(time[0]);
+    const microseconds = typeof time[1] === 'string' ? parseInt(time[1], 10) : Number(time[1]);
+    // Convert to milliseconds
+    return seconds * 1000 + Math.floor(microseconds / 1000);
+  }
 }

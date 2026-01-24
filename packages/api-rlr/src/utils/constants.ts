@@ -14,6 +14,7 @@ export const DefaultConfig = {
   routes: [],
   strategy: LimiterStrategy.SLIDING_WINDOW,
   burst: 3,
+  cost: 1, // Default cost per request
   storeSingletonKey: '',
   routesOnly: false,
   useRedisTime: false,

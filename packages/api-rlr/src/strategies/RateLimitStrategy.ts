@@ -7,6 +7,11 @@ export type StrategyExecuteArgs = {
   timeFrame: number;
   now: number;
   burst?: number;
+  /**
+   * Cost of this request in tokens (default: 1)
+   * Strategies will consume this many tokens instead of 1
+   */
+  cost?: number;
 };
 
 export type StrategyResult = {

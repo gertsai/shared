@@ -141,6 +141,12 @@ export type RateLimitOptions = {
   /** Optional global burst (only for token-bucket/gcra semantics). Defaults to 3. */
   burst?: number;
   /**
+   * Default cost per request in tokens (default: 1)
+   * Used for cost-based rate limiting where different operations
+   * consume different amounts of the rate limit quota.
+   */
+  cost?: number;
+  /**
    * If true and routes[] are provided, only matched routes are limited.
    * Unmatched requests will skip limiting (no global fallback).
    */
@@ -222,6 +228,8 @@ export type RateLimitOptions = {
 export enum LimiterStrategy {
   SLIDING_WINDOW = 'sliding_window',
   GCRA = 'gcra',
+  /** Leaky Bucket - smooth traffic shaping with constant drain rate */
+  LEAKY_BUCKET = 'leaky_bucket',
 }
 
 export enum Methods {
@@ -244,6 +252,13 @@ export type RouteType = {
   strategy?: LimiterStrategy;
   /** Optional burst override for strategies that support it */
   burst?: number;
+  /**
+   * Cost of this request in tokens (default: 1)
+   * Use for cost-based rate limiting where expensive operations
+   * consume more of the rate limit quota.
+   * Example: AI inference might cost 10, while simple GET costs 1
+   */
+  cost?: number;
 };
 
 export type Reset = number;

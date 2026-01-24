@@ -185,8 +185,122 @@ Clients like `@orchlab/gong` parse both families and apply the max delay with a 
 
 - `sliding_window` (default): time window with weighted previous window; simple and compatible with most clients.
 - `gcra`: highly predictable pacing with accurate `Retry-After`; recommended for webhook follow‑up/pull endpoints.
+- `leaky_bucket` (new): smooth traffic shaping with constant drain rate; ideal for API gateways requiring predictable throughput.
 
 Use `strategy` globally and/or override per route via `routes[]` entries.
+
+### Leaky Bucket Strategy (New)
+
+The Leaky Bucket algorithm models a bucket that fills with each request and drains at a constant rate:
+
+```typescript
+import { RLRMiddleware, LimiterStrategy } from '@gerts/api-rlr';
+
+RLRMiddleware({
+  limit: 100, // drain rate: 100 requests per timeFrame
+  timeFrame: 1000, // 1 second = 100 req/s drain rate
+  strategy: LimiterStrategy.LEAKY_BUCKET,
+  burst: 10, // max bucket capacity (burst allowance)
+  store: () => redis,
+});
+```
+
+**Benefits:**
+
+- Smooth, predictable output rate (no traffic spikes)
+- Natural burst absorption up to capacity
+- Ideal for protecting downstream services with fixed throughput
+
+**When to use:**
+
+- API gateways with strict throughput requirements
+- Rate limiting to external APIs with fixed limits
+- Traffic shaping for microservices
+
+### Cost-Based Rate Limiting (New)
+
+Different requests can consume different amounts of rate limit quota:
+
+```typescript
+RLRMiddleware({
+  limit: 1000, // 1000 tokens per minute
+  timeFrame: 60000,
+  cost: 1, // default cost per request
+  routes: [
+    {
+      path: '/api/ai/inference',
+      method: 'POST',
+      cost: 50, // AI calls cost 50 tokens
+    },
+    {
+      path: '/api/bulk/export',
+      method: 'POST',
+      cost: 100, // Bulk exports cost 100 tokens
+    },
+    {
+      path: '/api/data/:id',
+      method: 'GET',
+      cost: 1, // Simple reads cost 1 token (default)
+    },
+  ],
+  store: () => redis,
+});
+```
+
+**Use cases:**
+
+- AI/LLM endpoints that are computationally expensive
+- Bulk operations that stress the backend
+- Tiered API pricing based on operation complexity
+
+### Redis/Valkey Time Synchronization (New)
+
+For distributed systems, use `useRedisTime` to avoid clock skew issues:
+
+```typescript
+RLRMiddleware({
+  limit: 100,
+  timeFrame: 60000,
+  useRedisTime: true, // Use Redis TIME command instead of Date.now()
+  store: () => redis,
+});
+```
+
+**When to enable:**
+
+- Multi-node deployments with potential clock drift
+- Strict rate limiting requirements across distributed systems
+- When consistency is more important than minimal latency
+
+**Note:** Adds ~0.3-0.5ms latency per request for the TIME call.
+
+### In-Memory Adapter (New)
+
+Fallback when Redis is unavailable:
+
+```typescript
+import { MemoryAdapter, RateLimiter } from '@gerts/api-rlr';
+
+// Create in-memory adapter
+const adapter = new MemoryAdapter({
+  maxKeys: 10000, // LRU eviction limit
+  cleanupInterval: 60000, // Cleanup expired entries every 60s
+  debug: false,
+});
+
+// Use with RateLimiter directly
+const limiter = new RateLimiter(adapter, {
+  limit: 100,
+  timeFrame: 60000,
+  store: () => null as any, // Not used with MemoryAdapter
+});
+```
+
+**Limitations:**
+
+- Not distributed (each node has its own state)
+- Memory bound (configure maxKeys appropriately)
+- Best for single-node deployments or development
 
 ### Recommendations
 
@@ -457,6 +571,113 @@ This middleware can emit a server bucket id so clients can align queues. The id 
 | ^/v2/(search                     | meetings              | ai)(/.\*)?$ | GET              | 180            | 60000          | sliding_window | -              |
 
 - SSE policy: for `GET` endpoints ending with `/events` or `/stream`, consider separate buckets or stricter concurrency on the client. This library appends `/sse` suffix to the bucket id by default for such paths.
+
+## Benchmarks
+
+Run benchmarks to compare algorithms and stores:
+
+```bash
+# Throughput benchmark (Redis)
+RLR_PORT=6379 pnpm exec tsx benchmarks/rate-limit/rlr-throughput.bench.ts
+
+# Throughput benchmark (Valkey)
+RLR_PORT=6381 pnpm exec tsx benchmarks/rate-limit/rlr-throughput.bench.ts
+
+# Algorithm comparison
+pnpm exec tsx benchmarks/rate-limit/rlr-algorithms.bench.ts
+
+# New features benchmark (Leaky Bucket, Cost-based, useRedisTime)
+pnpm exec tsx benchmarks/rate-limit/rlr-new-features.bench.ts
+
+# Client-side rate limit features
+pnpm exec tsx benchmarks/rate-limit/client-rate-limit.bench.ts
+```
+
+### Performance Summary
+
+#### In-Memory Adapter (MemoryAdapter)
+
+| Benchmark                | Ops/s    | Avg (ms) | P95 (ms) | P99 (ms) |
+| ------------------------ | -------- | -------- | -------- | -------- |
+| **Sliding Window**       |
+| Sequential (unique keys) | 425K     | 0.002    | 0.002    | 0.005    |
+| Concurrent (unique keys) | 419K     | 0.118    | 0.510    | 2.517    |
+| Contention (single key)  | 33K      | 1.518    | 2.372    | 3.718    |
+| **GCRA**                 |
+| Sequential (unique keys) | 898K     | 0.001    | 0.001    | 0.003    |
+| Concurrent (unique keys) | 779K     | 0.063    | 0.145    | 0.521    |
+| Contention (single key)  | **2.2M** | 0.021    | 0.037    | 0.063    |
+| **Leaky Bucket**         |
+| Sequential (unique keys) | **951K** | 0.001    | 0.002    | 0.008    |
+| Concurrent (unique keys) | 423K     | 0.117    | 0.204    | 5.076    |
+| Contention (single key)  | **2.2M** | 0.022    | 0.040    | 0.052    |
+| High throughput          | **2.5M** | 0.020    | 0.023    | 0.036    |
+
+#### Redis 7 vs Valkey 9 (Lua Scripts)
+
+| Benchmark               | Redis 7   | Valkey 9  | Winner    | Δ         |
+| ----------------------- | --------- | --------- | --------- | --------- |
+| **Throughput**          |
+| PING concurrent         | 79.1K     | 79.8K     | ~Tie      | +1%       |
+| GCRA concurrent         | 27.8K     | **52.4K** | 🏆 Valkey | **+89%**  |
+| SW concurrent           | 50.4K     | 50.4K     | Tie       | 0%        |
+| Single key contention   | **66.4K** | 59.2K     | Redis     | -11%      |
+| **Concurrency Scaling** |
+| Concurrency=50          | 15.3K     | **61.5K** | 🏆 Valkey | **+302%** |
+| Concurrency=100         | 38.5K     | **90.6K** | 🏆 Valkey | **+135%** |
+| Concurrency=200         | 40.7K     | 61.3K     | 🏆 Valkey | +51%      |
+| **Sustained Load**      |
+| 10 seconds              | 46.8K     | **53.1K** | 🏆 Valkey | **+13%**  |
+| **Pipeline Mode**       |
+| Speedup                 | 16.8x     | **21.5x** | 🏆 Valkey | +28%      |
+
+#### Cost-Based Rate Limiting
+
+| Cost    | Ops/s | Notes             |
+| ------- | ----- | ----------------- |
+| cost=1  | 951K  | Simple reads      |
+| cost=5  | 1.1M  | Writes            |
+| cost=10 | 1.5M  | Medium operations |
+| cost=50 | 1.1M  | AI/bulk calls     |
+
+Mixed workload (100 requests):
+
+- Reads (cost=1): 69 requests
+- Writes (cost=5): 23 requests
+- AI calls (cost=50): 8 requests
+- **Total tokens: 584/1000** in 1.15ms
+
+#### useRedisTime Overhead
+
+| Source      | Ops/s | Overhead    |
+| ----------- | ----- | ----------- |
+| Date.now()  | 19.6M | baseline    |
+| Redis TIME  | 2.5K  | +0.4ms/call |
+| Clock drift | -     | 1-2ms       |
+
+**Recommendations:**
+
+- Use **Valkey 9** with `io-threads 8` for production (up to 89% faster on GCRA)
+- Use **GCRA** for predictable pacing and low-latency contention handling
+- Use **Leaky Bucket** for strict throughput control and traffic shaping
+- Use **MemoryAdapter** for single-node deployments or testing (up to 2.5M ops/s)
+- Enable **useRedisTime** only when clock sync is critical (adds ~0.4ms latency)
+
+### Valkey Configuration
+
+For optimal performance, use this Valkey config:
+
+```conf
+# /etc/valkey/valkey.conf
+io-threads 8
+io-threads-do-reads yes
+maxmemory 512mb
+maxmemory-policy allkeys-lru
+appendonly yes
+appendfsync everysec
+lazyfree-lazy-eviction yes
+jemalloc-bg-thread yes
+```
 
 ## License
 
