@@ -15,8 +15,8 @@ import {
   validResponseMock,
 } from './__mocks__';
 
-const paramsValidate = typia.createValidateEquals<typeof validParamsMock>();
-const responseValidate = typia.createValidateEquals<typeof validResponseMock>();
+const paramsValidate = typia.createValidate<typeof validParamsMock>();
+const responseValidate = typia.createValidate<typeof validResponseMock>();
 
 describe('ApiController', () => {
   ApiController.configure({
@@ -24,9 +24,7 @@ describe('ApiController', () => {
   });
 
   test('Correct session factory', () => {
-    expect(
-      ApiController['_config']?.sessionFactory('test', UserType.USER),
-    ).toBe(sessionMock);
+    expect(ApiController['_config']?.sessionFactory('test', UserType.USER)).toBe(sessionMock);
   });
 
   test('Create controller', () => {
@@ -86,32 +84,20 @@ describe('ApiController', () => {
       },
     };
 
-    const validActionRegistered = controller.register(
-      'action',
-      validActionOptions,
-    );
+    const validActionRegistered = controller.register('action', validActionOptions);
 
-    const invalidActionRegistered = controller.register(
-      'action2',
-      invalidActionOptions,
-    );
+    const invalidActionRegistered = controller.register('action2', invalidActionOptions);
 
-    const validActionGeneratedSchema = controller['_createActionSchema'](
-      validActionRegistered,
-    );
+    const validActionGeneratedSchema = controller['_createActionSchema'](validActionRegistered);
 
-    const invalidActionGeneratedSchema = controller['_createActionSchema'](
-      invalidActionRegistered,
-    );
+    const invalidActionGeneratedSchema = controller['_createActionSchema'](invalidActionRegistered);
 
     test('Register an action', () => {
       expect(validActionRegistered.options).toStrictEqual(validActionOptions);
     });
 
     test('Re-registering action throws error', () => {
-      expect(() =>
-        controller.register('action', validActionOptions),
-      ).toThrowError();
+      expect(() => controller.register('action', validActionOptions)).toThrowError();
     });
 
     test('Action schema is valid', () => {
@@ -124,10 +110,7 @@ describe('ApiController', () => {
     test('Action params validated', async () => {
       // Should pass
       await expect(
-        validActionGeneratedSchema.handler.call(
-          moleculerServiceMock,
-          validParamsContextMock,
-        ),
+        validActionGeneratedSchema.handler.call(moleculerServiceMock, validParamsContextMock),
       ).resolves.toMatchObject({
         data: validResponseMock,
         code: ResponseCode.SUCCESS,
@@ -135,19 +118,13 @@ describe('ApiController', () => {
 
       // Should throw error
       await expect(
-        validActionGeneratedSchema.handler.call(
-          moleculerServiceMock,
-          invalidParamsContextMock,
-        ),
+        validActionGeneratedSchema.handler.call(moleculerServiceMock, invalidParamsContextMock),
       ).rejects.toThrow(APIError);
     });
 
     test('Validate response', async () => {
       await expect(
-        invalidActionGeneratedSchema.handler.call(
-          moleculerServiceMock,
-          validParamsContextMock,
-        ),
+        invalidActionGeneratedSchema.handler.call(moleculerServiceMock, validParamsContextMock),
       ).rejects.toThrow(APIError);
     });
 
@@ -263,9 +240,7 @@ describe('ApiController', () => {
           params: paramsValidate,
           response: responseValidate,
           handler() {
-            throw JSON.parse(
-              new APIError(ResponseCode.FORBIDDEN).toJSON(),
-            );
+            throw JSON.parse(new APIError(ResponseCode.FORBIDDEN).toJSON());
           },
         },
       });
@@ -356,11 +331,7 @@ describe('ApiController', () => {
           params: paramsValidate,
           response: responseValidate,
           handler(ctx: any) {
-            ctx.call(
-              'v1.test.test',
-              { test: 'test' },
-              { meta: { test: 'test' } },
-            );
+            ctx.call('v1.test.test', { test: 'test' }, { meta: { test: 'test' } });
 
             return ctx.respond({
               var1: ctx.params.param1,

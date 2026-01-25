@@ -5,9 +5,7 @@ import type typia from 'typia';
  * Typia validator
  * Can be used to infer data type from validator
  */
-export type TypiaValidator<T> = ReturnType<
-  typeof typia.createValidateEquals<T>
->;
+export type TypiaValidator<T> = ReturnType<typeof typia.createValidate<T>>;
 
 /**
  * Possible moleculer context meta

@@ -3,12 +3,7 @@ import { ServiceBroker } from 'moleculer';
 import typia from 'typia';
 
 import pjson from '../../package.json';
-import {
-  ApiController,
-  ResponseCode,
-  createApiService,
-  createMoleculerConfig,
-} from '..';
+import { ApiController, ResponseCode, createApiService, createMoleculerConfig } from '..';
 
 const RESPONSE_MESSAGE = 'Some message' as const;
 
@@ -30,10 +25,10 @@ describe('Moleculer Service', () => {
   controller.register('getAction', {
     auth: 'none',
     rest: 'GET /action/:str',
-    params: typia.createValidateEquals<{
+    params: typia.createValidate<{
       str: string;
     }>(),
-    response: typia.createValidateEquals<{
+    response: typia.createValidate<{
       str: string;
     }>(),
     responseCode: ResponseCode.SUCCESS,
@@ -47,11 +42,11 @@ describe('Moleculer Service', () => {
   controller.register('postAction', {
     auth: 'none',
     rest: 'POST /action',
-    params: typia.createValidateEquals<{
+    params: typia.createValidate<{
       str: string;
       num: number;
     }>(),
-    response: typia.createValidateEquals<{
+    response: typia.createValidate<{
       str: string;
       num: number;
     }>(),
@@ -119,9 +114,7 @@ describe('Moleculer Service', () => {
     });
 
     test('Call get endpoint', async () => {
-      const result = await fetch(
-        `http://0.0.0.0:${API_GATE_PORT}/v1/test-service/action/test`,
-      );
+      const result = await fetch(`http://0.0.0.0:${API_GATE_PORT}/v1/test-service/action/test`);
 
       expect(result.ok).toBe(true);
       await expect(result.json()).resolves.toMatchObject({
@@ -135,10 +128,9 @@ describe('Moleculer Service', () => {
     });
 
     test('Fail Call POST endpoint with wrong parameters', async () => {
-      const result = await fetch(
-        `http://0.0.0.0:${API_GATE_PORT}/v1/test-service/action`,
-        { method: 'POST' },
-      );
+      const result = await fetch(`http://0.0.0.0:${API_GATE_PORT}/v1/test-service/action`, {
+        method: 'POST',
+      });
 
       expect(result.ok).toBe(false);
 

@@ -629,7 +629,7 @@ export type QueueTraceContext = {
  *
  * @example
  * ```typescript
- * type MyJobData = { tenantId: string; documentId: string };
+ * type MyJobData = { tenantId?: string; documentId: string };
  * const job: Job<JobDataWithTraceContext<MyJobData>> = ...;
  * const traceContext = job.data._traceContext;
  * ```

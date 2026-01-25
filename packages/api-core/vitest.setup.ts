@@ -14,12 +14,12 @@ vi.mock('typia', () => {
   return {
     default: {
       createValidate: () => mockValidator,
-      createValidateEquals: () => mockValidator,
+      createValidate: () => mockValidator,
       createIs: () => () => true,
       createAssert: () => (val: unknown) => val,
     },
     createValidate: () => mockValidator,
-    createValidateEquals: () => mockValidator,
+    createValidate: () => mockValidator,
     createIs: () => () => true,
     createAssert: () => (val: unknown) => val,
   };
