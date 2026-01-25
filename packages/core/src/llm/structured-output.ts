@@ -11,6 +11,51 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 import type { ZodType } from 'zod';
 import type { LLMResponseFormat } from './types.js';
 
+// =============================================================================
+// Schema Sanitization for Provider Compatibility
+// =============================================================================
+
+/**
+ * Recursively remove `additionalProperties` from JSON Schema.
+ *
+ * Gemini API doesn't support `additionalProperties` in response_schema.
+ * This function strips it at all levels of the schema.
+ *
+ * @param schema - JSON Schema object
+ * @returns Sanitized schema without additionalProperties
+ */
+function stripAdditionalProperties<T extends Record<string, unknown>>(schema: T): T {
+  if (typeof schema !== 'object' || schema === null) {
+    return schema;
+  }
+
+  const result: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(schema)) {
+    // Skip additionalProperties
+    if (key === 'additionalProperties') {
+      continue;
+    }
+
+    // Recursively process nested objects
+    if (typeof value === 'object' && value !== null) {
+      if (Array.isArray(value)) {
+        result[key] = value.map((item) =>
+          typeof item === 'object' && item !== null
+            ? stripAdditionalProperties(item as Record<string, unknown>)
+            : item,
+        );
+      } else {
+        result[key] = stripAdditionalProperties(value as Record<string, unknown>);
+      }
+    } else {
+      result[key] = value;
+    }
+  }
+
+  return result as T;
+}
+
 /**
  * LiteLLM JSON Schema format for structured output
  */
@@ -82,7 +127,7 @@ export interface ZodToLiteLLMOptions {
  */
 export function zodToResponseFormat(
   schema: ZodType,
-  options: ZodToLiteLLMOptions
+  options: ZodToLiteLLMOptions,
 ): LiteLLMResponseFormat {
   // Convert Zod to JSON Schema - don't use 'name' option to avoid $ref
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -93,11 +138,14 @@ export function zodToResponseFormat(
   // Extract the schema object (remove $schema and other metadata)
   const { $schema, definitions, ...schemaBody } = jsonSchema as Record<string, unknown>;
 
+  // Strip additionalProperties for Gemini compatibility (P1-012)
+  const sanitizedSchema = stripAdditionalProperties(schemaBody);
+
   return {
     type: 'json_schema',
     json_schema: {
       name: options.name,
-      schema: schemaBody as LiteLLMJsonSchema['schema'],
+      schema: sanitizedSchema as LiteLLMJsonSchema['schema'],
       strict: options.strict ?? true,
     },
   };
@@ -131,7 +179,7 @@ export function zodToResponseFormat(
  */
 export function zodToLLMResponseFormat(
   schema: ZodType,
-  options: ZodToLiteLLMOptions
+  options: ZodToLiteLLMOptions,
 ): LLMResponseFormat {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const jsonSchema = zodToJsonSchema(schema as any, {
@@ -141,11 +189,16 @@ export function zodToLLMResponseFormat(
   // Remove metadata and get clean schema
   const { $schema, definitions, ...schemaBody } = jsonSchema as Record<string, unknown>;
 
+  // Strip additionalProperties for Gemini compatibility (P1-012)
+  const sanitizedSchema = stripAdditionalProperties(schemaBody);
+
   return {
     type: 'json_schema',
     jsonSchema: {
       name: options.name,
-      schema: schemaBody as LLMResponseFormat['jsonSchema'] extends { schema: infer S } ? S : never,
+      schema: sanitizedSchema as LLMResponseFormat['jsonSchema'] extends { schema: infer S }
+        ? S
+        : never,
       strict: options.strict ?? true,
     },
   };
@@ -160,10 +213,7 @@ export function zodToLLMResponseFormat(
  * @param name - Schema name
  * @returns LiteLLM JSON Schema object
  */
-export function zodToJsonSchemaLiteLLM(
-  schema: ZodType,
-  name: string
-): LiteLLMJsonSchema {
+export function zodToJsonSchemaLiteLLM(schema: ZodType, name: string): LiteLLMJsonSchema {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const jsonSchema = zodToJsonSchema(schema as any, {
     name,
@@ -172,9 +222,12 @@ export function zodToJsonSchemaLiteLLM(
 
   const { $schema, definitions, ...schemaBody } = jsonSchema as Record<string, unknown>;
 
+  // Strip additionalProperties for Gemini compatibility (P1-012)
+  const sanitizedSchema = stripAdditionalProperties(schemaBody);
+
   return {
     name,
-    schema: schemaBody as LiteLLMJsonSchema['schema'],
+    schema: sanitizedSchema as LiteLLMJsonSchema['schema'],
     strict: true,
   };
 }
@@ -225,33 +278,101 @@ export interface StructuredOutputCapabilities {
  */
 export const MODEL_STRUCTURED_OUTPUT_CAPABILITIES: Record<string, StructuredOutputCapabilities> = {
   // OpenAI - Full native support
-  'gpt-4o': { supportsNativeStructuredOutputs: true, supportsJsonSchemaOutputs: true, supportsJsonMode: true },
-  'gpt-4o-mini': { supportsNativeStructuredOutputs: true, supportsJsonSchemaOutputs: true, supportsJsonMode: true },
-  'gpt-4-turbo': { supportsNativeStructuredOutputs: true, supportsJsonSchemaOutputs: true, supportsJsonMode: true },
-  'gpt-3.5-turbo': { supportsNativeStructuredOutputs: false, supportsJsonSchemaOutputs: false, supportsJsonMode: true },
+  'gpt-4o': {
+    supportsNativeStructuredOutputs: true,
+    supportsJsonSchemaOutputs: true,
+    supportsJsonMode: true,
+  },
+  'gpt-4o-mini': {
+    supportsNativeStructuredOutputs: true,
+    supportsJsonSchemaOutputs: true,
+    supportsJsonMode: true,
+  },
+  'gpt-4-turbo': {
+    supportsNativeStructuredOutputs: true,
+    supportsJsonSchemaOutputs: true,
+    supportsJsonMode: true,
+  },
+  'gpt-3.5-turbo': {
+    supportsNativeStructuredOutputs: false,
+    supportsJsonSchemaOutputs: false,
+    supportsJsonMode: true,
+  },
 
   // Anthropic - Native support in newer models
-  'claude-3-5-sonnet': { supportsNativeStructuredOutputs: true, supportsJsonSchemaOutputs: true, supportsJsonMode: true },
-  'claude-sonnet-4': { supportsNativeStructuredOutputs: true, supportsJsonSchemaOutputs: true, supportsJsonMode: true },
-  'claude-3-opus': { supportsNativeStructuredOutputs: false, supportsJsonSchemaOutputs: false, supportsJsonMode: true },
+  'claude-3-5-sonnet': {
+    supportsNativeStructuredOutputs: true,
+    supportsJsonSchemaOutputs: true,
+    supportsJsonMode: true,
+  },
+  'claude-sonnet-4': {
+    supportsNativeStructuredOutputs: true,
+    supportsJsonSchemaOutputs: true,
+    supportsJsonMode: true,
+  },
+  'claude-3-opus': {
+    supportsNativeStructuredOutputs: false,
+    supportsJsonSchemaOutputs: false,
+    supportsJsonMode: true,
+  },
 
   // Gemini - JSON schema support
-  'gemini-3-flash': { supportsNativeStructuredOutputs: false, supportsJsonSchemaOutputs: true, supportsJsonMode: true },
-  'gemini-3-pro': { supportsNativeStructuredOutputs: false, supportsJsonSchemaOutputs: true, supportsJsonMode: true },
-  'gemini-2.0-flash': { supportsNativeStructuredOutputs: false, supportsJsonSchemaOutputs: true, supportsJsonMode: true },
-  'gemini-flash': { supportsNativeStructuredOutputs: false, supportsJsonSchemaOutputs: true, supportsJsonMode: true },
-  'gemini-pro': { supportsNativeStructuredOutputs: false, supportsJsonSchemaOutputs: true, supportsJsonMode: true },
+  'gemini-3-flash': {
+    supportsNativeStructuredOutputs: false,
+    supportsJsonSchemaOutputs: true,
+    supportsJsonMode: true,
+  },
+  'gemini-3-pro': {
+    supportsNativeStructuredOutputs: false,
+    supportsJsonSchemaOutputs: true,
+    supportsJsonMode: true,
+  },
+  'gemini-2.0-flash': {
+    supportsNativeStructuredOutputs: false,
+    supportsJsonSchemaOutputs: true,
+    supportsJsonMode: true,
+  },
+  'gemini-flash': {
+    supportsNativeStructuredOutputs: false,
+    supportsJsonSchemaOutputs: true,
+    supportsJsonMode: true,
+  },
+  'gemini-pro': {
+    supportsNativeStructuredOutputs: false,
+    supportsJsonSchemaOutputs: true,
+    supportsJsonMode: true,
+  },
 
   // Mistral - Native support
-  'mistral-large': { supportsNativeStructuredOutputs: true, supportsJsonSchemaOutputs: true, supportsJsonMode: true },
-  'mistral-medium': { supportsNativeStructuredOutputs: true, supportsJsonSchemaOutputs: true, supportsJsonMode: true },
+  'mistral-large': {
+    supportsNativeStructuredOutputs: true,
+    supportsJsonSchemaOutputs: true,
+    supportsJsonMode: true,
+  },
+  'mistral-medium': {
+    supportsNativeStructuredOutputs: true,
+    supportsJsonSchemaOutputs: true,
+    supportsJsonMode: true,
+  },
 
   // Llama - JSON schema support
-  'llama-3.1': { supportsNativeStructuredOutputs: false, supportsJsonSchemaOutputs: true, supportsJsonMode: true },
-  'llama-3.2': { supportsNativeStructuredOutputs: false, supportsJsonSchemaOutputs: true, supportsJsonMode: true },
+  'llama-3.1': {
+    supportsNativeStructuredOutputs: false,
+    supportsJsonSchemaOutputs: true,
+    supportsJsonMode: true,
+  },
+  'llama-3.2': {
+    supportsNativeStructuredOutputs: false,
+    supportsJsonSchemaOutputs: true,
+    supportsJsonMode: true,
+  },
 
   // Default fallback
-  'default': { supportsNativeStructuredOutputs: false, supportsJsonSchemaOutputs: false, supportsJsonMode: true },
+  default: {
+    supportsNativeStructuredOutputs: false,
+    supportsJsonSchemaOutputs: false,
+    supportsJsonMode: true,
+  },
 };
 
 /**
@@ -293,7 +414,7 @@ export function getStructuredOutputCapabilities(model: string): StructuredOutput
 export function getSmartResponseFormat(
   model: string,
   schema: ZodType,
-  schemaName: string
+  schemaName: string,
 ): LiteLLMResponseFormat {
   const caps = getStructuredOutputCapabilities(model);
 
@@ -393,7 +514,7 @@ export function extractJsonFromText(text: string): unknown | null {
  */
 export function parseStructuredResponse<T extends ZodType>(
   response: string,
-  schema: T
+  schema: T,
 ): ReturnType<T['safeParse']>['data'] | null {
   // Try direct JSON parse
   let data: unknown;
