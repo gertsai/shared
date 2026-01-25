@@ -574,6 +574,6 @@ export interface MembershipEventPayload {
 export interface RoleAssignmentPayload {
   userId: string;
   roleId: string;
-  tenantId: string;
+  tenantId?: string;
   grantedBy?: string;
 }
