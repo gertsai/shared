@@ -14,6 +14,14 @@ import { ServiceBroker } from 'moleculer';
 import config from '../../config';
 import { ResponseCode } from '../apiResponse';
 import type { ContextMeta, TypiaValidator } from '../common';
+import {
+  coerceQueryParams,
+  smartCoerce,
+  isTypiaParamsWithSchema,
+  getValidator,
+  type ActionParams,
+  type TypiaParamsWithSchema,
+} from '../common';
 import { APIError } from '../error';
 
 import type {
@@ -489,8 +497,14 @@ export class ApiController<
   register<
     ActionName extends string,
     AuthType extends ActionAuthType,
-    ParamsValidator extends TypiaValidator<any>,
-    ParamsType extends ParamsValidator extends TypiaValidator<infer T> ? T : never,
+    // Support both legacy TypiaValidator<T> and new TypiaParamsWithSchema<T>
+    ParamsValidator extends ActionParams<any>,
+    // Infer ParamsType from either format
+    ParamsType extends ParamsValidator extends TypiaValidator<infer T>
+      ? T
+      : ParamsValidator extends TypiaParamsWithSchema<infer T>
+        ? T
+        : never,
     ResponseValidator extends TypiaValidator<any>,
     ResponseType extends ResponseValidator extends TypiaValidator<infer T> ? T : never,
     Rest extends RestConfig<any, any> | undefined = undefined,
@@ -521,7 +535,8 @@ export class ApiController<
     AuthType,
     ParamsType,
     ResponseType,
-    Rest
+    Rest,
+    ParamsValidator
   > {
     if (this._registeredActions[actionName]) {
       throw new Error(`Action '${actionName}' is already registered in this controller`);
@@ -541,11 +556,12 @@ export class ApiController<
 
     return (this._registeredActions[actionName] = {
       name: actionName,
-      // @ts-expect-error
+      // @ts-expect-error - rest type inference is complex
       rest,
       path,
       // Copy actionOptions to prevent modifying them
-      options: { ...actionOptions },
+      // Type is validated at call site, safe to cast here
+      options: { ...actionOptions } as any,
     });
   }
 
@@ -643,7 +659,32 @@ export class ApiController<
             Object.assign(params, ctx.meta.$multipart);
           }
 
-          const requestIsValid = action.options.params(params);
+          // Coerce query params for GET endpoints (URL query strings are always strings)
+          const restConfig = action.options.rest;
+          const isGetEndpoint =
+            typeof restConfig === 'string'
+              ? restConfig.startsWith('GET ')
+              : restConfig?.method === 'GET';
+
+          if (isGetEndpoint) {
+            const actionParams = action.options.params;
+
+            if (isTypiaParamsWithSchema(actionParams)) {
+              // New format: use schema-based smart coercion
+              smartCoerce(params as Record<string, unknown>, {
+                numericFields: actionParams.numericFields,
+                booleanFields: actionParams.booleanFields,
+                arrayFields: actionParams.arrayFields,
+              });
+            } else {
+              // Legacy format: use hard-coded list for backward compatibility
+              coerceQueryParams(params as Record<string, unknown>);
+            }
+          }
+
+          // Get validator (supports both legacy and new format)
+          const validator = getValidator(action.options.params);
+          const requestIsValid = validator(params);
 
           if (!requestIsValid.success) {
             throw new APIError(ResponseCode.BAD_REQUEST__INVALID_PARAMS, requestIsValid.errors);

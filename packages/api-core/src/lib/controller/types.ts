@@ -15,6 +15,7 @@ import type Moleculer from 'moleculer';
 
 import type { ResponseCode } from '../apiResponse';
 import type { ContextMeta, TypiaValidator } from '../common';
+import type { TypiaParamsWithSchema, ActionParams } from '../common/typia-params';
 
 // =============================================================================
 // Service Context Extension
@@ -370,14 +371,18 @@ export type ApiControllerRegisteredAction<
   ParamsType,
   ResponseType,
   Rest extends RestConfig<any, any> | undefined,
+  // Support both legacy TypiaValidator<T> and new TypiaParamsWithSchema<T>
+  ParamsValidator extends TypiaValidator<any> | TypiaParamsWithSchema<any> =
+    TypiaValidator<ParamsType>,
 > = {
   name: string;
   rest: RestPath;
   path: Path;
+  // Use 'any' for ParamsType constraint since it's already validated at register() time
   options: ActionOptions<
     AuthType,
-    TypiaValidator<ParamsType>,
-    ParamsType,
+    ParamsValidator,
+    any, // ParamsType constraint satisfied at register()
     TypiaValidator<ResponseType>,
     ResponseType,
     Rest
@@ -552,8 +557,14 @@ export type OpenFgaCheckDiscriminatedUnion<
  */
 export type ActionOptions<
   AuthType extends ActionAuthType = any,
-  ParamsValidator = TypiaValidator<any>,
-  ParamsType extends ParamsValidator extends TypiaValidator<infer T> ? T : never = any,
+  // Support both legacy TypiaValidator<T> and new TypiaParamsWithSchema<T>
+  ParamsValidator = TypiaValidator<any> | TypiaParamsWithSchema<any>,
+  // Infer ParamsType with constraint like original
+  ParamsType extends ParamsValidator extends TypiaValidator<infer T>
+    ? T
+    : ParamsValidator extends TypiaParamsWithSchema<infer T>
+      ? T
+      : never = any,
   ResponseValidator = TypiaValidator<any>,
   ResponseType extends ResponseValidator extends TypiaValidator<infer T> ? T : never = any,
   Rest extends RestConfig<any, any> | undefined = any,
