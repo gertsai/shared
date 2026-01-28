@@ -34,3 +34,7 @@ export * from './query';
 // Usage: import { rag } from '@gerts/core'; const response: rag.RAGResponse<{}> = ...
 // Or: import { RAGResponse } from '@gerts/core/rag';
 export * as rag from './rag';
+
+// Data Connectors System (RFC-042)
+// ACL models and utilities for connector permission sync
+export * from './connectors';

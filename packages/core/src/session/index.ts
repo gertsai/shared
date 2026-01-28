@@ -63,6 +63,7 @@ export {
   type RateLimitConfig,
   type FeatureFlags,
   type IngestionConfig,
+  type ObserveConfig,
   type CommunityLevel,
   type TenantConfig,
   type TenantConfigCreate,

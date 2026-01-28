@@ -251,6 +251,63 @@ export interface FeatureFlags {
 }
 
 // ============================================================================
+// LLM Observability Settings (RFC-062)
+// ============================================================================
+
+/**
+ * Observability configuration for the tenant
+ *
+ * Controls LLM tracing, metrics collection, and data retention.
+ * Used by @gerts/observe for per-tenant sampling and storage settings.
+ *
+ * @see RFC-062 LLM Observability Platform
+ */
+export interface ObserveConfig {
+  /** Enable observability for this tenant @default true */
+  enabled?: boolean;
+
+  /**
+   * Sampling rate for traces (0.0 - 1.0)
+   * - 1.0 = capture all traces (default)
+   * - 0.5 = capture 50% of traces
+   * - 0.0 = disable tracing
+   * @default 1.0
+   */
+  sampleRate?: number;
+
+  /** Trace retention in days (ClickHouse TTL) @default 30 */
+  traceRetentionDays?: number;
+
+  /** Generation data retention in days @default 90 */
+  generationRetentionDays?: number;
+
+  /**
+   * Maximum payload size to store (KB)
+   * Larger payloads are truncated to save storage
+   * @default 100
+   */
+  maxPayloadSizeKb?: number;
+
+  /**
+   * Enable detailed input/output logging
+   * When false, only metadata is stored (tokens, cost, latency)
+   * @default true
+   */
+  logPayloads?: boolean;
+
+  /**
+   * Enable cost tracking
+   * @default true
+   */
+  trackCost?: boolean;
+
+  /**
+   * Custom tags to add to all traces for this tenant
+   */
+  defaultTags?: string[];
+}
+
+// ============================================================================
 // Ingestion Settings
 // ============================================================================
 
@@ -338,6 +395,9 @@ export interface TenantConfig {
   /** Ingestion settings */
   ingestion?: IngestionConfig;
 
+  /** LLM Observability settings (RFC-062) */
+  observe?: ObserveConfig;
+
   /** Community hierarchy description */
   communityHierarchy?: CommunityLevel[];
 
@@ -386,6 +446,8 @@ export interface TenantConfigCreate {
   features?: FeatureFlags;
   /** Optional: Ingestion settings */
   ingestion?: IngestionConfig;
+  /** Optional: LLM Observability settings (RFC-062) */
+  observe?: ObserveConfig;
   /** Optional: Community hierarchy */
   communityHierarchy?: CommunityLevel[];
   /** Optional: Custom metadata */
@@ -420,6 +482,8 @@ export interface TenantConfigUpdate {
   features?: Partial<FeatureFlags>;
   /** Ingestion settings */
   ingestion?: Partial<IngestionConfig>;
+  /** LLM Observability settings (RFC-062) */
+  observe?: Partial<ObserveConfig>;
   /** Community hierarchy (replace all) */
   communityHierarchy?: CommunityLevel[];
   /** Custom metadata (merge) */
@@ -582,6 +646,16 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     enableOcr: false,
     enableTableExtraction: true,
   },
+  observe: {
+    enabled: true,
+    sampleRate: 1.0, // Capture all traces by default
+    traceRetentionDays: 30,
+    generationRetentionDays: 90,
+    maxPayloadSizeKb: 100,
+    logPayloads: true,
+    trackCost: true,
+    defaultTags: [],
+  },
 };
 
 // ============================================================================
@@ -617,6 +691,10 @@ export function mergeTenantConfigWithDefaults(config: TenantConfigCreate): Tenan
       ...DEFAULT_TENANT_CONFIG.ingestion,
       ...config.ingestion,
     },
+    observe: {
+      ...DEFAULT_TENANT_CONFIG.observe,
+      ...config.observe,
+    },
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -651,6 +729,7 @@ export function applyTenantConfigUpdate(
     ingestion: update.ingestion
       ? { ...existing.ingestion, ...update.ingestion }
       : existing.ingestion,
+    observe: update.observe ? { ...existing.observe, ...update.observe } : existing.observe,
     metadata: update.metadata ? { ...existing.metadata, ...update.metadata } : existing.metadata,
     // Update timestamp
     updatedAt: new Date().toISOString(),
