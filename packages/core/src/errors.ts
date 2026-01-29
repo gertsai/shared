@@ -366,6 +366,184 @@ export class AuthorizationError extends GertsError {
 }
 
 // =============================================================================
+// Connector Errors (RFC-042)
+// =============================================================================
+
+/**
+ * Failure type for connector sync operations.
+ */
+export type ConnectorFailureType = 'document' | 'permission' | 'network' | 'auth' | 'unknown';
+
+/**
+ * Connector failure structure for sync tracking.
+ */
+export interface ConnectorFailure {
+  type: ConnectorFailureType;
+  message: string;
+  documentId?: string;
+  retryable: boolean;
+  timestamp: Date;
+  originalError?: Error;
+}
+
+/**
+ * Extended error context for connector errors.
+ */
+export interface ConnectorErrorContext extends ErrorContext {
+  /** Source type (e.g., 'GOOGLE_DRIVE', 'CONFLUENCE') */
+  source?: string;
+  /** Document ID if error is document-specific */
+  documentId?: string;
+  /** HTTP status if error came from API response */
+  httpStatus?: number;
+}
+
+/**
+ * Base error for all connector operations.
+ * Adds source and documentId context to GertsError.
+ *
+ * @example
+ * ```typescript
+ * throw new ConnectorError('Failed to fetch page', {
+ *   code: 'FETCH_FAILED',
+ *   source: 'CONFLUENCE',
+ *   documentId: 'page-123',
+ *   httpStatus: 404,
+ * });
+ * ```
+ */
+export class ConnectorError extends GertsError {
+  readonly source?: string;
+  readonly documentId?: string;
+  readonly httpStatus?: number;
+
+  constructor(message: string, context: ConnectorErrorContext) {
+    // Infer ErrorKind from HTTP status if not provided
+    const kind =
+      context.kind ?? (context.httpStatus ? errorKindFromHttp(context.httpStatus) : undefined);
+
+    super(message, { ...context, kind });
+    this.name = 'ConnectorError';
+    this.source = context.source;
+    this.documentId = context.documentId;
+    this.httpStatus = context.httpStatus;
+  }
+
+  /**
+   * Convert to ConnectorFailure format for sync tracking.
+   */
+  toConnectorFailure(): ConnectorFailure {
+    return {
+      type: this.inferFailureType(),
+      message: this.message,
+      documentId: this.documentId,
+      retryable: this.isRetryable(),
+      timestamp: new Date(),
+      originalError: this,
+    };
+  }
+
+  /**
+   * Infer failure type from error properties.
+   */
+  private inferFailureType(): ConnectorFailureType {
+    switch (this.kind) {
+      case ErrorKind.Unauthenticated:
+      case ErrorKind.PermissionDenied:
+        return 'auth';
+      case ErrorKind.Unavailable:
+      case ErrorKind.DeadlineExceeded:
+      case ErrorKind.ResourceExhausted:
+        return 'network';
+      default:
+        return this.documentId ? 'document' : 'unknown';
+    }
+  }
+}
+
+/**
+ * HTTP error for connector API calls.
+ * Retryable for 5xx and rate limits.
+ */
+export class HttpConnectorError extends ConnectorError {
+  readonly statusText: string;
+
+  constructor(
+    message: string,
+    status: number,
+    statusText: string,
+    source?: string,
+    documentId?: string,
+  ) {
+    super(message, {
+      code: 'HTTP_ERROR',
+      source,
+      documentId,
+      httpStatus: status,
+      retryable: status >= 500 || status === 429 || status === 408,
+    });
+    this.name = 'HttpConnectorError';
+    this.statusText = statusText;
+  }
+
+  /** Check if error is a specific HTTP status */
+  is(status: number): boolean {
+    return this.httpStatus === status;
+  }
+
+  /** Check if error is client error (4xx) */
+  isClientError(): boolean {
+    return this.httpStatus !== undefined && this.httpStatus >= 400 && this.httpStatus < 500;
+  }
+
+  /** Check if error is server error (5xx) */
+  isServerError(): boolean {
+    return this.httpStatus !== undefined && this.httpStatus >= 500 && this.httpStatus < 600;
+  }
+
+  override getRetryDelay(attempt: number): number | undefined {
+    if (!this.isRetryable()) return undefined;
+    // Rate limit - longer delay
+    if (this.httpStatus === 429) {
+      return Math.min(1000 * Math.pow(2, attempt), 60000);
+    }
+    // Server error - normal backoff
+    return Math.min(100 * Math.pow(2, attempt), 10000);
+  }
+}
+
+/**
+ * Create ConnectorFailure from any error.
+ */
+export function createConnectorFailure(
+  error: unknown,
+  type: ConnectorFailureType = 'unknown',
+  documentId?: string,
+  retryable?: boolean,
+): ConnectorFailure {
+  if (error instanceof ConnectorError) {
+    return error.toConnectorFailure();
+  }
+
+  const isError = error instanceof Error;
+  return {
+    type,
+    message: isError ? error.message : String(error),
+    documentId,
+    retryable: retryable ?? (isError ? isRetryableError(error) : false),
+    timestamp: new Date(),
+    originalError: isError ? error : undefined,
+  };
+}
+
+/**
+ * Check if an error is a ConnectorError.
+ */
+export function isConnectorError(error: unknown): error is ConnectorError {
+  return error instanceof ConnectorError;
+}
+
+// =============================================================================
 // Type Guards and Utilities
 // =============================================================================
 
