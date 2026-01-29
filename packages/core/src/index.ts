@@ -38,3 +38,7 @@ export * as rag from './rag';
 // Data Connectors System (RFC-042)
 // ACL models and utilities for connector permission sync
 export * from './connectors';
+
+// Deny Ledger (RFC-042)
+// Persistent storage for access denials
+export * from './deny-ledger';

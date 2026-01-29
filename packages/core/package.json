@@ -53,6 +53,7 @@
     "zod-to-json-schema": "^3.25.1"
   },
   "devDependencies": {
+    "@gerts/database": "workspace:*",
     "@ryoppippi/unplugin-typia": "^2.6.5",
     "@standard-schema/spec": "^1.1.0",
     "ts-patch": "^3.3.0",

@@ -308,6 +308,192 @@ export interface ObserveConfig {
 }
 
 // ============================================================================
+// ACL Sync Settings (RFC-042)
+// ============================================================================
+
+/**
+ * Identity resolution strategy for ACL sync
+ *
+ * - `strict`: Only sync permissions for users with explicit identity links.
+ *   Best for enterprise deployments with strict access control.
+ *
+ * - `pending-grants`: Create pending grants for unknown emails,
+ *   auto-apply when user signs up. Best for OSS/B2C deployments.
+ *
+ * @see RFC-042 Appendix I
+ */
+export type IdentityStrategy = 'strict' | 'pending-grants';
+
+/**
+ * OpenFGA tenancy mode
+ *
+ * - `shared`: Single OpenFGA store with tenant prefix in object IDs.
+ *   Simpler, good for OSS/small deployments. REQUIRES SEC-001 fix.
+ *
+ * - `per-tenant`: Separate OpenFGA store per tenant.
+ *   Stronger isolation, good for enterprise/compliance.
+ *
+ * @see RFC-042 Appendix I.7
+ */
+export type OpenFgaTenancyMode = 'shared' | 'per-tenant';
+
+/**
+ * Public document security settings
+ */
+export interface PublicDocsConfig {
+  /**
+   * Require admin approval before documents are marked public
+   * Recommended for enterprise/compliance use cases
+   * @default false
+   */
+  requireApproval?: boolean;
+
+  /**
+   * Maximum public documents per hour (rate limiting)
+   * Prevents accidental mass exposure
+   * @default 1000
+   */
+  rateLimitPerHour?: number;
+}
+
+/**
+ * ACL Sync configuration for the tenant (RFC-042)
+ *
+ * Controls how access control lists are synchronized from
+ * external sources (Google Drive, Slack, Confluence, etc.)
+ * to OpenFGA for query-time enforcement.
+ *
+ * @see RFC-042 Data Connectors with Mirrored ACL
+ * @see RFC-042 Appendix I: Architecture Decisions
+ */
+export interface AclSyncConfig {
+  /**
+   * Enable ACL sync for this tenant
+   * When disabled, all documents are accessible to all tenant users
+   * @default true
+   */
+  enabled?: boolean;
+
+  /**
+   * Maximum acceptable revocation lag in seconds
+   *
+   * Time between permission revocation in source (e.g., Google Drive)
+   * and enforcement in OpenFGA queries.
+   *
+   * Lower values = more frequent polling = higher API costs
+   * - Enterprise: 15 (critical for security)
+   * - OSS/B2C: 300 (5 minutes, acceptable for most cases)
+   *
+   * @default 300
+   */
+  maxRevocationLagSeconds?: number;
+
+  /**
+   * Identity resolution strategy
+   *
+   * - `strict`: Only users with explicit identity links get access
+   * - `pending-grants`: Unknown emails get pending grants, applied on signup
+   *
+   * @default 'pending-grants'
+   */
+  identityStrategy?: IdentityStrategy;
+
+  /**
+   * TTL for pending grants in days
+   * Grants expire after this period if user doesn't sign up
+   * @default 90
+   */
+  pendingGrantTtlDays?: number;
+
+  /**
+   * Trusted email domains for automatic guest user provisioning
+   *
+   * Users from these domains get guest accounts automatically
+   * when their email appears in ACL sync (without explicit signup).
+   *
+   * Example: ['company.com', 'partner.org']
+   *
+   * @security SAML/LDAP may auto-populate this from IdP metadata
+   */
+  trustedDomains?: string[];
+
+  /**
+   * Public document security settings
+   */
+  publicDocs?: PublicDocsConfig;
+
+  /**
+   * OpenFGA tenancy mode
+   *
+   * - `shared`: Single store with tenant prefix (simpler)
+   * - `per-tenant`: Dedicated store per tenant (stronger isolation)
+   *
+   * @default 'shared'
+   */
+  openFgaTenancyMode?: OpenFgaTenancyMode;
+
+  /**
+   * OpenFGA store ID (only for `per-tenant` mode)
+   * Auto-generated if not provided
+   */
+  openFgaStoreId?: string;
+}
+
+// ============================================================================
+// Deny Ledger Settings (RFC-042)
+// ============================================================================
+
+/**
+ * Deny Ledger provider mode
+ *
+ * - `memory`: In-memory LRU cache + PostgreSQL backup (OSS default)
+ * - `redis`: Redis primary + PostgreSQL backup (Enterprise)
+ * - `postgres-only`: PostgreSQL only, no cache (max durability)
+ */
+export type DenyLedgerMode = 'memory' | 'redis' | 'postgres-only';
+
+/**
+ * Deny Ledger configuration for the tenant (RFC-042)
+ *
+ * Controls persistent storage for access denials.
+ * Ensures security state survives service restarts.
+ *
+ * @see RFC-042 Appendix I.5 - Deny Ledger Architecture
+ */
+export interface DenyLedgerConfig {
+  /**
+   * Provider mode
+   * @default 'memory'
+   */
+  mode?: DenyLedgerMode;
+
+  /**
+   * Cache TTL for deny entries (seconds)
+   * Entries are refreshed from PostgreSQL after this time
+   * @default 3600 (1 hour)
+   */
+  cacheTtlSeconds?: number;
+
+  /**
+   * Default TTL for brute-force lockouts (seconds)
+   * @default 900 (15 minutes)
+   */
+  bruteForceExpireSeconds?: number;
+
+  /**
+   * Max entries in memory cache (LRU eviction)
+   * @default 10000
+   */
+  maxCacheSize?: number;
+
+  /**
+   * Enable NATS pub/sub for multi-node sync
+   * @default false
+   */
+  enableNatsSync?: boolean;
+}
+
+// ============================================================================
 // Ingestion Settings
 // ============================================================================
 
@@ -398,6 +584,12 @@ export interface TenantConfig {
   /** LLM Observability settings (RFC-062) */
   observe?: ObserveConfig;
 
+  /** ACL Sync settings (RFC-042) */
+  aclSync?: AclSyncConfig;
+
+  /** Deny Ledger settings (RFC-042) */
+  denyLedger?: DenyLedgerConfig;
+
   /** Community hierarchy description */
   communityHierarchy?: CommunityLevel[];
 
@@ -448,6 +640,10 @@ export interface TenantConfigCreate {
   ingestion?: IngestionConfig;
   /** Optional: LLM Observability settings (RFC-062) */
   observe?: ObserveConfig;
+  /** Optional: ACL Sync settings (RFC-042) */
+  aclSync?: AclSyncConfig;
+  /** Optional: Deny Ledger settings (RFC-042) */
+  denyLedger?: DenyLedgerConfig;
   /** Optional: Community hierarchy */
   communityHierarchy?: CommunityLevel[];
   /** Optional: Custom metadata */
@@ -484,6 +680,10 @@ export interface TenantConfigUpdate {
   ingestion?: Partial<IngestionConfig>;
   /** LLM Observability settings (RFC-062) */
   observe?: Partial<ObserveConfig>;
+  /** ACL Sync settings (RFC-042) */
+  aclSync?: Partial<AclSyncConfig>;
+  /** Deny Ledger settings (RFC-042) */
+  denyLedger?: Partial<DenyLedgerConfig>;
   /** Community hierarchy (replace all) */
   communityHierarchy?: CommunityLevel[];
   /** Custom metadata (merge) */
@@ -656,6 +856,25 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     trackCost: true,
     defaultTags: [],
   },
+  aclSync: {
+    enabled: true,
+    maxRevocationLagSeconds: 300, // 5 minutes (OSS default)
+    identityStrategy: 'pending-grants', // OSS default
+    pendingGrantTtlDays: 90,
+    trustedDomains: [],
+    publicDocs: {
+      requireApproval: false, // OSS default
+      rateLimitPerHour: 1000,
+    },
+    openFgaTenancyMode: 'shared', // OSS default
+  },
+  denyLedger: {
+    mode: 'memory', // OSS default
+    cacheTtlSeconds: 3600, // 1 hour
+    bruteForceExpireSeconds: 900, // 15 minutes
+    maxCacheSize: 10000,
+    enableNatsSync: false,
+  },
 };
 
 // ============================================================================
@@ -695,6 +914,18 @@ export function mergeTenantConfigWithDefaults(config: TenantConfigCreate): Tenan
       ...DEFAULT_TENANT_CONFIG.observe,
       ...config.observe,
     },
+    aclSync: {
+      ...DEFAULT_TENANT_CONFIG.aclSync,
+      ...config.aclSync,
+      publicDocs: {
+        ...DEFAULT_TENANT_CONFIG.aclSync?.publicDocs,
+        ...config.aclSync?.publicDocs,
+      },
+    },
+    denyLedger: {
+      ...DEFAULT_TENANT_CONFIG.denyLedger,
+      ...config.denyLedger,
+    },
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -730,6 +961,18 @@ export function applyTenantConfigUpdate(
       ? { ...existing.ingestion, ...update.ingestion }
       : existing.ingestion,
     observe: update.observe ? { ...existing.observe, ...update.observe } : existing.observe,
+    aclSync: update.aclSync
+      ? {
+          ...existing.aclSync,
+          ...update.aclSync,
+          publicDocs: update.aclSync.publicDocs
+            ? { ...existing.aclSync?.publicDocs, ...update.aclSync.publicDocs }
+            : existing.aclSync?.publicDocs,
+        }
+      : existing.aclSync,
+    denyLedger: update.denyLedger
+      ? { ...existing.denyLedger, ...update.denyLedger }
+      : existing.denyLedger,
     metadata: update.metadata ? { ...existing.metadata, ...update.metadata } : existing.metadata,
     // Update timestamp
     updatedAt: new Date().toISOString(),
