@@ -5,7 +5,9 @@
  * - ACL prefix utilities for consistent string formatting
  * - ExternalAccess/DocumentAccess models for permission handling
  * - Status enums for indexing and sync operations
+ * - IdentityResolver interface for external → internal identity mapping
  */
 
 export * from './acl';
 export * from './enums';
+export * from './identity-resolver';
