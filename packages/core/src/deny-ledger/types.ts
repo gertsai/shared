@@ -9,33 +9,51 @@
  */
 
 // ============================================================================
-// Subject Types
+// Subject Types (Single Source of Truth)
 // ============================================================================
 
 /**
- * Types of subjects that can be denied access
+ * All valid subject types that can be denied access.
+ * This array is the single source of truth - the type is derived from it.
+ * Used for both compile-time type checking and runtime validation.
  */
-export type DenySubjectType =
-  | 'user' // User account
-  | 'session' // Active session (OIDC, JWT)
-  | 'certificate' // mTLS certificate
-  | 'api-key' // API key
-  | 'tenant' // Entire tenant (suspension)
-  | 'ip-address' // IP-based blocking
-  | 'email'; // Email blocklist
+export const DENY_SUBJECT_TYPES = [
+  'user', // User account
+  'session', // Active session (OIDC, JWT)
+  'certificate', // mTLS certificate
+  'api-key', // API key
+  'tenant', // Entire tenant (suspension)
+  'ip-address', // IP-based blocking
+  'email', // Email blocklist
+] as const;
 
 /**
- * Reasons for denial
+ * Types of subjects that can be denied access.
+ * Derived from DENY_SUBJECT_TYPES array.
  */
-export type DenyReason =
-  | 'revoked' // Explicit revocation by admin
-  | 'expired' // TTL expired (auto-cleanup)
-  | 'suspended' // Tenant/account suspended
-  | 'brute-force' // Too many failed auth attempts
-  | 'certificate-revoked' // mTLS cert revoked
-  | 'manual-block' // Manual admin block
-  | 'policy-violation' // Automated policy enforcement
-  | 'security-incident'; // Security team action
+export type DenySubjectType = (typeof DENY_SUBJECT_TYPES)[number];
+
+/**
+ * All valid denial reasons.
+ * This array is the single source of truth - the type is derived from it.
+ * Used for both compile-time type checking and runtime validation.
+ */
+export const DENY_REASONS = [
+  'revoked', // Explicit revocation by admin
+  'expired', // TTL expired (auto-cleanup)
+  'suspended', // Tenant/account suspended
+  'brute-force', // Too many failed auth attempts
+  'certificate-revoked', // mTLS cert revoked
+  'manual-block', // Manual admin block
+  'policy-violation', // Automated policy enforcement
+  'security-incident', // Security team action
+] as const;
+
+/**
+ * Reasons for denial.
+ * Derived from DENY_REASONS array.
+ */
+export type DenyReason = (typeof DENY_REASONS)[number];
 
 // ============================================================================
 // Entry Types
@@ -213,11 +231,18 @@ export interface DenyLedgerConfig {
 }
 
 /**
- * Default configuration
+ * Required configuration type (all fields filled)
  */
-export const DEFAULT_DENY_LEDGER_CONFIG: Required<
-  Omit<DenyLedgerConfig, 'redis' | 'natsSubject'>
-> & { redis: Required<NonNullable<DenyLedgerConfig['redis']>>; natsSubject: string } = {
+export type RequiredDenyLedgerConfig = Required<Omit<DenyLedgerConfig, 'redis' | 'natsSubject'>> & {
+  redis: Required<NonNullable<DenyLedgerConfig['redis']>>;
+  natsSubject: string;
+};
+
+/**
+ * Default configuration (immutable via as const + satisfies)
+ * Use `as const` to prevent accidental mutations
+ */
+export const DEFAULT_DENY_LEDGER_CONFIG = {
   mode: 'memory',
   cacheTtlSeconds: 3600,
   bruteForceExpireSeconds: 900,
@@ -228,7 +253,7 @@ export const DEFAULT_DENY_LEDGER_CONFIG: Required<
   },
   enableNatsSync: false,
   natsSubject: 'gerts.deny-ledger.updates',
-};
+} as const satisfies RequiredDenyLedgerConfig;
 
 // ============================================================================
 // Events (for NATS sync)

@@ -54,6 +54,10 @@ export {
   type DenyLedgerEventType,
   type DenyLedgerEvent,
   type DenyLedgerStats,
+  type RequiredDenyLedgerConfig,
+  // Constants (single source of truth for runtime validation)
+  DENY_SUBJECT_TYPES,
+  DENY_REASONS,
   DEFAULT_DENY_LEDGER_CONFIG,
 } from './types';
 

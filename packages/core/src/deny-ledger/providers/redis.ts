@@ -26,7 +26,7 @@ import type {
   DenySubjectType,
   DenyLedgerConfig,
 } from '../types';
-import { DEFAULT_DENY_LEDGER_CONFIG } from '../types';
+import { DEFAULT_DENY_LEDGER_CONFIG, DENY_SUBJECT_TYPES, DENY_REASONS } from '../types';
 import type { PostgresDenyLedger } from './postgres';
 
 // =============================================================================
@@ -71,8 +71,42 @@ export interface RedisClientLike {
 // Key Building
 // =============================================================================
 
-const KEY_PREFIX = 'deny:';
-const CHANNEL_INVALIDATE = 'deny:invalidate';
+const KEY_PREFIX = 'deny:' as const;
+const CHANNEL_INVALIDATE = 'deny:invalidate' as const;
+
+// =============================================================================
+// Invalidation Event Types (Discriminated Union)
+// =============================================================================
+
+/**
+ * Invalidation event types for pub/sub sync
+ * Using discriminated union for type-safe event handling
+ */
+type InvalidationEvent =
+  | { action: 'deny'; key: string; entryId: string }
+  | { action: 'allow'; key: string }
+  | { action: 'denyBatch'; count: number }
+  | { action: 'allowBatch'; count: number };
+
+/**
+ * Type guard for InvalidationEvent
+ */
+function isValidInvalidationEvent(data: unknown): data is InvalidationEvent {
+  if (typeof data !== 'object' || data === null) return false;
+  const obj = data as Record<string, unknown>;
+
+  switch (obj.action) {
+    case 'deny':
+      return typeof obj.key === 'string' && typeof obj.entryId === 'string';
+    case 'allow':
+      return typeof obj.key === 'string';
+    case 'denyBatch':
+    case 'allowBatch':
+      return typeof obj.count === 'number';
+    default:
+      return false;
+  }
+}
 
 /**
  * Build Redis key for a deny entry.
@@ -120,13 +154,79 @@ function serializeEntry(entry: DenyEntry): string {
   });
 }
 
-function deserializeEntry(json: string): DenyEntry {
-  const data = JSON.parse(json);
-  return {
-    ...data,
-    expiresAt: data.expiresAt ? new Date(data.expiresAt) : undefined,
-    createdAt: new Date(data.createdAt),
-  };
+/**
+ * Serialized entry shape for type guard.
+ * Uses types derived from DENY_SUBJECT_TYPES and DENY_REASONS (single source of truth).
+ */
+interface SerializedDenyEntry {
+  id: string;
+  tenantId: string;
+  subjectType: (typeof DENY_SUBJECT_TYPES)[number];
+  subjectId: string;
+  reason: (typeof DENY_REASONS)[number];
+  createdAt: string;
+  expiresAt?: string | null;
+  resourceType?: string | null;
+  resourceId?: string | null;
+  metadata?: unknown;
+}
+
+/**
+ * Type guard to validate deserialized entry data.
+ * Uses DENY_SUBJECT_TYPES and DENY_REASONS from types.ts (single source of truth).
+ */
+function isValidEntryData(data: unknown): data is SerializedDenyEntry {
+  if (typeof data !== 'object' || data === null) return false;
+  const obj = data as Record<string, unknown>;
+
+  // Validate required string fields
+  if (
+    typeof obj.id !== 'string' ||
+    typeof obj.tenantId !== 'string' ||
+    typeof obj.subjectType !== 'string' ||
+    typeof obj.subjectId !== 'string' ||
+    typeof obj.reason !== 'string' ||
+    typeof obj.createdAt !== 'string'
+  ) {
+    return false;
+  }
+
+  // Validate enum values using imported constants (single source of truth)
+  if (!DENY_SUBJECT_TYPES.includes(obj.subjectType as (typeof DENY_SUBJECT_TYPES)[number])) {
+    return false;
+  }
+  if (!DENY_REASONS.includes(obj.reason as (typeof DENY_REASONS)[number])) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Deserialize entry from JSON with validation
+ * @returns DenyEntry or null if invalid
+ */
+function deserializeEntry(json: string): DenyEntry | null {
+  try {
+    const data: unknown = JSON.parse(json);
+    if (!isValidEntryData(data)) {
+      return null;
+    }
+    return {
+      id: data.id,
+      tenantId: data.tenantId,
+      subjectType: data.subjectType as DenyEntry['subjectType'],
+      subjectId: data.subjectId,
+      reason: data.reason as DenyEntry['reason'],
+      resourceType: data.resourceType ?? undefined,
+      resourceId: data.resourceId ?? undefined,
+      metadata: data.metadata as DenyEntry['metadata'],
+      expiresAt: data.expiresAt ? new Date(data.expiresAt) : undefined,
+      createdAt: new Date(data.createdAt),
+    };
+  } catch {
+    return null;
+  }
 }
 
 // =============================================================================
@@ -224,26 +324,46 @@ export class RedisDenyLedger implements DenyLedgerProvider {
   async isDenied(request: DenyCheckRequest): Promise<DenyCheckResult> {
     const keys = this.buildCheckKeys(request);
 
-    // Fast path: Check Redis for any matching key
-    for (const key of keys) {
-      const cached = await this.redis.get(key);
+    // Fast path: Batch fetch from Redis using mget (instead of sequential gets)
+    const cachedValues = await this.redis.mget(...keys);
+
+    // Check each cached value in priority order
+    const expiredKeys: string[] = [];
+    for (let i = 0; i < keys.length; i++) {
+      const cached = cachedValues[i];
       if (cached) {
         const entry = deserializeEntry(cached);
 
+        // Skip invalid entries (corrupted cache data)
+        if (!entry) {
+          expiredKeys.push(keys[i]);
+          continue;
+        }
+
         // Check expiration
         if (entry.expiresAt && entry.expiresAt <= new Date()) {
-          // Expired - delete from Redis
-          await this.redis.del(key);
+          expiredKeys.push(keys[i]);
           continue;
         }
 
         this.stats.hits++;
+
+        // Cleanup expired/invalid keys asynchronously (don't await)
+        if (expiredKeys.length > 0) {
+          this.redis.del(...expiredKeys).catch(() => {});
+        }
+
         return {
           denied: true,
           entry,
           message: `Access denied: ${entry.reason}`,
         };
       }
+    }
+
+    // Cleanup expired/invalid keys
+    if (expiredKeys.length > 0) {
+      await this.redis.del(...expiredKeys);
     }
 
     // Slow path: Check PostgreSQL
@@ -556,11 +676,21 @@ export class RedisDenyLedger implements DenyLedgerProvider {
 
   /**
    * Handle invalidation message from pub/sub
+   * Uses type-safe discriminated union for event handling
    */
   private async handleInvalidation(message: string): Promise<void> {
     try {
-      const data = JSON.parse(message);
+      const data: unknown = JSON.parse(message);
 
+      // Validate event structure using type guard
+      if (!isValidInvalidationEvent(data)) {
+        if (process.env.DEBUG) {
+          console.debug('[DenyLedger] Invalid invalidation event:', data);
+        }
+        return;
+      }
+
+      // Type-safe switch on discriminated union
       switch (data.action) {
         case 'allow':
           // Key already removed by publisher, just update stats
@@ -569,17 +699,22 @@ export class RedisDenyLedger implements DenyLedgerProvider {
 
         case 'deny':
           // Entry already cached by publisher, just update stats
+          // data.entryId and data.key are available here (type-safe)
           this.stats.entries++;
           break;
 
         case 'denyBatch':
         case 'allowBatch':
           // Refresh from PostgreSQL for batch operations
+          // data.count is available here (type-safe)
           await this.warmCache();
           break;
       }
-    } catch {
-      // Ignore malformed messages
+    } catch (err) {
+      // Log malformed messages for debugging (don't throw to avoid crashing subscriber)
+      if (process.env.DEBUG) {
+        console.debug('[DenyLedger] Malformed invalidation message:', message, err);
+      }
     }
   }
 
@@ -617,7 +752,8 @@ export class RedisDenyLedger implements DenyLedgerProvider {
         const value = await this.redis.get(key);
         if (value) {
           const entry = deserializeEntry(value);
-          if (entry.expiresAt && entry.expiresAt <= new Date()) {
+          // Delete if invalid or expired
+          if (!entry || (entry.expiresAt && entry.expiresAt <= new Date())) {
             await this.redis.del(key);
             this.stats.entries = Math.max(0, this.stats.entries - 1);
           }
@@ -662,12 +798,16 @@ export class RedisDenyLedger implements DenyLedgerProvider {
    * Force refresh cache for a tenant
    */
   async refreshTenant(tenantId: string): Promise<void> {
-    // Clear existing tenant keys
+    // Clear existing tenant keys using SCAN (non-blocking, unlike keys())
     const pattern = buildTenantPattern(tenantId);
-    const keys = await this.redis.keys(pattern);
-    if (keys.length > 0) {
-      await this.redis.del(...keys);
-    }
+    let cursor = '0';
+    do {
+      const [nextCursor, batchKeys] = await this.redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+      cursor = nextCursor;
+      if (batchKeys.length > 0) {
+        await this.redis.del(...batchKeys);
+      }
+    } while (cursor !== '0');
 
     // Reload from PostgreSQL
     const entries = await this.postgres.loadAll(tenantId);
