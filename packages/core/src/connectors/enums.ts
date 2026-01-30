@@ -197,8 +197,9 @@ export const HierarchyNodeType = {
   SPACE: 'space',
   PAGE: 'page',
 
-  // Jira
+  // Jira / Linear
   PROJECT: 'project',
+  TEAM: 'team',
 
   // Notion
   DATABASE: 'database',
