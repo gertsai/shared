@@ -17,6 +17,7 @@
  */
 
 import type { FgaResourceType } from '../types.js';
+import type { DenyLedgerProvider as CoreDenyLedgerProvider } from '@gerts/core';
 
 // =============================================================================
 // Types
@@ -26,6 +27,8 @@ import type { FgaResourceType } from '../types.js';
  * Deny entry in the ledger.
  */
 export interface DenyEntry {
+  /** Tenant context (for multi-tenant isolation) */
+  tenantId?: string;
   /** User or subject being denied */
   userId: string;
   /** Resource type */
@@ -48,6 +51,8 @@ export interface DenyEntry {
  * Deny check request.
  */
 export interface DenyCheckRequest {
+  /** Tenant context (for multi-tenant isolation) */
+  tenantId?: string;
   userId: string;
   resourceType: FgaResourceType;
   resourceId: string;
@@ -71,27 +76,38 @@ export interface DenyCheckResult {
 /**
  * Simple in-memory deny ledger.
  * Use RedisDenyLedger for production.
+ *
+ * @deprecated Use RedisDenyLedgerAdapter for production to persist deny entries.
  */
 export class InMemoryDenyLedger {
   private entries: Map<string, DenyEntry> = new Map();
 
   /**
    * Generates key for the ledger.
+   * Includes tenantId for multi-tenant isolation.
    */
   private makeKey(
+    tenantId: string | undefined,
     userId: string,
     resourceType: string,
     resourceId: string,
     relation: string,
   ): string {
-    return `deny:${userId}:${resourceType}:${resourceId}:${relation}`;
+    const tenant = tenantId ?? '_default_';
+    return `deny:${tenant}:${userId}:${resourceType}:${resourceId}:${relation}`;
   }
 
   /**
    * Adds a deny entry.
    */
   async deny(entry: DenyEntry): Promise<void> {
-    const key = this.makeKey(entry.userId, entry.resourceType, entry.resourceId, entry.relation);
+    const key = this.makeKey(
+      entry.tenantId,
+      entry.userId,
+      entry.resourceType,
+      entry.resourceId,
+      entry.relation,
+    );
     this.entries.set(key, entry);
   }
 
@@ -103,8 +119,9 @@ export class InMemoryDenyLedger {
     resourceType: FgaResourceType,
     resourceId: string,
     relation: string,
+    tenantId?: string,
   ): Promise<boolean> {
-    const key = this.makeKey(userId, resourceType, resourceId, relation);
+    const key = this.makeKey(tenantId, userId, resourceType, resourceId, relation);
     return this.entries.delete(key);
   }
 
@@ -113,9 +130,11 @@ export class InMemoryDenyLedger {
    */
   async check(request: DenyCheckRequest): Promise<DenyCheckResult> {
     const now = new Date();
+    const { tenantId } = request;
 
     // Check exact match
     const exactKey = this.makeKey(
+      tenantId,
       request.userId,
       request.resourceType,
       request.resourceId,
@@ -133,6 +152,7 @@ export class InMemoryDenyLedger {
 
     // Check wildcard resource
     const wildcardResourceKey = this.makeKey(
+      tenantId,
       request.userId,
       request.resourceType,
       '*',
@@ -153,6 +173,7 @@ export class InMemoryDenyLedger {
 
     // Check wildcard relation
     const wildcardRelationKey = this.makeKey(
+      tenantId,
       request.userId,
       request.resourceType,
       request.resourceId,
@@ -172,7 +193,7 @@ export class InMemoryDenyLedger {
     }
 
     // Check full wildcard (deny all for user on resource type)
-    const fullWildcardKey = this.makeKey(request.userId, request.resourceType, '*', '*');
+    const fullWildcardKey = this.makeKey(tenantId, request.userId, request.resourceType, '*', '*');
     const fullWildcardEntry = this.entries.get(fullWildcardKey);
     if (fullWildcardEntry && (!fullWildcardEntry.expiresAt || fullWildcardEntry.expiresAt > now)) {
       return {
@@ -189,10 +210,12 @@ export class InMemoryDenyLedger {
   /**
    * Lists all deny entries for a user.
    */
-  async listForUser(userId: string): Promise<DenyEntry[]> {
+  async listForUser(userId: string, tenantId?: string): Promise<DenyEntry[]> {
     const results: DenyEntry[] = [];
+    const tenant = tenantId ?? '_default_';
+    const prefix = `deny:${tenant}:${userId}:`;
     for (const [key, entry] of this.entries) {
-      if (key.startsWith(`deny:${userId}:`)) {
+      if (key.startsWith(prefix)) {
         results.push(entry);
       }
     }
@@ -215,6 +238,146 @@ export class InMemoryDenyLedger {
 }
 
 // =============================================================================
+// Redis Deny Ledger Adapter (Production)
+// =============================================================================
+
+/**
+ * Configuration for RedisDenyLedgerAdapter
+ */
+export interface RedisDenyLedgerAdapterConfig {
+  /**
+   * Default tenant ID for requests without explicit tenantId.
+   * @default '_default_'
+   */
+  defaultTenantId?: string;
+}
+
+/**
+ * Redis-backed Deny Ledger Adapter for production use.
+ *
+ * Wraps @gerts/core's DenyLedgerProvider to implement the auth-openfga DenyLedger interface.
+ * Provides persistence and multi-node sync through Redis + PostgreSQL.
+ *
+ * @example
+ * ```typescript
+ * import { RedisDenyLedger, PostgresDenyLedger } from '@gerts/core';
+ * import Redis from 'ioredis';
+ * import { getDatabase } from '@gerts/database';
+ *
+ * const redis = new Redis();
+ * const postgres = new PostgresDenyLedger({ prisma: getDatabase() });
+ * const coreLedger = new RedisDenyLedger({ redis, postgres });
+ * await coreLedger.initialize();
+ *
+ * const adapter = new RedisDenyLedgerAdapter(coreLedger);
+ * setDenyLedger(adapter);
+ * ```
+ */
+export class RedisDenyLedgerAdapter implements DenyLedger {
+  private readonly defaultTenantId: string;
+
+  constructor(
+    private readonly coreLedger: CoreDenyLedgerProvider,
+    config?: RedisDenyLedgerAdapterConfig,
+  ) {
+    this.defaultTenantId = config?.defaultTenantId ?? '_default_';
+  }
+
+  async deny(entry: DenyEntry): Promise<void> {
+    const tenantId = entry.tenantId ?? this.defaultTenantId;
+    await this.coreLedger.deny({
+      tenantId,
+      subjectType: 'user',
+      subjectId: entry.userId,
+      resourceType: entry.resourceType,
+      resourceId: entry.resourceId,
+      reason: 'revoked', // Map from string reason to DenyReason
+      metadata: {
+        relation: entry.relation,
+        reason: entry.reason,
+        deniedBy: entry.deniedBy,
+      },
+      expiresAt: entry.expiresAt ?? undefined,
+      createdBy: entry.deniedBy,
+    });
+  }
+
+  async allow(
+    userId: string,
+    resourceType: FgaResourceType,
+    resourceId: string,
+    _relation: string, // Note: relation is stored in metadata, not used for lookup key
+    tenantId?: string,
+  ): Promise<boolean> {
+    const tenant = tenantId ?? this.defaultTenantId;
+    try {
+      await this.coreLedger.allow(tenant, 'user', userId, resourceType, resourceId);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async check(request: DenyCheckRequest): Promise<DenyCheckResult> {
+    const tenantId = request.tenantId ?? this.defaultTenantId;
+    const result = await this.coreLedger.isDenied({
+      tenantId,
+      subjectType: 'user',
+      subjectId: request.userId,
+      resourceType: request.resourceType,
+      resourceId: request.resourceId,
+    });
+
+    if (result.denied && result.entry) {
+      const metadata = result.entry.metadata as
+        | {
+            relation?: string;
+            reason?: string;
+            deniedBy?: string;
+          }
+        | undefined;
+      return {
+        denied: true,
+        reason: metadata?.reason ?? result.entry.reason,
+        deniedAt: result.entry.createdAt,
+        expiresAt: result.entry.expiresAt ?? null,
+      };
+    }
+
+    return { denied: false };
+  }
+
+  async listForUser(userId: string, tenantId?: string): Promise<DenyEntry[]> {
+    const tenant = tenantId ?? this.defaultTenantId;
+    const entries = await this.coreLedger.list(tenant, {
+      subjectType: 'user',
+      subjectId: userId,
+    });
+
+    return entries.map((entry) => {
+      const metadata = entry.metadata as
+        | {
+            relation?: string;
+            reason?: string;
+            deniedBy?: string;
+          }
+        | undefined;
+      return {
+        tenantId: entry.tenantId,
+        userId: entry.subjectId,
+        resourceType: (entry.resourceType ?? '*') as FgaResourceType,
+        resourceId: entry.resourceId ?? '*',
+        relation: metadata?.relation ?? '*',
+        reason: metadata?.reason ?? entry.reason,
+        deniedBy: metadata?.deniedBy ?? entry.createdBy ?? 'system',
+        deniedAt: entry.createdAt,
+        expiresAt: entry.expiresAt ?? null,
+      };
+    });
+  }
+}
+
+// =============================================================================
 // Deny Ledger Interface
 // =============================================================================
 
@@ -228,9 +391,10 @@ export interface DenyLedger {
     resourceType: FgaResourceType,
     resourceId: string,
     relation: string,
+    tenantId?: string,
   ): Promise<boolean>;
   check(request: DenyCheckRequest): Promise<DenyCheckResult>;
-  listForUser(userId: string): Promise<DenyEntry[]>;
+  listForUser(userId: string, tenantId?: string): Promise<DenyEntry[]>;
 }
 
 // =============================================================================
