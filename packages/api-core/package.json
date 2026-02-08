@@ -22,9 +22,9 @@
     "postinstall": "ts-patch install -s"
   },
   "dependencies": {
-    "@gerts/api-types": "workspace:*",
     "@gerts/auth-openfga": "workspace:*",
     "@gerts/core": "workspace:*",
+    "@standard-schema/spec": "^1.1.0",
     "@google-cloud/logging-bunyan": "^5.1.0",
     "@r2d2bzh/moleculer-healthcheck-middleware": "^1.0.6",
     "@samchon/openapi": "^4.7.1",

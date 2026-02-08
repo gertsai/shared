@@ -13,8 +13,8 @@ import type {
   GertsObjectType,
   GertsErrorType,
   GertsErrorCode,
-} from '@gerts/api-types';
-import { generateId, generateRequestId, RETRYABLE_ERROR_CODES } from '@gerts/api-types';
+} from './types';
+import { generateId, generateRequestId, RETRYABLE_ERROR_CODES } from './types';
 
 import type { OrchestraApiResponse } from '../apiResponse/OrchestraApiResponse.class';
 import type { ResponseCode } from '../apiResponse/types';

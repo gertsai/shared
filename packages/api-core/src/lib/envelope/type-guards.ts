@@ -9,7 +9,7 @@
  * @packageDocumentation
  */
 
-import type { UsageInfo } from '@gerts/api-types';
+import type { UsageInfo } from './types';
 
 import type { OrchestraApiResponse } from '../apiResponse/OrchestraApiResponse.class';
 import type { ResponseCode } from '../apiResponse/types';

@@ -227,7 +227,8 @@ export type ActionCallFunction = <
     infer AuthType,
     infer ParamsType,
     infer ResponseType,
-    infer RestConfig
+    infer RestConfig,
+    infer _ParamsValidator
   >
     ? {
         rest: RestConfig;
@@ -254,7 +255,8 @@ export type QueueActionCallFunction = <
     infer AuthType,
     infer ParamsType,
     infer ResponseType,
-    infer RestConfig
+    infer RestConfig,
+    infer _ParamsValidator
   >
     ? {
         rest: RestPath;

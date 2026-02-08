@@ -3,8 +3,6 @@ import type { OpenApiV3_1 } from '@samchon/openapi';
 import type { ServiceSchema } from 'moleculer';
 import { isErrorResult, merge } from 'openapi-merge';
 
-import { ResponseCode } from '../lib';
-
 // Type stub
 type ServiceRegistry = {
   name: string;
@@ -12,9 +10,7 @@ type ServiceRegistry = {
   nodes: string[];
 };
 
-export const createOpenApiService = (
-  schema: OpenApiV3_1.IDocument,
-): ServiceSchema => {
+export const createOpenApiService = (schema: OpenApiV3_1.IDocument): ServiceSchema => {
   return {
     name: 'openapi',
     version: 'v2',
@@ -23,36 +19,29 @@ export const createOpenApiService = (
        * Get aggregated OpenAPI schema across all available services
        */
       'schema.aggregated': {
+        auth: 'none',
         cache: false,
         rest: 'GET /schema.json',
         async handler() {
-          const aggregatedSchema = await this.aggregateSchema();
-
-          return {
-            code: ResponseCode.SUCCESS,
-            data: aggregatedSchema,
-            raw: true,
-          };
+          return this.aggregateSchema();
         },
       },
       /**
        * Get local OpenAPI schema
        */
       'schema.local': {
+        auth: 'none',
         cache: false,
         rest: 'GET /schema.local.json',
         handler() {
-          return {
-            code: ResponseCode.SUCCESS,
-            data: schema,
-            raw: true,
-          };
+          return schema;
         },
       },
       /**
        * Get local OpenAPI schema
        */
       schema: {
+        auth: 'none',
         handler() {
           return schema;
         },
@@ -60,13 +49,10 @@ export const createOpenApiService = (
     },
     methods: {
       async getOpenapiServices() {
-        const services: ServiceRegistry[] = await this.broker.call(
-          '$node.services',
-          {
-            withActions: false,
-            onlyLocal: false,
-          },
-        );
+        const services: ServiceRegistry[] = await this.broker.call('$node.services', {
+          withActions: false,
+          onlyLocal: false,
+        });
 
         return services.filter((service) => service.name.startsWith('openapi'));
       },
