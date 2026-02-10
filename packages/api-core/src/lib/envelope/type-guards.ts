@@ -193,6 +193,25 @@ export function extractTraceId(meta: unknown): string | undefined {
   return undefined;
 }
 
+/**
+ * Extract request ID from context meta safely.
+ *
+ * @param meta - Moleculer context meta
+ * @returns Request ID or undefined
+ */
+export function extractRequestId(meta: unknown): string | undefined {
+  if (!isTenantContextMeta(meta)) {
+    return undefined;
+  }
+
+  const requestId = meta.requestId;
+  if (typeof requestId === 'string' && requestId.length > 0) {
+    return requestId;
+  }
+
+  return undefined;
+}
+
 // ============================================================================
 // Usage Info Guards
 // ============================================================================

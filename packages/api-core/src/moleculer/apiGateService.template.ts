@@ -34,6 +34,30 @@ import type { OrchestraApiGateOptions, OrchestraApiRouteSchema } from './types';
  */
 const USE_GERTS_ENVELOPE = process.env.USE_GERTS_ENVELOPE === 'true';
 
+/**
+ * Map auth middleware error metadata to ResponseCode.
+ * Kept as exported pure function to make 401/403 mapping testable.
+ */
+export function mapAuthErrorToResponseCode(authErr: {
+  statusCode: 401 | 403;
+  code?: string;
+}): ResponseCode {
+  if (authErr.statusCode === 401) {
+    if (authErr.code === 'KEY_EXPIRED') {
+      return ResponseCode.NOT_AUTHORIZED__TOKEN_EXPIRED;
+    }
+    if (authErr.code === 'UNAUTHORIZED') {
+      return ResponseCode.NOT_AUTHORIZED;
+    }
+    return ResponseCode.NOT_AUTHORIZED__TOKEN_INVALID;
+  }
+
+  if (authErr.code === 'INSUFFICIENT_SCOPES') {
+    return ResponseCode.INSUFFICIENT_SCOPE;
+  }
+  return ResponseCode.FORBIDDEN__INSUFFICIENT_RIGHTS;
+}
+
 export const createApiService = (
   options: OrchestraApiGateOptions,
   packageJson: Record<string, unknown>,
@@ -234,14 +258,18 @@ export const createApiService = (
         statusCode: 401 | 403;
         code?: string;
         type: string;
+        requiredScopes?: unknown;
+        grantedScopes?: unknown;
       };
-      // Map statusCode to ResponseCode
-      const responseCode =
-        authErr.statusCode === 401 ? ResponseCode.NOT_AUTHORIZED : ResponseCode.FORBIDDEN;
+      const responseCode = mapAuthErrorToResponseCode(authErr);
 
       response = new OrchestraApiResponse(
         responseCode,
-        { code: authErr.code },
+        {
+          code: authErr.code,
+          requiredScopes: authErr.requiredScopes,
+          grantedScopes: authErr.grantedScopes,
+        },
         {
           message: err.message,
         },

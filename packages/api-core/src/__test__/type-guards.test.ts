@@ -12,6 +12,7 @@ import {
   isTenantContextMeta,
   extractTenantId,
   extractTraceId,
+  extractRequestId,
   isUsageInfo,
   extractUsageInfo,
   extractPackageInfo,
@@ -137,6 +138,24 @@ describe('TenantContextMeta Guards', () => {
 
     it('should return undefined for invalid meta', () => {
       expect(extractTraceId(null)).toBeUndefined();
+    });
+  });
+
+  describe('extractRequestId', () => {
+    it('should extract request ID from valid meta', () => {
+      expect(extractRequestId({ requestId: 'req_123' })).toBe('req_123');
+    });
+
+    it('should return undefined for missing request ID', () => {
+      expect(extractRequestId({})).toBeUndefined();
+    });
+
+    it('should return undefined for empty request ID', () => {
+      expect(extractRequestId({ requestId: '' })).toBeUndefined();
+    });
+
+    it('should return undefined for invalid meta', () => {
+      expect(extractRequestId(null)).toBeUndefined();
     });
   });
 });

@@ -23,6 +23,7 @@ import {
   getOrchestraInfo,
   extractTenantId,
   extractTraceId,
+  extractRequestId,
   extractUsageInfo,
   extractPackageInfo,
   wantsLegacyFormat,
@@ -77,6 +78,11 @@ const RESPONSE_CODE_TO_ERROR_TYPE: Record<string, GertsErrorType> = {
  * Map ResponseCode to GertsErrorCode
  */
 const RESPONSE_CODE_TO_ERROR_CODE: Record<string, GertsErrorCode> = {
+  // Generic validation/authz defaults
+  '400/bad_request': 'INVALID_PARAMS',
+  '401/not_authorized': 'MISSING_API_KEY',
+  '403/forbidden': 'INSUFFICIENT_SCOPE',
+  '403/01/forbidden': 'INSUFFICIENT_SCOPE',
   // Validation
   '400/01/invalid_params': 'INVALID_PARAMS',
   '400/02/invalid_response': 'VALIDATION_ERROR',
@@ -327,6 +333,7 @@ export function wrapErrorResponse(
 
   // Extract trace ID using type guard
   const traceId = ctx ? extractTraceId(ctx.meta) : undefined;
+  const requestId = ctx ? extractRequestId(ctx.meta) : undefined;
 
   // Detect stage
   const stage = detectStageFromPath(path);
@@ -344,7 +351,7 @@ export function wrapErrorResponse(
         : {}),
       ...(stage !== undefined ? { stage: stage as GertsErrorResponse['error']['stage'] } : {}),
     },
-    request_id: generateRequestId(),
+    request_id: requestId || generateRequestId(),
     timestamp: new Date().toISOString() as GertsErrorResponse['timestamp'],
     ...(tenantId.length > 0 ? { tenant_id: tenantId } : {}),
     ...(traceId !== undefined ? { trace_id: traceId } : {}),

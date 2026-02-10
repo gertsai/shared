@@ -59,16 +59,24 @@ export const createOpenApiService = (schema: OpenApiV3_1.IDocument): ServiceSche
       async aggregateSchema() {
         const services: ServiceRegistry[] = await this.getOpenapiServices();
 
+        // Deduplicate by service fullName — each service only needs one schema
+        // regardless of how many nodes it runs on. Without this, multi-node
+        // services cause "path already added" merge errors.
+        const seen = new Set<string>();
+        const uniqueServices = services.filter((s) => {
+          if (seen.has(s.fullName)) return false;
+          seen.add(s.fullName);
+          return true;
+        });
+
         const schemas = await Promise.all(
-          services.flatMap((service) =>
-            service.nodes.map((nodeID) =>
-              this.broker.call(
-                `${service.fullName}.schema`,
-                {},
-                {
-                  nodeID,
-                },
-              ),
+          uniqueServices.map((service) =>
+            this.broker.call(
+              `${service.fullName}.schema`,
+              {},
+              {
+                nodeID: service.nodes[0],
+              },
             ),
           ),
         );

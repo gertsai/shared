@@ -267,7 +267,7 @@ describe('wrapSuccessResponse', () => {
 
 describe('wrapErrorResponse', () => {
   it('should wrap error response', () => {
-    const ctx = createMockContext();
+    const ctx = createMockContext({ requestId: 'req_from_ctx' });
     const orchResponse = new OrchestraApiResponse(
       ResponseCode.NOT_FOUND,
       {},
@@ -283,7 +283,7 @@ describe('wrapErrorResponse', () => {
     expect(result.success).toBe(false);
     expect(result.error.message).toBe('Resource not found');
     expect(result.error.type).toBe('not_found_error');
-    expect(result.request_id).toMatch(/^req_[a-zA-Z0-9]{12,}$/);
+    expect(result.request_id).toBe('req_from_ctx');
     expect(result.timestamp).toBeDefined();
   });
 
@@ -313,6 +313,25 @@ describe('wrapErrorResponse', () => {
     // 500 -> server_error
     const internal = new OrchestraApiResponse(ResponseCode.INTERNAL_ERROR, {});
     expect(wrapErrorResponse({ ctx, orchResponse: internal }).error.type).toBe('server_error');
+  });
+
+  it('should map auth response codes to domain error codes', () => {
+    const ctx = createMockContext();
+
+    const missingApiKey = new OrchestraApiResponse(ResponseCode.NOT_AUTHORIZED, {});
+    expect(wrapErrorResponse({ ctx, orchResponse: missingApiKey }).error.code).toBe(
+      'MISSING_API_KEY',
+    );
+
+    const invalidApiKey = new OrchestraApiResponse(ResponseCode.NOT_AUTHORIZED__TOKEN_INVALID, {});
+    expect(wrapErrorResponse({ ctx, orchResponse: invalidApiKey }).error.code).toBe(
+      'INVALID_API_KEY',
+    );
+
+    const insufficientScope = new OrchestraApiResponse(ResponseCode.INSUFFICIENT_SCOPE, {});
+    expect(wrapErrorResponse({ ctx, orchResponse: insufficientScope }).error.code).toBe(
+      'INSUFFICIENT_SCOPE',
+    );
   });
 
   it('should detect retryable errors', () => {
