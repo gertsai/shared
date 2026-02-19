@@ -1113,8 +1113,11 @@ export class ApiController<
 
             await handler(context);
           } catch (error) {
-            this.logger?.error('❌ Error in started handler:', error);
-            // Continue with other handlers even if one fails
+            this.logger?.error(
+              '❌ Critical error in started handler — service will NOT start:',
+              error,
+            );
+            throw error; // Fail fast — let Moleculer handle broken service (won't register in registry)
           }
         }
 
