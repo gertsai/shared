@@ -1113,8 +1113,22 @@ export class ApiController<
 
             await handler(context);
           } catch (error) {
-            this.logger?.error('❌ Error in started handler:', error);
-            // Continue with other handlers even if one fails
+            // Startup diagnostics — show actionable ASCII-box with fix suggestions
+            try {
+              const { DiagnosticRegistry } = await import('../diagnostics');
+              const svcName = `${controller._options.version}.${controller._options.name}`;
+              const result = DiagnosticRegistry.diagnose(svcName, error);
+              if (result.matched && result.formattedBox) {
+                this.logger?.error(result.formattedBox);
+              }
+            } catch {
+              // Diagnostics must never prevent the original error from propagating
+            }
+            this.logger?.error(
+              '❌ Critical error in started handler — service will NOT start:',
+              error,
+            );
+            throw error; // Fail fast — let Moleculer handle broken service (won't register in registry)
           }
         }
 

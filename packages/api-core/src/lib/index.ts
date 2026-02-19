@@ -4,3 +4,4 @@ export * from './error';
 export * from './apiResponse';
 export * from './oauth';
 export * from './envelope';
+export * from './diagnostics';
