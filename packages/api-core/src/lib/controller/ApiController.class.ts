@@ -1189,11 +1189,23 @@ export class ApiController<
                 const jobData = (job.data || {}) as { _traceContext?: QueueTraceContext };
                 const traceContext = jobData._traceContext;
 
+                // Build meta for S2S auth: propagate $caller and tenantId from job data
+                const jobMeta: Record<string, unknown> = {
+                  $caller: service.fullName || service.name,
+                };
+                // Propagate tenantId from job data if available (BullMQ workers don't inherit meta)
+                const rawJobData = (job.data || {}) as Record<string, unknown>;
+                if (rawJobData.tenantId && typeof rawJobData.tenantId === 'string') {
+                  jobMeta.tenantId = rawJobData.tenantId;
+                }
+
                 // Call the handler with Orchestra-compatible context
                 return handlerConfig.handler.call(service, {
                   job,
-                  call: (...args: [string, Record<string, any>]) =>
-                    service.broker.call(...args).then((res: any) => res?.data ?? res),
+                  call: (action: string, params?: Record<string, any>) =>
+                    service.broker
+                      .call(action, params, { meta: jobMeta })
+                      .then((res: any) => res?.data ?? res),
                   logger: service.logger,
                   traceContext,
                   // Queue methods for dispatching child jobs
