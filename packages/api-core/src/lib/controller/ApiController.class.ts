@@ -1113,6 +1113,17 @@ export class ApiController<
 
             await handler(context);
           } catch (error) {
+            // Startup diagnostics — show actionable ASCII-box with fix suggestions
+            try {
+              const { DiagnosticRegistry } = await import('../diagnostics');
+              const svcName = `${controller._options.version}.${controller._options.name}`;
+              const result = DiagnosticRegistry.diagnose(svcName, error);
+              if (result.matched && result.formattedBox) {
+                this.logger?.error(result.formattedBox);
+              }
+            } catch {
+              // Diagnostics must never prevent the original error from propagating
+            }
             this.logger?.error(
               '❌ Critical error in started handler — service will NOT start:',
               error,
