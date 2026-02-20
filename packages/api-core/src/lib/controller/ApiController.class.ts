@@ -1118,7 +1118,7 @@ export class ApiController<
               const { DiagnosticRegistry } = await import('../diagnostics');
               const svcName = `${controller._options.version}.${controller._options.name}`;
               const result = DiagnosticRegistry.diagnose(svcName, error);
-              if (result.matched && result.formattedBox) {
+              if (result.matched) {
                 this.logger?.error(result.formattedBox);
               }
             } catch {

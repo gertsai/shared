@@ -23,7 +23,6 @@ const BUILTINS: DiagnosticEntry[] = [
   // 2. Redis (BullMQ)
   {
     match: [
-      'ECONNREFUSED', // will match if postgres didn't
       'Redis Client Error',
       'MaxRetriesPerRequestError',
       'connect ECONNREFUSED 127.0.0.1:6379',

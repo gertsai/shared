@@ -22,6 +22,7 @@ import {
   requestTimeoutError,
   gatewayTimeoutError,
 } from '../lib/error/helpers';
+import { APIError } from '../lib/error';
 import { ResponseCode } from '../lib/apiResponse';
 
 // Helper to check if error is APIError-like
@@ -282,6 +283,102 @@ describe('Error Helper Functions', () => {
       expect(isAPIError(error)).toBe(true);
       expect(error.code).toBe(ResponseCode.GATEWAY_TIMEOUT);
       expect(error.message).toContain('LLM service did not respond');
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // APIError.fromError — statusCode auto-detection
+  // ─────────────────────────────────────────────────────────────────────────
+
+  describe('APIError.fromError', () => {
+    it('should map error with statusCode 409 to CONFLICT', () => {
+      const domainError = Object.assign(new Error('File already exists at path: /test.txt'), {
+        statusCode: 409,
+      });
+
+      const apiError = APIError.fromError(domainError);
+
+      expect(apiError.code).toBe(ResponseCode.CONFLICT);
+      expect(apiError.message).toContain('File already exists at path: /test.txt');
+    });
+
+    it('should map error with statusCode 404 to NOT_FOUND', () => {
+      const domainError = Object.assign(new Error('File not found: abc123'), {
+        statusCode: 404,
+      });
+
+      const apiError = APIError.fromError(domainError);
+
+      expect(apiError.code).toBe(ResponseCode.NOT_FOUND);
+      expect(apiError.message).toContain('File not found: abc123');
+    });
+
+    it('should map error with statusCode 413 to PAYLOAD_TOO_LARGE', () => {
+      const domainError = Object.assign(new Error('File too large'), {
+        statusCode: 413,
+      });
+
+      const apiError = APIError.fromError(domainError);
+
+      expect(apiError.code).toBe(ResponseCode.PAYLOAD_TOO_LARGE);
+    });
+
+    it('should map error with statusCode 415 to UNSUPPORTED_MEDIA_TYPE', () => {
+      const domainError = Object.assign(new Error('MIME type not allowed'), {
+        statusCode: 415,
+      });
+
+      const apiError = APIError.fromError(domainError);
+
+      expect(apiError.code).toBe(ResponseCode.UNSUPPORTED_MEDIA_TYPE);
+    });
+
+    it('should prefer explicit code over statusCode', () => {
+      const domainError = Object.assign(new Error('conflict'), {
+        statusCode: 409,
+      });
+
+      const apiError = APIError.fromError(domainError, ResponseCode.BAD_REQUEST);
+
+      expect(apiError.code).toBe(ResponseCode.BAD_REQUEST);
+    });
+
+    it('should fall back to INTERNAL_ERROR for errors without statusCode', () => {
+      const plainError = new Error('Something went wrong');
+
+      const apiError = APIError.fromError(plainError);
+
+      expect(apiError.code).toBe(ResponseCode.INTERNAL_ERROR);
+    });
+
+    it('should fall back to INTERNAL_ERROR for unknown statusCode', () => {
+      const domainError = Object.assign(new Error('weird'), {
+        statusCode: 999,
+      });
+
+      const apiError = APIError.fromError(domainError);
+
+      expect(apiError.code).toBe(ResponseCode.INTERNAL_ERROR);
+    });
+
+    it('should ignore non-numeric statusCode', () => {
+      const domainError = Object.assign(new Error('bad'), {
+        statusCode: 'not a number',
+      });
+
+      const apiError = APIError.fromError(domainError);
+
+      expect(apiError.code).toBe(ResponseCode.INTERNAL_ERROR);
+    });
+
+    it('should preserve original stack trace', () => {
+      const domainError = Object.assign(new Error('File exists'), {
+        statusCode: 409,
+      });
+
+      const apiError = APIError.fromError(domainError);
+
+      expect(apiError.stack).toBe(domainError.stack);
     });
   });
 });
