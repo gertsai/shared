@@ -6,6 +6,7 @@
  * - SessionContext (request-scoped) - per-request, in-memory
  *
  * Uses Typia for compile-time validation (20,000x faster than Zod)
+ * GraphRAGConfig uses Zod schema-first pattern for runtime validation.
  *
  * @example
  * ```typescript
@@ -15,6 +16,8 @@
  * }
  * ```
  */
+
+import { z } from 'zod';
 
 // ============================================================================
 // LLM Configuration
@@ -64,7 +67,7 @@ export interface TenantLLMConfig {
 /**
  * Supported embedding providers
  */
-export type EmbeddingProvider = 'openai' | 'azure' | 'infinity' | 'ollama' | 'custom';
+export type EmbeddingProvider = 'openai' | 'azure' | 'infinity' | 'ollama' | 'litellm' | 'custom';
 
 /**
  * Embedding configuration for the tenant
@@ -151,40 +154,100 @@ export interface OntologyBinding {
 export type GraphRAGMode = 'local' | 'global' | 'hybrid' | 'auto';
 
 /**
- * GraphRAG configuration for the tenant
+ * GraphRAG configuration schema (Zod-first)
+ *
+ * All fields optional — merged with DEFAULT_TENANT_CONFIG at runtime.
+ * UI settings (gleaning, dedup, extraction tuning) are persisted here
+ * and read by extract.ts via `GraphRAGConfigSchema.safeParse()`.
  */
-export interface GraphRAGConfig {
+export const GraphRAGConfigSchema = z.object({
+  // --- Search ---
   /** Default search mode @default 'auto' */
-  mode?: GraphRAGMode;
+  mode: z.enum(['local', 'global', 'hybrid', 'auto']).optional(),
   /** Max hops for local search @default 2 */
-  maxHops?: number;
+  maxHops: z.number().int().nonnegative().optional(),
   /** Number of results @default 20 */
-  topK?: number;
+  topK: z.number().int().positive().optional(),
+
+  // --- Schema / Ontology ---
   /** Use schema hints for extraction @default true */
-  useSchemaHints?: boolean;
+  useSchemaHints: z.boolean().optional(),
   /** Enable ontology mode @default false */
-  ontologyMode?: boolean;
+  ontologyMode: z.boolean().optional(),
+
+  // --- Community ---
   /** Community hierarchy level @default 0 */
-  communityLevel?: number;
+  communityLevel: z.number().int().nonnegative().optional(),
   /** Include communities in results @default true */
-  includeCommunities?: boolean;
+  includeCommunities: z.boolean().optional(),
+  /** Community detection algorithm @default 'louvain' */
+  communityAlgorithm: z.enum(['louvain', 'leiden']).optional(),
+  /** Resolution parameter for community detection @default 1.0 */
+  communityResolution: z.number().min(0.1).max(10).optional(),
+  /** Maximum cluster size before splitting @default 100 */
+  maxClusterSize: z.number().int().positive().optional(),
+  /** Maximum hierarchy levels @default 3 */
+  communityMaxLevels: z.number().int().min(1).max(10).optional(),
+
+  // --- Results ---
   /** Include entities in results @default true */
-  includeEntities?: boolean;
+  includeEntities: z.boolean().optional(),
   /** Include relationships in results @default true */
-  includeRelationships?: boolean;
+  includeRelationships: z.boolean().optional(),
   /** Include source chunks in results @default true */
-  includeSources?: boolean;
+  includeSources: z.boolean().optional(),
   /** Max tokens for response @default 4096 */
-  maxTokens?: number;
+  maxTokens: z.number().int().positive().optional(),
+
+  // --- Streaming ---
   /** Enable streaming @default false */
-  streaming?: boolean;
+  streaming: z.boolean().optional(),
   /** Chunk size for streaming @default 100 */
-  streamChunkSize?: number;
+  streamChunkSize: z.number().int().positive().optional(),
+
+  // --- Extraction Types ---
   /** Entity types to extract (from ontology) */
-  entityTypes?: string[];
+  entityTypes: z.array(z.string()).optional(),
   /** Relationship types to extract (from ontology) */
-  relationshipTypes?: string[];
-}
+  relationshipTypes: z.array(z.string()).optional(),
+
+  // --- Gleaning (LLM re-extraction) ---
+  /** Enable gleaning (multi-pass extraction) @default false */
+  useGleaning: z.boolean().optional(),
+  /** Max gleaning iterations @default 3 */
+  maxGleaningIterations: z.number().int().min(1).max(10).optional(),
+
+  // --- Deduplication ---
+  /** Enable entity deduplication @default true */
+  dedupEnabled: z.boolean().optional(),
+  /** Minimum similarity for dedup match @default 0.85 */
+  dedupMinSimilarity: z.number().min(0).max(1).optional(),
+  /** Max dedup candidates per entity @default 50 */
+  dedupMaxCandidates: z.number().int().positive().optional(),
+  /** Enable alias detection during dedup @default true */
+  dedupEnableAliases: z.boolean().optional(),
+
+  // --- Extraction Tuning ---
+  /** Enable numeric property extraction @default true */
+  numericProperties: z.boolean().optional(),
+  /** Batch size for extraction @default 10 */
+  extractionBatchSize: z.number().int().positive().optional(),
+  /** Concurrency for extraction @default 3 */
+  extractionConcurrency: z.number().int().min(1).max(10).optional(),
+  /** Max triples per chunk @default 100 */
+  maxTriplesPerChunk: z.number().int().positive().optional(),
+
+  // --- Ontology Hints ---
+  /** Top-K ontology classes for hints @default 10 */
+  ontologyTopKClasses: z.number().int().positive().optional(),
+  /** Top-K ontology properties for hints @default 20 */
+  ontologyTopKProperties: z.number().int().positive().optional(),
+  /** Min score for ontology hint inclusion @default 0.5 */
+  ontologyMinScore: z.number().min(0).max(1).optional(),
+});
+
+/** GraphRAG configuration for the tenant (inferred from Zod schema) */
+export type GraphRAGConfig = z.infer<typeof GraphRAGConfigSchema>;
 
 // ============================================================================
 // Locale Settings
@@ -758,7 +821,7 @@ export function isEmbeddingConfig(value: unknown): value is EmbeddingConfig {
   const v = value as Record<string, unknown>;
   return (
     typeof v.provider === 'string' &&
-    ['openai', 'azure', 'infinity', 'ollama', 'custom'].includes(v.provider) &&
+    ['openai', 'azure', 'infinity', 'ollama', 'litellm', 'custom'].includes(v.provider) &&
     typeof v.model === 'string'
   );
 }
@@ -813,6 +876,28 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     maxTokens: 4096,
     streaming: false,
     streamChunkSize: 100,
+    // Gleaning
+    useGleaning: true,
+    maxGleaningIterations: 1,
+    // Deduplication
+    dedupEnabled: true,
+    dedupMinSimilarity: 0.85,
+    dedupMaxCandidates: 5,
+    dedupEnableAliases: true,
+    // Extraction tuning
+    numericProperties: true,
+    extractionBatchSize: 10,
+    extractionConcurrency: 3,
+    maxTriplesPerChunk: 50,
+    // Community
+    communityAlgorithm: 'louvain' as const,
+    communityResolution: 1.5,
+    maxClusterSize: 100,
+    communityMaxLevels: 3,
+    // Ontology hints
+    ontologyTopKClasses: 20,
+    ontologyTopKProperties: 30,
+    ontologyMinScore: 0.3,
   },
   locale: {
     language: 'en',

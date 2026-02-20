@@ -58,6 +58,7 @@ export {
   type PromptConfig,
   type OntologyBinding,
   type GraphRAGMode,
+  GraphRAGConfigSchema,
   type GraphRAGConfig,
   type LocaleConfig,
   type RateLimitConfig,
