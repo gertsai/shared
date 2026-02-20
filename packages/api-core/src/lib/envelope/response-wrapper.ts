@@ -95,6 +95,8 @@ const RESPONSE_CODE_TO_ERROR_CODE: Record<string, GertsErrorCode> = {
   // Not found
   '404/not_found': 'ENTITY_NOT_FOUND',
   '404/01/action_not_found': 'ENTITY_NOT_FOUND',
+  // Conflict
+  '409/conflict': 'CONFLICT',
   // Rate limit
   '429/too_many_requests': 'RATE_LIMIT_EXCEEDED',
   // Server errors
