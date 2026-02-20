@@ -1197,6 +1197,33 @@ export class ApiController<
                 const rawJobData = (job.data || {}) as Record<string, unknown>;
                 if (rawJobData.tenantId && typeof rawJobData.tenantId === 'string') {
                   jobMeta.tenantId = rawJobData.tenantId;
+
+                  // Pre-load tenant config once per job to avoid N+1 in session middleware.
+                  // Each S2S call from worker inherits this meta, so middleware sees
+                  // tenantConfigLoaded !== undefined and skips redundant loads.
+                  try {
+                    const configResult = (await service.broker.call(
+                      'v1.tenant-config.get',
+                      { tenantId: rawJobData.tenantId },
+                      {
+                        meta: {
+                          $caller: service.fullName || service.name,
+                          tenantId: rawJobData.tenantId,
+                          tenantConfigLoaded: true,
+                        },
+                      },
+                    )) as { success: boolean; data?: Record<string, unknown> };
+
+                    if (configResult.success && configResult.data) {
+                      jobMeta.tenantConfig = configResult.data;
+                      jobMeta.tenantConfigLoaded = true;
+                    } else {
+                      jobMeta.tenantConfigLoaded = false;
+                    }
+                  } catch {
+                    // Non-fatal: if config service is down, let middleware handle it per-call
+                    jobMeta.tenantConfigLoaded = false;
+                  }
                 }
 
                 // Call the handler with Orchestra-compatible context
