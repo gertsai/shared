@@ -28,6 +28,7 @@ export * from './graph';
 export * from './streaming';
 export * from './session';
 export * from './query';
+export * from './entity-reference';
 
 // RAG API Standard (RFC-036)
 // Exported as namespace to avoid name collisions with existing types
