@@ -659,14 +659,15 @@ export class ApiController<
             Object.assign(params, ctx.meta.$multipart);
           }
 
-          // Coerce query params for GET endpoints (URL query strings are always strings)
+          // Coerce query params for endpoints that receive params via URL query string
+          // (GET and DELETE — both use query strings, not request body)
           const restConfig = action.options.rest;
-          const isGetEndpoint =
+          const isQueryStringEndpoint =
             typeof restConfig === 'string'
-              ? restConfig.startsWith('GET ')
-              : restConfig?.method === 'GET';
+              ? restConfig.startsWith('GET ') || restConfig.startsWith('DELETE ')
+              : restConfig?.method === 'GET' || restConfig?.method === 'DELETE';
 
-          if (isGetEndpoint) {
+          if (isQueryStringEndpoint) {
             const actionParams = action.options.params;
 
             if (isTypiaParamsWithSchema(actionParams)) {
@@ -680,6 +681,14 @@ export class ApiController<
               // Legacy format: use hard-coded list for backward compatibility
               coerceQueryParams(params as Record<string, unknown>);
             }
+          }
+
+          // Auto-inject tenantId from meta into params for REST calls.
+          // OpenAPI generator omits tenantId from the public spec (clients never send it),
+          // but Typia validators require it. Inject from meta so validation passes.
+          const meta = ctx.meta as Record<string, unknown>;
+          if (meta?.tenantId && !(params as Record<string, unknown>).tenantId) {
+            (params as Record<string, unknown>).tenantId = meta.tenantId;
           }
 
           // Get validator (supports both legacy and new format)
