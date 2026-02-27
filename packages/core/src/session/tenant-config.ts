@@ -174,6 +174,8 @@ export const GraphRAGConfigSchema = z.object({
   useSchemaHints: z.boolean().optional(),
   /** Enable ontology mode @default false */
   ontologyMode: z.boolean().optional(),
+  /** Default ontology ID for OntologyRAG extraction */
+  defaultOntologyId: z.string().uuid().optional(),
 
   // --- Community ---
   /** Community hierarchy level @default 0 */
@@ -311,6 +313,54 @@ export interface FeatureFlags {
   auditLogging?: boolean;
   /** Enable real-time events (WebSocket) @default false */
   realTimeEvents?: boolean;
+}
+
+// ============================================================================
+// Memory Settings (RFC-080)
+// ============================================================================
+
+/**
+ * Memory layer identifiers
+ */
+export type MemoryLayer = 'session' | 'working' | 'longterm' | 'entity';
+
+/**
+ * Memory access policy
+ *
+ * - `open`: everyone sees everything within tenant
+ * - `scoped`: users see own + chat scope; agents see own + project scope
+ * - `strict`: users see only own; agents see only assigned scope
+ */
+export type MemoryAccessPolicy = 'open' | 'scoped' | 'strict';
+
+/**
+ * Memory configuration for the tenant
+ *
+ * Controls entity fact injection, token budgets, extraction behavior,
+ * access policies, and layer toggles.
+ * Used by chat completions memory bridge for per-tenant memory settings.
+ *
+ * @see RFC-080 Chat Agent Platform
+ */
+export interface MemoryConfig {
+  /** Enable memory context injection into chat prompts @default true */
+  enabled?: boolean;
+  /** Maximum entity facts to inject into prompt (list-all fallback mode) @default 50 */
+  maxFactsInContext?: number;
+  /** Maximum tokens for memory context @default 1024 */
+  maxContextTokens?: number;
+  /** Enable async fact extraction from conversations @default true */
+  factExtractionEnabled?: boolean;
+  /** Auto-extract facts from conversations (alias for factExtractionEnabled) @default true */
+  extractFacts?: boolean;
+  /** Working memory TTL in hours @default 24 */
+  ttlHours?: number;
+  /** Maximum memory items per scope level @default 1000 */
+  maxItemsPerScope?: number;
+  /** Memory access policy controlling who can see what @default 'open' */
+  accessPolicy?: MemoryAccessPolicy;
+  /** Which memory layers are active for this tenant @default ['session','working','longterm','entity'] */
+  enabledLayers?: MemoryLayer[];
 }
 
 // ============================================================================
@@ -644,6 +694,9 @@ export interface TenantConfig {
   /** Ingestion settings */
   ingestion?: IngestionConfig;
 
+  /** Memory settings (RFC-080) */
+  memory?: MemoryConfig;
+
   /** LLM Observability settings (RFC-062) */
   observe?: ObserveConfig;
 
@@ -701,6 +754,8 @@ export interface TenantConfigCreate {
   features?: FeatureFlags;
   /** Optional: Ingestion settings */
   ingestion?: IngestionConfig;
+  /** Optional: Memory settings (RFC-080) */
+  memory?: MemoryConfig;
   /** Optional: LLM Observability settings (RFC-062) */
   observe?: ObserveConfig;
   /** Optional: ACL Sync settings (RFC-042) */
@@ -741,6 +796,8 @@ export interface TenantConfigUpdate {
   features?: Partial<FeatureFlags>;
   /** Ingestion settings */
   ingestion?: Partial<IngestionConfig>;
+  /** Memory settings (RFC-080) */
+  memory?: Partial<MemoryConfig>;
   /** LLM Observability settings (RFC-062) */
   observe?: Partial<ObserveConfig>;
   /** ACL Sync settings (RFC-042) */
@@ -931,6 +988,17 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     enableOcr: false,
     enableTableExtraction: true,
   },
+  memory: {
+    enabled: true,
+    maxFactsInContext: 50,
+    maxContextTokens: 1024,
+    factExtractionEnabled: true,
+    extractFacts: true,
+    ttlHours: 24,
+    maxItemsPerScope: 1000,
+    accessPolicy: 'open',
+    enabledLayers: ['session', 'working', 'longterm', 'entity'],
+  },
   observe: {
     enabled: true,
     sampleRate: 1.0, // Capture all traces by default
@@ -995,6 +1063,10 @@ export function mergeTenantConfigWithDefaults(config: TenantConfigCreate): Tenan
       ...DEFAULT_TENANT_CONFIG.ingestion,
       ...config.ingestion,
     },
+    memory: {
+      ...DEFAULT_TENANT_CONFIG.memory,
+      ...config.memory,
+    },
     observe: {
       ...DEFAULT_TENANT_CONFIG.observe,
       ...config.observe,
@@ -1045,6 +1117,7 @@ export function applyTenantConfigUpdate(
     ingestion: update.ingestion
       ? { ...existing.ingestion, ...update.ingestion }
       : existing.ingestion,
+    memory: update.memory ? { ...existing.memory, ...update.memory } : existing.memory,
     observe: update.observe ? { ...existing.observe, ...update.observe } : existing.observe,
     aclSync: update.aclSync
       ? {
