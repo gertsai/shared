@@ -190,6 +190,84 @@ export const GraphRAGConfigSchema = z.object({
   maxClusterSize: z.number().int().positive().optional(),
   /** Maximum hierarchy levels @default 3 */
   communityMaxLevels: z.number().int().min(1).max(10).optional(),
+  /** Include source chunk text excerpts in community summary prompts @default false */
+  communityIncludeChunks: z.boolean().optional(),
+  /** Maximum number of chunks to include in community summary prompt @default 5 */
+  communityMaxChunksInPrompt: z.number().int().min(1).max(20).optional(),
+  /** Percentage of token budget allocated to chunk text (0-100) @default 20 */
+  communityChunkBudgetPercent: z.number().min(0).max(100).optional(),
+  /** Cosine similarity threshold for community ANN pre-filter (0-1) @default 0.3 */
+  communitySimilarityThreshold: z.number().min(0).max(1).optional(),
+  /** Default topK for GET /v1/graph/communities/similar @default 10 */
+  communitySearchTopK: z.number().int().min(1).max(100).optional(),
+  /** Hard cap for topK in communities/similar endpoint (security) @default 100 */
+  communityTopKCap: z.number().int().min(10).max(500).optional(),
+
+  // --- DRIFT Iterative Search (H.28) ---
+  /** Enable DRIFT multi-hop iterative community search @default true */
+  driftEnabled: z.boolean().optional(),
+  /** Maximum hops for DRIFT iterative traversal @default 3 */
+  driftMaxHops: z.number().int().min(1).max(10).optional(),
+  /** Number of seed communities for DRIFT search @default 5 */
+  driftSeedTopK: z.number().int().min(1).max(20).optional(),
+  /** Similarity threshold for DRIFT community expansion @default 0.3 */
+  driftSimilarityThreshold: z.number().min(0).max(1).optional(),
+
+  // --- RAPTOR Tree Summarization ---
+  /** Enable RAPTOR recursive chunk tree summarization @default false */
+  raptorEnabled: z.boolean().optional(),
+  /** Maximum depth of RAPTOR summarization tree @default 3 */
+  raptorMaxDepth: z.number().int().min(1).max(5).optional(),
+  /** Target cluster size for RAPTOR grouping @default 10 */
+  raptorClusterSize: z.number().int().min(2).max(50).optional(),
+  /** Minimum cluster size for RAPTOR grouping @default 3 */
+  raptorMinClusterSize: z.number().int().min(2).max(20).optional(),
+
+  // --- Entity Resolution ---
+  /** Enable automatic entity deduplication via semantic similarity @default false */
+  entityResolutionEnabled: z.boolean().optional(),
+  /** Similarity threshold for entity resolution @default 0.85 */
+  entityResolutionThreshold: z.number().min(0).max(1).optional(),
+  /** Entity resolution strategy @default 'conservative' */
+  entityResolutionStrategy: z.enum(['auto', 'conservative']).optional(),
+
+  // --- HippoRAG ---
+  /** Enable HippoRAG (brain-inspired retrieval with PPR) @default false */
+  hippoEnabled: z.boolean().optional(),
+  /** Personalized PageRank damping factor @default 0.85 */
+  hippoPPRDamping: z.number().min(0).max(1).optional(),
+  /** Maximum nodes to return from PPR traversal @default 50 */
+  hippoMaxNodes: z.number().int().min(5).max(200).optional(),
+
+  // --- SubGraph RAG ---
+  /** Enable subgraph extraction for context-aware retrieval @default false */
+  subgraphEnabled: z.boolean().optional(),
+  /** Maximum nodes in extracted subgraph @default 50 */
+  subgraphMaxNodes: z.number().int().min(5).max(200).optional(),
+  /** Maximum hops from seed entities @default 2 */
+  subgraphMaxHops: z.number().int().min(1).max(5).optional(),
+
+  // --- Temporal GraphRAG ---
+  /** Enable temporal decay for time-aware retrieval @default false */
+  temporalEnabled: z.boolean().optional(),
+  /** Exponential decay rate for older facts @default 0.1 */
+  temporalDecayRate: z.number().min(0).max(1).optional(),
+  /** Time window in days for temporal filtering @default 30 */
+  temporalWindowDays: z.number().int().min(1).max(365).optional(),
+
+  // --- ToG (Think-on-Graph) ---
+  /** Enable Think-on-Graph LLM-guided graph exploration @default false */
+  togEnabled: z.boolean().optional(),
+  /** Beam width for ToG search @default 3 */
+  togBeamWidth: z.number().int().min(1).max(10).optional(),
+  /** Maximum exploration depth @default 3 */
+  togMaxDepth: z.number().int().min(1).max(5).optional(),
+
+  // --- IRCoT (Interleaving Retrieval with Chain-of-Thought) ---
+  /** Enable IRCoT multi-step retrieval with reasoning @default false */
+  ircotEnabled: z.boolean().optional(),
+  /** Maximum retrieval-reasoning steps @default 5 */
+  ircotMaxSteps: z.number().int().min(1).max(10).optional(),
 
   // --- Results ---
   /** Include entities in results @default true */
@@ -920,7 +998,7 @@ export function isTenantConfigUpdate(value: unknown): value is TenantConfigUpdat
  */
 export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'embedding'> = {
   graphRag: {
-    mode: 'auto',
+    mode: 'auto' as const,
     maxHops: 2,
     topK: 20,
     useSchemaHints: true,
@@ -951,6 +1029,45 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     communityResolution: 1.5,
     maxClusterSize: 100,
     communityMaxLevels: 3,
+    communityIncludeChunks: false,
+    communityMaxChunksInPrompt: 5,
+    communityChunkBudgetPercent: 20,
+    communitySimilarityThreshold: 0.3,
+    communitySearchTopK: 10,
+    communityTopKCap: 100,
+    // DRIFT iterative search
+    driftEnabled: true,
+    driftMaxHops: 3,
+    driftSeedTopK: 5,
+    driftSimilarityThreshold: 0.3,
+    // RAPTOR tree summarization
+    raptorEnabled: false,
+    raptorMaxDepth: 3,
+    raptorClusterSize: 10,
+    raptorMinClusterSize: 3,
+    // Entity Resolution
+    entityResolutionEnabled: false,
+    entityResolutionThreshold: 0.85,
+    entityResolutionStrategy: 'conservative' as const,
+    // HippoRAG
+    hippoEnabled: false,
+    hippoPPRDamping: 0.85,
+    hippoMaxNodes: 50,
+    // SubGraph RAG
+    subgraphEnabled: false,
+    subgraphMaxNodes: 50,
+    subgraphMaxHops: 2,
+    // Temporal GraphRAG
+    temporalEnabled: false,
+    temporalDecayRate: 0.1,
+    temporalWindowDays: 30,
+    // ToG (Think-on-Graph)
+    togEnabled: false,
+    togBeamWidth: 3,
+    togMaxDepth: 3,
+    // IRCoT
+    ircotEnabled: false,
+    ircotMaxSteps: 5,
     // Ontology hints
     ontologyTopKClasses: 20,
     ontologyTopKProperties: 30,
@@ -974,7 +1091,7 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     entityDeduplication: true,
     ontologyRag: false,
     shaclValidation: false,
-    shaclMode: 'warning',
+    shaclMode: 'warning' as const,
     numericProperties: true,
     auditLogging: true,
     realTimeEvents: false,
@@ -996,7 +1113,7 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     extractFacts: true,
     ttlHours: 24,
     maxItemsPerScope: 1000,
-    accessPolicy: 'open',
+    accessPolicy: 'open' as const,
     enabledLayers: ['session', 'working', 'longterm', 'entity'],
   },
   observe: {
@@ -1012,17 +1129,17 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
   aclSync: {
     enabled: true,
     maxRevocationLagSeconds: 300, // 5 minutes (OSS default)
-    identityStrategy: 'pending-grants', // OSS default
+    identityStrategy: 'pending-grants' as const, // OSS default
     pendingGrantTtlDays: 90,
     trustedDomains: [],
     publicDocs: {
       requireApproval: false, // OSS default
       rateLimitPerHour: 1000,
     },
-    openFgaTenancyMode: 'shared', // OSS default
+    openFgaTenancyMode: 'shared' as const, // OSS default
   },
   denyLedger: {
-    mode: 'memory', // OSS default
+    mode: 'memory' as const, // OSS default
     cacheTtlSeconds: 3600, // 1 hour
     bruteForceExpireSeconds: 900, // 15 minutes
     maxCacheSize: 10000,
