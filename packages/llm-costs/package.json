@@ -1,0 +1,34 @@
+{
+  "name": "@gerts/llm-costs",
+  "version": "0.1.0",
+  "description": "LLM model costs, capabilities, and provider registry — 2,600+ models, 100+ providers",
+  "types": "./dist/esm/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    }
+  },
+  "scripts": {
+    "dev": "tsc --watch",
+    "build": "pnpm run \"/^build:(esm|cjs)$/\"",
+    "build:esm": "tsc",
+    "build:cjs": "tsc --outDir dist/cjs --module commonjs",
+    "sync": "tsx scripts/sync-litellm.ts",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.2.2",
+    "tsx": "^4.7.0",
+    "vitest": "^3.0.0"
+  }
+}
