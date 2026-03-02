@@ -47,6 +47,7 @@
   },
   "dependencies": {
     "gpt-tokenizer": "^2.5.0",
+    "@gerts/llm-costs": "workspace:*",
     "llm-info": "^1.0.69",
     "typia": "^11.0.0",
     "zod": "^3.22.0",

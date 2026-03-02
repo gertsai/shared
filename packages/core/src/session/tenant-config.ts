@@ -58,6 +58,10 @@ export interface TenantLLMConfig {
   maxTokens?: number;
   /** Timeout in ms @default 60000 */
   timeout?: number;
+  /** Model Registry: selected model configuration UUID (RFC-094) */
+  registryModelId?: string;
+  /** Model Registry: selected provider UUID (RFC-094) */
+  registryProviderId?: string;
 }
 
 // ============================================================================
@@ -83,8 +87,14 @@ export interface EmbeddingConfig {
   baseUrl?: string;
   /** Embedding dimension @default 1536 */
   dimension?: number;
+  /** Alias: embedding dimensions (frontend sends this) @default 768 */
+  dimensions?: number;
   /** Batch size for embedding @default 100 */
   batchSize?: number;
+  /** Model Registry: selected model configuration UUID (RFC-094) */
+  registryModelId?: string;
+  /** Model Registry: selected provider UUID (RFC-094) */
+  registryProviderId?: string;
 }
 
 // ============================================================================
@@ -317,6 +327,16 @@ export const GraphRAGConfigSchema = z.object({
   /** Max triples per chunk @default 100 */
   maxTriplesPerChunk: z.number().int().positive().optional(),
 
+  // --- Per-Use-Case Model Override ---
+  /** LLM model for entity/relationship extraction. Falls back to llm.model if unset. */
+  extractionModel: z.string().optional(),
+  /** LLM model for community summarization. Falls back to llm.model if unset. */
+  communityModel: z.string().optional(),
+  /** LLM model for RAG answer generation & global search. Falls back to llm.model if unset. */
+  queryModel: z.string().optional(),
+  /** LLM model for ontology induction. Falls back to llm.model if unset. */
+  ontologyModel: z.string().optional(),
+
   // --- Ontology Hints ---
   /** Top-K ontology classes for hints @default 10 */
   ontologyTopKClasses: z.number().int().positive().optional(),
@@ -496,6 +516,45 @@ export interface ObserveConfig {
    * Custom tags to add to all traces for this tenant
    */
   defaultTags?: string[];
+}
+
+// ============================================================================
+// Fallback Configuration (RFC-094)
+// ============================================================================
+
+/**
+ * Configuration for automatic model fallback chains
+ *
+ * Maps model IDs to ordered lists of fallback model IDs.
+ * When a primary model fails, the system tries each fallback in order.
+ *
+ * @see RFC-094 AI Model Management & Provider Gateway
+ */
+export interface FallbackConfig {
+  /** Fallback on any error after retries exhausted */
+  regular: Record<string, string[]>;
+  /** Fallback when context window / token limit exceeded */
+  contextWindow: Record<string, string[]>;
+  /** Fallback when embedding dimensions don't match */
+  dimensionMismatch: Record<string, string[]>;
+}
+
+/**
+ * Get fallback chain for a model based on error type.
+ * Returns ordered list of fallback model IDs, empty array if none configured.
+ *
+ * @param config - FallbackConfig from tenant configuration (may be undefined)
+ * @param model - Primary model ID that failed
+ * @param type - Type of failure that triggered fallback
+ * @returns Ordered list of fallback model IDs
+ */
+export function getFallbackChain(
+  config: FallbackConfig | undefined,
+  model: string,
+  type: 'regular' | 'contextWindow' | 'dimensionMismatch',
+): string[] {
+  if (!config) return [];
+  return config[type]?.[model] ?? [];
 }
 
 // ============================================================================
@@ -778,6 +837,9 @@ export interface TenantConfig {
   /** LLM Observability settings (RFC-062) */
   observe?: ObserveConfig;
 
+  /** Model fallback chain configuration (RFC-094) */
+  fallbackConfig?: FallbackConfig;
+
   /** ACL Sync settings (RFC-042) */
   aclSync?: AclSyncConfig;
 
@@ -836,6 +898,8 @@ export interface TenantConfigCreate {
   memory?: MemoryConfig;
   /** Optional: LLM Observability settings (RFC-062) */
   observe?: ObserveConfig;
+  /** Optional: Model fallback chain configuration (RFC-094) */
+  fallbackConfig?: FallbackConfig;
   /** Optional: ACL Sync settings (RFC-042) */
   aclSync?: AclSyncConfig;
   /** Optional: Deny Ledger settings (RFC-042) */
@@ -878,6 +942,8 @@ export interface TenantConfigUpdate {
   memory?: Partial<MemoryConfig>;
   /** LLM Observability settings (RFC-062) */
   observe?: Partial<ObserveConfig>;
+  /** Model fallback chain configuration (RFC-094) */
+  fallbackConfig?: FallbackConfig;
   /** ACL Sync settings (RFC-042) */
   aclSync?: Partial<AclSyncConfig>;
   /** Deny Ledger settings (RFC-042) */

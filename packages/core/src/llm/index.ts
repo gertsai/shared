@@ -103,6 +103,25 @@ export {
   CONTEXT_WINDOW_USAGE_RATIO,
   DEFAULT_CONTEXT_WINDOW_SIZE,
   DEFAULT_OUTPUT_TOKEN_LIMIT,
+  // @gerts/llm-costs re-exports (2,600+ models, 100+ providers)
+  getLlmCostInfo,
+  findLlmCostInfo,
+  calculateLlmCost,
+  toPerMillion,
+  toPerToken,
+  getLlmModelsByMode,
+  getLlmModelsByProvider,
+  filterLlmModels,
+  getLlmProvider,
+  getAllLlmProviders,
+  compareLlmCosts,
+  getLlmPricingSummary,
+  type LlmCostModelInfo,
+  type LlmCostTokenPricing,
+  type LlmCostModelCapabilities,
+  type LlmCostProviderConfig,
+  type LlmCostResult,
+  type LlmCostModelFilter,
 } from './model-registry';
 
 // Structured Output (Zod → JSON Schema for LiteLLM)

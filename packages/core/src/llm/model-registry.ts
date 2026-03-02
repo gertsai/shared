@@ -91,12 +91,18 @@ export function getOutputTokenLimit(model: string): number {
  * @param model - Model identifier
  * @returns Pricing per million tokens or undefined
  */
-export function getModelPricing(model: string): {
-  inputPerMillion: number;
-  outputPerMillion: number;
-} | undefined {
+export function getModelPricing(model: string):
+  | {
+      inputPerMillion: number;
+      outputPerMillion: number;
+    }
+  | undefined {
   const info = getModelInfo(model);
-  if (info && info.pricePerMillionInputTokens !== null && info.pricePerMillionOutputTokens !== null) {
+  if (
+    info &&
+    info.pricePerMillionInputTokens !== null &&
+    info.pricePerMillionOutputTokens !== null
+  ) {
     return {
       inputPerMillion: info.pricePerMillionInputTokens,
       outputPerMillion: info.pricePerMillionOutputTokens,
@@ -116,7 +122,7 @@ export function getModelPricing(model: string): {
 export function calculateCost(
   model: string,
   inputTokens: number,
-  outputTokens: number
+  outputTokens: number,
 ): number | undefined {
   const pricing = getModelPricing(model);
   if (!pricing) return undefined;
@@ -261,7 +267,7 @@ export async function getModelsForProviderAsync(provider: AI_PROVIDER_TYPE): Pro
  * @returns Array of model identifiers
  */
 export function getModelsByCapability(
-  capability: 'vision' | 'reasoning' | 'coding' | 'writing'
+  capability: 'vision' | 'reasoning' | 'coding' | 'writing',
 ): string[] {
   return AllModels.filter((model) => {
     const info = ModelInfoMap[model as ModelLike];
@@ -343,3 +349,28 @@ export function getMostCapableModel(provider: AI_PROVIDER_TYPE): string | undefi
 
   return best;
 }
+
+// ---------------------------------------------------------------------------
+// Re-exports from @gerts/llm-costs (2,600+ models, 100+ providers)
+// Aliased with LlmCost* prefix to avoid conflicts with llm-info exports above
+// ---------------------------------------------------------------------------
+export {
+  getModel as getLlmCostInfo,
+  findModel as findLlmCostInfo,
+  calculateCost as calculateLlmCost,
+  toPerMillion,
+  toPerToken,
+  getModelsByMode as getLlmModelsByMode,
+  getModelsByProvider as getLlmModelsByProvider,
+  filterModels as filterLlmModels,
+  getProvider as getLlmProvider,
+  getAllProviders as getAllLlmProviders,
+  compareCosts as compareLlmCosts,
+  getPricingSummary as getLlmPricingSummary,
+  type ModelInfo as LlmCostModelInfo,
+  type TokenPricing as LlmCostTokenPricing,
+  type ModelCapabilities as LlmCostModelCapabilities,
+  type ProviderConfig as LlmCostProviderConfig,
+  type CostResult as LlmCostResult,
+  type ModelFilter as LlmCostModelFilter,
+} from '@gerts/llm-costs';

@@ -68,6 +68,7 @@ export {
   type MemoryAccessPolicy,
   type MemoryLayer,
   type ObserveConfig,
+  type FallbackConfig,
   type CommunityLevel,
   type TenantConfig,
   type TenantConfigCreate,
@@ -91,4 +92,6 @@ export {
   calculateConfigHash,
   // Sanitization (RISK-003)
   sanitizeTenantConfig,
+  // Fallback (RFC-094)
+  getFallbackChain,
 } from './tenant-config';
