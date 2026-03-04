@@ -344,6 +344,10 @@ export const GraphRAGConfigSchema = z.object({
   ontologyTopKProperties: z.number().int().positive().optional(),
   /** Min score for ontology hint inclusion @default 0.5 */
   ontologyMinScore: z.number().min(0).max(1).optional(),
+
+  // --- OWL Inference ---
+  /** Enable OWL inference (inverse/symmetric/transitive) on extracted triples @default true */
+  owlInference: z.boolean().optional(),
 });
 
 /** GraphRAG configuration for the tenant (inferred from Zod schema) */

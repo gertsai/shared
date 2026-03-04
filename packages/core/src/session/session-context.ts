@@ -122,7 +122,7 @@ export class GraphRAGSessionContext implements IDestroyable {
       clientPlatform: config.clientPlatform,
       clientVersion: config.clientVersion,
       startedAt: new Date(),
-      timeout: config.timeout || 30000,
+      timeout: config.timeout || 60000,
     };
 
     this._graphRagSettings = {
