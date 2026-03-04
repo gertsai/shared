@@ -60,6 +60,17 @@ export {
   type GraphRAGMode,
   GraphRAGConfigSchema,
   type GraphRAGConfig,
+  // Entity Resolution (RFC-096)
+  type EntityResolutionStrategy,
+  EntityResolutionConfigSchema,
+  type EntityResolutionConfig,
+  // Multilingual (RFC-097)
+  MultilingualConfigSchema,
+  type MultilingualConfig,
+  // Vector Search (RFC-098)
+  type VectorSearchMode,
+  VectorSearchConfigSchema,
+  type VectorSearchConfig,
   type LocaleConfig,
   type RateLimitConfig,
   type FeatureFlags,

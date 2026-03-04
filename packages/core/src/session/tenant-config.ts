@@ -95,6 +95,27 @@ export interface EmbeddingConfig {
   registryModelId?: string;
   /** Model Registry: selected provider UUID (RFC-094) */
   registryProviderId?: string;
+  /**
+   * Enable sparse embeddings for hybrid search (RFC-098).
+   * When true and the provider supports it (e.g., Infinity/BGE-M3),
+   * sparse vectors are generated alongside dense and stored in Milvus.
+   * @default true
+   */
+  sparseEmbeddingsEnabled?: boolean;
+  /**
+   * Enable hybrid search (dense + sparse vectors) for v1.vector.search (RFC-098).
+   * When true and sparse embeddings are available, search uses Milvus native
+   * hybrid search with RRF fusion instead of dense-only ANN.
+   * @default true
+   */
+  hybridSearchEnabled?: boolean;
+  /**
+   * Enable reranker for search result quality improvement (RFC-098).
+   * When true and a reranker is configured, search results are reranked
+   * using cross-encoder scoring after retrieval.
+   * @default false
+   */
+  rerankerEnabled?: boolean;
 }
 
 // ============================================================================
@@ -236,10 +257,16 @@ export const GraphRAGConfigSchema = z.object({
   // --- Entity Resolution ---
   /** Enable automatic entity deduplication via semantic similarity @default false */
   entityResolutionEnabled: z.boolean().optional(),
+  /** Enable entity normalization pre-pass (garbage filtering, type normalization) @default true */
+  entityNormalizationEnabled: z.boolean().optional(),
   /** Similarity threshold for entity resolution @default 0.85 */
   entityResolutionThreshold: z.number().min(0).max(1).optional(),
   /** Entity resolution strategy @default 'conservative' */
   entityResolutionStrategy: z.enum(['auto', 'conservative']).optional(),
+  /** EntityMatcher minimum similarity for fuzzy pre-pass @default 0.85 */
+  entityMatcherMinSimilarity: z.number().min(0).max(1).optional(),
+  /** EntityMatcher maximum candidates per entity @default 10 */
+  entityMatcherMaxCandidates: z.number().int().min(1).max(100).optional(),
 
   // --- HippoRAG ---
   /** Enable HippoRAG (brain-inspired retrieval with PPR) @default false */
@@ -352,6 +379,120 @@ export const GraphRAGConfigSchema = z.object({
 
 /** GraphRAG configuration for the tenant (inferred from Zod schema) */
 export type GraphRAGConfig = z.infer<typeof GraphRAGConfigSchema>;
+
+// ============================================================================
+// Entity Resolution Configuration (RFC-096)
+// ============================================================================
+
+/**
+ * Entity resolution strategy
+ *
+ * - `conservative`: Embedding-only, high thresholds (legacy behavior)
+ * - `hybrid`: 3-pass waterfall — name → embedding → LLM fallback
+ * - `llm-assisted`: Always use LLM for review-band pairs
+ */
+export type EntityResolutionStrategy = 'conservative' | 'hybrid' | 'llm-assisted';
+
+/**
+ * Entity resolution configuration (RFC-096)
+ *
+ * Controls the hybrid entity resolution pipeline:
+ * garbage filter → blocking → 3-band scoring → optional LLM fallback.
+ *
+ * @see RFC-096 Hybrid Entity Resolution
+ */
+export const EntityResolutionConfigSchema = z.object({
+  /** Enable entity resolution @default true */
+  enabled: z.boolean().optional(),
+  /** Resolution strategy @default 'hybrid' */
+  strategy: z.enum(['conservative', 'hybrid', 'llm-assisted']).optional(),
+  /** 3-band similarity thresholds */
+  thresholds: z
+    .object({
+      /** Auto-merge threshold (score >= autoMerge → merge without review) @default 0.92 */
+      autoMerge: z.number().min(0).max(1).optional(),
+      /** Review threshold (review <= score < autoMerge → needs review or LLM) @default 0.75 */
+      review: z.number().min(0).max(1).optional(),
+      /** Reject threshold (score < reject → no match) @default 0.50 */
+      reject: z.number().min(0).max(1).optional(),
+    })
+    .optional(),
+  /** Enable cross-lingual entity matching @default false */
+  crossLingual: z.boolean().optional(),
+  /** Enable LLM fallback for review-band pairs @default false */
+  llmFallback: z.boolean().optional(),
+  /** Enable garbage entity filtering (pronouns, articles, low-entropy names) @default true */
+  garbageFilter: z.boolean().optional(),
+  /** Max LLM calls per entity resolution batch (rate limiter) @default 10 */
+  maxLlmCallsPerBatch: z.number().int().min(1).max(50).optional(),
+  /** LLM confidence threshold — reject LLM decisions below this value @default 0.7 */
+  llmConfidenceThreshold: z.number().min(0.1).max(1).optional(),
+  /** Shannon entropy threshold — skip LLM for low-entropy entity names @default 1.5 */
+  entropyThreshold: z.number().min(0.5).max(3).optional(),
+});
+
+/** Entity resolution configuration type (RFC-096) */
+export type EntityResolutionConfig = z.infer<typeof EntityResolutionConfigSchema>;
+
+// ============================================================================
+// Multilingual Configuration (RFC-097)
+// ============================================================================
+
+/**
+ * Multilingual configuration (RFC-097)
+ *
+ * Controls cross-lingual ontology, entity extraction, and alias resolution.
+ *
+ * @see RFC-097 Multilingual Ontology
+ */
+export const MultilingualConfigSchema = z.object({
+  /** Enable multilingual support @default false */
+  enabled: z.boolean().optional(),
+  /** Default language (BCP 47) @default 'en' */
+  defaultLanguage: z.string().optional(),
+  /** Supported languages (BCP 47 codes) @default ['en'] */
+  supportedLanguages: z.array(z.string()).optional(),
+});
+
+/** Multilingual configuration type (RFC-097) */
+export type MultilingualConfig = z.infer<typeof MultilingualConfigSchema>;
+
+// ============================================================================
+// Vector Search Configuration (RFC-098)
+// ============================================================================
+
+/**
+ * Vector search mode
+ *
+ * - `dense`: Standard ANN with dense embeddings only
+ * - `sparse`: BM25-like sparse vector search only
+ * - `hybrid`: Combined dense + sparse with RRF fusion
+ */
+export type VectorSearchMode = 'dense' | 'sparse' | 'hybrid';
+
+/**
+ * Vector search configuration (RFC-098)
+ *
+ * Controls search mode (dense/sparse/hybrid), weight distribution,
+ * and reranking for improved retrieval quality.
+ *
+ * @see RFC-098 BGE-M3 Hybrid Search
+ */
+export const VectorSearchConfigSchema = z.object({
+  /** Search mode @default 'dense' */
+  mode: z.enum(['dense', 'sparse', 'hybrid']).optional(),
+  /** Weight for sparse vectors in hybrid mode (0-1) @default 0.3 */
+  sparseWeight: z.number().min(0).max(1).optional(),
+  /** Weight for dense vectors in hybrid mode (0-1) @default 0.7 */
+  denseWeight: z.number().min(0).max(1).optional(),
+  /** Enable cross-encoder reranking after retrieval @default false */
+  rerankEnabled: z.boolean().optional(),
+  /** Top-K candidates to rerank @default 20 */
+  rerankTopK: z.number().int().min(1).max(100).optional(),
+});
+
+/** Vector search configuration type (RFC-098) */
+export type VectorSearchConfig = z.infer<typeof VectorSearchConfigSchema>;
 
 // ============================================================================
 // Locale Settings
@@ -850,6 +991,15 @@ export interface TenantConfig {
   /** Deny Ledger settings (RFC-042) */
   denyLedger?: DenyLedgerConfig;
 
+  /** Entity resolution settings (RFC-096) */
+  entityResolution?: EntityResolutionConfig;
+
+  /** Multilingual settings (RFC-097) */
+  multilingual?: MultilingualConfig;
+
+  /** Vector search settings (RFC-098) */
+  vectorSearch?: VectorSearchConfig;
+
   /** Community hierarchy description */
   communityHierarchy?: CommunityLevel[];
 
@@ -908,6 +1058,12 @@ export interface TenantConfigCreate {
   aclSync?: AclSyncConfig;
   /** Optional: Deny Ledger settings (RFC-042) */
   denyLedger?: DenyLedgerConfig;
+  /** Optional: Entity resolution settings (RFC-096) */
+  entityResolution?: EntityResolutionConfig;
+  /** Optional: Multilingual settings (RFC-097) */
+  multilingual?: MultilingualConfig;
+  /** Optional: Vector search settings (RFC-098) */
+  vectorSearch?: VectorSearchConfig;
   /** Optional: Community hierarchy */
   communityHierarchy?: CommunityLevel[];
   /** Optional: Custom metadata */
@@ -952,6 +1108,12 @@ export interface TenantConfigUpdate {
   aclSync?: Partial<AclSyncConfig>;
   /** Deny Ledger settings (RFC-042) */
   denyLedger?: Partial<DenyLedgerConfig>;
+  /** Entity resolution settings (RFC-096) */
+  entityResolution?: Partial<EntityResolutionConfig>;
+  /** Multilingual settings (RFC-097) */
+  multilingual?: Partial<MultilingualConfig>;
+  /** Vector search settings (RFC-098) */
+  vectorSearch?: Partial<VectorSearchConfig>;
   /** Community hierarchy (replace all) */
   communityHierarchy?: CommunityLevel[];
   /** Custom metadata (merge) */
@@ -1117,8 +1279,11 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     raptorMinClusterSize: 3,
     // Entity Resolution
     entityResolutionEnabled: false,
+    entityNormalizationEnabled: true,
     entityResolutionThreshold: 0.85,
     entityResolutionStrategy: 'conservative' as const,
+    entityMatcherMinSimilarity: 0.85,
+    entityMatcherMaxCandidates: 10,
     // HippoRAG
     hippoEnabled: false,
     hippoPPRDamping: 0.85,
@@ -1215,6 +1380,30 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     maxCacheSize: 10000,
     enableNatsSync: false,
   },
+  entityResolution: {
+    enabled: true,
+    strategy: 'hybrid' as const,
+    thresholds: {
+      autoMerge: 0.92,
+      review: 0.75,
+      reject: 0.5,
+    },
+    crossLingual: false,
+    llmFallback: false,
+    garbageFilter: true,
+  },
+  multilingual: {
+    enabled: false,
+    defaultLanguage: 'en',
+    supportedLanguages: ['en'],
+  },
+  vectorSearch: {
+    mode: 'dense' as const,
+    sparseWeight: 0.3,
+    denseWeight: 0.7,
+    rerankEnabled: false,
+    rerankTopK: 20,
+  },
 };
 
 // ============================================================================
@@ -1270,6 +1459,22 @@ export function mergeTenantConfigWithDefaults(config: TenantConfigCreate): Tenan
       ...DEFAULT_TENANT_CONFIG.denyLedger,
       ...config.denyLedger,
     },
+    entityResolution: {
+      ...DEFAULT_TENANT_CONFIG.entityResolution,
+      ...config.entityResolution,
+      thresholds: {
+        ...DEFAULT_TENANT_CONFIG.entityResolution?.thresholds,
+        ...config.entityResolution?.thresholds,
+      },
+    },
+    multilingual: {
+      ...DEFAULT_TENANT_CONFIG.multilingual,
+      ...config.multilingual,
+    },
+    vectorSearch: {
+      ...DEFAULT_TENANT_CONFIG.vectorSearch,
+      ...config.vectorSearch,
+    },
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -1318,6 +1523,24 @@ export function applyTenantConfigUpdate(
     denyLedger: update.denyLedger
       ? { ...existing.denyLedger, ...update.denyLedger }
       : existing.denyLedger,
+    entityResolution: update.entityResolution
+      ? {
+          ...DEFAULT_TENANT_CONFIG.entityResolution,
+          ...existing.entityResolution,
+          ...update.entityResolution,
+          thresholds: {
+            ...DEFAULT_TENANT_CONFIG.entityResolution?.thresholds,
+            ...existing.entityResolution?.thresholds,
+            ...update.entityResolution?.thresholds,
+          },
+        }
+      : existing.entityResolution,
+    multilingual: update.multilingual
+      ? { ...DEFAULT_TENANT_CONFIG.multilingual, ...existing.multilingual, ...update.multilingual }
+      : existing.multilingual,
+    vectorSearch: update.vectorSearch
+      ? { ...DEFAULT_TENANT_CONFIG.vectorSearch, ...existing.vectorSearch, ...update.vectorSearch }
+      : existing.vectorSearch,
     metadata: update.metadata ? { ...existing.metadata, ...update.metadata } : existing.metadata,
     // Update timestamp
     updatedAt: new Date().toISOString(),
