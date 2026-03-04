@@ -121,6 +121,7 @@ export class ApiController<
   ServiceVersion extends string,
   ServiceName extends string,
   ServiceContext extends ServiceContextBase = ServiceContextBase,
+  TMeta extends Record<string, any> = ContextMeta,
 > {
   /**
    * Reference to the broker instance for accessing broker logger
@@ -302,7 +303,8 @@ export class ApiController<
     V extends string,
     N extends string,
     S extends ServiceContextBase = ServiceContextBase,
-  >(version: V, name: N): ApiController<V, N, S> {
+    M extends Record<string, any> = ContextMeta,
+  >(version: V, name: N): ApiController<V, N, S, M> {
     // @ts-ignore
     return (ApiController._controllers[`${version}.${name}`] ??= new ApiController({
       name,
@@ -508,9 +510,9 @@ export class ApiController<
     ResponseValidator extends TypiaValidator<any>,
     ResponseType extends ResponseValidator extends TypiaValidator<infer T> ? T : never,
     Rest extends RestConfig<any, any> | undefined = undefined,
-    // Pass ServiceContext from class to ActionHandler for proper type inference
-    Handler extends ActionHandler<AuthType, ParamsType, ResponseType, ServiceContext> =
-      ActionHandler<AuthType, ParamsType, ResponseType, ServiceContext>,
+    // Pass ServiceContext and TMeta from class to ActionHandler for proper type inference
+    Handler extends ActionHandler<AuthType, ParamsType, ResponseType, ServiceContext, TMeta> =
+      ActionHandler<AuthType, ParamsType, ResponseType, ServiceContext, TMeta>,
   >(
     actionName: ActionName,
     actionOptions: ActionOptions<
@@ -521,6 +523,7 @@ export class ApiController<
       ResponseType,
       Rest,
       ServiceContext,
+      TMeta,
       Handler
     >,
   ): ApiControllerRegisteredAction<
