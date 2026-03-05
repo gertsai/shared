@@ -375,6 +375,26 @@ export const GraphRAGConfigSchema = z.object({
   // --- OWL Inference ---
   /** Enable OWL inference (inverse/symmetric/transitive) on extracted triples @default true */
   owlInference: z.boolean().optional(),
+
+  // --- Hybrid Search Fusion (HybridSearcher) ---
+  /** RRF fusion weight for vector search results (0-1) @default 0.4 */
+  fusionWeightVector: z.number().min(0).max(1).optional(),
+  /** RRF fusion weight for BM25 keyword search results (0-1) @default 0.3 */
+  fusionWeightBm25: z.number().min(0).max(1).optional(),
+  /** RRF fusion weight for graph/PageRank search results (0-1) @default 0.3 */
+  fusionWeightGraph: z.number().min(0).max(1).optional(),
+  /** RRF k constant — higher = more equal weight to all ranks @default 60 */
+  rrfK: z.number().int().min(1).max(200).optional(),
+  /** BM25 term-frequency saturation parameter @default 1.5 */
+  bm25K1: z.number().min(0).max(3).optional(),
+  /** BM25 document-length normalization (0=no norm, 1=full norm) @default 0.75 */
+  bm25B: z.number().min(0).max(1).optional(),
+  /** Personalized PageRank damping factor @default 0.85 */
+  pprDamping: z.number().min(0).max(1).optional(),
+  /** Personalized PageRank max iterations @default 100 */
+  pprIterations: z.number().int().min(25).max(500).optional(),
+  /** Subgraph search decay factor per hop (score *= decayFactor) @default 0.5 */
+  subgraphDecayFactor: z.number().min(0).max(1).optional(),
 });
 
 /** GraphRAG configuration for the tenant (inferred from Zod schema) */
@@ -409,13 +429,20 @@ export const EntityResolutionConfigSchema = z.object({
   /** 3-band similarity thresholds */
   thresholds: z
     .object({
-      /** Auto-merge threshold (score >= autoMerge → merge without review) @default 0.92 */
+      /** Auto-merge threshold (score >= autoMerge → merge without review) @default 0.75 */
       autoMerge: z.number().min(0).max(1).optional(),
-      /** Review threshold (review <= score < autoMerge → needs review or LLM) @default 0.75 */
+      /** Review threshold (review <= score < autoMerge → needs review or LLM) @default 0.65 */
       review: z.number().min(0).max(1).optional(),
-      /** Reject threshold (score < reject → no match) @default 0.50 */
+      /** Reject threshold (score < reject → no match) @default 0.45 */
       reject: z.number().min(0).max(1).optional(),
     })
+    .refine(
+      (t) => {
+        if (t.reject == null || t.review == null || t.autoMerge == null) return true;
+        return t.reject < t.review && t.review < t.autoMerge;
+      },
+      { message: 'Thresholds must satisfy: reject < review < autoMerge' },
+    )
     .optional(),
   /** Enable cross-lingual entity matching @default false */
   crossLingual: z.boolean().optional(),
@@ -489,6 +516,8 @@ export const VectorSearchConfigSchema = z.object({
   rerankEnabled: z.boolean().optional(),
   /** Top-K candidates to rerank @default 20 */
   rerankTopK: z.number().int().min(1).max(100).optional(),
+  /** Weight for entity results in 3-way hybrid fusion (0-1, default: 0.3) */
+  entityWeight: z.number().min(0).max(1).optional(),
 });
 
 /** Vector search configuration type (RFC-098) */
@@ -910,6 +939,8 @@ export interface IngestionConfig {
   enableOcr?: boolean;
   /** Enable table extraction @default true */
   enableTableExtraction?: boolean;
+  /** Automatically process uploaded files through the ingestion pipeline @default false */
+  autoIngestOnUpload?: boolean;
 }
 
 // ============================================================================
@@ -1307,6 +1338,16 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     ontologyTopKClasses: 20,
     ontologyTopKProperties: 30,
     ontologyMinScore: 0.3,
+    // Hybrid Search Fusion
+    fusionWeightVector: 0.4,
+    fusionWeightBm25: 0.3,
+    fusionWeightGraph: 0.3,
+    rrfK: 60,
+    bm25K1: 1.5,
+    bm25B: 0.75,
+    pprDamping: 0.85,
+    pprIterations: 100,
+    subgraphDecayFactor: 0.5,
   },
   locale: {
     language: 'en',
@@ -1339,6 +1380,7 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     maxFilesPerBatch: 100,
     enableOcr: false,
     enableTableExtraction: true,
+    autoIngestOnUpload: false,
   },
   memory: {
     enabled: true,
@@ -1384,9 +1426,9 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     enabled: true,
     strategy: 'hybrid' as const,
     thresholds: {
-      autoMerge: 0.92,
-      review: 0.75,
-      reject: 0.5,
+      autoMerge: 0.75,
+      review: 0.65,
+      reject: 0.45,
     },
     crossLingual: false,
     llmFallback: false,
@@ -1398,10 +1440,10 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     supportedLanguages: ['en'],
   },
   vectorSearch: {
-    mode: 'dense' as const,
+    mode: 'hybrid' as const,
     sparseWeight: 0.3,
     denseWeight: 0.7,
-    rerankEnabled: false,
+    rerankEnabled: true,
     rerankTopK: 20,
   },
 };
