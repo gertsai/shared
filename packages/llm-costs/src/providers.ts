@@ -44,6 +44,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   openai: {
     name: 'OpenAI',
     key: 'openai',
+    icon: 'openai',
     firstParty: true,
     baseUrl: 'https://api.openai.com/v1',
     website: 'https://openai.com',
@@ -54,6 +55,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   anthropic: {
     name: 'Anthropic',
     key: 'anthropic',
+    icon: 'anthropic',
     firstParty: true,
     baseUrl: 'https://api.anthropic.com',
     website: 'https://anthropic.com',
@@ -67,6 +69,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   azure: {
     name: 'Azure OpenAI',
     key: 'azure',
+    icon: 'azure',
     firstParty: false,
     website: 'https://azure.microsoft.com/products/ai-services/openai-service',
     healthCheckPath: '/openai/deployments',
@@ -75,6 +78,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   azure_ai: {
     name: 'Azure AI',
     key: 'azure_ai',
+    icon: 'azure',
     firstParty: false,
     website: 'https://ai.azure.com',
     endpoints: FULL,
@@ -82,6 +86,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   bedrock: {
     name: 'AWS Bedrock',
     key: 'bedrock',
+    icon: 'aws',
     firstParty: false,
     website: 'https://aws.amazon.com/bedrock',
     endpoints: {
@@ -93,6 +98,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   vertex_ai: {
     name: 'Google Vertex AI',
     key: 'vertex_ai',
+    icon: 'google',
     firstParty: true,
     website: 'https://cloud.google.com/vertex-ai',
     endpoints: {
@@ -104,6 +110,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   gemini: {
     name: 'Google AI Studio (Gemini)',
     key: 'gemini',
+    icon: 'google',
     firstParty: true,
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/',
     website: 'https://ai.google.dev',
@@ -114,6 +121,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   mistral: {
     name: 'Mistral AI',
     key: 'mistral',
+    icon: 'mistral',
     firstParty: true,
     baseUrl: 'https://api.mistral.ai/v1',
     website: 'https://mistral.ai',
@@ -127,6 +135,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   cohere: {
     name: 'Cohere',
     key: 'cohere',
+    icon: 'cohere',
     firstParty: true,
     baseUrl: 'https://api.cohere.ai/v1',
     website: 'https://cohere.com',
@@ -140,6 +149,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   deepseek: {
     name: 'DeepSeek',
     key: 'deepseek',
+    icon: 'deepseek',
     firstParty: true,
     baseUrl: 'https://api.deepseek.com',
     website: 'https://deepseek.com',
@@ -150,6 +160,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   groq: {
     name: 'Groq',
     key: 'groq',
+    icon: 'groq',
     firstParty: true,
     baseUrl: 'https://api.groq.com/openai/v1',
     website: 'https://groq.com',
@@ -160,10 +171,12 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   ollama: {
     name: 'Ollama',
     key: 'ollama',
+    icon: 'ollama',
     firstParty: false,
     baseUrl: 'http://localhost:11434',
     website: 'https://ollama.ai',
     healthCheckPath: '/api/tags',
+    modelsPath: '/api/tags',
     endpoints: {
       ...CHAT_ONLY,
       embeddings: true,
@@ -172,6 +185,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   together_ai: {
     name: 'Together AI',
     key: 'together_ai',
+    icon: 'together',
     firstParty: false,
     baseUrl: 'https://api.together.xyz/v1',
     website: 'https://together.ai',
@@ -182,6 +196,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   fireworks_ai: {
     name: 'Fireworks AI',
     key: 'fireworks_ai',
+    icon: 'fireworks',
     firstParty: false,
     baseUrl: 'https://api.fireworks.ai/inference/v1',
     website: 'https://fireworks.ai',
@@ -190,6 +205,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   openrouter: {
     name: 'OpenRouter',
     key: 'openrouter',
+    icon: 'openrouter',
     firstParty: false,
     baseUrl: 'https://openrouter.ai/api/v1',
     website: 'https://openrouter.ai',
@@ -200,6 +216,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   xai: {
     name: 'xAI',
     key: 'xai',
+    icon: 'xai',
     firstParty: true,
     baseUrl: 'https://api.x.ai/v1',
     website: 'https://x.ai',
@@ -210,6 +227,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   perplexity: {
     name: 'Perplexity AI',
     key: 'perplexity',
+    icon: 'perplexity',
     firstParty: true,
     baseUrl: 'https://api.perplexity.ai',
     website: 'https://perplexity.ai',
@@ -218,6 +236,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   cerebras: {
     name: 'Cerebras',
     key: 'cerebras',
+    icon: 'cerebras',
     firstParty: true,
     baseUrl: 'https://api.cerebras.ai/v1',
     website: 'https://cerebras.ai',
@@ -226,6 +245,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   sambanova: {
     name: 'SambaNova',
     key: 'sambanova',
+    icon: 'sambanova',
     firstParty: true,
     baseUrl: 'https://api.sambanova.ai/v1',
     website: 'https://sambanova.ai',
@@ -234,6 +254,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   deepinfra: {
     name: 'DeepInfra',
     key: 'deepinfra',
+    icon: 'deepinfra',
     firstParty: false,
     baseUrl: 'https://api.deepinfra.com/v1/openai',
     website: 'https://deepinfra.com',
@@ -242,10 +263,14 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   infinity: {
     name: 'Infinity',
     key: 'infinity',
+    icon: 'infinity',
     firstParty: false,
     baseUrl: 'http://localhost:7997',
     website: 'https://github.com/michaelfeil/infinity',
     healthCheckPath: '/health',
+    modelsPath: '/models',
+    embeddingsPath: '/embeddings',
+    rerankPath: '/rerank',
     endpoints: {
       chatCompletions: false,
       messages: false,
@@ -256,12 +281,13 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
       audioSpeech: false,
       moderations: false,
       batches: false,
-      rerank: false,
+      rerank: true,
     },
   },
   jina_ai: {
     name: 'Jina AI',
     key: 'jina_ai',
+    icon: 'jina',
     firstParty: true,
     baseUrl: 'https://api.jina.ai/v1',
     website: 'https://jina.ai',
@@ -281,6 +307,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   voyage: {
     name: 'Voyage AI',
     key: 'voyage',
+    icon: 'voyage',
     firstParty: true,
     baseUrl: 'https://api.voyageai.com/v1',
     website: 'https://voyageai.com',
@@ -300,15 +327,20 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   vllm: {
     name: 'vLLM',
     key: 'vllm',
+    icon: 'vllm',
     firstParty: false,
     baseUrl: 'http://localhost:8000/v1',
     website: 'https://vllm.ai',
     healthCheckPath: '/health',
-    endpoints: CHAT_ONLY,
+    endpoints: {
+      ...CHAT_ONLY,
+      embeddings: true,
+    },
   },
   litellm_proxy: {
     name: 'LiteLLM Proxy',
     key: 'litellm_proxy',
+    icon: 'litellm',
     firstParty: false,
     baseUrl: 'http://localhost:4000',
     website: 'https://litellm.ai',
@@ -322,6 +354,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   huggingface: {
     name: 'Hugging Face',
     key: 'huggingface',
+    icon: 'huggingface',
     firstParty: false,
     baseUrl: 'https://api-inference.huggingface.co',
     website: 'https://huggingface.co',
@@ -335,6 +368,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   replicate: {
     name: 'Replicate',
     key: 'replicate',
+    icon: 'replicate',
     firstParty: false,
     baseUrl: 'https://api.replicate.com/v1',
     website: 'https://replicate.com',
@@ -344,6 +378,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   databricks: {
     name: 'Databricks',
     key: 'databricks',
+    icon: 'databricks',
     firstParty: false,
     website: 'https://databricks.com',
     endpoints: CHAT_ONLY,
@@ -351,6 +386,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   nvidia_nim: {
     name: 'NVIDIA NIM',
     key: 'nvidia_nim',
+    icon: 'nvidia',
     firstParty: false,
     baseUrl: 'https://integrate.api.nvidia.com/v1',
     website: 'https://build.nvidia.com',
@@ -359,6 +395,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
   meta_llama: {
     name: 'Meta Llama API',
     key: 'meta_llama',
+    icon: 'meta',
     firstParty: true,
     website: 'https://llama.meta.com',
     endpoints: CHAT_ONLY,

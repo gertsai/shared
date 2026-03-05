@@ -216,6 +216,8 @@ export interface ProviderConfig {
   name: string;
   /** Provider key (used in LiteLLM model names) */
   key: string;
+  /** Icon identifier for UI rendering (maps to frontend icon component) */
+  icon?: string;
   /** Whether this is a first-party provider (direct API) vs aggregator */
   firstParty: boolean;
   /** Default base URL for API calls */
@@ -228,6 +230,12 @@ export interface ProviderConfig {
   endpoints: ProviderEndpoints;
   /** Health check endpoint path */
   healthCheckPath?: string;
+  /** Models listing endpoint path (default: /v1/models) */
+  modelsPath?: string;
+  /** Embeddings endpoint path (default: /v1/embeddings) */
+  embeddingsPath?: string;
+  /** Rerank endpoint path (default: /v1/rerank) */
+  rerankPath?: string;
 }
 
 // ==================== Lookup types ====================
