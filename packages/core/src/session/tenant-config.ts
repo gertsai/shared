@@ -285,26 +285,64 @@ export const GraphRAGConfigSchema = z.object({
   subgraphMaxHops: z.number().int().min(1).max(5).optional(),
 
   // --- Temporal GraphRAG ---
-  /** Enable temporal decay for time-aware retrieval @default false */
+  /**
+   * Enable temporal decay scoring for time-aware retrieval.
+   * When enabled, older entities/relationships receive lower scores via exp(-decayRate * ageDays).
+   * @default false
+   */
   temporalEnabled: z.boolean().optional(),
-  /** Exponential decay rate for older facts @default 0.1 */
+  /**
+   * Exponential decay rate per day for temporal scoring.
+   * Higher values = faster decay. score *= exp(-decayRate * ageDays).
+   * @default 0.1
+   */
   temporalDecayRate: z.number().min(0).max(1).optional(),
-  /** Time window in days for temporal filtering @default 30 */
+  /**
+   * Time window in days for temporal filtering.
+   * Only entities/relationships updated within this window are considered.
+   * @default 30
+   */
   temporalWindowDays: z.number().int().min(1).max(365).optional(),
 
   // --- ToG (Think-on-Graph) ---
-  /** Enable Think-on-Graph LLM-guided graph exploration @default false */
+  /**
+   * Enable Think-on-Graph LLM-guided beam search through the knowledge graph.
+   * Uses LLM to iteratively select which relations to traverse.
+   * @default false
+   */
   togEnabled: z.boolean().optional(),
-  /** Beam width for ToG search @default 3 */
+  /** Beam width for ToG search (number of parallel paths). @default 3 */
   togBeamWidth: z.number().int().min(1).max(10).optional(),
-  /** Maximum exploration depth @default 3 */
+  /** Maximum graph exploration depth (hops). @default 3 */
   togMaxDepth: z.number().int().min(1).max(5).optional(),
 
   // --- IRCoT (Interleaving Retrieval with Chain-of-Thought) ---
-  /** Enable IRCoT multi-step retrieval with reasoning @default false */
+  /**
+   * Enable IRCoT multi-step retrieval with chain-of-thought reasoning.
+   * Iteratively retrieves evidence and reasons until answer is found.
+   * @default false
+   */
   ircotEnabled: z.boolean().optional(),
-  /** Maximum retrieval-reasoning steps @default 5 */
+  /** Maximum retrieval-reasoning iterations for IRCoT. @default 5 */
   ircotMaxSteps: z.number().int().min(1).max(10).optional(),
+
+  // --- Query Defaults ---
+  /** Max graph traversal depth for local search @default 2 */
+  maxDepth: z.number().int().min(1).max(10).optional(),
+  /** Max relationships to include in context @default 30 */
+  maxRelationships: z.number().int().positive().optional(),
+  /** Max text units (chunks) to include in context @default 15 */
+  maxTextUnits: z.number().int().positive().optional(),
+  /** LLM temperature for answer generation @default 0.0 */
+  temperature: z.number().min(0).max(2).optional(),
+  /** Enable chunk expansion (query-time similar chunk retrieval) @default true */
+  chunkExpansionEnabled: z.boolean().optional(),
+  /** Max similar chunks per source chunk @default 2 */
+  chunkExpansionLimit: z.number().int().min(0).max(10).optional(),
+  /** Min similarity score for chunk expansion @default 0.7 */
+  chunkExpansionMinScore: z.number().min(0).max(1).optional(),
+  /** Concurrency for chunk expansion queries @default 5 */
+  chunkExpansionConcurrency: z.number().int().min(1).max(20).optional(),
 
   // --- Results ---
   /** Include entities in results @default true */
@@ -325,7 +363,7 @@ export const GraphRAGConfigSchema = z.object({
   // --- Extraction Types ---
   /** Entity types to extract (from ontology) */
   entityTypes: z.array(z.string()).optional(),
-  /** Relationship types to extract (from ontology) */
+  /** @experimental Not yet wired — ontology-driven extraction supersedes this. Relationship types to extract (from ontology) */
   relationshipTypes: z.array(z.string()).optional(),
 
   // --- Gleaning (LLM re-extraction) ---
@@ -351,8 +389,10 @@ export const GraphRAGConfigSchema = z.object({
   extractionBatchSize: z.number().int().positive().optional(),
   /** Concurrency for extraction @default 3 */
   extractionConcurrency: z.number().int().min(1).max(10).optional(),
-  /** Max triples per chunk @default 100 */
+  /** Max triples per chunk @default 50 */
   maxTriplesPerChunk: z.number().int().positive().optional(),
+  /** Max entities per chunk @default 30 */
+  maxEntitiesPerChunk: z.number().int().positive().optional(),
 
   // --- Per-Use-Case Model Override ---
   /** LLM model for entity/relationship extraction. Falls back to llm.model if unset. */
@@ -518,6 +558,14 @@ export const VectorSearchConfigSchema = z.object({
   rerankTopK: z.number().int().min(1).max(100).optional(),
   /** Weight for entity results in 3-way hybrid fusion (0-1, default: 0.3) */
   entityWeight: z.number().min(0).max(1).optional(),
+  /** Enable BM25 full-text search on Milvus collections @default false */
+  bm25Enabled: z.boolean().optional(),
+  /** BM25 drop ratio — fraction of low-frequency terms to drop @default 0.05 */
+  bm25DropRatio: z.number().min(0).max(1).optional(),
+  /** BM25 analyzer language @default 'standard' */
+  analyzerLanguage: z.string().optional(),
+  /** BM25 weight for hybrid fusion @default 0.3 */
+  bm25Weight: z.number().min(0).max(1).optional(),
 });
 
 /** Vector search configuration type (RFC-098) */
