@@ -970,6 +970,25 @@ export interface DenyLedgerConfig {
 // ============================================================================
 
 /**
+ * Chunking strategy for document ingestion (RFC-105)
+ */
+export type ChunkingStrategy =
+  | 'sentence-splitter'
+  | 'semantic'
+  | 'semantic-overlap'
+  | 'hierarchical';
+
+/**
+ * Breakpoint detection method for semantic chunking (RFC-105)
+ */
+export type BreakpointMethod = 'percentile' | 'standard_deviation' | 'interquartile' | 'gradient';
+
+/**
+ * Content type hint for chunking optimization (RFC-105)
+ */
+export type ChunkingContentType = 'auto' | 'prose' | 'code' | 'mixed' | 'legal' | 'medical';
+
+/**
  * Ingestion configuration for the tenant
  */
 export interface IngestionConfig {
@@ -989,7 +1008,55 @@ export interface IngestionConfig {
   enableTableExtraction?: boolean;
   /** Automatically process uploaded files through the ingestion pipeline @default false */
   autoIngestOnUpload?: boolean;
+
+  // --- Semantic Chunker Settings (RFC-105) ---
+  /** Chunking strategy to use @default 'sentence-splitter' */
+  chunkingStrategy?: ChunkingStrategy;
+  /** Breakpoint detection method for semantic chunking @default 'percentile' */
+  breakpointMethod?: BreakpointMethod;
+  /** Breakpoint threshold (0-100, percentile value for split detection) @default 95 */
+  breakpointThreshold?: number;
+  /** Minimum chunk size in tokens @default 50 */
+  chunkMinTokens?: number;
+  /** Maximum chunk size in tokens @default 500 */
+  chunkMaxTokens?: number;
+  /** Content type hint for chunking optimization @default 'auto' */
+  contentType?: ChunkingContentType;
+  /** Number of sentences to overlap between semantic chunks (0-10) @default 2 */
+  overlapSentences?: number;
+  /** Enable cosine similarity smoothing before breakpoint detection @default true */
+  smoothingEnabled?: boolean;
+  /** Sliding window size for smoothing (1-10) @default 3 */
+  smoothingWindowSize?: number;
 }
+
+/**
+ * Zod schema for IngestionConfig runtime validation (RFC-105)
+ *
+ * All fields optional — merged with DEFAULT_TENANT_CONFIG at runtime.
+ */
+export const IngestionConfigSchema = z.object({
+  chunkSize: z.number().int().positive().optional(),
+  chunkOverlap: z.number().int().nonnegative().optional(),
+  supportedFileTypes: z.array(z.string()).optional(),
+  maxFileSize: z.number().int().positive().optional(),
+  maxFilesPerBatch: z.number().int().positive().optional(),
+  enableOcr: z.boolean().optional(),
+  enableTableExtraction: z.boolean().optional(),
+  autoIngestOnUpload: z.boolean().optional(),
+  // Semantic chunker settings (RFC-105)
+  chunkingStrategy: z.enum(['sentence-splitter', 'semantic', 'semantic-overlap']).optional(),
+  breakpointMethod: z
+    .enum(['percentile', 'standard_deviation', 'interquartile', 'gradient'])
+    .optional(),
+  breakpointThreshold: z.number().min(1).max(100).optional(),
+  chunkMinTokens: z.number().int().positive().optional(),
+  chunkMaxTokens: z.number().int().positive().optional(),
+  contentType: z.enum(['auto', 'prose', 'code', 'mixed', 'legal', 'medical']).optional(),
+  overlapSentences: z.number().int().min(0).max(10).optional(),
+  smoothingEnabled: z.boolean().optional(),
+  smoothingWindowSize: z.number().int().min(1).max(10).optional(),
+});
 
 // ============================================================================
 // Community Hierarchy
@@ -1429,6 +1496,16 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     enableOcr: false,
     enableTableExtraction: true,
     autoIngestOnUpload: false,
+    // Semantic chunker settings (RFC-105)
+    chunkingStrategy: 'sentence-splitter' as const,
+    breakpointMethod: 'percentile' as const,
+    breakpointThreshold: 95,
+    chunkMinTokens: 50,
+    chunkMaxTokens: 500,
+    contentType: 'auto' as const,
+    overlapSentences: 2,
+    smoothingEnabled: true,
+    smoothingWindowSize: 3,
   },
   memory: {
     enabled: true,

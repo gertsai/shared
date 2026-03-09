@@ -62,7 +62,7 @@ class LRUNode<T> {
     public key: string,
     public entry: CacheEntry<T>,
     public prev: LRUNode<T> | null = null,
-    public next: LRUNode<T> | null = null
+    public next: LRUNode<T> | null = null,
   ) {}
 }
 
@@ -168,6 +168,29 @@ export class LRUCache<T = unknown> {
   }
 
   /**
+   * Read a value without promoting it in the LRU order.
+   * Useful for diagnostics and iteration where you don't want to
+   * change eviction priority.
+   *
+   * Time complexity: O(1)
+   */
+  peek(key: CacheKey, options?: { tenantId?: TenantId }): T | undefined {
+    const fullKey = this.buildKey(key, options?.tenantId);
+    const node = this.cache.get(fullKey);
+
+    if (!node) return undefined;
+
+    // Check TTL expiration (lazy)
+    if (this.isExpired(node.entry)) {
+      this.deleteNode(node, 'ttl');
+      return undefined;
+    }
+
+    // NO moveToHead — that's the point of peek
+    return node.entry.value;
+  }
+
+  /**
    * Set a value in the cache
    *
    * Time complexity: O(1)
@@ -178,7 +201,7 @@ export class LRUCache<T = unknown> {
     options?: {
       tenantId?: TenantId;
       ttl?: number;
-    }
+    },
   ): void {
     const fullKey = this.buildKey(key, options?.tenantId);
     const existingNode = this.cache.get(fullKey);
