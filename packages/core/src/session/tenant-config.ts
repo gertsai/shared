@@ -404,6 +404,14 @@ export const GraphRAGConfigSchema = z.object({
   /** LLM model for ontology induction. Falls back to llm.model if unset. */
   ontologyModel: z.string().optional(),
 
+  // --- Per-Use-Case Max Tokens Override ---
+  /** Max output tokens for extraction LLM call. Thinking models need higher values. @default 65536 */
+  extractionMaxTokens: z.number().int().min(256).max(1_000_000).optional(),
+  /** Max output tokens for community summarization LLM call. @default 16384 */
+  communityMaxTokens: z.number().int().min(256).max(1_000_000).optional(),
+  /** Max output tokens for query/answer generation LLM call. @default 16384 */
+  queryMaxTokens: z.number().int().min(256).max(1_000_000).optional(),
+
   // --- Ontology Hints ---
   /** Top-K ontology classes for hints @default 10 */
   ontologyTopKClasses: z.number().int().positive().optional(),
@@ -415,6 +423,12 @@ export const GraphRAGConfigSchema = z.object({
   // --- OWL Inference ---
   /** Enable OWL inference (inverse/symmetric/transitive) on extracted triples @default true */
   owlInference: z.boolean().optional(),
+
+  // --- Ontology Embedding ---
+  /** Batch size for ontology vector embedding @default 30 */
+  ontologyEmbedBatchSize: z.number().int().min(1).max(200).optional(),
+  /** Max parallel embedding requests (match round-robin instance count) @default 5 */
+  ontologyEmbedConcurrency: z.number().int().min(1).max(20).optional(),
 
   // --- Hybrid Search Fusion (HybridSearcher) ---
   /** RRF fusion weight for vector search results (0-1) @default 0.4 */
@@ -1453,6 +1467,9 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     ontologyTopKClasses: 20,
     ontologyTopKProperties: 30,
     ontologyMinScore: 0.3,
+    // Ontology embedding
+    ontologyEmbedBatchSize: 30,
+    ontologyEmbedConcurrency: 5,
     // Hybrid Search Fusion
     fusionWeightVector: 0.4,
     fusionWeightBm25: 0.3,
