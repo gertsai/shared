@@ -720,13 +720,27 @@ export class ApiController<
             }
           }
 
-          // Extract trace context for auto-injection into jobs
+          // Extract trace context for auto-injection into jobs.
+          // Build a W3C traceparent header so that queue workers can link
+          // their spans back to this HTTP request trace via propagation.extract().
+          // Format: "00-{traceId32hex}-{spanId16hex}-{flags}"
+          // Uses ctx.requestID as traceId and ctx.id as spanId (the current action span).
           const traceContext: QueueTraceContext | undefined = ctx.tracing
-            ? {
-                traceId: ctx.requestID ?? undefined,
-                parentId: ctx.parentID ?? undefined,
-                sampled: ctx.tracing ?? undefined,
-              }
+            ? (() => {
+                const rawTraceId = (ctx.requestID ?? '').replace(/-/g, '');
+                const rawSpanId = (ctx.id ?? '').replace(/-/g, '');
+                const traceId = rawTraceId.padEnd(32, '0').slice(0, 32);
+                const spanId = rawSpanId.padEnd(16, '0').slice(0, 16);
+                // W3C spec: traceId must be non-zero
+                const safeTraceId = traceId === '0'.repeat(32) ? '0'.repeat(31) + '1' : traceId;
+                const safeSpanId = spanId === '0'.repeat(16) ? '0'.repeat(15) + '1' : spanId;
+                return {
+                  traceId: ctx.requestID ?? undefined,
+                  parentId: ctx.parentID ?? undefined,
+                  sampled: ctx.tracing ?? undefined,
+                  traceparent: `00-${safeTraceId}-${safeSpanId}-01`,
+                };
+              })()
             : undefined;
 
           const { code, message, data, raw } = await action.options.handler.call(this, {
