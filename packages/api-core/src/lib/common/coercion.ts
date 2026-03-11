@@ -174,6 +174,8 @@ export function coerceQueryParams(params: Record<string, unknown>): void {
     'keepVersions',
     'expiresInSeconds',
     'versionNum',
+    // Observe/Analytics
+    'days',
     // Generic
     'version',
   ];
@@ -202,6 +204,9 @@ export function coerceQueryParams(params: Record<string, unknown>): void {
     'includeMuted',
     'includeSystem',
     'isBuiltIn',
+    'isVisible',
+    'mfaRequired',
+    'useOntology',
   ];
 
   coerceNumericFields(params, numericParams);
