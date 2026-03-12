@@ -219,6 +219,8 @@ export interface LLMCallOptions {
   topP?: number;
   /** Stop sequences to end generation */
   stopSequences?: string[];
+  /** Hint for LLM providers that support prompt caching (Anthropic, Gemini) */
+  cacheControl?: { type: 'ephemeral' };
 }
 
 /** Response format configuration */
