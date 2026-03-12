@@ -755,6 +755,34 @@ export interface ObserveConfig {
 }
 
 // ============================================================================
+// Tracing Configuration (RFC-115)
+// ============================================================================
+
+/**
+ * OpenTelemetry tracing configuration for the tenant.
+ *
+ * Controls head-based sampling rate for distributed traces.
+ * Separate from ObserveConfig which handles LLM-specific observability.
+ *
+ * @see RFC-115 Observability & Distributed Tracing
+ */
+export interface TracingConfig {
+  /** Enable OTel tracing for this tenant @default true */
+  enabled?: boolean;
+
+  /**
+   * Head-based sampling rate as percentage (0-100).
+   * - 100 = capture all traces
+   * - 5 = capture 5% of traces (default for standard tier)
+   * - 0 = disable tracing
+   *
+   * Suggested rates by tier: free=1, standard=5, pro=10, enterprise=25
+   * @default undefined (falls back to global OTEL_SAMPLING_RATE)
+   */
+  samplingRate?: number;
+}
+
+// ============================================================================
 // Fallback Configuration (RFC-094)
 // ============================================================================
 
@@ -1142,6 +1170,9 @@ export interface TenantConfig {
   /** LLM Observability settings (RFC-062) */
   observe?: ObserveConfig;
 
+  /** OTel tracing settings (RFC-115) */
+  tracing?: TracingConfig;
+
   /** Model fallback chain configuration (RFC-094) */
   fallbackConfig?: FallbackConfig;
 
@@ -1212,6 +1243,8 @@ export interface TenantConfigCreate {
   memory?: MemoryConfig;
   /** Optional: LLM Observability settings (RFC-062) */
   observe?: ObserveConfig;
+  /** Optional: OTel tracing settings (RFC-115) */
+  tracing?: TracingConfig;
   /** Optional: Model fallback chain configuration (RFC-094) */
   fallbackConfig?: FallbackConfig;
   /** Optional: ACL Sync settings (RFC-042) */
@@ -1262,6 +1295,8 @@ export interface TenantConfigUpdate {
   memory?: Partial<MemoryConfig>;
   /** LLM Observability settings (RFC-062) */
   observe?: Partial<ObserveConfig>;
+  /** OTel tracing settings (RFC-115) */
+  tracing?: Partial<TracingConfig>;
   /** Model fallback chain configuration (RFC-094) */
   fallbackConfig?: FallbackConfig;
   /** ACL Sync settings (RFC-042) */
@@ -1545,6 +1580,10 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     trackCost: true,
     defaultTags: [],
   },
+  tracing: {
+    enabled: true,
+    // samplingRate intentionally undefined — falls back to global OTEL_SAMPLING_RATE
+  },
   aclSync: {
     enabled: true,
     maxRevocationLagSeconds: 300, // 5 minutes (OSS default)
@@ -1631,6 +1670,10 @@ export function mergeTenantConfigWithDefaults(config: TenantConfigCreate): Tenan
       ...DEFAULT_TENANT_CONFIG.observe,
       ...config.observe,
     },
+    tracing: {
+      ...DEFAULT_TENANT_CONFIG.tracing,
+      ...config.tracing,
+    },
     aclSync: {
       ...DEFAULT_TENANT_CONFIG.aclSync,
       ...config.aclSync,
@@ -1695,6 +1738,7 @@ export function applyTenantConfigUpdate(
       : existing.ingestion,
     memory: update.memory ? { ...existing.memory, ...update.memory } : existing.memory,
     observe: update.observe ? { ...existing.observe, ...update.observe } : existing.observe,
+    tracing: update.tracing ? { ...existing.tracing, ...update.tracing } : existing.tracing,
     aclSync: update.aclSync
       ? {
           ...existing.aclSync,

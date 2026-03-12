@@ -79,6 +79,7 @@ export {
   type MemoryAccessPolicy,
   type MemoryLayer,
   type ObserveConfig,
+  type TracingConfig,
   type FallbackConfig,
   type CommunityLevel,
   type TenantConfig,
