@@ -449,6 +449,14 @@ export const GraphRAGConfigSchema = z.object({
   pprIterations: z.number().int().min(25).max(500).optional(),
   /** Subgraph search decay factor per hop (score *= decayFactor) @default 0.5 */
   subgraphDecayFactor: z.number().min(0).max(1).optional(),
+
+  // --- Entity Reranking (post-expandSubgraph) ---
+  /** Enable question-aware entity reranking after subgraph expansion @default true */
+  entityRerankEnabled: z.boolean().optional(),
+  /** Max entities to keep after question-aware reranking of expanded subgraph @default 15 */
+  maxExpandedEntities: z.number().int().min(1).max(200).optional(),
+  /** BFS decay factor for entity reranking (seeds=1.0, hop1=decay, hop2=decay^2) @default 0.5 */
+  entityRerankDecayFactor: z.number().min(0).max(1).optional(),
 });
 
 /** GraphRAG configuration for the tenant (inferred from Zod schema) */
@@ -584,6 +592,35 @@ export const VectorSearchConfigSchema = z.object({
 
 /** Vector search configuration type (RFC-098) */
 export type VectorSearchConfig = z.infer<typeof VectorSearchConfigSchema>;
+
+// ============================================================================
+// Quality Monitoring Configuration (RFC-118)
+// ============================================================================
+
+/**
+ * Quality monitoring configuration (RFC-118)
+ *
+ * Controls production sampling, drift detection, and quality alerting.
+ * ProductionSampler runs on the configured cron schedule and uses EWMA
+ * to detect quality degradation across eval metrics.
+ *
+ * @see RFC-118 Quality Lifecycle Management
+ */
+export const QualityMonitoringConfigSchema = z.object({
+  /** Enable quality monitoring (production sampling + drift detection) @default false */
+  enabled: z.boolean().default(false),
+  /** Cron expression for production sampler schedule @default "0 2 * * *" (daily 2am) */
+  samplerCron: z.string().default('0 2 * * *'),
+  /** EWMA smoothing factor for drift detection (0-1) @default 0.3 */
+  driftAlpha: z.number().min(0).max(1).default(0.3),
+  /** Delta threshold for warning-level drift alerts @default 0.05 */
+  driftWarningThreshold: z.number().min(0).max(1).default(0.05),
+  /** Delta threshold for critical-level drift alerts @default 0.10 */
+  driftCriticalThreshold: z.number().min(0).max(1).default(0.1),
+});
+
+/** Quality monitoring configuration type (RFC-118) */
+export type QualityMonitoringConfig = z.infer<typeof QualityMonitoringConfigSchema>;
 
 // ============================================================================
 // Locale Settings
@@ -1191,6 +1228,9 @@ export interface TenantConfig {
   /** Vector search settings (RFC-098) */
   vectorSearch?: VectorSearchConfig;
 
+  /** Quality monitoring settings (RFC-118) */
+  qualityMonitoring?: QualityMonitoringConfig;
+
   /** Community hierarchy description */
   communityHierarchy?: CommunityLevel[];
 
@@ -1257,6 +1297,8 @@ export interface TenantConfigCreate {
   multilingual?: MultilingualConfig;
   /** Optional: Vector search settings (RFC-098) */
   vectorSearch?: VectorSearchConfig;
+  /** Optional: Quality monitoring settings (RFC-118) */
+  qualityMonitoring?: QualityMonitoringConfig;
   /** Optional: Community hierarchy */
   communityHierarchy?: CommunityLevel[];
   /** Optional: Custom metadata */
@@ -1309,6 +1351,8 @@ export interface TenantConfigUpdate {
   multilingual?: Partial<MultilingualConfig>;
   /** Vector search settings (RFC-098) */
   vectorSearch?: Partial<VectorSearchConfig>;
+  /** Quality monitoring settings (RFC-118) */
+  qualityMonitoring?: Partial<QualityMonitoringConfig>;
   /** Community hierarchy (replace all) */
   communityHierarchy?: CommunityLevel[];
   /** Custom metadata (merge) */
@@ -1453,7 +1497,8 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     maxTriplesPerChunk: 50,
     // Community
     communityAlgorithm: 'louvain' as const,
-    communityResolution: 1.5,
+    // communityResolution intentionally omitted — resolved per-algorithm in community handler
+    // Louvain default: 1.5, Leiden default: 0.5 (different quality functions)
     maxClusterSize: 100,
     communityMaxLevels: 3,
     communityIncludeChunks: false,
@@ -1769,6 +1814,17 @@ export function applyTenantConfigUpdate(
     vectorSearch: update.vectorSearch
       ? { ...DEFAULT_TENANT_CONFIG.vectorSearch, ...existing.vectorSearch, ...update.vectorSearch }
       : existing.vectorSearch,
+    qualityMonitoring: update.qualityMonitoring
+      ? {
+          enabled: false,
+          samplerCron: '0 2 * * *',
+          driftAlpha: 0.3,
+          driftWarningThreshold: 0.05,
+          driftCriticalThreshold: 0.1,
+          ...existing.qualityMonitoring,
+          ...update.qualityMonitoring,
+        }
+      : existing.qualityMonitoring,
     metadata: update.metadata ? { ...existing.metadata, ...update.metadata } : existing.metadata,
     // Update timestamp
     updatedAt: new Date().toISOString(),
