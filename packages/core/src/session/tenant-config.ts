@@ -457,6 +457,16 @@ export const GraphRAGConfigSchema = z.object({
   maxExpandedEntities: z.number().int().min(1).max(200).optional(),
   /** BFS decay factor for entity reranking (seeds=1.0, hop1=decay, hop2=decay^2) @default 0.5 */
   entityRerankDecayFactor: z.number().min(0).max(1).optional(),
+  /** Always run reranking even on small graphs (entity count ≤ limit). Ensures noise filtering. @default true */
+  alwaysRerank: z.boolean().optional(),
+  /** Minimum relevance score for entities/triples in context builder (0-1). Items below threshold are filtered out. @default 0.3 */
+  minContextRelevance: z.number().min(0).max(1).optional(),
+
+  // --- Query Classification & Entry Point Fallback ---
+  /** Enable auto-detection of aggregate/thematic queries for routing to global search @default true */
+  aggregateQueryDetection: z.boolean().optional(),
+  /** Enable fallback to graph store entities when embedding search returns 0 entry points @default true */
+  entryPointFallback: z.boolean().optional(),
 });
 
 /** GraphRAG configuration for the tenant (inferred from Zod schema) */
@@ -1616,6 +1626,15 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     pprDamping: 0.85,
     pprIterations: 100,
     subgraphDecayFactor: 0.5,
+    // Entity reranking
+    entityRerankEnabled: true,
+    maxExpandedEntities: 15,
+    entityRerankDecayFactor: 0.5,
+    alwaysRerank: true,
+    minContextRelevance: 0.3,
+    // Query classification & entry point fallback
+    aggregateQueryDetection: true,
+    entryPointFallback: true,
   },
   locale: {
     language: 'en',
