@@ -623,6 +623,55 @@ export const QualityMonitoringConfigSchema = z.object({
 export type QualityMonitoringConfig = z.infer<typeof QualityMonitoringConfigSchema>;
 
 // ============================================================================
+// Eval Judge Configuration
+// ============================================================================
+
+/**
+ * Eval judge configuration — controls LLM-as-a-judge scoring.
+ * Per-tenant overrides for judge model, thresholds, and fallback behavior.
+ * All fields optional — merged with DEFAULT_TENANT_CONFIG.eval at runtime.
+ */
+export const EvalConfigSchema = z.object({
+  /** LLM model for eval judge (e.g., 'gpt-4', 'gemini-2.0-flash') */
+  judgeModel: z.string().optional(),
+  /** Custom system prompt for the judge LLM */
+  judgeSystemPrompt: z.string().optional(),
+  /** Enable LLM judge (default: true when model available) */
+  judgeEnabled: z.boolean().optional(),
+  /** Fall back to heuristic scoring if LLM fails (default: true) */
+  heuristicFallback: z.boolean().optional(),
+  /** Default pass/fail thresholds */
+  thresholds: z
+    .object({
+      faithfulness: z.number().min(0).max(1).optional(),
+      contextRelevance: z.number().min(0).max(1).optional(),
+      answerRelevance: z.number().min(0).max(1).optional(),
+      hallucination: z.number().min(0).max(1).optional(),
+    })
+    .optional(),
+  /** Per-metric custom prompt overrides (placeholders: {context}, {answer}, {query}) */
+  metricPrompts: z
+    .object({
+      faithfulness: z.string().optional(),
+      contextRelevance: z.string().optional(),
+      answerRelevance: z.string().optional(),
+      hallucination: z.string().optional(),
+    })
+    .optional(),
+  /** Default dataset ID for quality checks and scheduled evals */
+  defaultDatasetId: z.string().optional(),
+  /** Max items per dataset import (overrides project.config) */
+  datasetMaxItems: z.number().int().min(1).max(10_000).optional(),
+  /** Max chars per question or expectedAnswer */
+  datasetMaxStringLength: z.number().int().min(100).max(100_000).optional(),
+  /** Max chars for serialized metadata per item */
+  datasetMaxMetadataLength: z.number().int().min(100).max(100_000).optional(),
+});
+
+/** Eval judge configuration type */
+export type EvalConfig = z.infer<typeof EvalConfigSchema>;
+
+// ============================================================================
 // Locale Settings
 // ============================================================================
 
@@ -1231,6 +1280,9 @@ export interface TenantConfig {
   /** Quality monitoring settings (RFC-118) */
   qualityMonitoring?: QualityMonitoringConfig;
 
+  /** Eval judge settings (LLM-as-a-judge) */
+  eval?: EvalConfig;
+
   /** Community hierarchy description */
   communityHierarchy?: CommunityLevel[];
 
@@ -1299,6 +1351,8 @@ export interface TenantConfigCreate {
   vectorSearch?: VectorSearchConfig;
   /** Optional: Quality monitoring settings (RFC-118) */
   qualityMonitoring?: QualityMonitoringConfig;
+  /** Optional: Eval judge settings */
+  eval?: EvalConfig;
   /** Optional: Community hierarchy */
   communityHierarchy?: CommunityLevel[];
   /** Optional: Custom metadata */
@@ -1353,6 +1407,8 @@ export interface TenantConfigUpdate {
   vectorSearch?: Partial<VectorSearchConfig>;
   /** Quality monitoring settings (RFC-118) */
   qualityMonitoring?: Partial<QualityMonitoringConfig>;
+  /** Eval judge settings */
+  eval?: Partial<EvalConfig>;
   /** Community hierarchy (replace all) */
   communityHierarchy?: CommunityLevel[];
   /** Custom metadata (merge) */
@@ -1672,6 +1728,16 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     rerankEnabled: true,
     rerankTopK: 20,
   },
+  eval: {
+    judgeEnabled: true,
+    heuristicFallback: true,
+    thresholds: {
+      faithfulness: 0.7,
+      contextRelevance: 0.7,
+      answerRelevance: 0.7,
+      hallucination: 0.3,
+    },
+  },
 };
 
 // ============================================================================
@@ -1746,6 +1812,14 @@ export function mergeTenantConfigWithDefaults(config: TenantConfigCreate): Tenan
     vectorSearch: {
       ...DEFAULT_TENANT_CONFIG.vectorSearch,
       ...config.vectorSearch,
+    },
+    eval: {
+      ...DEFAULT_TENANT_CONFIG.eval,
+      ...config.eval,
+      thresholds: {
+        ...DEFAULT_TENANT_CONFIG.eval?.thresholds,
+        ...config.eval?.thresholds,
+      },
     },
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -1825,6 +1899,18 @@ export function applyTenantConfigUpdate(
           ...update.qualityMonitoring,
         }
       : existing.qualityMonitoring,
+    eval: update.eval
+      ? {
+          ...DEFAULT_TENANT_CONFIG.eval,
+          ...existing.eval,
+          ...update.eval,
+          thresholds: {
+            ...DEFAULT_TENANT_CONFIG.eval?.thresholds,
+            ...existing.eval?.thresholds,
+            ...update.eval?.thresholds,
+          },
+        }
+      : existing.eval,
     metadata: update.metadata ? { ...existing.metadata, ...update.metadata } : existing.metadata,
     // Update timestamp
     updatedAt: new Date().toISOString(),
