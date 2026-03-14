@@ -467,6 +467,14 @@ export const GraphRAGConfigSchema = z.object({
   aggregateQueryDetection: z.boolean().optional(),
   /** Enable fallback to graph store entities when embedding search returns 0 entry points @default true */
   entryPointFallback: z.boolean().optional(),
+
+  // --- Confidence Calibration ---
+  /** Minimum avg relevance score to attempt LLM answer generation. Below threshold returns "insufficient info". @default 0.2 */
+  confidenceThreshold: z.number().min(0).max(1).optional(),
+
+  // --- Query Decomposition ---
+  /** Enable decomposition of complex multi-aspect questions into sub-queries @default true */
+  queryDecomposition: z.boolean().optional(),
 });
 
 /** GraphRAG configuration for the tenant (inferred from Zod schema) */
@@ -1635,6 +1643,8 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     // Query classification & entry point fallback
     aggregateQueryDetection: true,
     entryPointFallback: true,
+    // Query decomposition
+    queryDecomposition: true,
   },
   locale: {
     language: 'en',
