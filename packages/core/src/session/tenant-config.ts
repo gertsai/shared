@@ -1730,7 +1730,7 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     routeThematic: 'raptor',
     routeSpecific: 'local',
     routeMultiHop: 'local',
-    fallbackChain: ['local'],
+    fallbackChain: ['local', 'global'],
     nameBoostEnabled: false,
   },
   locale: {
