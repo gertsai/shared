@@ -348,6 +348,10 @@ export const GraphRAGConfigSchema = z.object({
   togBeamWidth: z.number().int().min(1).max(10).optional(),
   /** Maximum graph exploration depth (hops). @default 3 */
   togMaxDepth: z.number().int().min(1).max(5).optional(),
+  /** Maximum relations shown to LLM per hop for edge selection. @default 20 */
+  togMaxRelations: z.number().int().min(5).max(50).optional(),
+  /** Confidence decay for branched beams (same-type relation forks). @default 0.4 */
+  togBranchDecay: z.number().min(0.1).max(1.0).optional(),
 
   // --- IRCoT (Interleaving Retrieval with Chain-of-Thought) ---
   /**
@@ -1690,6 +1694,8 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     togEnabled: false,
     togBeamWidth: 3,
     togMaxDepth: 3,
+    togMaxRelations: 20,
+    togBranchDecay: 0.4,
     // IRCoT
     ircotEnabled: false,
     ircotMaxSteps: 5,
