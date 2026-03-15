@@ -1724,7 +1724,7 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     // Query decomposition
     queryDecomposition: true,
     // Pipeline (RFC-123)
-    usePipeline: false,
+    usePipeline: true,
     autoRoutingEnabled: true,
     routeAggregate: 'global',
     routeThematic: 'raptor',
