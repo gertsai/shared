@@ -359,6 +359,14 @@ export const GraphRAGConfigSchema = z.object({
   /** Maximum retrieval-reasoning iterations for IRCoT. @default 5 */
   ircotMaxSteps: z.number().int().min(1).max(10).optional(),
 
+  /**
+   * Route aggregate queries (e.g. "list all organizations") through NL→Cypher
+   * for exact recall, then merge results into the GraphRAG response.
+   * Requires nlQuery.enabled in pipeline settings.
+   * @default true
+   */
+  useNlCypherForAggregate: z.boolean().optional(),
+
   // --- Query Defaults ---
   /** Max graph traversal depth for local search @default 2 */
   maxDepth: z.number().int().min(1).max(10).optional(),
@@ -508,6 +516,34 @@ export const GraphRAGConfigSchema = z.object({
   // --- Query Decomposition ---
   /** Enable decomposition of complex multi-aspect questions into sub-queries @default true */
   queryDecomposition: z.boolean().optional(),
+
+  // --- Pipeline (RFC-123) ---
+  /** Use new IRetriever-based pipeline instead of legacy GraphRAGOrchestrator. @default false */
+  usePipeline: z.boolean().optional(),
+
+  /** Enable intelligent auto-routing via QuestionAnalyzer. @default true */
+  autoRoutingEnabled: z.boolean().optional(),
+
+  /** Retriever for aggregation queries (e.g., "how many..."). @default 'global' */
+  routeAggregate: z.string().optional(),
+
+  /** Retriever for thematic queries (e.g., "what are the main themes..."). @default 'raptor' */
+  routeThematic: z.string().optional(),
+
+  /** Retriever for specific/factual queries (e.g., "who is..."). @default 'local' */
+  routeSpecific: z.string().optional(),
+
+  /** Retriever for multi-hop/relationship queries (e.g., "how is X connected to Y"). @default 'local' */
+  routeMultiHop: z.string().optional(),
+
+  /** Ordered fallback chain — try retrievers until one has results. @default ['local'] */
+  fallbackChain: z.array(z.string()).optional(),
+
+  /** Enable entity name boosting (entities mentioned in question get score boost). @default false */
+  nameBoostEnabled: z.boolean().optional(),
+
+  /** Per-tenant system prompt override for GraphRAG answer generation. @default undefined (uses built-in) */
+  querySystemPrompt: z.string().optional(),
 });
 
 /** GraphRAG configuration for the tenant (inferred from Zod schema) */
@@ -1657,6 +1693,8 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     // IRCoT
     ircotEnabled: false,
     ircotMaxSteps: 5,
+    // NL→Cypher aggregate enrichment
+    useNlCypherForAggregate: true,
     // Ontology hints
     ontologyTopKClasses: 20,
     ontologyTopKProperties: 30,
@@ -1676,7 +1714,7 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     subgraphDecayFactor: 0.5,
     // Entity reranking
     entityRerankEnabled: true,
-    maxExpandedEntities: 15,
+    maxExpandedEntities: 10,
     entityRerankDecayFactor: 0.5,
     alwaysRerank: true,
     minContextRelevance: 0.3,
@@ -1685,6 +1723,15 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     entryPointFallback: true,
     // Query decomposition
     queryDecomposition: true,
+    // Pipeline (RFC-123)
+    usePipeline: false,
+    autoRoutingEnabled: true,
+    routeAggregate: 'global',
+    routeThematic: 'raptor',
+    routeSpecific: 'local',
+    routeMultiHop: 'local',
+    fallbackChain: ['local'],
+    nameBoostEnabled: false,
   },
   locale: {
     language: 'en',
