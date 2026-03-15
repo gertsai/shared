@@ -73,6 +73,39 @@ export interface TenantLLMConfig {
  */
 export type EmbeddingProvider = 'openai' | 'azure' | 'infinity' | 'ollama' | 'litellm' | 'custom';
 
+// ============================================================================
+// Reranker Configuration
+// ============================================================================
+
+/**
+ * Supported reranker providers
+ */
+export type RerankerProvider = 'infinity' | 'cohere' | 'litellm' | 'custom';
+
+/**
+ * Reranker configuration for the tenant
+ */
+export interface RerankerConfig {
+  /** Whether reranking is enabled */
+  enabled?: boolean;
+  /** Reranker provider */
+  provider?: RerankerProvider;
+  /** Model identifier (e.g., 'BAAI/bge-reranker-v2-m3') */
+  model?: string;
+  /** Base URL for the reranker service */
+  baseUrl?: string;
+  /** API key reference (for cloud providers like Cohere) */
+  apiKeyRef?: string;
+  /** Model Registry: selected model UUID */
+  registryModelId?: string;
+  /** Model Registry: selected provider UUID */
+  registryProviderId?: string;
+  /** Max documents to rerank per query @default 20 */
+  topN?: number;
+  /** Minimum score threshold to keep @default 0.0 */
+  scoreThreshold?: number;
+}
+
 /**
  * Embedding configuration for the tenant
  */
@@ -1295,6 +1328,9 @@ export interface TenantConfig {
   /** Vector search settings (RFC-098) */
   vectorSearch?: VectorSearchConfig;
 
+  /** Reranker settings */
+  reranker?: RerankerConfig;
+
   /** Quality monitoring settings (RFC-118) */
   qualityMonitoring?: QualityMonitoringConfig;
 
@@ -1367,6 +1403,8 @@ export interface TenantConfigCreate {
   multilingual?: MultilingualConfig;
   /** Optional: Vector search settings (RFC-098) */
   vectorSearch?: VectorSearchConfig;
+  /** Optional: Reranker settings */
+  reranker?: RerankerConfig;
   /** Optional: Quality monitoring settings (RFC-118) */
   qualityMonitoring?: QualityMonitoringConfig;
   /** Optional: Eval judge settings */
@@ -1423,6 +1461,8 @@ export interface TenantConfigUpdate {
   multilingual?: Partial<MultilingualConfig>;
   /** Vector search settings (RFC-098) */
   vectorSearch?: Partial<VectorSearchConfig>;
+  /** Reranker settings */
+  reranker?: Partial<RerankerConfig>;
   /** Quality monitoring settings (RFC-118) */
   qualityMonitoring?: Partial<QualityMonitoringConfig>;
   /** Eval judge settings */
@@ -1757,6 +1797,13 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     rerankEnabled: true,
     rerankTopK: 20,
   },
+  reranker: {
+    enabled: true,
+    provider: 'infinity' as const,
+    model: 'BAAI/bge-reranker-v2-m3',
+    topN: 20,
+    scoreThreshold: 0.0,
+  },
   eval: {
     judgeEnabled: true,
     heuristicFallback: true,
@@ -1917,6 +1964,9 @@ export function applyTenantConfigUpdate(
     vectorSearch: update.vectorSearch
       ? { ...DEFAULT_TENANT_CONFIG.vectorSearch, ...existing.vectorSearch, ...update.vectorSearch }
       : existing.vectorSearch,
+    reranker: update.reranker
+      ? { ...DEFAULT_TENANT_CONFIG.reranker, ...existing.reranker, ...update.reranker }
+      : existing.reranker,
     qualityMonitoring: update.qualityMonitoring
       ? {
           enabled: false,
@@ -1990,6 +2040,16 @@ export type SanitizedTenantLLMConfig = Omit<TenantLLMConfig, 'apiKeyRef' | 'base
 export type SanitizedEmbeddingConfig = Omit<EmbeddingConfig, 'apiKeyRef' | 'baseUrl'>;
 
 /**
+ * Sanitized Reranker configuration without sensitive fields
+ *
+ * Removes: apiKeyRef, baseUrl (credentials that should not leak via ctx.meta)
+ * Keeps: enabled, provider, model, topN, scoreThreshold, registryModelId, registryProviderId
+ *
+ * @security RISK-003 - Prevents credential leak via inter-service calls
+ */
+export type SanitizedRerankerConfig = Omit<RerankerConfig, 'apiKeyRef' | 'baseUrl'>;
+
+/**
  * Sanitized TenantConfig for safe propagation via ctx.meta
  *
  * This type represents a TenantConfig with sensitive fields removed from
@@ -2005,11 +2065,13 @@ export type SanitizedEmbeddingConfig = Omit<EmbeddingConfig, 'apiKeyRef' | 'base
  * ctx.locals.tenantConfig = response.data;  // Full config, server-side only
  * ```
  */
-export type SanitizedTenantConfig = Omit<TenantConfig, 'llm' | 'embedding'> & {
+export type SanitizedTenantConfig = Omit<TenantConfig, 'llm' | 'embedding' | 'reranker'> & {
   /** Sanitized LLM configuration (without apiKeyRef, baseUrl) */
   llm: SanitizedTenantLLMConfig;
   /** Sanitized Embedding configuration (without apiKeyRef, baseUrl) */
   embedding: SanitizedEmbeddingConfig;
+  /** Sanitized Reranker configuration (without apiKeyRef, baseUrl) */
+  reranker?: SanitizedRerankerConfig;
 };
 
 /**
@@ -2051,11 +2113,19 @@ export function sanitizeTenantConfig(config: TenantConfig): SanitizedTenantConfi
     ...sanitizedEmbedding
   } = config.embedding;
 
+  // Destructure to remove sensitive Reranker fields (if present)
+  let sanitizedReranker: SanitizedRerankerConfig | undefined;
+  if (config.reranker) {
+    const { apiKeyRef: _rerankerApiKey, baseUrl: _rerankerBaseUrl, ...rest } = config.reranker;
+    sanitizedReranker = rest;
+  }
+
   // Return config with sanitized nested objects
   return {
     ...config,
     llm: sanitizedLlm,
     embedding: sanitizedEmbedding,
+    reranker: sanitizedReranker,
   };
 }
 
@@ -2083,6 +2153,11 @@ export function isSanitizedTenantConfig(value: unknown): value is SanitizedTenan
 
   // Verify Embedding config does NOT have sensitive fields
   if ('apiKeyRef' in config.embedding || 'baseUrl' in config.embedding) {
+    return false;
+  }
+
+  // Verify Reranker config does NOT have sensitive fields (if present)
+  if (config.reranker && ('apiKeyRef' in config.reranker || 'baseUrl' in config.reranker)) {
     return false;
   }
 
