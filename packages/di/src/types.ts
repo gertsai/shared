@@ -1,6 +1,6 @@
 /**
  * @fileoverview
- * Core type definitions for the Orchestra Dependency Injection library.
+ * Core type definitions for the Gerts DI library.
  *
  * This module provides the fundamental types and interfaces used throughout the DI system:
  * - Service interfaces (IService, IGlobalService)
@@ -61,10 +61,7 @@ export interface IDestroyable {
  * }
  * ```
  */
-export interface ServiceConsumer<
-  ServiceClassName extends string,
-  Consumer extends ConsumerType,
-> {
+export interface ServiceConsumer<ServiceClassName extends string, Consumer extends ConsumerType> {
   /** The service directory instance for this consumer, providing access to all registered services. */
   $sd: ServiceDirectory<ServiceClassName, Consumer>;
 }
@@ -85,9 +82,7 @@ export interface ServiceConsumer<
  * }
  * ```
  */
-export interface IService<Consumer extends ConsumerType | null>
-  extends IDestroyable,
-    EventEmitter {
+export interface IService<Consumer extends ConsumerType | null> extends IDestroyable, EventEmitter {
   /** Gets the consumer instance this service is associated with */
   get Consumer(): Consumer;
   /** Returns a promise that resolves when the service is fully initialized and ready for use */
@@ -165,10 +160,7 @@ export type InferServiceByKeyAndConsumer<
   ConsumerClassName extends string,
   Service extends IService<any>,
 > = ConsumerClassName extends keyof ServiceTypeMapping
-  ? InferServiceFromMapping<
-      ServiceTypeMapping[ConsumerClassName],
-      Service
-    > extends infer T
+  ? InferServiceFromMapping<ServiceTypeMapping[ConsumerClassName], Service> extends infer T
     ? [T] extends [never]
       ? InferServiceFromMapping<ServiceTypeMapping['default'], Service, true>
       : T
@@ -204,7 +196,7 @@ export type InferServiceFromMapping<
  *
  * @example
  * ```typescript
- * declare module '@orchlab/di' {
+ * declare module '@gerts/di' {
  *   interface GlobalServiceTypeMapping {
  *     'logger': LoggerService;
  *     'config': ConfigService;
@@ -222,7 +214,7 @@ export interface GlobalServiceTypeMapping {}
  *
  * @example
  * ```typescript
- * declare module '@orchlab/di' {
+ * declare module '@gerts/di' {
  *   interface DefaultServiceTypeMapping {
  *     'storage': StorageService;
  *     'validation': ValidationService;
@@ -239,7 +231,7 @@ export interface DefaultServiceTypeMapping {}
  *
  * @example
  * ```typescript
- * declare module '@orchlab/di' {
+ * declare module '@gerts/di' {
  *   interface ServiceTypeMapping {
  *     'User': {
  *       'profile': UserProfileService;

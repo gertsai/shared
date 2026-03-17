@@ -1,6 +1,6 @@
 /**
  * @fileoverview
- * Service identifier creation utilities for the Orchestra DI system.
+ * Service identifier creation utilities for the Gerts DI system.
  *
  * This module provides functions for creating type-safe service identifiers
  * that are used throughout the DI system to uniquely identify services.
@@ -56,9 +56,8 @@ import type { ServiceIdentifier, ServiceType } from './types';
  * @internal This function uses symbol-based branding to ensure runtime uniqueness
  * while preserving compile-time type safety through TypeScript's type system.
  */
-export function createIdentifier<
-  Service extends ServiceType,
-  const I extends string,
->(identifier: I) {
+export function createIdentifier<Service extends ServiceType, const I extends string>(
+  identifier: I,
+) {
   return Symbol(identifier) as unknown as I & ServiceIdentifier<Service>;
 }

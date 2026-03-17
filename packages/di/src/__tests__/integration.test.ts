@@ -1,6 +1,6 @@
 /**
  * @fileoverview
- * Integration tests for the complete Orchestra DI system.
+ * Integration tests for the complete Gerts DI system.
  * These tests verify that all components work together correctly.
  */
 
@@ -11,10 +11,7 @@ import type { ConsumerType, IGlobalService, ServiceConsumer } from '../index';
 import { AbstractService, createIdentifier, diContainer } from '../index';
 
 // Real-world example: User entity with profile and settings services
-class UserEntity
-  extends EventEmitter
-  implements ConsumerType, ServiceConsumer<'User', UserEntity>
-{
+class UserEntity extends EventEmitter implements ConsumerType, ServiceConsumer<'User', UserEntity> {
   public $sd: any; // Will be set by the DI system
 
   constructor(
@@ -108,10 +105,7 @@ class UserSettingsService extends AbstractService<UserEntity> {
     return { ...this._settings };
   }
 
-  updateSetting<K extends keyof typeof this._settings>(
-    key: K,
-    value: (typeof this._settings)[K],
-  ) {
+  updateSetting<K extends keyof typeof this._settings>(key: K, value: (typeof this._settings)[K]) {
     this._settings[key] = value;
     this.emit('settings-changed', key, value);
   }
@@ -153,8 +147,7 @@ class MessagesService extends AbstractService<ChatEntity> {
 
 // Global logger service
 class LoggerService extends AbstractService<null> implements IGlobalService {
-  private _logs: Array<{ level: string; message: string; timestamp: Date }> =
-    [];
+  private _logs: Array<{ level: string; message: string; timestamp: Date }> = [];
 
   constructor({ consumer }: { consumer: null }) {
     super({ consumer });
@@ -206,10 +199,7 @@ class ConfigService extends AbstractService<null> implements IGlobalService {
     return this._config[key];
   }
 
-  set<K extends keyof typeof this._config>(
-    key: K,
-    value: (typeof this._config)[K],
-  ) {
+  set<K extends keyof typeof this._config>(key: K, value: (typeof this._config)[K]) {
     this._config[key] = value;
     this.emit('config-changed', key, value);
   }
@@ -219,14 +209,10 @@ class ConfigService extends AbstractService<null> implements IGlobalService {
   }
 }
 
-describe('Orchestra DI Integration Tests', () => {
+describe('Gerts DI Integration Tests', () => {
   // Service identifiers
-  const userProfileId = createIdentifier<UserProfileService, 'profile'>(
-    'profile',
-  );
-  const userSettingsId = createIdentifier<UserSettingsService, 'settings'>(
-    'settings',
-  );
+  const userProfileId = createIdentifier<UserProfileService, 'profile'>('profile');
+  const userSettingsId = createIdentifier<UserSettingsService, 'settings'>('settings');
   const messagesId = createIdentifier<MessagesService, 'messages'>('messages');
   const loggerId = createIdentifier<LoggerService, 'logger'>('logger');
   const configId = createIdentifier<ConfigService, 'config'>('config');
@@ -252,25 +238,15 @@ describe('Orchestra DI Integration Tests', () => {
     );
 
     // Register global services
-    diContainer.registerGlobalService(
-      loggerId,
-      ({ consumer }) => new LoggerService({ consumer }),
-    );
-    diContainer.registerGlobalService(
-      configId,
-      ({ consumer }) => new ConfigService({ consumer }),
-    );
+    diContainer.registerGlobalService(loggerId, ({ consumer }) => new LoggerService({ consumer }));
+    diContainer.registerGlobalService(configId, ({ consumer }) => new ConfigService({ consumer }));
   });
 
   describe('Complete user workflow', () => {
     it('should handle a complete user lifecycle with services', async () => {
       // Create a user
       const user = new UserEntity('user-1', 'Alice');
-      const userDirectory = diContainer.resolveServiceDirectory(
-        'User',
-        UserEntity,
-        user,
-      );
+      const userDirectory = diContainer.resolveServiceDirectory('User', UserEntity, user);
       user.$sd = userDirectory;
 
       // Get user services
@@ -328,16 +304,8 @@ describe('Orchestra DI Integration Tests', () => {
       const user1 = new UserEntity('user-1', 'Alice');
       const user2 = new UserEntity('user-2', 'Bob');
 
-      const directory1 = diContainer.resolveServiceDirectory(
-        'User',
-        UserEntity,
-        user1,
-      );
-      const directory2 = diContainer.resolveServiceDirectory(
-        'User',
-        UserEntity,
-        user2,
-      );
+      const directory1 = diContainer.resolveServiceDirectory('User', UserEntity, user1);
+      const directory2 = diContainer.resolveServiceDirectory('User', UserEntity, user2);
 
       // Get services for both users
       const profile1 = directory1.get(userProfileId);
@@ -346,12 +314,7 @@ describe('Orchestra DI Integration Tests', () => {
       const settings2 = directory2.get(userSettingsId);
 
       // Wait for initialization
-      await Promise.all([
-        profile1.isReady,
-        profile2.isReady,
-        settings1.isReady,
-        settings2.isReady,
-      ]);
+      await Promise.all([profile1.isReady, profile2.isReady, settings1.isReady, settings2.isReady]);
 
       // Verify services are isolated
       expect(profile1).not.toBe(profile2);
@@ -413,10 +376,7 @@ describe('Orchestra DI Integration Tests', () => {
       expect(config1.get('apiUrl')).toBe('https://api.example.com');
       config1.set('apiUrl', 'https://api.newdomain.com');
       expect(config1.get('apiUrl')).toBe('https://api.newdomain.com');
-      expect(configChangeSpy).toHaveBeenCalledWith(
-        'apiUrl',
-        'https://api.newdomain.com',
-      );
+      expect(configChangeSpy).toHaveBeenCalledWith('apiUrl', 'https://api.newdomain.com');
 
       // Cleanup
       user.$destroy();
@@ -427,11 +387,7 @@ describe('Orchestra DI Integration Tests', () => {
   describe('Chat system integration', () => {
     it('should handle chat functionality with messages service', async () => {
       const chat = new ChatEntity('chat-1');
-      const chatDirectory = diContainer.resolveServiceDirectory(
-        'Chat',
-        ChatEntity,
-        chat,
-      );
+      const chatDirectory = diContainer.resolveServiceDirectory('Chat', ChatEntity, chat);
 
       const messagesService = chatDirectory.get(messagesId);
       expect(messagesService).toBeInstanceOf(MessagesService);
@@ -463,11 +419,7 @@ describe('Orchestra DI Integration Tests', () => {
   describe('Service lifecycle and cleanup', () => {
     it('should properly clean up all services when consumer is destroyed', async () => {
       const user = new UserEntity('user-1', 'Alice');
-      const userDirectory = diContainer.resolveServiceDirectory(
-        'User',
-        UserEntity,
-        user,
-      );
+      const userDirectory = diContainer.resolveServiceDirectory('User', UserEntity, user);
 
       const profileService = userDirectory.get(userProfileId);
       const settingsService = userDirectory.get(userSettingsId);
@@ -498,10 +450,9 @@ describe('Orchestra DI Integration Tests', () => {
         $destroy() {}
       }
 
-      const failingServiceId = createIdentifier<
-        FailingService,
-        'failing-service'
-      >('failing-service');
+      const failingServiceId = createIdentifier<FailingService, 'failing-service'>(
+        'failing-service',
+      );
       diContainer.registerService(
         UserEntity,
         failingServiceId,
@@ -509,11 +460,7 @@ describe('Orchestra DI Integration Tests', () => {
       );
 
       const user = new UserEntity('user-1', 'Alice');
-      const userDirectory = diContainer.resolveServiceDirectory(
-        'User',
-        UserEntity,
-        user,
-      );
+      const userDirectory = diContainer.resolveServiceDirectory('User', UserEntity, user);
 
       expect(() => {
         userDirectory.get(failingServiceId);
@@ -530,11 +477,7 @@ describe('Orchestra DI Integration Tests', () => {
   describe('Type safety and service resolution', () => {
     it('should maintain type safety throughout the system', async () => {
       const user = new UserEntity('user-1', 'Alice');
-      const userDirectory = diContainer.resolveServiceDirectory(
-        'User',
-        UserEntity,
-        user,
-      );
+      const userDirectory = diContainer.resolveServiceDirectory('User', UserEntity, user);
 
       // TypeScript should ensure these return the correct types
       const profileService = userDirectory.get(userProfileId);
@@ -559,21 +502,13 @@ describe('Orchestra DI Integration Tests', () => {
 
     it('should work with complex service interactions', async () => {
       const user = new UserEntity('user-1', 'Alice');
-      const userDirectory = diContainer.resolveServiceDirectory(
-        'User',
-        UserEntity,
-        user,
-      );
+      const userDirectory = diContainer.resolveServiceDirectory('User', UserEntity, user);
 
       const profileService = userDirectory.get(userProfileId);
       const settingsService = userDirectory.get(userSettingsId);
       const logger = diContainer.$sd.get(loggerId);
 
-      await Promise.all([
-        profileService.isReady,
-        settingsService.isReady,
-        logger.isReady,
-      ]);
+      await Promise.all([profileService.isReady, settingsService.isReady, logger.isReady]);
 
       // Get the initial log count (may have logs from previous tests)
       const initialLogCount = logger.getLogs().length;
@@ -605,9 +540,7 @@ describe('Orchestra DI Integration Tests', () => {
       // Verify interactions occurred (events may fire in slightly different order)
       expect(interactionLog).toContain('profile-updated');
       expect(interactionLog).toContain('settings-changed');
-      expect(interactionLog.filter((log) => log === 'log-info')).toHaveLength(
-        2,
-      );
+      expect(interactionLog.filter((log) => log === 'log-info')).toHaveLength(2);
 
       const logs = logger.getLogs();
       const newLogs = logs.slice(initialLogCount);

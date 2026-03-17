@@ -1,6 +1,6 @@
-# @orchlab/di
+# @gerts/di
 
-A lightweight, type-safe dependency injection container for TypeScript applications, designed specifically for the Orchestra ecosystem but usable in any TypeScript project.
+A lightweight, type-safe dependency injection container for TypeScript applications.
 
 ## Features
 
@@ -9,13 +9,13 @@ A lightweight, type-safe dependency injection container for TypeScript applicati
 - 🧹 **Memory-safe**: Automatic cleanup and memory leak prevention
 - 📦 **Lazy loading**: Services are created only when needed
 - 🔄 **Lifecycle management**: Automatic service lifecycle tied to consumer lifecycle
-- 🎯 **Vue integration**: Built-in support for Vue reactivity system
+- 🎯 **Framework agnostic**: Works with any TypeScript project
 - 🧪 **Well-tested**: Comprehensive test suite with 100% coverage
 
 ## Installation
 
 ```bash
-pnpm add @orchlab/di
+pnpm add @gerts/di
 ```
 
 ## Quick Start
@@ -23,8 +23,8 @@ pnpm add @orchlab/di
 ### 1. Define Your Services
 
 ```typescript
-import { AbstractService, createIdentifier } from '@orchlab/di';
-import type { ConsumerType } from '@orchlab/di';
+import { AbstractService, createIdentifier } from '@gerts/di';
+import type { ConsumerType } from '@gerts/di';
 
 // Define a consumer (entity that uses services)
 class UserEntity extends EventEmitter implements ConsumerType {
@@ -84,7 +84,7 @@ const profileServiceId = createIdentifier<UserProfileService>('profile');
 ### 3. Register Services
 
 ```typescript
-import { diContainer } from '@orchlab/di';
+import { diContainer } from '@gerts/di';
 
 // Register the service for the UserEntity consumer type
 diContainer.registerService(UserEntity, profileServiceId, ({ consumer }) => {
@@ -99,11 +99,7 @@ diContainer.registerService(UserEntity, profileServiceId, ({ consumer }) => {
 const user = new UserEntity('user-1', 'Alice');
 
 // Get the service directory for this user
-const userDirectory = diContainer.resolveServiceDirectory(
-  'User',
-  UserEntity,
-  user,
-);
+const userDirectory = diContainer.resolveServiceDirectory('User', UserEntity, user);
 
 // Get the profile service (created lazily)
 const profileService = userDirectory.get(profileServiceId);
@@ -241,7 +237,7 @@ profileService.on('profile-updated', () => {
 For better type inference, extend the service type mappings:
 
 ```typescript
-declare module '@orchlab/di' {
+declare module '@gerts/di' {
   interface ServiceTypeMapping {
     User: {
       profile: UserProfileService;
@@ -269,7 +265,7 @@ You can declare and register services in separate files.
 For example, you can create a file `services.ts` and declare the service type mappings there:
 
 ```typescript
-declare module '@orchlab/di' {
+declare module '@gerts/di' {
   // Declare empty interface for service type mapping
   declare interface UserServiceTypeMapping {}
   interface ServiceTypeMapping {
@@ -284,14 +280,14 @@ declare module '@orchlab/di' {
 }
 
 // Extend the service type mapping in the another file
-declare module '@orchlab/di' {
+declare module '@gerts/di' {
   interface UserServiceTypeMapping {
     profile: UserProfileService;
   }
 }
 
 // Extend the service type mapping in the another file
-declare module '@orchlab/di' {
+declare module '@gerts/di' {
   interface UserServiceTypeMapping {
     settings: UserSettingsService;
   }
@@ -303,10 +299,7 @@ declare module '@orchlab/di' {
 Make your consumers implement the `ServiceConsumer` interface for better integration:
 
 ```typescript
-class UserEntity
-  extends EventEmitter
-  implements ConsumerType, ServiceConsumer<'User', UserEntity>
-{
+class UserEntity extends EventEmitter implements ConsumerType, ServiceConsumer<'User', UserEntity> {
   public $sd: ServiceDirectory<'User', UserEntity>;
 
   constructor(id: string, name: string) {
@@ -440,7 +433,7 @@ The library includes comprehensive test utilities:
 
 ```typescript
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createIdentifier, diContainer } from '@orchlab/di';
+import { createIdentifier, diContainer } from '@gerts/di';
 
 describe('MyService', () => {
   let consumer: MyConsumer;
@@ -448,11 +441,7 @@ describe('MyService', () => {
 
   beforeEach(() => {
     consumer = new MyConsumer();
-    const directory = diContainer.resolveServiceDirectory(
-      'My',
-      MyConsumer,
-      consumer,
-    );
+    const directory = diContainer.resolveServiceDirectory('My', MyConsumer, consumer);
     service = directory.get(myServiceId);
   });
 

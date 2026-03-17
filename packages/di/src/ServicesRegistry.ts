@@ -1,18 +1,13 @@
 /**
  * @fileoverview
- * Service registry implementation for managing service factories in the Orchestra DI system.
+ * Service registry implementation for managing service factories in the Gerts DI system.
  *
  * The ServicesRegistry is responsible for storing and managing factory functions that create
  * service instances. It provides type-safe registration and creation of services.
  */
 
 import { diLogger } from './logger';
-import type {
-  ConsumerType,
-  IService,
-  ServiceFactory,
-  ServiceIdentifier,
-} from './types';
+import type { ConsumerType, IService, ServiceFactory, ServiceIdentifier } from './types';
 
 /**
  * Registry for managing service factories.
@@ -58,9 +53,7 @@ export class ServicesRegistry<Consumer extends ConsumerType | null> {
    */
   register<I extends ServiceIdentifier<any>>(
     serviceKey: I,
-    serviceFactory: ServiceFactory<
-      I extends ServiceIdentifier<infer T> ? T : never
-    >,
+    serviceFactory: ServiceFactory<I extends ServiceIdentifier<infer T> ? T : never>,
   ): void {
     diLogger.debug('Registering service:', serviceKey, serviceFactory);
     this._factories.set(serviceKey, serviceFactory);
@@ -95,10 +88,7 @@ export class ServicesRegistry<Consumer extends ConsumerType | null> {
    * const profileService = registry.create(profileServiceId, userEntity);
    * ```
    */
-  create(
-    serviceKey: ServiceIdentifier,
-    consumer: Consumer,
-  ): IService<Consumer> {
+  create(serviceKey: ServiceIdentifier, consumer: Consumer): IService<Consumer> {
     const factory = this._factories.get(serviceKey);
     if (!factory) {
       throw new Error(

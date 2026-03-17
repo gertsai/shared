@@ -1,6 +1,6 @@
 /**
  * @fileoverview
- * Base abstract class for all services in the Orchestra Dependency Injection library.
+ * Base abstract class for all services in the Gerts DI library.
  *
  * This class provides the fundamental structure and lifecycle management for services,
  * including initialization tracking, consumer association, and proper cleanup.
@@ -15,7 +15,7 @@ import type { ConsumerType, IService } from './types';
 /**
  * Abstract base class for all services in the DI system.
  * Provides common functionality for service lifecycle management, consumer association,
- * and integration with Vue's reactivity system.
+ * and integration with the reactivity system.
  *
  * @template Consumer - The consumer type this service is associated with, or null for global services
  *
@@ -64,7 +64,7 @@ export abstract class AbstractService<Consumer extends ConsumerType | null>
 
   /**
    * Constructs a new AbstractService.
-   * Automatically sets up the consumer association, readiness tracking, and Vue reactivity integration.
+   * Automatically sets up the consumer association and readiness tracking.
    *
    * @param options - Configuration object for the service
    * @param options.consumer - The consumer instance to associate with this service

@@ -1,6 +1,6 @@
 /**
  * @fileoverview
- * Global services manager for the Orchestra Dependency Injection library.
+ * Global services manager for the Gerts DI library.
  *
  * This module provides the central management functionality for the DI system:
  * - Service registration for different consumer types
@@ -37,9 +37,7 @@ type ConsumerClassType =
  *
  * @template C - The consumer class constructor type
  */
-type InferConsumerType<C extends ConsumerClassType> = C extends new (
-  ...args: any[]
-) => infer T
+type InferConsumerType<C extends ConsumerClassType> = C extends new (...args: any[]) => infer T
   ? T
   : C extends abstract new (...args: any[]) => infer T
     ? T
@@ -49,10 +47,7 @@ type InferConsumerType<C extends ConsumerClassType> = C extends new (
  * Global map of services registries, keyed by consumer class constructor or '__global__'.
  * Each consumer class gets its own registry, and global services use the '__global__' key.
  */
-const servicesRegistry = new Map<
-  ConsumerClassType | '__global__',
-  ServicesRegistry<any>
->();
+const servicesRegistry = new Map<ConsumerClassType | '__global__', ServicesRegistry<any>>();
 
 /**
  * Resolves or creates a services registry for the given consumer class or global services.
@@ -107,13 +102,8 @@ function registerService<
   ConsumerClass extends ConsumerClassType,
   Id extends ServiceIdentifier<any>,
   ConsumerType extends InferConsumerType<ConsumerClass>,
-  ServiceType extends IService<ConsumerType> &
-    (Id extends ServiceIdentifier<infer T> ? T : never),
->(
-  consumerClass: ConsumerClass,
-  serviceKey: Id,
-  serviceFactory: ServiceFactory<ServiceType>,
-) {
+  ServiceType extends IService<ConsumerType> & (Id extends ServiceIdentifier<infer T> ? T : never),
+>(consumerClass: ConsumerClass, serviceKey: Id, serviceFactory: ServiceFactory<ServiceType>) {
   const registry = resolveServicesRegistry(consumerClass);
   registry.register(serviceKey, serviceFactory);
 }
@@ -145,8 +135,7 @@ function registerService<
  */
 function registerGlobalService<
   Id extends ServiceIdentifier<any>,
-  ServiceType extends IGlobalService &
-    (Id extends ServiceIdentifier<infer T> ? T : never),
+  ServiceType extends IGlobalService & (Id extends ServiceIdentifier<infer T> ? T : never),
 >(serviceKey: Id, serviceFactory: ServiceFactory<ServiceType>) {
   const registry = resolveServicesRegistry('__global__');
   registry.register(serviceKey, serviceFactory);
@@ -158,10 +147,7 @@ function registerGlobalService<
  * Using WeakMap ensures that service directories are garbage collected when
  * their associated consumers are no longer referenced, preventing memory leaks.
  */
-const serviceDirectoryRegistry = new WeakMap<
-  ConsumerType,
-  ServiceDirectory<string, any>
->();
+const serviceDirectoryRegistry = new WeakMap<ConsumerType, ServiceDirectory<string, any>>();
 
 /**
  * Resolves or creates a service directory for the given consumer instance.
@@ -195,11 +181,7 @@ function resolveServiceDirectory<
   ConsumerClassName extends string,
   ConsumerClass extends ConsumerClassType,
   ConsumerInstance extends ConsumerType,
->(
-  consumerClassName: ConsumerClassName,
-  consumerClass: ConsumerClass,
-  consumer: ConsumerInstance,
-) {
+>(consumerClassName: ConsumerClassName, consumerClass: ConsumerClass, consumer: ConsumerInstance) {
   let directory = serviceDirectoryRegistry.get(consumer);
   if (!directory) {
     const registry = servicesRegistry.get(consumerClass);
@@ -217,11 +199,7 @@ function resolveServiceDirectory<
     });
 
     // Set up automatic cleanup when the consumer is destroyed
-    if (
-      typeof consumer === 'object' &&
-      consumer !== null &&
-      consumer instanceof EventEmitter
-    ) {
+    if (typeof consumer === 'object' && consumer !== null && consumer instanceof EventEmitter) {
       consumer.on('destroy', () => {
         directory?.$destroy();
       });
@@ -253,7 +231,7 @@ const globalServiceDirectory = new ServiceDirectory({
  *
  * @example
  * ```typescript
- * import { diContainer } from '@orchlab/di';
+ * import { diContainer } from '@gerts/di';
  *
  * // Register a service for a specific consumer type
  * diContainer.registerService(UserEntity, profileServiceId, ({ consumer }) => {
