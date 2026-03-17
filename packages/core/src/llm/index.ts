@@ -34,6 +34,7 @@ export type {
   LLMToolStartedEvent,
   LLMToolCompletedEvent,
   LLMToolFailedEvent,
+  ILLMCallable,
 } from './types';
 export type {
   LLMRouterSelectionEvent,

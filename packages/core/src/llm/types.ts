@@ -201,6 +201,15 @@ export interface LLMTool {
   };
 }
 
+/**
+ * Minimal callable LLM interface.
+ * Use this for duck-typed LLM proxies that only need the call() method
+ * (e.g., broker-delegated proxies, tenant-scoped wrappers).
+ */
+export interface ILLMCallable {
+  call(messages: LLMMessage[], options?: LLMCallOptions): Promise<LLMResponse>;
+}
+
 /** Options for LLM call */
 export interface LLMCallOptions {
   /** Tools available for the model to use */
