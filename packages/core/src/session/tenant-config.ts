@@ -872,6 +872,44 @@ export interface MemoryConfig {
   accessPolicy?: MemoryAccessPolicy;
   /** Which memory layers are active for this tenant @default ['session','working','longterm','entity'] */
   enabledLayers?: MemoryLayer[];
+
+  // --- RFC-126 Multi-Layer Graph Memory extensions ---
+
+  /** Enable memory retention from conversations @default true */
+  retainEnabled?: boolean;
+  /** Minimum quality score for auto-promotion to knowledge layer (0..1) @default 0.7 */
+  promotionThreshold?: number;
+  /** Reflection interval in minutes @default 60 */
+  reflectionIntervalMinutes?: number;
+
+  /**
+   * Disposition traits for agent personality (RFC-126 Phase 5).
+   * 3-axis model: skepticism, literalism, empathy (each 1-5).
+   * @default { skepticism: 3, literalism: 3, empathy: 3 }
+   */
+  disposition?: {
+    /** How critical vs trusting (1=trusting, 5=skeptical) @default 3 */
+    skepticism?: number;
+    /** How literal vs interpretive (1=reads between lines, 5=literal) @default 3 */
+    literalism?: number;
+    /** How emotion-focused vs fact-focused (1=facts only, 5=emotions matter) @default 3 */
+    empathy?: number;
+  };
+
+  /**
+   * LLM settings for memory operations (extraction, reflection).
+   * Overrides project.config defaults per-tenant.
+   */
+  llm?: {
+    /** Temperature for fact extraction @default 0 */
+    extractionTemperature?: number;
+    /** Max tokens for fact extraction @default 2000 */
+    extractionMaxTokens?: number;
+    /** Temperature for reflection @default 0.3 */
+    reflectionTemperature?: number;
+    /** Max tokens for reflection @default 3000 */
+    reflectionMaxTokens?: number;
+  };
 }
 
 // ============================================================================
@@ -1792,6 +1830,21 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     maxItemsPerScope: 1000,
     accessPolicy: 'open' as const,
     enabledLayers: ['session', 'working', 'longterm', 'entity'],
+    // RFC-126 extensions
+    retainEnabled: true,
+    promotionThreshold: 0.7,
+    reflectionIntervalMinutes: 60,
+    disposition: {
+      skepticism: 3,
+      literalism: 3,
+      empathy: 3,
+    },
+    llm: {
+      extractionTemperature: 0,
+      extractionMaxTokens: 2000,
+      reflectionTemperature: 0.3,
+      reflectionMaxTokens: 3000,
+    },
   },
   observe: {
     enabled: true,
@@ -1905,6 +1958,14 @@ export function mergeTenantConfigWithDefaults(config: TenantConfigCreate): Tenan
     memory: {
       ...DEFAULT_TENANT_CONFIG.memory,
       ...config.memory,
+      disposition: {
+        ...DEFAULT_TENANT_CONFIG.memory?.disposition,
+        ...config.memory?.disposition,
+      },
+      llm: {
+        ...DEFAULT_TENANT_CONFIG.memory?.llm,
+        ...config.memory?.llm,
+      },
     },
     observe: {
       ...DEFAULT_TENANT_CONFIG.observe,
@@ -1984,7 +2045,20 @@ export function applyTenantConfigUpdate(
     ingestion: update.ingestion
       ? { ...existing.ingestion, ...update.ingestion }
       : existing.ingestion,
-    memory: update.memory ? { ...existing.memory, ...update.memory } : existing.memory,
+    memory: update.memory
+      ? {
+          ...existing.memory,
+          ...update.memory,
+          disposition: {
+            ...existing.memory?.disposition,
+            ...update.memory?.disposition,
+          },
+          llm: {
+            ...existing.memory?.llm,
+            ...update.memory?.llm,
+          },
+        }
+      : existing.memory,
     observe: update.observe ? { ...existing.observe, ...update.observe } : existing.observe,
     tracing: update.tracing ? { ...existing.tracing, ...update.tracing } : existing.tracing,
     aclSync: update.aclSync
