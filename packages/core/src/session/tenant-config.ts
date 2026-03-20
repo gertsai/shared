@@ -897,6 +897,38 @@ export interface MemoryConfig {
   };
 
   /**
+   * Decay profile for memory forgetting curves (RFC-126 Phase 12.6).
+   * Presets: aggressive (30d), balanced (90d, default), conservative (365d), custom.
+   * @default 'balanced'
+   */
+  decayProfile?: 'aggressive' | 'balanced' | 'conservative' | 'custom';
+
+  /**
+   * Half-life in days for memory decay (used when decayProfile is 'custom').
+   * After this many days the time-decay factor reaches 0.5.
+   * @default 90
+   */
+  decayHalfLifeDays?: number;
+
+  /**
+   * Minimum score floor for memory decay — prevents total forgetting (0-1).
+   * @default 0.05
+   */
+  decayFloor?: number;
+
+  /**
+   * Decay function mode: logarithmic (slow graceful), exponential (fast drop), linear.
+   * @default 'logarithmic'
+   */
+  decayMode?: 'logarithmic' | 'exponential' | 'linear';
+
+  /**
+   * Frequency boost weight (0-1) — how much access count influences the final score.
+   * @default 0.15
+   */
+  decayFrequencyBoost?: number;
+
+  /**
    * LLM settings for memory operations (extraction, reflection).
    * Overrides project.config defaults per-tenant.
    */
@@ -1834,6 +1866,12 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     retainEnabled: true,
     promotionThreshold: 0.7,
     reflectionIntervalMinutes: 60,
+    // RFC-126 Phase 12.6 — decay profiles
+    decayProfile: 'balanced' as const,
+    decayHalfLifeDays: 90,
+    decayFloor: 0.05,
+    decayMode: 'logarithmic' as const,
+    decayFrequencyBoost: 0.15,
     disposition: {
       skepticism: 3,
       literalism: 3,
