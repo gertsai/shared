@@ -121,6 +121,7 @@ export class ApiController<
   ServiceVersion extends string,
   ServiceName extends string,
   ServiceContext extends ServiceContextBase = ServiceContextBase,
+  TMeta extends Record<string, any> = ContextMeta,
 > {
   /**
    * Reference to the broker instance for accessing broker logger
@@ -302,7 +303,8 @@ export class ApiController<
     V extends string,
     N extends string,
     S extends ServiceContextBase = ServiceContextBase,
-  >(version: V, name: N): ApiController<V, N, S> {
+    M extends Record<string, any> = ContextMeta,
+  >(version: V, name: N): ApiController<V, N, S, M> {
     // @ts-ignore
     return (ApiController._controllers[`${version}.${name}`] ??= new ApiController({
       name,
@@ -508,9 +510,9 @@ export class ApiController<
     ResponseValidator extends TypiaValidator<any>,
     ResponseType extends ResponseValidator extends TypiaValidator<infer T> ? T : never,
     Rest extends RestConfig<any, any> | undefined = undefined,
-    // Pass ServiceContext from class to ActionHandler for proper type inference
-    Handler extends ActionHandler<AuthType, ParamsType, ResponseType, ServiceContext> =
-      ActionHandler<AuthType, ParamsType, ResponseType, ServiceContext>,
+    // Pass ServiceContext and TMeta from class to ActionHandler for proper type inference
+    Handler extends ActionHandler<AuthType, ParamsType, ResponseType, ServiceContext, TMeta> =
+      ActionHandler<AuthType, ParamsType, ResponseType, ServiceContext, TMeta>,
   >(
     actionName: ActionName,
     actionOptions: ActionOptions<
@@ -521,6 +523,7 @@ export class ApiController<
       ResponseType,
       Rest,
       ServiceContext,
+      TMeta,
       Handler
     >,
   ): ApiControllerRegisteredAction<
@@ -659,14 +662,15 @@ export class ApiController<
             Object.assign(params, ctx.meta.$multipart);
           }
 
-          // Coerce query params for GET endpoints (URL query strings are always strings)
+          // Coerce query params for endpoints that receive params via URL query string
+          // (GET and DELETE — both use query strings, not request body)
           const restConfig = action.options.rest;
-          const isGetEndpoint =
+          const isQueryStringEndpoint =
             typeof restConfig === 'string'
-              ? restConfig.startsWith('GET ')
-              : restConfig?.method === 'GET';
+              ? restConfig.startsWith('GET ') || restConfig.startsWith('DELETE ')
+              : restConfig?.method === 'GET' || restConfig?.method === 'DELETE';
 
-          if (isGetEndpoint) {
+          if (isQueryStringEndpoint) {
             const actionParams = action.options.params;
 
             if (isTypiaParamsWithSchema(actionParams)) {
@@ -680,6 +684,14 @@ export class ApiController<
               // Legacy format: use hard-coded list for backward compatibility
               coerceQueryParams(params as Record<string, unknown>);
             }
+          }
+
+          // Auto-inject tenantId from meta into params for REST calls.
+          // OpenAPI generator omits tenantId from the public spec (clients never send it),
+          // but Typia validators require it. Inject from meta so validation passes.
+          const meta = ctx.meta as Record<string, unknown>;
+          if (meta?.tenantId && !(params as Record<string, unknown>).tenantId) {
+            (params as Record<string, unknown>).tenantId = meta.tenantId;
           }
 
           // Get validator (supports both legacy and new format)
@@ -708,13 +720,27 @@ export class ApiController<
             }
           }
 
-          // Extract trace context for auto-injection into jobs
+          // Extract trace context for auto-injection into jobs.
+          // Build a W3C traceparent header so that queue workers can link
+          // their spans back to this HTTP request trace via propagation.extract().
+          // Format: "00-{traceId32hex}-{spanId16hex}-{flags}"
+          // Uses ctx.requestID as traceId and ctx.id as spanId (the current action span).
           const traceContext: QueueTraceContext | undefined = ctx.tracing
-            ? {
-                traceId: ctx.requestID ?? undefined,
-                parentId: ctx.parentID ?? undefined,
-                sampled: ctx.tracing ?? undefined,
-              }
+            ? (() => {
+                const rawTraceId = (ctx.requestID ?? '').replace(/-/g, '');
+                const rawSpanId = (ctx.id ?? '').replace(/-/g, '');
+                const traceId = rawTraceId.padEnd(32, '0').slice(0, 32);
+                const spanId = rawSpanId.padEnd(16, '0').slice(0, 16);
+                // W3C spec: traceId must be non-zero
+                const safeTraceId = traceId === '0'.repeat(32) ? '0'.repeat(31) + '1' : traceId;
+                const safeSpanId = spanId === '0'.repeat(16) ? '0'.repeat(15) + '1' : spanId;
+                return {
+                  traceId: ctx.requestID ?? undefined,
+                  parentId: ctx.parentID ?? undefined,
+                  sampled: ctx.tracing ?? undefined,
+                  traceparent: `00-${safeTraceId}-${safeSpanId}-01`,
+                };
+              })()
             : undefined;
 
           const { code, message, data, raw } = await action.options.handler.call(this, {
@@ -1118,7 +1144,7 @@ export class ApiController<
               const { DiagnosticRegistry } = await import('../diagnostics');
               const svcName = `${controller._options.version}.${controller._options.name}`;
               const result = DiagnosticRegistry.diagnose(svcName, error);
-              if (result.matched && result.formattedBox) {
+              if (result.matched) {
                 this.logger?.error(result.formattedBox);
               }
             } catch {
@@ -1189,11 +1215,50 @@ export class ApiController<
                 const jobData = (job.data || {}) as { _traceContext?: QueueTraceContext };
                 const traceContext = jobData._traceContext;
 
+                // Build meta for S2S auth: propagate $caller and tenantId from job data
+                const jobMeta: Record<string, unknown> = {
+                  $caller: service.fullName || service.name,
+                };
+                // Propagate tenantId from job data if available (BullMQ workers don't inherit meta)
+                const rawJobData = (job.data || {}) as Record<string, unknown>;
+                if (rawJobData.tenantId && typeof rawJobData.tenantId === 'string') {
+                  jobMeta.tenantId = rawJobData.tenantId;
+
+                  // Pre-load tenant config once per job to avoid N+1 in session middleware.
+                  // Each S2S call from worker inherits this meta, so middleware sees
+                  // tenantConfigLoaded !== undefined and skips redundant loads.
+                  try {
+                    const configResult = (await service.broker.call(
+                      'v1.tenant-config.get',
+                      { tenantId: rawJobData.tenantId },
+                      {
+                        meta: {
+                          $caller: service.fullName || service.name,
+                          tenantId: rawJobData.tenantId,
+                          tenantConfigLoaded: true,
+                        },
+                      },
+                    )) as { success: boolean; data?: Record<string, unknown> };
+
+                    if (configResult.success && configResult.data) {
+                      jobMeta.tenantConfig = configResult.data;
+                      jobMeta.tenantConfigLoaded = true;
+                    } else {
+                      jobMeta.tenantConfigLoaded = false;
+                    }
+                  } catch {
+                    // Non-fatal: if config service is down, let middleware handle it per-call
+                    jobMeta.tenantConfigLoaded = false;
+                  }
+                }
+
                 // Call the handler with Orchestra-compatible context
                 return handlerConfig.handler.call(service, {
                   job,
-                  call: (...args: [string, Record<string, any>]) =>
-                    service.broker.call(...args).then((res: any) => res?.data ?? res),
+                  call: (action: string, params?: Record<string, any>) =>
+                    service.broker
+                      .call(action, params, { meta: jobMeta })
+                      .then((res: any) => res?.data ?? res),
                   logger: service.logger,
                   traceContext,
                   // Queue methods for dispatching child jobs

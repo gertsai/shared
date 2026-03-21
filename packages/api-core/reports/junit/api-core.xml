@@ -1,227 +1,771 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<testsuites name="vitest tests" tests="109" failures="0" errors="0" time="0.01418204">
-    <testsuite name="src/__test__/api-gate-auth-error-map.test.ts" timestamp="2026-02-08T18:15:50.867Z" hostname="MacBook-Pro-explosovebit.local" tests="5" failures="0" errors="0" skipped="0" time="0.001371916">
-        <testcase classname="src/__test__/api-gate-auth-error-map.test.ts" name="mapAuthErrorToResponseCode &gt; maps 401 unauthorized to NOT_AUTHORIZED" time="0.000503875">
+<testsuites name="vitest tests" tests="370" failures="0" errors="0" time="0.28506904">
+    <testsuite name="src/__test__/api-gate-auth-error-map.test.ts" timestamp="2026-03-02T23:12:37.635Z" hostname="MacBook-Pro-explosovebit.local" tests="5" failures="0" errors="0" skipped="0" time="0.001616875">
+        <testcase classname="src/__test__/api-gate-auth-error-map.test.ts" name="mapAuthErrorToResponseCode &gt; maps 401 unauthorized to NOT_AUTHORIZED" time="0.000587834">
         </testcase>
-        <testcase classname="src/__test__/api-gate-auth-error-map.test.ts" name="mapAuthErrorToResponseCode &gt; maps 401 key expired to NOT_AUTHORIZED__TOKEN_EXPIRED" time="0.000156291">
+        <testcase classname="src/__test__/api-gate-auth-error-map.test.ts" name="mapAuthErrorToResponseCode &gt; maps 401 key expired to NOT_AUTHORIZED__TOKEN_EXPIRED" time="0.000184917">
         </testcase>
-        <testcase classname="src/__test__/api-gate-auth-error-map.test.ts" name="mapAuthErrorToResponseCode &gt; maps unknown 401 codes to NOT_AUTHORIZED__TOKEN_INVALID" time="0.00005425">
+        <testcase classname="src/__test__/api-gate-auth-error-map.test.ts" name="mapAuthErrorToResponseCode &gt; maps unknown 401 codes to NOT_AUTHORIZED__TOKEN_INVALID" time="0.000061375">
         </testcase>
-        <testcase classname="src/__test__/api-gate-auth-error-map.test.ts" name="mapAuthErrorToResponseCode &gt; maps 403 insufficient scopes to INSUFFICIENT_SCOPE" time="0.000047125">
+        <testcase classname="src/__test__/api-gate-auth-error-map.test.ts" name="mapAuthErrorToResponseCode &gt; maps 403 insufficient scopes to INSUFFICIENT_SCOPE" time="0.000047708">
         </testcase>
-        <testcase classname="src/__test__/api-gate-auth-error-map.test.ts" name="mapAuthErrorToResponseCode &gt; maps other 403 codes to FORBIDDEN__INSUFFICIENT_RIGHTS" time="0.000091583">
+        <testcase classname="src/__test__/api-gate-auth-error-map.test.ts" name="mapAuthErrorToResponseCode &gt; maps other 403 codes to FORBIDDEN__INSUFFICIENT_RIGHTS" time="0.000092542">
         </testcase>
     </testsuite>
-    <testsuite name="src/__test__/response-wrapper.test.ts" timestamp="2026-02-08T18:15:50.868Z" hostname="MacBook-Pro-explosovebit.local" tests="42" failures="0" errors="0" skipped="0" time="0.005273708">
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Array Detection &gt; should detect entity list from path" time="0.000675334">
+    <testsuite name="src/__test__/apiController.test.ts" timestamp="2026-03-02T23:12:37.639Z" hostname="MacBook-Pro-explosovebit.local" tests="16" failures="0" errors="0" skipped="0" time="0.01007775">
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; Correct session factory" time="0.000597333">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Array Detection &gt; should detect relationship list from path" time="0.000070625">
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; Create controller" time="0.000336875">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Array Detection &gt; should detect community list from path" time="0.000048708">
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; Resolve controller" time="0.000126">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Array Detection &gt; should detect chunk list from path" time="0.000102417">
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; ApiController/actions &gt; Register an action" time="0.000327542">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Array Detection &gt; should default to list for unknown array path" time="0.000044667">
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; ApiController/actions &gt; Re-registering action throws error" time="0.000384875">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Object Type Detection &gt; should detect query result" time="0.000055834">
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; ApiController/actions &gt; Action schema is valid" time="0.000323833">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Object Type Detection &gt; should detect query analysis" time="0.0000395">
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; ApiController/actions &gt; Action params validated" time="0.00092925">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Object Type Detection &gt; should detect entity" time="0.000033917">
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; ApiController/actions &gt; Validate response" time="0.000110583">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Object Type Detection &gt; should detect relationship" time="0.000176042">
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; ApiController/actions &gt; Generate service schema" time="0.000389541">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Object Type Detection &gt; should detect community" time="0.000057375">
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; ApiController/actions/auth &gt; Optional Auth Action" time="0.000356791">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Object Type Detection &gt; should detect job status" time="0.000070708">
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; ApiController/actions/auth &gt; Required Auth Action" time="0.000198667">
+        </testcase>
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; ApiController/actions/errors &gt; Object Error converted to APIError" time="0.003608167">
+        </testcase>
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; ApiController/actions/errors &gt; Regular error converted to APIError" time="0.000529709">
+        </testcase>
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; ApiController/actions/errors &gt; APIError is thrown" time="0.000121208">
+        </testcase>
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; ApiController/actions/errors &gt; Unknown APIError is thrown" time="0.0000995">
+        </testcase>
+        <testcase classname="src/__test__/apiController.test.ts" name="ApiController &gt; ApiController/actions/call &gt; Moleculer context called" time="0.000733625">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/__test__/configLoader.test.ts" timestamp="2026-03-02T23:12:37.642Z" hostname="MacBook-Pro-explosovebit.local" tests="1" failures="0" errors="0" skipped="0" time="0.001154167">
+        <testcase classname="src/__test__/configLoader.test.ts" name="Load config" time="0.00068875">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/__test__/error-helpers.test.ts" timestamp="2026-03-02T23:12:37.643Z" hostname="MacBook-Pro-explosovebit.local" tests="35" failures="0" errors="0" skipped="0" time="0.012557167">
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; notFoundError &gt; should create NOT_FOUND error with resource name" time="0.002223208">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; notFoundError &gt; should create NOT_FOUND error with resource name and id" time="0.0001395">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; conflictError &gt; should create CONFLICT error with resource name" time="0.000189333">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; conflictError &gt; should create CONFLICT error with resource name and id" time="0.000093417">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; forbiddenError &gt; should create FORBIDDEN error with default message" time="0.000346125">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; forbiddenError &gt; should create FORBIDDEN error with custom message" time="0.000098584">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; unauthorizedError &gt; should create NOT_AUTHORIZED error with default message" time="0.000166">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; unauthorizedError &gt; should create NOT_AUTHORIZED error with custom message" time="0.000175125">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; tokenInvalidError &gt; should create TOKEN_INVALID error" time="0.0003075">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; tokenExpiredError &gt; should create TOKEN_EXPIRED error" time="0.000108875">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; validationError &gt; should create BAD_REQUEST__INVALID_PARAMS error" time="0.0000765">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; validationError &gt; should include validation details" time="0.000297">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; badRequestError &gt; should create BAD_REQUEST error" time="0.000066833">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; internalError &gt; should create INTERNAL_ERROR" time="0.000069791">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; internalError &gt; should append cause stack trace" time="0.004353167">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; serviceUnavailableError &gt; should create SERVICE_UNAVAILABLE error" time="0.00010425">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; rateLimitError &gt; should create TOO_MANY_REQUESTS error with retryAfter" time="0.000108833">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; rateLimitError &gt; should create TOO_MANY_REQUESTS error without retryAfter" time="0.0000455">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; rateLimitError &gt; should create TOO_MANY_REQUESTS error with custom message" time="0.000038917">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; preconditionFailedError &gt; should create PRECONDITION_FAILED error" time="0.000064833">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; payloadTooLargeError &gt; should create PAYLOAD_TOO_LARGE error with max size" time="0.000075875">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; payloadTooLargeError &gt; should include actual size in message" time="0.000046208">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; insufficientStorageError &gt; should create INSUFFICIENT_STORAGE error" time="0.000049291">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; notImplementedError &gt; should create NOT_IMPLEMENTED error" time="0.000060666">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; requestTimeoutError &gt; should create REQUEST_TIMEOUT error" time="0.000062583">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; gatewayTimeoutError &gt; should create GATEWAY_TIMEOUT error" time="0.000057459">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; APIError.fromError &gt; should map error with statusCode 409 to CONFLICT" time="0.000232417">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; APIError.fromError &gt; should map error with statusCode 404 to NOT_FOUND" time="0.000115833">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; APIError.fromError &gt; should map error with statusCode 413 to PAYLOAD_TOO_LARGE" time="0.0000945">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; APIError.fromError &gt; should map error with statusCode 415 to UNSUPPORTED_MEDIA_TYPE" time="0.000152542">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; APIError.fromError &gt; should prefer explicit code over statusCode" time="0.0000935">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; APIError.fromError &gt; should fall back to INTERNAL_ERROR for errors without statusCode" time="0.000146334">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; APIError.fromError &gt; should fall back to INTERNAL_ERROR for unknown statusCode" time="0.000099625">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; APIError.fromError &gt; should ignore non-numeric statusCode" time="0.000143875">
+        </testcase>
+        <testcase classname="src/__test__/error-helpers.test.ts" name="Error Helper Functions &gt; APIError.fromError &gt; should preserve original stack trace" time="0.000088">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/__test__/moleculer.test.ts" timestamp="2026-03-02T23:12:37.647Z" hostname="MacBook-Pro-explosovebit.local" tests="5" failures="0" errors="0" skipped="0" time="0.181237083">
+        <testcase classname="src/__test__/moleculer.test.ts" name="Moleculer Service &gt; Has registered action" time="0.000655791">
+        </testcase>
+        <testcase classname="src/__test__/moleculer.test.ts" name="Moleculer Service &gt; Action is called" time="0.00129625">
+        </testcase>
+        <testcase classname="src/__test__/moleculer.test.ts" name="Moleculer Service &gt; Api Gate &gt; Call get endpoint" time="0.031972834">
+        </testcase>
+        <testcase classname="src/__test__/moleculer.test.ts" name="Moleculer Service &gt; Api Gate &gt; Fail Call POST endpoint with wrong parameters" time="0.02126425">
+        </testcase>
+        <testcase classname="src/__test__/moleculer.test.ts" name="Moleculer Service &gt; Api Gate &gt; Get not found error on undefined action" time="0.001871833">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/__test__/oidc-error.test.ts" timestamp="2026-03-02T23:12:37.649Z" hostname="MacBook-Pro-explosovebit.local" tests="37" failures="0" errors="0" skipped="0" time="0.006009458">
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; constructor &gt; should create error with oauth2Error and errorDescription" time="0.001837834">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; constructor &gt; should inherit from Error" time="0.000211125">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; constructor &gt; should accept optional redirectUri and state" time="0.000070667">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; constructor &gt; should accept optional details" time="0.000304291">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; status &gt; should return 400 for invalid_request" time="0.000063">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; status &gt; should return 401 for invalid_client" time="0.00006125">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; status &gt; should return 401 for invalid_credentials" time="0.000048333">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; status &gt; should return 403 for access_denied" time="0.000076125">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; status &gt; should return 404 for user_not_found" time="0.000211583">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; status &gt; should return 409 for email_exists" time="0.000075791">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; status &gt; should return 429 for too_many_attempts" time="0.000043042">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; status &gt; should return 500 for server_error" time="0.000035625">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; status &gt; should return 503 for temporarily_unavailable" time="0.000032833">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; kind &gt; should map invalid_request to InvalidArgument" time="0.000038584">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; kind &gt; should map invalid_credentials to Unauthenticated" time="0.000031416">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; kind &gt; should map too_many_attempts to ResourceExhausted" time="0.000031083">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; kind &gt; should map email_not_verified to FailedPrecondition" time="0.000033083">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; kind &gt; should map server_error to Internal" time="0.000029708">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; toOAuth2Response &gt; should return OAuth2-compliant JSON" time="0.000056875">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; toRedirectUrl &gt; should return null when no redirectUri" time="0.000051334">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; toRedirectUrl &gt; should build redirect URL with error params" time="0.00015925">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; toRedirectUrl &gt; should include state in redirect URL" time="0.000058834">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; shouldRedirect &gt; should return true when redirectUri is set" time="0.000036917">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; shouldRedirect &gt; should return false when redirectUri is not set" time="0.000031167">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; isOIDCError &gt; should return true for OIDCError instances" time="0.000043">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; isOIDCError &gt; should return true for objects with __OIDC_ERROR__ marker" time="0.00002875">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; isOIDCError &gt; should return false for regular Error" time="0.000029542">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; isOIDCError &gt; should return false for non-errors" time="0.000042875">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; factory functions &gt; oidcInvalidRequest should create invalid_request error" time="0.000044166">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; factory functions &gt; oidcInvalidClient should create invalid_client error" time="0.000044708">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; factory functions &gt; oidcInvalidGrant should create invalid_grant error" time="0.000043208">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; factory functions &gt; oidcAccessDenied should create access_denied error" time="0.000051042">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; factory functions &gt; oidcInvalidCredentials should create invalid_credentials error" time="0.000041916">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; factory functions &gt; oidcTooManyAttempts should include retry time" time="0.000047542">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; factory functions &gt; oidcTooManyAttempts without retry time" time="0.000031708">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; factory functions &gt; oidcInvalidToken should create invalid_token error" time="0.00004175">
+        </testcase>
+        <testcase classname="src/__test__/oidc-error.test.ts" name="OIDCError &gt; factory functions &gt; oidcServerError should create server_error" time="0.000042584">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/__test__/response-wrapper.test.ts" timestamp="2026-03-02T23:12:37.653Z" hostname="MacBook-Pro-explosovebit.local" tests="42" failures="0" errors="0" skipped="0" time="0.005649208">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Array Detection &gt; should detect entity list from path" time="0.000731708">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Array Detection &gt; should detect relationship list from path" time="0.000070875">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Array Detection &gt; should detect community list from path" time="0.00004875">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Array Detection &gt; should detect chunk list from path" time="0.000103417">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Array Detection &gt; should default to list for unknown array path" time="0.000046041">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Object Type Detection &gt; should detect query result" time="0.000055375">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Object Type Detection &gt; should detect query analysis" time="0.00003975">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Object Type Detection &gt; should detect entity" time="0.000035584">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Object Type Detection &gt; should detect relationship" time="0.000174959">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Object Type Detection &gt; should detect community" time="0.000058792">
+        </testcase>
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Object Type Detection &gt; should detect job status" time="0.000071792">
         </testcase>
         <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Object Type Detection &gt; should detect stats" time="0.00003075">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Object Type Detection &gt; should detect health" time="0.000039542">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Object Type Detection &gt; should detect health" time="0.000042375">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Object Type Detection &gt; should detect graph export" time="0.000027459">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Object Type Detection &gt; should detect graph export" time="0.000028625">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Path-Based Detection &gt; should detect query from path" time="0.000026459">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Path-Based Detection &gt; should detect query from path" time="0.000027084">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Path-Based Detection &gt; should detect ingest job from path" time="0.000073041">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Path-Based Detection &gt; should detect ingest job from path" time="0.000081834">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Path-Based Detection &gt; should detect scheduler from path" time="0.000028209">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Path-Based Detection &gt; should detect scheduler from path" time="0.000039125">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Path-Based Detection &gt; should detect vector from path" time="0.000030125">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="detectObjectType &gt; Path-Based Detection &gt; should detect vector from path" time="0.000029083">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="getIdPrefix &gt; should return correct prefix for query types" time="0.000116166">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="getIdPrefix &gt; should return correct prefix for query types" time="0.0000695">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="getIdPrefix &gt; should return correct prefix for entity types" time="0.000079416">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="getIdPrefix &gt; should return correct prefix for entity types" time="0.000037459">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="getIdPrefix &gt; should return correct prefix for relationship types" time="0.000045334">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="getIdPrefix &gt; should return correct prefix for relationship types" time="0.000037166">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="getIdPrefix &gt; should return correct prefix for community types" time="0.000039834">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="getIdPrefix &gt; should return correct prefix for community types" time="0.000036375">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="getIdPrefix &gt; should return correct prefix for document types" time="0.000040084">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="getIdPrefix &gt; should return correct prefix for document types" time="0.0000375">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="getIdPrefix &gt; should return correct prefix for job types" time="0.000042">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="getIdPrefix &gt; should return correct prefix for job types" time="0.000041292">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="getIdPrefix &gt; should return correct prefix for system types" time="0.000031292">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="getIdPrefix &gt; should return correct prefix for system types" time="0.000032041">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="getIdPrefix &gt; should return lst for unknown types" time="0.000023417">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="getIdPrefix &gt; should return lst for unknown types" time="0.000023958">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapSuccessResponse &gt; should wrap successful response" time="0.000558542">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapSuccessResponse &gt; should wrap successful response" time="0.000553875">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapSuccessResponse &gt; should include usage info when present" time="0.000118375">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapSuccessResponse &gt; should include usage info when present" time="0.000112">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapSuccessResponse &gt; should include trace ID when present in meta" time="0.000049916">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapSuccessResponse &gt; should include trace ID when present in meta" time="0.000049125">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapSuccessResponse &gt; should include legacy fields" time="0.000079542">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapSuccessResponse &gt; should include legacy fields" time="0.000079541">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapSuccessResponse &gt; should use default tenant when not in meta" time="0.000090709">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapSuccessResponse &gt; should use default tenant when not in meta" time="0.0000815">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapErrorResponse &gt; should wrap error response" time="0.000506208">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapErrorResponse &gt; should wrap error response" time="0.000450333">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapErrorResponse &gt; should map response codes to error types" time="0.000148292">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapErrorResponse &gt; should map response codes to error types" time="0.000152417">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapErrorResponse &gt; should map auth response codes to domain error codes" time="0.00017625">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapErrorResponse &gt; should map auth response codes to domain error codes" time="0.000165417">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapErrorResponse &gt; should detect retryable errors" time="0.000070666">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapErrorResponse &gt; should detect retryable errors" time="0.000065083">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapErrorResponse &gt; should include retry_after for rate limit errors" time="0.00003325">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapErrorResponse &gt; should include retry_after for rate limit errors" time="0.000034709">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapErrorResponse &gt; should detect stage from path" time="0.000063791">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapErrorResponse &gt; should detect stage from path" time="0.00007175">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapErrorResponse &gt; should include legacy fields" time="0.000043459">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapErrorResponse &gt; should include legacy fields" time="0.000044292">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapErrorResponse &gt; should use error message when provided" time="0.000079875">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="wrapErrorResponse &gt; should use error message when provided" time="0.000084958">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="buildResponsePayload &gt; should include legacy fields when requested" time="0.000084791">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="buildResponsePayload &gt; should include legacy fields when requested" time="0.00009375">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="buildResponsePayload &gt; should exclude legacy fields when not requested" time="0.000040959">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="buildResponsePayload &gt; should exclude legacy fields when not requested" time="0.000044083">
         </testcase>
-        <testcase classname="src/__test__/response-wrapper.test.ts" name="buildResponsePayload &gt; should preserve main GertsResponse fields" time="0.000075916">
+        <testcase classname="src/__test__/response-wrapper.test.ts" name="buildResponsePayload &gt; should preserve main GertsResponse fields" time="0.00008025">
         </testcase>
     </testsuite>
-    <testsuite name="src/__test__/type-guards.test.ts" timestamp="2026-02-08T18:15:50.870Z" hostname="MacBook-Pro-explosovebit.local" tests="62" failures="0" errors="0" skipped="0" time="0.007536416">
-        <testcase classname="src/__test__/type-guards.test.ts" name="OrchestraInfo Guards &gt; isOrchestraInfo &gt; should return true for valid OrchestraInfo" time="0.000809084">
+    <testsuite name="src/__test__/type-guards.test.ts" timestamp="2026-03-02T23:12:37.663Z" hostname="MacBook-Pro-explosovebit.local" tests="62" failures="0" errors="0" skipped="0" time="0.012118708">
+        <testcase classname="src/__test__/type-guards.test.ts" name="OrchestraInfo Guards &gt; isOrchestraInfo &gt; should return true for valid OrchestraInfo" time="0.000874875">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="OrchestraInfo Guards &gt; isOrchestraInfo &gt; should return false for invalid types" time="0.000243416">
+        <testcase classname="src/__test__/type-guards.test.ts" name="OrchestraInfo Guards &gt; isOrchestraInfo &gt; should return false for invalid types" time="0.00019725">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="OrchestraInfo Guards &gt; isOrchestraInfo &gt; should return false for invalid field types" time="0.000145667">
+        <testcase classname="src/__test__/type-guards.test.ts" name="OrchestraInfo Guards &gt; isOrchestraInfo &gt; should return false for invalid field types" time="0.000093958">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="OrchestraInfo Guards &gt; assertOrchestraInfo &gt; should not throw for valid OrchestraInfo" time="0.000373042">
+        <testcase classname="src/__test__/type-guards.test.ts" name="OrchestraInfo Guards &gt; assertOrchestraInfo &gt; should not throw for valid OrchestraInfo" time="0.000421333">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="OrchestraInfo Guards &gt; assertOrchestraInfo &gt; should throw for invalid OrchestraInfo" time="0.000152875">
+        <testcase classname="src/__test__/type-guards.test.ts" name="OrchestraInfo Guards &gt; assertOrchestraInfo &gt; should throw for invalid OrchestraInfo" time="0.000145708">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="OrchestraInfo Guards &gt; getOrchestraInfo &gt; should return value if valid" time="0.000255125">
+        <testcase classname="src/__test__/type-guards.test.ts" name="OrchestraInfo Guards &gt; getOrchestraInfo &gt; should return value if valid" time="0.000253334">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="OrchestraInfo Guards &gt; getOrchestraInfo &gt; should return fallback for invalid value" time="0.000074875">
+        <testcase classname="src/__test__/type-guards.test.ts" name="OrchestraInfo Guards &gt; getOrchestraInfo &gt; should return fallback for invalid value" time="0.000068917">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; isTenantContextMeta &gt; should return true for valid context meta" time="0.000066333">
+        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; isTenantContextMeta &gt; should return true for valid context meta" time="0.000065916">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; isTenantContextMeta &gt; should return false for non-objects" time="0.000215833">
+        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; isTenantContextMeta &gt; should return false for non-objects" time="0.000219417">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractTenantId &gt; should extract tenant ID from valid meta" time="0.000077084">
+        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractTenantId &gt; should extract tenant ID from valid meta" time="0.000073583">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractTenantId &gt; should return fallback for missing tenant ID" time="0.000043542">
+        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractTenantId &gt; should return fallback for missing tenant ID" time="0.000042917">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractTenantId &gt; should return fallback for empty tenant ID" time="0.000031291">
+        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractTenantId &gt; should return fallback for empty tenant ID" time="0.000030709">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractTenantId &gt; should return fallback for non-string tenant ID" time="0.000041291">
+        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractTenantId &gt; should return fallback for non-string tenant ID" time="0.000040417">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractTenantId &gt; should return fallback for invalid meta" time="0.0000375">
+        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractTenantId &gt; should return fallback for invalid meta" time="0.00003775">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractTraceId &gt; should extract trace ID from valid meta" time="0.000040292">
+        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractTraceId &gt; should extract trace ID from valid meta" time="0.000039625">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractTraceId &gt; should return undefined for missing trace ID" time="0.000040166">
+        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractTraceId &gt; should return undefined for missing trace ID" time="0.000038833">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractTraceId &gt; should return undefined for empty trace ID" time="0.000034292">
+        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractTraceId &gt; should return undefined for empty trace ID" time="0.00002875">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractTraceId &gt; should return undefined for invalid meta" time="0.000026708">
+        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractTraceId &gt; should return undefined for invalid meta" time="0.000025875">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractRequestId &gt; should extract request ID from valid meta" time="0.000038125">
+        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractRequestId &gt; should extract request ID from valid meta" time="0.000034708">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractRequestId &gt; should return undefined for missing request ID" time="0.00002825">
+        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractRequestId &gt; should return undefined for missing request ID" time="0.0000275">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractRequestId &gt; should return undefined for empty request ID" time="0.000027833">
+        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractRequestId &gt; should return undefined for empty request ID" time="0.000027125">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractRequestId &gt; should return undefined for invalid meta" time="0.000028625">
+        <testcase classname="src/__test__/type-guards.test.ts" name="TenantContextMeta Guards &gt; extractRequestId &gt; should return undefined for invalid meta" time="0.000027041">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; isUsageInfo &gt; should return true for valid UsageInfo" time="0.000048834">
+        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; isUsageInfo &gt; should return true for valid UsageInfo" time="0.000046083">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; isUsageInfo &gt; should return true for UsageInfo with optional fields" time="0.00003175">
+        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; isUsageInfo &gt; should return true for UsageInfo with optional fields" time="0.00003375">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; isUsageInfo &gt; should return false for missing required fields" time="0.000040625">
+        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; isUsageInfo &gt; should return false for missing required fields" time="0.000039625">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; isUsageInfo &gt; should return false for negative values" time="0.000028916">
+        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; isUsageInfo &gt; should return false for negative values" time="0.000027">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; isUsageInfo &gt; should return false for non-numeric values" time="0.000028916">
+        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; isUsageInfo &gt; should return false for non-numeric values" time="0.00003225">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; isUsageInfo &gt; should return false for invalid optional fields" time="0.000031333">
+        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; isUsageInfo &gt; should return false for invalid optional fields" time="0.00002975">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; extractUsageInfo &gt; should extract usage from data.usage" time="0.000055834">
+        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; extractUsageInfo &gt; should extract usage from data.usage" time="0.000374083">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; extractUsageInfo &gt; should extract usage from data._meta" time="0.000083458">
+        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; extractUsageInfo &gt; should extract usage from data._meta" time="0.0002345">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; extractUsageInfo &gt; should return undefined for missing usage" time="0.000041417">
+        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; extractUsageInfo &gt; should return undefined for missing usage" time="0.004619375">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; extractUsageInfo &gt; should return undefined for invalid data" time="0.00099">
+        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; extractUsageInfo &gt; should return undefined for invalid data" time="0.000118375">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; extractUsageInfo &gt; should return undefined for invalid usage object" time="0.00006725">
+        <testcase classname="src/__test__/type-guards.test.ts" name="UsageInfo Guards &gt; extractUsageInfo &gt; should return undefined for invalid usage object" time="0.000373083">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="PackageJson Guards &gt; extractPackageInfo &gt; should extract name and version from valid package.json" time="0.000113625">
+        <testcase classname="src/__test__/type-guards.test.ts" name="PackageJson Guards &gt; extractPackageInfo &gt; should extract name and version from valid package.json" time="0.000121083">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="PackageJson Guards &gt; extractPackageInfo &gt; should return defaults for missing fields" time="0.000045708">
+        <testcase classname="src/__test__/type-guards.test.ts" name="PackageJson Guards &gt; extractPackageInfo &gt; should return defaults for missing fields" time="0.000050917">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="PackageJson Guards &gt; extractPackageInfo &gt; should return defaults for non-string fields" time="0.000101833">
+        <testcase classname="src/__test__/type-guards.test.ts" name="PackageJson Guards &gt; extractPackageInfo &gt; should return defaults for non-string fields" time="0.000097375">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="PackageJson Guards &gt; extractPackageInfo &gt; should return defaults for invalid input" time="0.0001005">
+        <testcase classname="src/__test__/type-guards.test.ts" name="PackageJson Guards &gt; extractPackageInfo &gt; should return defaults for invalid input" time="0.000098583">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="PackageJson Guards &gt; extractPackageInfo &gt; should handle partial package.json" time="0.000059875">
+        <testcase classname="src/__test__/type-guards.test.ts" name="PackageJson Guards &gt; extractPackageInfo &gt; should handle partial package.json" time="0.000062583">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="Request Format Detection &gt; wantsLegacyFormat &gt; should return false for null/undefined request" time="0.000054166">
+        <testcase classname="src/__test__/type-guards.test.ts" name="Request Format Detection &gt; wantsLegacyFormat &gt; should return false for null/undefined request" time="0.000061667">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="Request Format Detection &gt; wantsLegacyFormat &gt; should return false for empty request" time="0.000026917">
+        <testcase classname="src/__test__/type-guards.test.ts" name="Request Format Detection &gt; wantsLegacyFormat &gt; should return false for empty request" time="0.000030709">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="Request Format Detection &gt; wantsLegacyFormat &gt; should detect legacy format from query param" time="0.00003925">
+        <testcase classname="src/__test__/type-guards.test.ts" name="Request Format Detection &gt; wantsLegacyFormat &gt; should detect legacy format from query param" time="0.000043125">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="Request Format Detection &gt; wantsLegacyFormat &gt; should detect legacy format from query param array" time="0.000038583">
+        <testcase classname="src/__test__/type-guards.test.ts" name="Request Format Detection &gt; wantsLegacyFormat &gt; should detect legacy format from query param array" time="0.000044917">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="Request Format Detection &gt; wantsLegacyFormat &gt; should detect legacy format from Accept header" time="0.0000285">
+        <testcase classname="src/__test__/type-guards.test.ts" name="Request Format Detection &gt; wantsLegacyFormat &gt; should detect legacy format from Accept header" time="0.000027667">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="Request Format Detection &gt; wantsLegacyFormat &gt; should detect legacy format from Accept header with multiple types" time="0.00002675">
+        <testcase classname="src/__test__/type-guards.test.ts" name="Request Format Detection &gt; wantsLegacyFormat &gt; should detect legacy format from Accept header with multiple types" time="0.00002575">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="Request Format Detection &gt; wantsLegacyFormat &gt; should return false for standard Accept header" time="0.000026">
+        <testcase classname="src/__test__/type-guards.test.ts" name="Request Format Detection &gt; wantsLegacyFormat &gt; should return false for standard Accept header" time="0.000025875">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="Request Format Detection &gt; wantsLegacyFormat &gt; should handle Accept header as array" time="0.000027083">
+        <testcase classname="src/__test__/type-guards.test.ts" name="Request Format Detection &gt; wantsLegacyFormat &gt; should handle Accept header as array" time="0.000026">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should accept valid alphanumeric tenant IDs" time="0.000114291">
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should accept valid alphanumeric tenant IDs" time="0.000116083">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should accept underscores and hyphens" time="0.000046833">
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should accept underscores and hyphens" time="0.000045167">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should accept single character tenant IDs" time="0.000034875">
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should accept single character tenant IDs" time="0.000033917">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should accept 64 character tenant IDs" time="0.000086333">
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should accept 64 character tenant IDs" time="0.000029917">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should reject empty string" time="0.000030792">
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should reject empty string" time="0.000023833">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should reject null/undefined" time="0.000035125">
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should reject null/undefined" time="0.000032583">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should reject IDs over 64 characters" time="0.000158708">
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should reject IDs over 64 characters" time="0.000026583">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should reject special characters" time="0.000104584">
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should reject special characters" time="0.000062">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should reject CRLF injection attempts" time="0.000056708">
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should reject CRLF injection attempts" time="0.000045333">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should reject null byte injection" time="0.000029083">
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should reject null byte injection" time="0.000024375">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should reject Redis command injection" time="0.00002825">
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should reject Redis command injection" time="0.000029084">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should reject path traversal attempts" time="0.000097875">
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; validateTenantIdFormat &gt; should reject path traversal attempts" time="0.000103834">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; isTenantIdValid &gt; should return true for valid tenant IDs" time="0.000046084">
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; isTenantIdValid &gt; should return true for valid tenant IDs" time="0.000045834">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; isTenantIdValid &gt; should return false for invalid tenant IDs" time="0.000044667">
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; isTenantIdValid &gt; should return false for invalid tenant IDs" time="0.000228041">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; TENANT_ID_REGEX &gt; should match valid patterns" time="0.000045541">
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; TENANT_ID_REGEX &gt; should match valid patterns" time="0.000102667">
         </testcase>
-        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; TENANT_ID_REGEX &gt; should not match invalid patterns" time="0.000041959">
+        <testcase classname="src/__test__/type-guards.test.ts" name="Tenant ID Validation (SEC-002) &gt; TENANT_ID_REGEX &gt; should not match invalid patterns" time="0.000146083">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/lib/common/coercion.test.ts" timestamp="2026-03-02T23:12:37.672Z" hostname="MacBook-Pro-explosovebit.local" tests="24" failures="0" errors="0" skipped="0" time="0.005472833">
+        <testcase classname="src/lib/common/coercion.test.ts" name="coerceNumericFields &gt; should coerce string numbers to numbers" time="0.001962542">
+        </testcase>
+        <testcase classname="src/lib/common/coercion.test.ts" name="coerceNumericFields &gt; should handle decimal numbers" time="0.000399959">
+        </testcase>
+        <testcase classname="src/lib/common/coercion.test.ts" name="coerceNumericFields &gt; should handle negative numbers" time="0.000111833">
+        </testcase>
+        <testcase classname="src/lib/common/coercion.test.ts" name="coerceNumericFields &gt; should not coerce non-numeric strings" time="0.000115042">
+        </testcase>
+        <testcase classname="src/lib/common/coercion.test.ts" name="coerceNumericFields &gt; should not modify already numeric values" time="0.000109875">
+        </testcase>
+        <testcase classname="src/lib/common/coercion.test.ts" name="coerceNumericFields &gt; should handle undefined and null values" time="0.000099208">
+        </testcase>
+        <testcase classname="src/lib/common/coercion.test.ts" name="coerceNumericFields &gt; should handle empty string" time="0.000042708">
+        </testcase>
+        <testcase classname="src/lib/common/coercion.test.ts" name="coerceBooleanFields &gt; should coerce &quot;true&quot; and &quot;false&quot; strings" time="0.000110791">
+        </testcase>
+        <testcase classname="src/lib/common/coercion.test.ts" name="coerceBooleanFields &gt; should coerce &quot;1&quot; and &quot;0&quot; strings" time="0.000203">
+        </testcase>
+        <testcase classname="src/lib/common/coercion.test.ts" name="coerceBooleanFields &gt; should coerce &quot;yes&quot; and &quot;no&quot; strings" time="0.000066375">
+        </testcase>
+        <testcase classname="src/lib/common/coercion.test.ts" name="coerceBooleanFields &gt; should be case-insensitive" time="0.00010475">
+        </testcase>
+        <testcase classname="src/lib/common/coercion.test.ts" name="coerceBooleanFields &gt; should not coerce unrecognized strings" time="0.000044916">
+        </testcase>
+        <testcase classname="src/lib/common/coercion.test.ts" name="coerceBooleanFields &gt; should not modify already boolean values" time="0.000038916">
+        </testcase>
+        <testcase classname="src/lib/common/coercion.test.ts" name="coerceArrayFields &gt; should split comma-separated strings into arrays" time="0.000293">
+        </testcase>
+        <testcase classname="src/lib/common/coercion.test.ts" name="coerceArrayFields &gt; should trim whitespace from array elements" time="0.000051916">
+        </testcase>
+        <testcase classname="src/lib/common/coercion.test.ts" name="coerceArrayFields &gt; should filter empty elements" time="0.0000435">
+        </testcase>
+        <testcase classname="src/lib/common/coercion.test.ts" name="coerceArrayFields &gt; should not split strings without commas" time="0.000032125">
+        </testcase>
+        <testcase classname="src/lib/common/coercion.test.ts" name="coerceArrayFields &gt; should not modify already array values" time="0.000035125">
+        </testcase>
+        <testcase classname="src/lib/common/coercion.test.ts" name="smartCoerce &gt; should apply all coercions in correct order" time="0.000184666">
+        </testcase>
+        <testcase classname="src/lib/common/coercion.test.ts" name="smartCoerce &gt; should handle empty schema" time="0.000030041">
+        </testcase>
+        <testcase classname="src/lib/common/coercion.test.ts" name="smartCoerce &gt; should handle partial schema" time="0.00004125">
+        </testcase>
+        <testcase classname="src/lib/common/coercion.test.ts" name="smartCoerce &gt; should process arrays before primitives" time="0.000041334">
+        </testcase>
+        <testcase classname="src/lib/common/coercion.test.ts" name="coerceQueryParams (legacy) &gt; should coerce common numeric params" time="0.000104084">
+        </testcase>
+        <testcase classname="src/lib/common/coercion.test.ts" name="coerceQueryParams (legacy) &gt; should not affect non-numeric params" time="0.000057">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/lib/common/ip-utils.test.ts" timestamp="2026-03-02T23:12:37.675Z" hostname="MacBook-Pro-explosovebit.local" tests="20" failures="0" errors="0" skipped="0" time="0.009647958">
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="extractClientIp &gt; X-Real-IP handling &gt; should use X-Real-IP when present" time="0.002401709">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="extractClientIp &gt; X-Real-IP handling &gt; should trim X-Real-IP value" time="0.000150541">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="extractClientIp &gt; X-Real-IP handling &gt; should skip invalid X-Real-IP" time="0.000177708">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="extractClientIp &gt; X-Forwarded-For handling (SEC-001) &gt; should use LAST IP by default to prevent spoofing" time="0.000188708">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="extractClientIp &gt; X-Forwarded-For handling (SEC-001) &gt; should use first IP when configured for backwards compat" time="0.000111583">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="extractClientIp &gt; X-Forwarded-For handling (SEC-001) &gt; should handle single IP in X-Forwarded-For" time="0.000062625">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="extractClientIp &gt; X-Forwarded-For handling (SEC-001) &gt; should skip invalid IPs in chain" time="0.000050292">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="extractClientIp &gt; socket fallback &gt; should use socket IP when no proxy headers" time="0.000043708">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="extractClientIp &gt; socket fallback &gt; should strip IPv6-mapped IPv4 prefix" time="0.000223084">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="extractClientIp &gt; socket fallback &gt; should return unknown when no IP available" time="0.00006175">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="extractClientIp &gt; configuration options &gt; should skip X-Real-IP when not trusted" time="0.000045958">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="extractClientIp &gt; configuration options &gt; should skip X-Forwarded-For when not trusted" time="0.000039625">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="extractClientIp &gt; configuration options &gt; should fall back to socket when no headers trusted" time="0.0000345">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="isValidIpFormat &gt; IPv4 validation &gt; should accept valid IPv4" time="0.000588541">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="isValidIpFormat &gt; IPv4 validation &gt; should reject invalid IPv4 octets" time="0.000222708">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="isValidIpFormat &gt; IPv6 validation &gt; should accept valid IPv6" time="0.000099833">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="isValidIpFormat &gt; injection prevention &gt; should reject CRLF injection attempts" time="0.000063208">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="isValidIpFormat &gt; injection prevention &gt; should reject null byte injection" time="0.000033334">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="isValidIpFormat &gt; injection prevention &gt; should reject overly long strings" time="0.000032333">
+        </testcase>
+        <testcase classname="src/lib/common/ip-utils.test.ts" name="isValidIpFormat &gt; injection prevention &gt; should reject empty/null values" time="0.00087975">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/lib/common/typia-params.test.ts" timestamp="2026-03-02T23:12:37.679Z" hostname="MacBook-Pro-explosovebit.local" tests="28" failures="0" errors="0" skipped="0" time="0.007662834">
+        <testcase classname="src/lib/common/typia-params.test.ts" name="createTypiaParams &gt; should create params with validate function" time="0.001181584">
+        </testcase>
+        <testcase classname="src/lib/common/typia-params.test.ts" name="createTypiaParams &gt; should extract numeric fields from schema" time="0.00139525">
+        </testcase>
+        <testcase classname="src/lib/common/typia-params.test.ts" name="createTypiaParams &gt; should extract boolean fields from schema" time="0.000237708">
+        </testcase>
+        <testcase classname="src/lib/common/typia-params.test.ts" name="createTypiaParams &gt; should extract array fields from schema" time="0.000228292">
+        </testcase>
+        <testcase classname="src/lib/common/typia-params.test.ts" name="createTypiaParams &gt; should generate properties for REPL" time="0.000172167">
+        </testcase>
+        <testcase classname="src/lib/common/typia-params.test.ts" name="createTypiaParams &gt; should have marker property" time="0.000065333">
+        </testcase>
+        <testcase classname="src/lib/common/typia-params.test.ts" name="createQueryParams &gt; should be alias for createTypiaParams" time="0.000118583">
+        </testcase>
+        <testcase classname="src/lib/common/typia-params.test.ts" name="createBodyParams &gt; should clear coercion fields" time="0.000384416">
+        </testcase>
+        <testcase classname="src/lib/common/typia-params.test.ts" name="createBodyParams &gt; should keep properties for REPL" time="0.000203333">
+        </testcase>
+        <testcase classname="src/lib/common/typia-params.test.ts" name="isTypiaParamsWithSchema &gt; should return true for TypiaParamsWithSchema" time="0.000079625">
+        </testcase>
+        <testcase classname="src/lib/common/typia-params.test.ts" name="isTypiaParamsWithSchema &gt; should return false for validator function" time="0.000048917">
+        </testcase>
+        <testcase classname="src/lib/common/typia-params.test.ts" name="isTypiaParamsWithSchema &gt; should return false for plain object" time="0.000032209">
+        </testcase>
+        <testcase classname="src/lib/common/typia-params.test.ts" name="isTypiaParamsWithSchema &gt; should return false for null/undefined" time="0.000041042">
+        </testcase>
+        <testcase classname="src/lib/common/typia-params.test.ts" name="isTypiaValidator &gt; should return true for validator function" time="0.000035125">
+        </testcase>
+        <testcase classname="src/lib/common/typia-params.test.ts" name="isTypiaValidator &gt; should return false for TypiaParamsWithSchema" time="0.000040416">
+        </testcase>
+        <testcase classname="src/lib/common/typia-params.test.ts" name="getValidator &gt; should return validator from TypiaParamsWithSchema" time="0.000041417">
+        </testcase>
+        <testcase classname="src/lib/common/typia-params.test.ts" name="getValidator &gt; should return validator function as-is" time="0.000029292">
+        </testcase>
+        <testcase classname="src/lib/common/typia-params.test.ts" name="getNumericFields &gt; should return fields from TypiaParamsWithSchema" time="0.000108583">
+        </testcase>
+        <testcase classname="src/lib/common/typia-params.test.ts" name="getNumericFields &gt; should return empty array for validator function" time="0.000035584">
+        </testcase>
+        <testcase classname="src/lib/common/typia-params.test.ts" name="getBooleanFields &gt; should return fields from TypiaParamsWithSchema" time="0.000054584">
+        </testcase>
+        <testcase classname="src/lib/common/typia-params.test.ts" name="getBooleanFields &gt; should return empty array for validator function" time="0.000034542">
+        </testcase>
+        <testcase classname="src/lib/common/typia-params.test.ts" name="getArrayFields &gt; should return fields from TypiaParamsWithSchema" time="0.000055">
+        </testcase>
+        <testcase classname="src/lib/common/typia-params.test.ts" name="getArrayFields &gt; should return empty array for validator function" time="0.000033583">
+        </testcase>
+        <testcase classname="src/lib/common/typia-params.test.ts" name="getProperties &gt; should return properties from TypiaParamsWithSchema" time="0.00005275">
+        </testcase>
+        <testcase classname="src/lib/common/typia-params.test.ts" name="getProperties &gt; should return empty object for validator function" time="0.000040375">
+        </testcase>
+        <testcase classname="src/lib/common/typia-params.test.ts" name="validation functionality &gt; should validate correct params" time="0.000084583">
+        </testcase>
+        <testcase classname="src/lib/common/typia-params.test.ts" name="validation functionality &gt; should reject invalid params" time="0.000135834">
+        </testcase>
+        <testcase classname="src/lib/common/typia-params.test.ts" name="validation functionality &gt; should validate optional fields" time="0.000059958">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/lib/envelope/types/error.test.ts" timestamp="2026-03-02T23:12:37.684Z" hostname="MacBook-Pro-explosovebit.local" tests="35" failures="0" errors="0" skipped="0" time="0.011269042">
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; ERROR_STATUS_CODES &gt; should map error types to HTTP status codes" time="0.001995583">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; RETRYABLE_ERROR_CODES &gt; should include rate limit errors" time="0.000225875">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; RETRYABLE_ERROR_CODES &gt; should include timeout errors" time="0.000069">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; RETRYABLE_ERROR_CODES &gt; should include connection errors" time="0.000096709">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; RETRYABLE_ERROR_CODES &gt; should NOT include validation errors" time="0.000236792">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; generateRequestId &gt; should generate ID with req_ prefix" time="0.000143958">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; generateRequestId &gt; should generate unique IDs" time="0.000498708">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; GertsErrorType &gt; should define all error types" time="0.001430291">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; GertsProcessingStage &gt; should define all processing stages" time="0.000972625">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; GertsErrorResponse &gt; should define required fields" time="0.000167166">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; GertsErrorResponse &gt; should accept optional fields" time="0.000117792">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; createGertsError &gt; should create error with required fields" time="0.00050325">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; createGertsError &gt; should auto-detect retryable from code" time="0.000061834">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; createGertsError &gt; should allow overriding retryable" time="0.000055459">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; createGertsError &gt; should include optional fields" time="0.000112583">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; getStatusCode &gt; should return correct status codes" time="0.000090833">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; isRetryable &gt; should return true for retryable codes" time="0.000057416">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; isRetryable &gt; should return false for non-retryable codes" time="0.000074416">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; convenience error creators &gt; validationError &gt; should create validation error" time="0.000130292">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; convenience error creators &gt; notFoundError &gt; should create not found error" time="0.000099208">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; convenience error creators &gt; notFoundError &gt; should accept custom code" time="0.000041875">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; convenience error creators &gt; authError &gt; should create auth error with defaults" time="0.000105959">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; convenience error creators &gt; authError &gt; should accept custom message" time="0.0000565">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; convenience error creators &gt; rateLimitError &gt; should create rate limit error" time="0.000099041">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; convenience error creators &gt; rateLimitError &gt; should include retry time in default message" time="0.000105625">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; convenience error creators &gt; rateLimitError &gt; should accept custom message" time="0.000038">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; convenience error creators &gt; internalError &gt; should create internal error with defaults" time="0.000105625">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; convenience error creators &gt; internalError &gt; should accept custom message and details" time="0.00007575">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; isErrorResponse &gt; should return true for valid error response" time="0.000057708">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; isErrorResponse &gt; should return false for success response" time="0.000056667">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; isErrorResponse &gt; should return false for null" time="0.000078167">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; isErrorResponse &gt; should return false for undefined" time="0.000032042">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; isErrorResponse &gt; should return false for non-object" time="0.000058458">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; isErrorResponse &gt; should return false for object without success field" time="0.0000385">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/error.test.ts" name="GertsErrorResponse Envelope &gt; isErrorResponse &gt; should return false for object without error field" time="0.000046292">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/lib/envelope/types/list.test.ts" timestamp="2026-03-02T23:12:37.690Z" hostname="MacBook-Pro-explosovebit.local" tests="34" failures="0" errors="0" skipped="0" time="0.013174666">
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; encodeCursor / decodeCursor &gt; should encode and decode cursor correctly" time="0.007087875">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; encodeCursor / decodeCursor &gt; should handle empty object" time="0.000129458">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; encodeCursor / decodeCursor &gt; should handle complex objects" time="0.000178792">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; encodeCursor / decodeCursor &gt; should return null for invalid cursor" time="0.000175708">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; encodeCursor / decodeCursor &gt; should use base64url encoding" time="0.00016525">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; PaginationInfo &gt; should define all pagination fields" time="0.000145959">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; PaginationInfo &gt; should handle last page" time="0.000138833">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; PaginationParams &gt; should define request parameters" time="0.000109292">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; PaginationParams &gt; should allow all optional fields" time="0.000193875">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; SortConfig &gt; should define sort configuration" time="0.000097041">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; SortConfig &gt; should accept asc order" time="0.000044084">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; GertsListResponse&lt;T&gt; &gt; should define required fields" time="0.000409667">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; GertsListResponse&lt;T&gt; &gt; should accept optional fields" time="0.00009175">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; createGertsListResponse &gt; should create response with required fields" time="0.000231333">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; createGertsListResponse &gt; should calculate has_more correctly" time="0.000110166">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; createGertsListResponse &gt; should include optional fields" time="0.000183208">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; createGertsListResponse &gt; should use custom ID when provided" time="0.000042958">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; createPaginationInfo &gt; should create pagination info from params" time="0.000111375">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; createPaginationInfo &gt; should use defaults for empty params" time="0.000045166">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; createPaginationInfo &gt; should calculate has_more correctly" time="0.000062292">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; pageToOffset &gt; should calculate offset from page number" time="0.00007625">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; pageToOffset &gt; should handle page 0 as page 1" time="0.000035125">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; pageToOffset &gt; should handle negative page numbers" time="0.000033708">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; offsetToPage &gt; should calculate page number from offset" time="0.00009475">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; offsetToPage &gt; should handle partial offsets" time="0.000042917">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; totalPages &gt; should calculate total pages" time="0.000073792">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; totalPages &gt; should handle single page" time="0.000054458">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; totalPages &gt; should handle exact multiples" time="0.000046125">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; isListResponse &gt; should return true for valid list response" time="0.000081042">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; isListResponse &gt; should return false for non-list success response" time="0.000037667">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; isListResponse &gt; should return false for error response" time="0.000035416">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; isListResponse &gt; should return false for null" time="0.000053166">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; isListResponse &gt; should return false for undefined" time="0.000031667">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/list.test.ts" name="GertsListResponse Envelope &gt; isListResponse &gt; should return false for response without pagination" time="0.000046791">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/lib/envelope/types/response.test.ts" timestamp="2026-03-02T23:12:37.693Z" hostname="MacBook-Pro-explosovebit.local" tests="26" failures="0" errors="0" skipped="0" time="0.007421291">
+        <testcase classname="src/lib/envelope/types/response.test.ts" name="GertsResponse Envelope &gt; ID_PREFIXES &gt; should define all expected prefixes" time="0.001184167">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/response.test.ts" name="GertsResponse Envelope &gt; ID_PREFIXES &gt; should have 3-letter prefixes" time="0.000957958">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/response.test.ts" name="GertsResponse Envelope &gt; generateId &gt; should generate ID with correct prefix" time="0.000122125">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/response.test.ts" name="GertsResponse Envelope &gt; generateId &gt; should generate unique IDs" time="0.000202583">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/response.test.ts" name="GertsResponse Envelope &gt; generateId &gt; should accept custom prefix" time="0.000063791">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/response.test.ts" name="GertsResponse Envelope &gt; generateId &gt; should generate 12 random characters" time="0.000126042">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/response.test.ts" name="GertsResponse Envelope &gt; UsageInfo &gt; should define required token fields" time="0.000089833">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/response.test.ts" name="GertsResponse Envelope &gt; UsageInfo &gt; should accept gerts-specific fields" time="0.000087">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/response.test.ts" name="GertsResponse Envelope &gt; GertsObjectType &gt; should include query types" time="0.000222209">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/response.test.ts" name="GertsResponse Envelope &gt; GertsObjectType &gt; should include document types" time="0.000101875">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/response.test.ts" name="GertsResponse Envelope &gt; GertsObjectType &gt; should include entity types" time="0.000064292">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/response.test.ts" name="GertsResponse Envelope &gt; GertsObjectType &gt; should include job types" time="0.000178458">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/response.test.ts" name="GertsResponse Envelope &gt; GertsResponse&lt;T&gt; &gt; should define required fields" time="0.000240125">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/response.test.ts" name="GertsResponse Envelope &gt; GertsResponse&lt;T&gt; &gt; should accept optional fields" time="0.000129416">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/response.test.ts" name="GertsResponse Envelope &gt; createGertsResponse &gt; should create response with required fields" time="0.00026275">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/response.test.ts" name="GertsResponse Envelope &gt; createGertsResponse &gt; should use correct prefix for object type" time="0.000134125">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/response.test.ts" name="GertsResponse Envelope &gt; createGertsResponse &gt; should include optional fields when provided" time="0.000694292">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/response.test.ts" name="GertsResponse Envelope &gt; createGertsResponse &gt; should use custom ID when provided" time="0.000044875">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/response.test.ts" name="GertsResponse Envelope &gt; createGertsResponse &gt; should set created timestamp to current time" time="0.000095875">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/response.test.ts" name="GertsResponse Envelope &gt; isSuccessResponse &gt; should return true for valid success response" time="0.000057125">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/response.test.ts" name="GertsResponse Envelope &gt; isSuccessResponse &gt; should return false for error response" time="0.0000405">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/response.test.ts" name="GertsResponse Envelope &gt; isSuccessResponse &gt; should return false for null" time="0.00004725">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/response.test.ts" name="GertsResponse Envelope &gt; isSuccessResponse &gt; should return false for undefined" time="0.000030041">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/response.test.ts" name="GertsResponse Envelope &gt; isSuccessResponse &gt; should return false for non-object" time="0.000066667">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/response.test.ts" name="GertsResponse Envelope &gt; isSuccessResponse &gt; should return false for object without success field" time="0.000034625">
+        </testcase>
+        <testcase classname="src/lib/envelope/types/response.test.ts" name="GertsResponse Envelope &gt; isSuccessResponse &gt; should return false for object without data field" time="0.000037625">
         </testcase>
     </testsuite>
 </testsuites>

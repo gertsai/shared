@@ -323,6 +323,7 @@ export type ActionHandlerCtx<
   ParamsType,
   ResponseType,
   ServiceContext extends ServiceContextBase = ServiceContextBase,
+  TMeta extends ContextMeta = ContextMeta,
 > = {
   /**
    * :TODO - Figure out how to make it work properly here. Look in _createQueueSchema
@@ -332,7 +333,7 @@ export type ActionHandlerCtx<
    * Raw Moleculer context for advanced use cases (broker.call, meta, etc.)
    * For service properties, use `ctx.service` instead.
    */
-  ctx: Moleculer.Context<ParamsType, ContextMeta>;
+  ctx: Moleculer.Context<ParamsType, TMeta>;
   // Define correct session type based on AuthType
   session: AuthType extends 'required'
     ? OrchestraSession // Session 100% exists when AuthType === 'required'
@@ -571,7 +572,8 @@ export type ActionOptions<
   ResponseType extends ResponseValidator extends TypiaValidator<infer T> ? T : never = any,
   Rest extends RestConfig<any, any> | undefined = any,
   ServiceContext extends ServiceContextBase = ServiceContextBase,
-  Handler extends ActionHandler<AuthType, ParamsType, ResponseType, ServiceContext> = any,
+  TMeta extends ContextMeta = ContextMeta,
+  Handler extends ActionHandler<AuthType, ParamsType, ResponseType, ServiceContext, TMeta> = any,
 > = {
   auth: AuthType;
   /**
@@ -869,9 +871,10 @@ export type ActionHandler<
   ParamsType,
   ResponseType,
   ServiceContext extends ServiceContextBase = ServiceContextBase,
+  TMeta extends ContextMeta = ContextMeta,
 > = (
   this: Moleculer.Service & ServiceContext,
-  params: ActionHandlerCtx<AuthType, ParamsType, ResponseType, ServiceContext>,
+  params: ActionHandlerCtx<AuthType, ParamsType, ResponseType, ServiceContext, TMeta>,
 ) => ActionHandlerResponse<ResponseType> | Promise<ActionHandlerResponse<ResponseType>>;
 
 export interface CoreServiceSchema extends ServiceSchema {

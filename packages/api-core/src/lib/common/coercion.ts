@@ -174,9 +174,41 @@ export function coerceQueryParams(params: Record<string, unknown>): void {
     'keepVersions',
     'expiresInSeconds',
     'versionNum',
+    // Observe/Analytics
+    'days',
     // Generic
     'version',
   ];
 
+  const booleanParams = [
+    // Flags
+    'sync',
+    'recursive',
+    'permanent',
+    'force',
+    'detailed',
+    'verbose',
+    // Purge/Ingest
+    'includeFiles',
+    'includeVectors',
+    'includeGraph',
+    // Files
+    'includeMeta',
+    'includeContent',
+    // Generic
+    'active',
+    'enabled',
+    'withChildren',
+    'showArchived',
+    'showSubprojects',
+    'includeMuted',
+    'includeSystem',
+    'isBuiltIn',
+    'isVisible',
+    'mfaRequired',
+    'useOntology',
+  ];
+
   coerceNumericFields(params, numericParams);
+  coerceBooleanFields(params, booleanParams);
 }
