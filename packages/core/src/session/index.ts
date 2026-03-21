@@ -82,6 +82,9 @@ export {
   type TracingConfig,
   type FallbackConfig,
   type CommunityLevel,
+  // Agent Reasoning (RFC-128)
+  AgentReasoningConfigSchema,
+  type AgentReasoningConfig,
   type TenantConfig,
   type TenantConfigCreate,
   type TenantConfigUpdate,

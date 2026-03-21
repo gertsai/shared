@@ -763,6 +763,49 @@ export const EvalConfigSchema = z.object({
 export type EvalConfig = z.infer<typeof EvalConfigSchema>;
 
 // ============================================================================
+// Agent Reasoning (RFC-128)
+// ============================================================================
+
+/**
+ * Agent reasoning configuration — controls goal decomposition, tool ranking,
+ * confidence estimation, and ReAct loop budgets.
+ * Per-tenant overrides; all fields have defaults via Zod.
+ */
+export const AgentReasoningConfigSchema = z.object({
+  /** Enable agent reasoning engine @default false */
+  enabled: z.boolean().default(false),
+  /** Confidence threshold to answer directly (0-1) @default 0.85 */
+  confidenceThresholdAnswer: z.number().min(0).max(1).default(0.85),
+  /** Confidence threshold to escalate to human (0-1) @default 0.50 */
+  confidenceThresholdEscalate: z.number().min(0).max(1).default(0.5),
+  /** Maximum subtasks from goal decomposition @default 5 */
+  maxSubtasks: z.number().int().min(1).max(10).default(5),
+  /** Maximum ReAct loop iterations @default 5 */
+  maxReactIterations: z.number().int().min(1).max(20).default(5),
+  /** Tool ranker weight distribution */
+  toolRankerWeights: z
+    .object({
+      relevance: z.number().min(0).max(1).default(0.5),
+      historicalSuccess: z.number().min(0).max(1).default(0.3),
+      latency: z.number().min(0).max(1).default(0.1),
+      freshness: z.number().min(0).max(1).default(0.1),
+    })
+    .default({}),
+  /** Default budget constraints for reasoning loops */
+  defaultBudget: z
+    .object({
+      maxSteps: z.number().int().min(1).max(50).default(10),
+      maxTokens: z.number().int().min(1000).max(100000).default(8000),
+      maxTimeMs: z.number().int().min(5000).max(300000).default(30000),
+      maxRetries: z.number().int().min(0).max(10).default(2),
+    })
+    .default({}),
+});
+
+/** Agent reasoning configuration type */
+export type AgentReasoningConfig = z.infer<typeof AgentReasoningConfigSchema>;
+
+// ============================================================================
 // Locale Settings
 // ============================================================================
 
@@ -1447,6 +1490,9 @@ export interface TenantConfig {
   /** Eval judge settings (LLM-as-a-judge) */
   eval?: EvalConfig;
 
+  /** Agent reasoning settings (RFC-128) */
+  agentReasoning?: AgentReasoningConfig;
+
   /** Community hierarchy description */
   communityHierarchy?: CommunityLevel[];
 
@@ -1519,6 +1565,8 @@ export interface TenantConfigCreate {
   qualityMonitoring?: QualityMonitoringConfig;
   /** Optional: Eval judge settings */
   eval?: EvalConfig;
+  /** Optional: Agent reasoning settings (RFC-128) */
+  agentReasoning?: AgentReasoningConfig;
   /** Optional: Community hierarchy */
   communityHierarchy?: CommunityLevel[];
   /** Optional: Custom metadata */
@@ -1577,6 +1625,8 @@ export interface TenantConfigUpdate {
   qualityMonitoring?: Partial<QualityMonitoringConfig>;
   /** Eval judge settings */
   eval?: Partial<EvalConfig>;
+  /** Agent reasoning settings (RFC-128) */
+  agentReasoning?: Partial<AgentReasoningConfig>;
   /** Community hierarchy (replace all) */
   communityHierarchy?: CommunityLevel[];
   /** Custom metadata (merge) */
@@ -1958,6 +2008,25 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
       hallucination: 0.3,
     },
   },
+  agentReasoning: {
+    enabled: false,
+    confidenceThresholdAnswer: 0.85,
+    confidenceThresholdEscalate: 0.5,
+    maxSubtasks: 5,
+    maxReactIterations: 5,
+    toolRankerWeights: {
+      relevance: 0.5,
+      historicalSuccess: 0.3,
+      latency: 0.1,
+      freshness: 0.1,
+    },
+    defaultBudget: {
+      maxSteps: 10,
+      maxTokens: 8000,
+      maxTimeMs: 30000,
+      maxRetries: 2,
+    },
+  },
 };
 
 // ============================================================================
@@ -2047,6 +2116,18 @@ export function mergeTenantConfigWithDefaults(config: TenantConfigCreate): Tenan
       thresholds: {
         ...DEFAULT_TENANT_CONFIG.eval?.thresholds,
         ...config.eval?.thresholds,
+      },
+    },
+    agentReasoning: {
+      ...DEFAULT_TENANT_CONFIG.agentReasoning!,
+      ...config.agentReasoning,
+      toolRankerWeights: {
+        ...DEFAULT_TENANT_CONFIG.agentReasoning!.toolRankerWeights,
+        ...config.agentReasoning?.toolRankerWeights,
+      },
+      defaultBudget: {
+        ...DEFAULT_TENANT_CONFIG.agentReasoning!.defaultBudget,
+        ...config.agentReasoning?.defaultBudget,
       },
     },
     createdAt: new Date().toISOString(),
@@ -2155,6 +2236,23 @@ export function applyTenantConfigUpdate(
           },
         }
       : existing.eval,
+    agentReasoning: update.agentReasoning
+      ? {
+          ...DEFAULT_TENANT_CONFIG.agentReasoning!,
+          ...existing.agentReasoning,
+          ...update.agentReasoning,
+          toolRankerWeights: {
+            ...DEFAULT_TENANT_CONFIG.agentReasoning!.toolRankerWeights,
+            ...existing.agentReasoning?.toolRankerWeights,
+            ...update.agentReasoning?.toolRankerWeights,
+          },
+          defaultBudget: {
+            ...DEFAULT_TENANT_CONFIG.agentReasoning!.defaultBudget,
+            ...existing.agentReasoning?.defaultBudget,
+            ...update.agentReasoning?.defaultBudget,
+          },
+        }
+      : existing.agentReasoning,
     metadata: update.metadata ? { ...existing.metadata, ...update.metadata } : existing.metadata,
     // Update timestamp
     updatedAt: new Date().toISOString(),
