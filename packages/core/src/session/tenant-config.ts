@@ -907,6 +907,10 @@ export interface MemoryConfig {
   factExtractionEnabled?: boolean;
   /** Auto-extract facts from conversations (alias for factExtractionEnabled) @default true */
   extractFacts?: boolean;
+  /** Max output tokens for fact extraction LLM call. Thinking models need higher values. @default 8000 */
+  factExtractionMaxTokens?: number;
+  /** Force JSON output from LLM for fact extraction (prevents markdown fences). @default true */
+  factExtractionJsonMode?: boolean;
   /** Working memory TTL in hours @default 24 */
   ttlHours?: number;
   /** Maximum memory items per scope level @default 1000 */
@@ -1908,6 +1912,8 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     maxContextTokens: 1024,
     factExtractionEnabled: true,
     extractFacts: true,
+    factExtractionMaxTokens: 8000,
+    factExtractionJsonMode: true,
     ttlHours: 24,
     maxItemsPerScope: 1000,
     accessPolicy: 'open' as const,
