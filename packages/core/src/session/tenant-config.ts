@@ -936,6 +936,10 @@ export interface MemoryConfig {
   reflectMinNewFacts?: number;
   /** Use cross-encoder reranking for entity XRef matching @default false */
   entityXRefRerank?: boolean;
+  /** Minimum cosine similarity for reinforcement dedup (lower = more aggressive dedup) @default 0.85 */
+  reinforcementMinScore?: number;
+  /** Enable cross-encoder reranking in reflector for better fact ordering @default false */
+  reflectorRerank?: boolean;
 
   /**
    * Disposition traits for agent personality (RFC-126 Phase 5).
