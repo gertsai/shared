@@ -928,6 +928,14 @@ export interface MemoryConfig {
   promotionThreshold?: number;
   /** Reflection interval in minutes @default 60 */
   reflectionIntervalMinutes?: number;
+  /** Enable periodic reflection @default true */
+  reflectEnabled?: boolean;
+  /** Minimum total facts in store to trigger reflection @default 20 */
+  reflectMinTotalFacts?: number;
+  /** Minimum new facts since last reflection to trigger @default 5 */
+  reflectMinNewFacts?: number;
+  /** Use cross-encoder reranking for entity XRef matching @default false */
+  entityXRefRerank?: boolean;
 
   /**
    * Disposition traits for agent personality (RFC-126 Phase 5).
@@ -1922,6 +1930,10 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
     retainEnabled: true,
     promotionThreshold: 0.7,
     reflectionIntervalMinutes: 60,
+    reflectEnabled: true,
+    reflectMinTotalFacts: 20,
+    reflectMinNewFacts: 5,
+    entityXRefRerank: false,
     // RFC-126 Phase 12.6 — decay profiles
     decayProfile: 'balanced' as const,
     decayHalfLifeDays: 90,
