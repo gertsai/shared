@@ -987,6 +987,17 @@ export interface MemoryConfig {
    */
   decayFrequencyBoost?: number;
 
+  // --- Fact Cleanup settings (RFC-130 Phase 3) ---
+
+  /** Enable automatic fact cleanup for this tenant @default true */
+  factCleanupEnabled?: boolean;
+  /** Max facts to analyze per cleanup run @default 500 */
+  factCleanupLimit?: number;
+  /** Cron expression for fact cleanup schedule (global, not per-tenant) @default '0 4 * * *' */
+  factCleanupCron?: string;
+  /** Drift alert threshold — alert if any fact type exceeds this fraction (0.1-1.0) @default 0.4 */
+  driftAlertThreshold?: number;
+
   /**
    * LLM settings for memory operations (extraction, reflection).
    * Overrides project.config defaults per-tenant.
@@ -1949,6 +1960,11 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
       literalism: 3,
       empathy: 3,
     },
+    // RFC-130 Phase 3 — fact cleanup
+    factCleanupEnabled: true,
+    factCleanupLimit: 500,
+    factCleanupCron: '0 4 * * *',
+    driftAlertThreshold: 0.4,
     llm: {
       extractionTemperature: 0,
       extractionMaxTokens: 2000,
