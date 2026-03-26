@@ -109,4 +109,7 @@ export {
   sanitizeTenantConfig,
   // Fallback (RFC-094)
   getFallbackChain,
+  // Fact Type Config (RFC-132)
+  type FactTypeConfig,
+  DEFAULT_FACT_TYPES,
 } from './tenant-config';

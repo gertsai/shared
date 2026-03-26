@@ -870,6 +870,92 @@ export interface FeatureFlags {
 }
 
 // ============================================================================
+// Fact Type Configuration (RFC-132 — custom fact types for agents)
+// ============================================================================
+
+/**
+ * Per-agent/per-tenant fact type configuration.
+ *
+ * Controls which fact types are extracted, their confidence caps,
+ * and extraction priority ordering. Stored in AgentDefinition.config.factTypes
+ * and threaded through the memory pipeline to buildFactExtractionPrompt().
+ */
+export interface FactTypeConfig {
+  /** Unique identifier for this fact type (e.g. 'world', 'preference') */
+  id: string;
+  /** Human-readable label */
+  label: string;
+  /** Description used in the LLM extraction prompt */
+  description: string;
+  /** Whether this fact type is active for extraction @default true */
+  enabled: boolean;
+  /** Maximum confidence score for facts of this type (0-1) @default 1.0 */
+  confidenceCap: number;
+  /** Extraction priority — lower numbers are listed first in the prompt @default 1 */
+  extractionPriority: number;
+}
+
+/** Default fact types matching the hardcoded prompt in extract-facts.ts */
+export const DEFAULT_FACT_TYPES: readonly FactTypeConfig[] = [
+  {
+    id: 'world',
+    label: 'World Fact',
+    description: 'Objectively verifiable fact about the world',
+    enabled: true,
+    confidenceCap: 1.0,
+    extractionPriority: 1,
+  },
+  {
+    id: 'experience',
+    label: 'Personal Experience',
+    description: 'Something the user has done or worked with',
+    enabled: true,
+    confidenceCap: 1.0,
+    extractionPriority: 2,
+  },
+  {
+    id: 'preference',
+    label: 'User Preference',
+    description: 'User stated preference or choice',
+    enabled: true,
+    confidenceCap: 0.9,
+    extractionPriority: 3,
+  },
+  {
+    id: 'opinion',
+    label: 'Opinion',
+    description: 'Subjective belief or assessment',
+    enabled: true,
+    confidenceCap: 0.69,
+    extractionPriority: 4,
+  },
+  {
+    id: 'decision',
+    label: 'Decision',
+    description: 'A decision made or action taken',
+    enabled: true,
+    confidenceCap: 1.0,
+    extractionPriority: 5,
+  },
+  {
+    id: 'pattern',
+    label: 'Recurring Pattern',
+    description: 'Something observed repeatedly',
+    enabled: true,
+    confidenceCap: 0.8,
+    extractionPriority: 6,
+  },
+  {
+    id: 'temporal',
+    label: 'Time-Bound Fact',
+    description: 'Fact that may become stale',
+    enabled: true,
+    confidenceCap: 0.9,
+    extractionPriority: 7,
+  },
+];
+
+// ============================================================================
 // Memory Settings (RFC-080)
 // ============================================================================
 
