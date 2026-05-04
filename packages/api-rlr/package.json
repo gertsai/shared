@@ -1,8 +1,7 @@
 {
-  "name": "@gerts/api-rlr",
-  "version": "0.1.4",
-  "description": "Gerts.ai API rate limit request middleware with Redis and Lua scripts",
-  "private": true,
+  "name": "@gertsai/api-rlr",
+  "version": "0.1.0",
+  "description": "Production-grade rate limit middleware for Moleculer.js APIs — Redis (sliding-window + GCRA via Lua scripts), PostgreSQL (database-agnostic via PgClient interface), and in-memory adapters",
   "engines": {
     "node": ">=22"
   },
@@ -20,6 +19,9 @@
       }
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "prepublish": "pnpm build",
     "copy:lua": "copyfiles -u 1 src/scripts/*.lua dist",
@@ -32,8 +34,9 @@
     "test:coverage": "vitest run --coverage.enabled --coverage.reporter=html"
   },
   "author": "Eli Rum <explosivebit@gmail.com>",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "dependencies": {
+    "@gertsai/api-core": "workspace:*",
     "consola": "^3.4.2",
     "lodash.clonedeep": "^4.5.0",
     "lodash.debounce": "^4.0.8",
@@ -47,8 +50,6 @@
     "uuid": "^9.0.1"
   },
   "devDependencies": {
-    "@gerts/api-core": "workspace:*",
-    "@gerts/database": "workspace:*",
     "@types/lodash.clonedeep": "^4.5.9",
     "@types/lodash.debounce": "^4.0.9",
     "@types/lodash.get": "^4.4.9",

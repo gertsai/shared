@@ -1,7 +1,7 @@
 /**
  * Comprehensive Integration Tests for api-rlr
  *
- * Run with: HAS_REDIS=1 pnpm --filter @gerts/api-rlr test comprehensive
+ * Run with: HAS_REDIS=1 pnpm --filter @gertsai/api-rlr test comprehensive
  *
  * Tests:
  * 1. GCRA remaining calculation (verifies the fix)

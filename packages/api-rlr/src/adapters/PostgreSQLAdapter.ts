@@ -10,7 +10,7 @@
  * - BigInt arrays for timestamp storage (Sliding Window)
  * - BigInt for TAT storage (GCRA)
  *
- * @module @gerts/api-rlr/adapters
+ * @module @gertsai/api-rlr/adapters
  */
 import type { GCRAResult, SlidingWindowResult, StorageAdapter } from './StorageAdapter';
 
@@ -66,7 +66,7 @@ export interface PostgreSQLAdapterConfig {
  * @example
  * ```typescript
  * import { PrismaClient } from '@prisma/client';
- * import { PostgreSQLAdapter } from '@gerts/api-rlr';
+ * import { PostgreSQLAdapter } from '@gertsai/api-rlr';
  *
  * const prisma = new PrismaClient();
  * const adapter = new PostgreSQLAdapter({ prisma });

@@ -1,4 +1,4 @@
-import type { ResponseCode, ResponseDataType } from '@gerts/api-core';
+import type { ResponseCode, ResponseDataType } from '@gertsai/api-core';
 import { Errors } from 'moleculer';
 const { MoleculerError } = Errors;
 

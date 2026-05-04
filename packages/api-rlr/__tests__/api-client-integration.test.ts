@@ -1,5 +1,5 @@
 /**
- * Integration tests: @gerts/api-rlr + @gerts/api-client
+ * Integration tests: @gertsai/api-rlr + an external API client
  *
  * Tests full client-server integration:
  * - RateLimitManager (client) + MiddlewareFactory (server)

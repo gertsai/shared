@@ -14,8 +14,8 @@
     "types": ["node"],
     "baseUrl": ".",
     "paths": {
-      "@gerts/api-core": ["../api-core/dist/index.d.ts"],
-      "@gerts/api-core/*": ["../api-core/dist/*"]
+      "@gertsai/api-core": ["../api-core/dist/index.d.ts"],
+      "@gertsai/api-core/*": ["../api-core/dist/*"]
     }
   },
   "include": ["src/**/*.ts"],

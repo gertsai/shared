@@ -98,8 +98,8 @@ describe('PostgreSQLAdapter (unit)', () => {
 // ============================================================================
 
 // Integration tests are force-skipped в OSS @gertsai/api-rlr v0.1.0 — they were
-// written against @gerts/database (Prisma + Hub-specific schema) which is NOT
-// part of the OSS extraction (per ADR-009 + ADR-011 invariants I-1, I-2).
+// written against an internal Prisma-based database helper (Hub-specific schema)
+// which is NOT part of the OSS extraction (per ADR-009 + ADR-011 invariants I-1, I-2).
 // TODO(api-rlr): re-enable once @gertsai/database is published (or rewire to use
 // a generic Prisma/Drizzle/raw-pg client instance directly via `new PgClient()`).
 // For now, behaviour is validated via algorithmic unit tests (above) + Redis
