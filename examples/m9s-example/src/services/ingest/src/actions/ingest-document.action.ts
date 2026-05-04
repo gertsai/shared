@@ -8,8 +8,10 @@
  *   2. Resolve the user identifier (real apps use `auth: 'required'` and
  *      `session.user_uuid`; we accept it from `meta.user_uuid` or fall
  *      back to 'anonymous' so curl works without auth).
- *   3. Enqueue the job through `service.queue` — which runs synchronously
- *      (no Redis) or hands off to a BullMQ worker (Redis configured).
+ *   3. Produce side: if the service has `addJob` (queue configured via
+ *      `ApiController.configure({queue})`), enqueue a BullMQ job —
+ *      api-core's worker picks it up. Otherwise, run the use case
+ *      synchronously here as an in-process fallback.
  *   4. Map known domain errors to `APIError` instances; let everything else
  *      bubble up to the framework's default handler.
  *
@@ -19,9 +21,25 @@
 import { APIError, ResponseCode } from '@gertsai/api-core';
 import typia from 'typia';
 
+import config from '../../../../../project.config';
 import { resolveExampleController } from '../../../../lib/example-controller';
 import { PermissionDeniedError } from '../../../../application/IngestDocumentUseCase';
-import type { IngestServiceContext, IngestDocumentRequest, IngestDocumentResponse } from '../../types';
+import { INGEST_QUEUE_NAME, JOB_PROCESS_DOCUMENT } from '../queues';
+import type {
+  IngestServiceContext,
+  IngestDocumentRequest,
+  IngestDocumentResponse,
+} from '../../types';
+
+/**
+ * Whether api-core's queue methods (`service.addJob`/`service.getQueue`) are
+ * available on this service. Mirrors the gating in api-core
+ * `_createServiceSchema` which adds those methods only when
+ * `ApiController._config.queue` is set — i.e., when REDIS_URL was provided.
+ *
+ * Single source of truth = `project.config.REDIS_URL`.
+ */
+const QUEUE_ENABLED = !!config.REDIS_URL;
 
 const controller = resolveExampleController<'v1', 'ingest', IngestServiceContext>('v1', 'ingest');
 
@@ -39,7 +57,7 @@ export const ingestDocument: any = controller.register('document', {
   responseCode: ResponseCode.SUCCESS_CREATED,
   responseMessage: 'Document accepted for ingestion',
 
-  async handler({ params, ctx, service, logger, respond }) {
+  async handler({ params, ctx, service, logger, respond, addJob }) {
     const { docId, text, metadata } = params;
 
     // Resolve user id from meta (set by an auth middleware in real apps).
@@ -51,11 +69,34 @@ export const ingestDocument: any = controller.register('document', {
       docId,
       userId,
       textLength: text.length,
-      mode: service.queue.mode,
+      mode: QUEUE_ENABLED ? 'queued' : 'inline',
     });
 
     try {
-      const { jobId, chunkCount } = await service.queue.enqueue({
+      // Pipeline-style: when api-core has queue config, the service has
+      // `addJob` injected automatically. Action just enqueues — the worker
+      // registered in `queues/ingest-chunk.worker.ts` runs asynchronously.
+      if (QUEUE_ENABLED) {
+        const job = await addJob(
+          INGEST_QUEUE_NAME,
+          JOB_PROCESS_DOCUMENT,
+          { docId, text, userId, metadata },
+        );
+
+        const response: IngestDocumentResponse = {
+          docId,
+          jobId: String(job?.id ?? `job-${Date.now()}`),
+          mode: 'queued',
+          chunkCount: null,
+        };
+
+        logger.info('[v1.ingest.document] enqueued', response);
+        return respond(response, 'Document accepted for ingestion', ResponseCode.SUCCESS_CREATED);
+      }
+
+      // Inline fallback — no Redis configured. Same code path as the
+      // worker handler, just executed in the request thread.
+      const { chunkCount } = await service.useCase.execute({
         docId,
         text,
         userId,
@@ -64,12 +105,12 @@ export const ingestDocument: any = controller.register('document', {
 
       const response: IngestDocumentResponse = {
         docId,
-        jobId,
-        mode: service.queue.mode,
+        jobId: `inline-${Date.now()}-${chunkCount}`,
+        mode: 'inline',
         chunkCount,
       };
 
-      logger.info('[v1.ingest.document] enqueued', response);
+      logger.info('[v1.ingest.document] processed inline', response);
       return respond(response, 'Document accepted for ingestion', ResponseCode.SUCCESS_CREATED);
     } catch (err) {
       // Map domain errors to transport (HTTP) errors here — keeps the

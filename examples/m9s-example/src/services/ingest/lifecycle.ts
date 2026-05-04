@@ -1,20 +1,27 @@
 /**
  * Ingest Service Lifecycle.
  *
- * Mirrors `apps/pipeline/src/services/ingest/lifecycle.ts`:
+ * Mirrors `apps/pipeline/src/services/ingest/lifecycle.ts` shape:
  *
  *   - On service started: build outbound adapters (memory stores, mock
  *     embedder, allow-all gate), wire them into `IngestDocumentUseCase`,
- *     initialise the queue (BullMQ or inline fallback), and stash all of
- *     it on `ctx.service` so action handlers can pull it out via the
+ *     and stash everything on `ctx.service` so action handlers (and the
+ *     queue worker registered in `src/queues/`) can reach them via the
  *     typed `IngestServiceContext` generic.
  *
- *   - On service stopped: close the queue (idempotent for inline mode).
+ *   - Queue lifecycle is OWNED by api-core: `ApiController.configure({queue})`
+ *     in `services/index.ts` provides the BullMQ connection; api-core's
+ *     `started()` handler creates the BullMQ Queue + Worker for every
+ *     `controller.registerWorker(...)` registration in this service.
+ *     We don't manage `bullmq` directly — the only thing we do here is
+ *     populate the application-layer dependencies.
  *
- * This file is the SINGLE place that knows about both ports and concrete
- * adapters — the action handlers see only abstractions through `service.*`.
+ *   - On service stopped: nothing to tear down — api-core closes the BullMQ
+ *     Queue/Worker handles for us.
+ *
+ * This file is the single composition root for the ingest domain — the only
+ * place that knows about both ports and concrete adapters.
  */
-import config from '../../../project.config';
 import { resolveExampleController } from '../../lib/example-controller';
 import { IngestDocumentUseCase } from '../../application/IngestDocumentUseCase';
 import { MemoryDocumentStore } from '../../infrastructure/memory-document.store';
@@ -25,7 +32,6 @@ import { AllowAllPermissionGate } from '../../infrastructure/allow-all-permissio
 // Swap the gate construction below to enable real OpenFGA enforcement.
 // import { OpenFgaPermissionGate } from '../../infrastructure/openfga-permission.gate';
 
-import { initIngestQueue, closeIngestQueue } from './src/queues';
 import type { IngestServiceContext } from './types';
 
 const controller = resolveExampleController<'v1', 'ingest', IngestServiceContext>('v1', 'ingest');
@@ -47,36 +53,21 @@ controller.addStartedHandler(async (ctx) => {
   // 2. Use case wires the adapters together — pure application logic.
   const useCase = new IngestDocumentUseCase({ docStore, chunkStore, embedder, gate });
 
-  // 3. Queue (BullMQ when REDIS_URL set, inline synchronous otherwise).
-  //    `workerEnabled` mirrors pipeline's WORKERS_ENABLED contract — when
-  //    false, the queue is producer-only (jobs are added but no worker is
-  //    started in this process — useful for API-gateway nodes).
-  const queue = await initIngestQueue({
-    useCase,
-    logger: ctx.logger,
-    concurrency: config.WORKER_CONCURRENCY,
-    workerEnabled: config.WORKERS_ENABLED,
-  });
-
-  // 4. Stash everything on the typed service context.
+  // 3. Stash everything on the typed service context. Queue handles are
+  //    contributed by api-core (service.addJob, service.getQueue) when
+  //    ApiController.configure({queue}) was called in services/index.ts.
   ctx.service.docStore = docStore;
   ctx.service.chunkStore = chunkStore;
   ctx.service.embedder = embedder;
   ctx.service.gate = gate;
   ctx.service.useCase = useCase;
-  ctx.service.queue = queue;
 
-  ctx.logger?.info(
-    `[v1.ingest] ready (queue mode=${queue.mode}, ` +
-      `worker=${config.WORKERS_ENABLED ? `on×${config.WORKER_CONCURRENCY}` : 'off'}, ` +
-      `embedder dims=${embedder.dimensions})`,
-  );
+  ctx.logger?.info(`[v1.ingest] ready (embedder dims=${embedder.dimensions})`);
 });
 
 controller.addStoppedHandler(async (ctx) => {
-  ctx.logger?.info('[v1.ingest] stopping...');
-  await closeIngestQueue(ctx.service.queue);
   ctx.logger?.info('[v1.ingest] stopped.');
+  // Queue cleanup is api-core's responsibility — nothing to do here.
 });
 
 export { controller };

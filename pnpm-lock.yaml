@@ -47,9 +47,6 @@ importers:
       '@gertsai/utils':
         specifier: workspace:*
         version: link:../../packages/utils
-      bullmq:
-        specifier: ^5.34.8
-        version: 5.76.5
       ioredis:
         specifier: ^5.8.0
         version: 5.10.1
@@ -69,6 +66,9 @@ importers:
       '@types/node':
         specifier: ^22.10.0
         version: 22.19.17
+      bullmq:
+        specifier: ^5.34.8
+        version: 5.76.5
       ts-patch:
         specifier: ^3.3.0
         version: 3.3.0

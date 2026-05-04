@@ -23,7 +23,6 @@
     "@gertsai/fetch": "workspace:*",
     "@gertsai/m9s-cache": "workspace:*",
     "@gertsai/utils": "workspace:*",
-    "bullmq": "^5.34.8",
     "ioredis": "^5.8.0",
     "moleculer": "^0.14.35",
     "moleculer-web": "^0.10.6",
@@ -32,6 +31,7 @@
   "devDependencies": {
     "@standard-schema/spec": "^1.1.0",
     "@types/node": "^22.10.0",
+    "bullmq": "^5.34.8",
     "ts-patch": "^3.3.0",
     "typescript": "^5.9.0",
     "typescript-transform-paths": "^3.5.4",

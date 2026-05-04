@@ -17,8 +17,10 @@ need a single, runnable, dependency-free reference that demonstrates:
    → `services/`).
 3. How to plug `M9sCacheCacher` into a Moleculer broker via the package's
    in-memory driver.
-4. How to slot in BullMQ-backed queues with a synchronous in-process
-   fallback for offline runs.
+4. How to register BullMQ workers via `ApiController.registerWorker()` —
+   api-core owns BullMQ Queue/Worker lifecycle; the producer side is
+   `service.addJob(...)`. Falls back to synchronous in-process execution
+   when no `REDIS_URL` is configured.
 5. Where future packages (e.g. `api-rlr`) plug in.
 
 ## Architecture
@@ -73,7 +75,7 @@ src/
     │       ├── actions/
     │       │   └── ingest-document.action.ts
     │       └── queues/
-    │           └── ingest-chunk.queue.ts  # BullMQ + inline fallback
+    │           └── ingest-chunk.worker.ts  # controller.registerWorker(...)
     └── search/
         ├── index.ts, lifecycle.ts, types.ts
         └── src/actions/search-query.action.ts

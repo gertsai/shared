@@ -1,10 +1,15 @@
 /**
  * Ingest Service Types — m9s-example.
  *
- * Mirrors `apps/pipeline/src/services/ingest/types.ts` shape but trimmed to
- * the minimum needed for the example: a typed ServiceContext (used by
- * ApiController to type `ctx.service.<thing>`) plus request/response shapes
- * for the public REST action.
+ * Mirrors `apps/pipeline/src/services/ingest/types.ts` shape, trimmed to the
+ * minimum the example needs: a typed `ServiceContextBase` extension that
+ * api-core uses to type `ctx.service.<thing>`, plus public REST shapes.
+ *
+ * NOTE: queue infrastructure is owned by api-core when `ApiController.configure`
+ * provides a `queue` connection. The service then exposes:
+ *   - `service.addJob(queueName, jobName, payload, opts?)` — produce side
+ *   - `service.getQueue(queueName)` — direct BullMQ Queue access
+ * No queue handle on the context — those methods come from api-core directly.
  */
 
 import type { ServiceContextBase } from '@gertsai/api-core';
@@ -14,7 +19,6 @@ import type { IDocumentStore } from '../../domain/ports/IDocumentStore';
 import type { IChunkStore } from '../../domain/ports/IChunkStore';
 import type { IEmbedder } from '../../domain/ports/IEmbedder';
 import type { IPermissionGate } from '../../domain/ports/IPermissionGate';
-import type { IngestQueueHandle } from './src/queues';
 
 // =============================================================================
 // Service Context
@@ -22,8 +26,11 @@ import type { IngestQueueHandle } from './src/queues';
 
 /**
  * Properties wired into `ctx.service` by the ingest lifecycle handler.
- * Action handlers see these strongly-typed thanks to ApiController's
+ * Action handlers see these strongly-typed via ApiController's
  * `ServiceContext` generic.
+ *
+ * `addJob` and `getQueue` are NOT declared here — they are added by api-core
+ * onto every service whose ApiController has a queue config.
  */
 export interface IngestServiceContext extends ServiceContextBase {
   docStore: IDocumentStore;
@@ -31,7 +38,6 @@ export interface IngestServiceContext extends ServiceContextBase {
   embedder: IEmbedder;
   gate: IPermissionGate;
   useCase: IngestDocumentUseCase;
-  queue: IngestQueueHandle;
 }
 
 // =============================================================================
@@ -67,18 +73,21 @@ export interface IngestDocumentRequest {
 /**
  * `POST /api/v1/ingest/document` — response body.
  *
- * In queue mode (REDIS_URL set) `chunkCount` is `null` and processing
- * happens in the BullMQ worker; the job id is returned so callers can poll
- * for completion. In inline mode (no Redis), processing is synchronous and
- * `chunkCount` is the final count.
+ * In **queue mode** (REDIS_URL set + workers enabled): action returns
+ * immediately with `mode='queued'`, `jobId=<bullmq id>`, `chunkCount=null`.
+ * Processing happens asynchronously in the BullMQ Worker.
+ *
+ * In **inline mode** (REDIS_URL not set): action runs the use case
+ * synchronously and returns `mode='inline'`, `chunkCount=<final count>`.
+ * `jobId` is a synthetic identifier.
  */
 export interface IngestDocumentResponse {
   /** Echoed back for client-side correlation */
   docId: string;
   /** BullMQ job id (or a synthetic id when running in inline mode) */
   jobId: string;
-  /** 'redis' when backed by BullMQ, 'inline' when fallback synchronous */
-  mode: 'redis' | 'inline';
-  /** Final chunk count when synchronous; null in async/Redis mode */
+  /** 'queued' when handed to BullMQ, 'inline' when run synchronously here */
+  mode: 'queued' | 'inline';
+  /** Final chunk count when synchronous; null in async/queued mode */
   chunkCount: number | null;
 }
