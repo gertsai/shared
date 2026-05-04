@@ -50,13 +50,28 @@ const cacher: Cacher = new M9sCacheCacher({
 }) as unknown as Cacher;
 
 // ---------------------------------------------------------------------------
-// Transporter: `null` | redis | nats
+// Transporter: Local (null) | Redis | NATS
+//
+// NOTE: transporter ≠ queue. NATS is for inter-service Moleculer pub/sub;
+// the BullMQ queue uses REDIS_URL independently. You can run NATS transport
+// AND a Redis-backed queue at the same time (recommended for multi-node).
 // ---------------------------------------------------------------------------
 const transporter: BrokerOptions['transporter'] =
-  config.TRANSPORT_TYPE === 'redis' && config.REDIS_URL
-    ? { type: 'Redis', options: { redis: config.REDIS_URL } }
-    : config.TRANSPORT_TYPE === 'nats' && config.NATS_URL
-      ? { type: 'NATS', options: { url: config.NATS_URL } }
+  config.TRANSPORT_TYPE === 'NATS' && config.NATS_URL
+    ? {
+        type: 'NATS',
+        options: {
+          url: config.NATS_URL,
+          // Reliability options matching pipeline defaults.
+          maxReconnectAttempts: config.NATS_MAX_RECONNECT, // -1 = infinite
+          reconnectTimeWait: config.NATS_RECONNECT_WAIT,
+        },
+      }
+    : config.TRANSPORT_TYPE === 'Redis' && config.REDIS_URL
+      ? {
+          type: 'Redis',
+          options: { redis: config.REDIS_URL },
+        }
       : null;
 
 const brokerConfig: BrokerOptions = {

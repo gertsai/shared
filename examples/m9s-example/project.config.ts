@@ -9,10 +9,15 @@
  *
  *   WEB_SERVER_PORT       HTTP port (default: 3000)
  *   MOLECULER_NAMESPACE   broker namespace        (default: 'm9s-example')
- *   TRANSPORT_TYPE        'null' | 'redis' | 'nats'    (default: 'null')
- *   REDIS_URL             redis://host:port — required for 'redis' transport
- *                         AND for BullMQ async queue mode
- *   NATS_URL              nats://host:port — required for 'nats' transport
+ *   TRANSPORT_TYPE        'Local' | 'Redis' | 'NATS' (default: 'Local')
+ *                         — Local: single-node, no transporter
+ *                         — Redis: pub/sub via ioredis
+ *                         — NATS:  via nats.js (multi-node, Pylecular-compat)
+ *   REDIS_URL             redis://host:port — used for: (a) 'Redis' transport,
+ *                                                       (b) BullMQ queue (independent)
+ *   NATS_URL              nats://host:port — required for 'NATS' transport
+ *   NATS_RECONNECT_WAIT   ms between reconnects (default: 2000)
+ *   NATS_MAX_RECONNECT    -1 = infinite (default: -1)
  *   LOG_LEVEL             fatal|error|warn|info|debug|trace  (default: info)
  *   CACHE_TTL             cacher default TTL seconds          (default: 60)
  *   CACHE_MAX_ENTRIES     in-memory cacher cap                (default: 5_000)
@@ -63,9 +68,15 @@ const config = {
 
   // Moleculer broker
   MOLECULER_NAMESPACE: process.env.MOLECULER_NAMESPACE ?? 'm9s-example',
-  TRANSPORT_TYPE: oneOf(process.env.TRANSPORT_TYPE, ['null', 'redis', 'nats'] as const, 'null'),
+  TRANSPORT_TYPE: oneOf(
+    process.env.TRANSPORT_TYPE,
+    ['Local', 'Redis', 'NATS'] as const,
+    'Local',
+  ),
   REDIS_URL: process.env.REDIS_URL ?? '',
-  NATS_URL: process.env.NATS_URL ?? '',
+  NATS_URL: process.env.NATS_URL ?? 'nats://localhost:4222',
+  NATS_RECONNECT_WAIT: num(process.env.NATS_RECONNECT_WAIT, 2_000),
+  NATS_MAX_RECONNECT: num(process.env.NATS_MAX_RECONNECT, -1),
   REQUEST_TIMEOUT: num(process.env.REQUEST_TIMEOUT, 30_000),
 
   // Logging

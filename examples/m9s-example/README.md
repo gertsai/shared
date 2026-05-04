@@ -117,26 +117,56 @@ WORKERS=m9s-example.ingest \
 pnpm --filter @gertsai-examples/m9s-example run start -- --repl
 ```
 
+### Cluster mode — NATS transport + Redis queue
+
+Two infra concerns, runnable simultaneously:
+
+- **NATS** (port 4222) — Moleculer transporter for inter-service pub/sub
+  (`broker.call('v1.search.query', …)` fans out across nodes).
+- **Redis** (port 6379) — BullMQ queue backend (async ingest jobs).
+
+```bash
+# 1. Spin up NATS + Redis in Docker
+pnpm --filter @gertsai-examples/m9s-example run infra:up
+
+# 2. Run the example in cluster mode (NATS transport + Redis queue)
+pnpm --filter @gertsai-examples/m9s-example run dev:cluster
+
+# Tear down:
+pnpm --filter @gertsai-examples/m9s-example run infra:down
+```
+
+Or with custom URLs:
+```bash
+TRANSPORT_TYPE=NATS \
+NATS_URL=nats://nats.local:4222 \
+REDIS_URL=redis://redis.local:6379 \
+WORKER_CONCURRENCY=8 \
+  pnpm --filter @gertsai-examples/m9s-example run dev
+```
+
 ### Configuration (`project.config.ts`)
 
-All knobs live in `project.config.ts` and read once at import time. Override
-via env vars:
+All knobs live in `project.config.ts` and are read once at import time.
+Override via env vars:
 
-| Env var               | Default          | Effect                                                       |
-|-----------------------|------------------|--------------------------------------------------------------|
-| `WEB_SERVER_PORT`     | `3000`           | HTTP gateway port                                            |
-| `MOLECULER_NAMESPACE` | `m9s-example`    | Broker namespace                                             |
-| `TRANSPORT_TYPE`      | `null`           | `null` (single-node) / `redis` / `nats`                      |
-| `REDIS_URL`           | _(unset)_        | Required for `redis` transport AND BullMQ queue              |
-| `NATS_URL`            | _(unset)_        | Required for `nats` transport                                |
-| `LOG_LEVEL`           | `info`           | `fatal` … `trace`                                            |
-| `CACHE_TTL`           | `60`             | Cacher default TTL (seconds)                                 |
-| `CACHE_MAX_ENTRIES`   | `5000`           | In-memory cacher cap                                         |
-| `REQUEST_TIMEOUT`     | `30000`          | Moleculer request timeout (ms)                               |
-| `WORKER_CONCURRENCY`  | `4`              | BullMQ Worker `{ concurrency }`                              |
-| `WORKERS_ENABLED`     | `true`           | `false` → producer-only (jobs added, not consumed here)      |
-| `SERVICES`            | _(all)_          | CSV of service short names (`ingest,search`)                 |
-| `WORKERS`             | _(all)_          | CSV of worker queue names                                    |
+| Env var                | Default                   | Effect                                                  |
+|------------------------|---------------------------|---------------------------------------------------------|
+| `WEB_SERVER_PORT`      | `3000`                    | HTTP gateway port                                       |
+| `MOLECULER_NAMESPACE`  | `m9s-example`             | Broker namespace                                        |
+| `TRANSPORT_TYPE`       | `Local`                   | `Local` (single-node) / `Redis` / `NATS`                |
+| `REDIS_URL`            | _(unset)_                 | Used for: (a) `Redis` transport, (b) BullMQ queue       |
+| `NATS_URL`             | `nats://localhost:4222`   | Used by `NATS` transport                                |
+| `NATS_RECONNECT_WAIT`  | `2000`                    | ms between NATS reconnects                              |
+| `NATS_MAX_RECONNECT`   | `-1`                      | -1 = infinite                                           |
+| `LOG_LEVEL`            | `info`                    | `fatal` … `trace`                                       |
+| `CACHE_TTL`            | `60`                      | Cacher default TTL (seconds)                            |
+| `CACHE_MAX_ENTRIES`    | `5000`                    | In-memory cacher cap                                    |
+| `REQUEST_TIMEOUT`      | `30000`                   | Moleculer request timeout (ms)                          |
+| `WORKER_CONCURRENCY`   | `4`                       | BullMQ Worker `{ concurrency }`                         |
+| `WORKERS_ENABLED`      | `true`                    | `false` → producer-only (jobs added, not consumed here) |
+| `SERVICES`             | _(all)_                   | CSV of service short names (`ingest,search`)            |
+| `WORKERS`              | _(all)_                   | CSV of worker queue names                               |
 
 In another terminal:
 

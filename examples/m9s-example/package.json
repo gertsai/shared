@@ -11,6 +11,10 @@
     "start": "node dist/src/index.js",
     "dev": "ts-node-dev --debounce 1500 src/index.ts --repl",
     "dev:no-repl": "ts-node-dev --debounce 1500 src/index.ts",
+    "dev:cluster": "TRANSPORT_TYPE=NATS REDIS_URL=redis://localhost:6379 NATS_URL=nats://localhost:4222 ts-node-dev --debounce 1500 src/index.ts",
+    "infra:up": "docker compose -f docker-compose.yml up -d",
+    "infra:down": "docker compose -f docker-compose.yml down",
+    "infra:logs": "docker compose -f docker-compose.yml logs -f",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tspc --noEmit",
@@ -28,6 +32,7 @@
     "ioredis": "^5.8.0",
     "moleculer": "^0.14.35",
     "moleculer-web": "^0.10.6",
+    "nats": "^2.29.3",
     "typia": "^9.7.0"
   },
   "devDependencies": {

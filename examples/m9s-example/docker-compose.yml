@@ -1,0 +1,49 @@
+# NATS + Redis infra for m9s-example.
+#
+# Spin up with:   pnpm run infra:up
+# Tear down with: pnpm run infra:down
+# Logs:           pnpm run infra:logs
+#
+# Then run the example in cluster mode:
+#   pnpm run dev:cluster
+#
+# Layout:
+#   - NATS  (port 4222) → Moleculer transporter for inter-service pub/sub
+#   - Redis (port 6379) → BullMQ queue backend (jobs + workers)
+#
+# These are two independent concerns:
+#   - NATS  = synchronous service calls fan out across nodes
+#   - Redis = asynchronous background jobs (ingest worker)
+
+services:
+  nats:
+    image: nats:2.10-alpine
+    container_name: m9s-example-nats
+    ports:
+      - '127.0.0.1:4222:4222' # client port
+      - '127.0.0.1:8222:8222' # http monitoring
+    command: ['-js', '-m', '8222'] # enable JetStream + monitoring
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '-q', 'http://localhost:8222/healthz']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: m9s-example-redis
+    ports:
+      - '127.0.0.1:6379:6379'
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes:
+      - m9s-redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  m9s-redis-data:

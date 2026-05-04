@@ -56,6 +56,9 @@ importers:
       moleculer-web:
         specifier: ^0.10.6
         version: 0.10.8(moleculer@0.14.35(bunyan@1.8.15)(debug@4.4.3)(ioredis@5.10.1)(nats@2.29.3)(protobufjs@7.5.6))
+      nats:
+        specifier: ^2.29.3
+        version: 2.29.3
       typia:
         specifier: ^9.7.0
         version: 9.7.2(@types/node@22.19.17)(typescript@5.9.3)
