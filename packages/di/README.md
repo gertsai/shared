@@ -1,495 +1,183 @@
-# @gerts/di
+<div align="center">
 
-A lightweight, type-safe dependency injection container for TypeScript applications.
+# @gertsai/di
 
-## Features
+### Type-safe dependency injection that respects consumer lifecycles
 
-- 🔐 **Type-safe**: Full TypeScript support with compile-time type checking
-- 🏗️ **Modular**: Support for both consumer-specific and global services
-- 🧹 **Memory-safe**: Automatic cleanup and memory leak prevention
-- 📦 **Lazy loading**: Services are created only when needed
-- 🔄 **Lifecycle management**: Automatic service lifecycle tied to consumer lifecycle
-- 🎯 **Framework agnostic**: Works with any TypeScript project
-- 🧪 **Well-tested**: Comprehensive test suite with 100% coverage
+A lightweight DI container for TypeScript: branded service identifiers, lazy
+factories, automatic cleanup tied to consumer destruction, and dual ESM+CJS output.
 
-## Installation
+[![Tier](https://img.shields.io/badge/tier-2-orange?style=flat-square)](#)
+[![Build](https://img.shields.io/badge/build-ESM%20%2B%20CJS-blue?style=flat-square)](#)
+[![Types](https://img.shields.io/badge/types-strict-3178c6?style=flat-square)](#)
+[![Status](https://img.shields.io/badge/status-alpha-yellow?style=flat-square)](#status)
+
+</div>
+
+---
+
+## Why @gertsai/di
+
+<table>
+<tr>
+<td width="50%">
+
+### Without
+- DI containers tied to decorators and `reflect-metadata`
+- Singletons that outlive the entities they serve
+- Loose `string` keys, no compile-time guarantees
+- Manual teardown of every dependent object
+
+</td>
+<td width="50%">
+
+### With @gertsai/di
+- Plain classes, no decorators, no metadata reflection
+- Services live and die with their consumer
+- `ServiceIdentifier<T>` carries the type into `get()`
+- One `consumer.$destroy()` cascades cleanup
+
+</td>
+</tr>
+</table>
+
+## Install
 
 ```bash
-pnpm add @gerts/di
+pnpm add @gertsai/di
 ```
 
-## Quick Start
+Peer requirement: TypeScript 5.2+. Workspace dep: [`@gertsai/utils`](../utils)
+(provides `DeferredPromise` for service readiness).
 
-### 1. Define Your Services
+## Quickstart
 
 ```typescript
-import { AbstractService, createIdentifier } from '@gerts/di';
-import type { ConsumerType } from '@gerts/di';
+import { EventEmitter } from 'events';
+import {
+  AbstractService,
+  createIdentifier,
+  diContainer,
+  type ConsumerType,
+} from '@gertsai/di';
 
-// Define a consumer (entity that uses services)
+// 1. Consumer — entity that owns services
 class UserEntity extends EventEmitter implements ConsumerType {
-  constructor(
-    private _id: string,
-    private _name: string,
-  ) {
+  constructor(public readonly id: string, public readonly name: string) {
     super();
   }
-
-  get id() {
-    return this._id;
-  }
-  get name() {
-    return this._name;
-  }
-
   $destroy() {
     this.emit('destroy');
     this.removeAllListeners();
   }
 }
 
-// Define a service
-class UserProfileService extends AbstractService<UserEntity> {
-  private _profile: any = null;
+// 2. Service — bound to a consumer, lifecycle-managed
+class ProfileService extends AbstractService<UserEntity> {
+  private profile: { bio: string } | null = null;
 
   constructor({ consumer }: { consumer: UserEntity }) {
     super({ consumer });
-    this.loadProfile();
-  }
-
-  private async loadProfile() {
-    // Simulate async loading
-    this._profile = { bio: `Profile for ${this.Consumer.name}` };
-    this._isReady.resolve(); // Mark service as ready
-  }
-
-  getProfile() {
-    return this._profile;
-  }
-
-  $destroy() {
-    this._profile = null;
-    this.removeAllListeners();
-  }
-}
-```
-
-### 2. Create Service Identifiers
-
-```typescript
-// Create a unique identifier for the service
-const profileServiceId = createIdentifier<UserProfileService>('profile');
-```
-
-### 3. Register Services
-
-```typescript
-import { diContainer } from '@gerts/di';
-
-// Register the service for the UserEntity consumer type
-diContainer.registerService(UserEntity, profileServiceId, ({ consumer }) => {
-  return new UserProfileService({ consumer });
-});
-```
-
-### 4. Use Services
-
-```typescript
-// Create a user entity
-const user = new UserEntity('user-1', 'Alice');
-
-// Get the service directory for this user
-const userDirectory = diContainer.resolveServiceDirectory('User', UserEntity, user);
-
-// Get the profile service (created lazily)
-const profileService = userDirectory.get(profileServiceId);
-
-// Wait for the service to be ready
-await profileService.isReady;
-
-// Use the service
-const profile = profileService.getProfile();
-console.log(profile); // { bio: 'Profile for Alice' }
-
-// Cleanup (automatically destroys all services)
-user.$destroy();
-```
-
-## Core Concepts
-
-### Services
-
-Services are classes that extend `AbstractService<Consumer>` and provide specific functionality for consumers. Services can be:
-
-- **Consumer-specific**: Associated with a particular consumer instance
-- **Global**: Singleton services shared across the application
-
-```typescript
-// Consumer-specific service
-class UserSettingsService extends AbstractService<UserEntity> {
-  // Service implementation
-}
-
-// Global service
-class LoggerService extends AbstractService<null> implements IGlobalService {
-  // Global service implementation
-}
-```
-
-### Consumers
-
-Consumers are entities that use services. They must:
-
-- Extend `EventEmitter`
-- Implement `IDestroyable` interface
-- Emit a 'destroy' event when being cleaned up
-
-```typescript
-class UserEntity extends EventEmitter implements ConsumerType {
-  $destroy() {
-    this.emit('destroy'); // Important: triggers service cleanup
-    this.removeAllListeners();
-  }
-}
-```
-
-### Service Identifiers
-
-Service identifiers are unique, type-safe keys used to register and retrieve services:
-
-```typescript
-const profileId = createIdentifier<UserProfileService>('profile');
-const settingsId = createIdentifier<UserSettingsService>('settings');
-const loggerId = createIdentifier<LoggerService>('logger');
-```
-
-### Service Directories
-
-Service directories manage service instances for specific consumers:
-
-- Lazy creation: Services are created only when first requested
-- Caching: Same service instance returned on subsequent calls
-- Automatic cleanup: All services destroyed when consumer is destroyed
-
-## Advanced Usage
-
-### Global Services
-
-Global services are singletons shared across the entire application:
-
-```typescript
-class ConfigService extends AbstractService<null> implements IGlobalService {
-  private _config = { apiUrl: 'https://api.example.com' };
-
-  constructor({ consumer }: { consumer: null }) {
-    super({ consumer });
+    this.profile = { bio: `Profile for ${consumer.name}` };
     this._isReady.resolve();
   }
 
-  get<K extends keyof typeof this._config>(key: K) {
-    return this._config[key];
-  }
-
-  $destroy() {
-    this.removeAllListeners();
-  }
+  getProfile() { return this.profile; }
+  $destroy() { this.profile = null; this.removeAllListeners(); }
 }
 
-const configId = createIdentifier<ConfigService>('config');
+// 3. Identifier — branded, type-carrying
+const ProfileServiceId = createIdentifier<ProfileService>('profile');
 
-// Register global service
-diContainer.registerGlobalService(configId, ({ consumer }) => {
-  return new ConfigService({ consumer });
-});
+// 4. Register
+diContainer.registerService(UserEntity, ProfileServiceId, ({ consumer }) =>
+  new ProfileService({ consumer }),
+);
 
-// Access from anywhere
-const config = diContainer.$sd.get(configId);
+// 5. Resolve + use
+const alice = new UserEntity('u-1', 'Alice');
+const sd = diContainer.resolveServiceDirectory('User', UserEntity, alice);
+const profile = sd.get(ProfileServiceId); // typed as ProfileService
+
+await profile.isReady;
+profile.getProfile(); // { bio: 'Profile for Alice' }
+
+alice.$destroy(); // cascades — ProfileService.$destroy() runs
 ```
 
-### Service Communication
+## What you get
 
-Services can communicate through events:
+| | |
+|:---|:---|
+| **Branded identifiers** | `createIdentifier<T>(name)` returns `ServiceIdentifier<T>` — the type travels through registration and resolution. |
+| **Container hierarchy** | Per-consumer-class registries plus a `__global__` registry for singletons. Lookups are scoped, not flat. |
+| **Lifecycle binding** | A consumer emitting `'destroy'` triggers `ServiceDirectory.$destroy()` which destroys every cached service. No manual bookkeeping. |
+| **Lazy instantiation** | Services are constructed only on first `sd.get(id)`. Subsequent calls return the cached instance. |
+| **Memory-safe** | `WeakMap<ConsumerType, ServiceDirectory>` ensures directories are GC-eligible once consumers are unreferenced. |
+| **Readiness protocol** | `AbstractService` exposes `isReady: Promise<void>` backed by a `DeferredPromise` from `@gertsai/utils`. |
+| **Global services** | Register via `registerGlobalService(id, factory)`, access via `diContainer.$sd.get(id)`. |
+| **Module augmentation** | Extend `ServiceTypeMapping` / `GlobalServiceTypeMapping` for full inference across files. |
+| **Dual build** | `dist/esm` + `dist/cjs` with separate `.d.ts` per format, both published from one source. |
+
+## API surface
 
 ```typescript
-class NotificationService extends AbstractService<UserEntity> {
-  constructor({ consumer }: { consumer: UserEntity }) {
-    super({ consumer });
-    this._isReady.resolve();
-  }
+// Identifiers
+createIdentifier<Service, Name extends string>(name: Name): ServiceIdentifier<Service>;
 
-  sendNotification(message: string) {
-    this.emit('notification-sent', { message, userId: this.Consumer.id });
-  }
+// Container
+diContainer.registerService(
+  ConsumerClass,
+  serviceId,
+  ({ consumer }) => new Service({ consumer }),
+);
+diContainer.registerGlobalService(serviceId, ({ consumer: null }) => new Service(...));
+diContainer.resolveServiceDirectory(name, ConsumerClass, consumerInstance): ServiceDirectory;
+diContainer.$sd; // global ServiceDirectory
 
-  $destroy() {
-    this.removeAllListeners();
-  }
+// Service directory
+sd.get(serviceId);   // lazy + cached, returns typed instance
+sd.$destroy();       // cascade-destroys every cached service
+
+// Base class
+abstract class AbstractService<Consumer extends ConsumerType | null> {
+  protected _consumer: Consumer;
+  protected _isReady: DeferredPromise<void>;
+  get Consumer(): Consumer;
+  get isReady(): Promise<void>;
+  abstract $destroy(): void;
 }
 
-// In another service or component
-profileService.on('profile-updated', () => {
-  notificationService.sendNotification('Profile updated successfully!');
-});
-```
-
-### Type-Safe Service Mappings
-
-For better type inference, extend the service type mappings:
-
-```typescript
-declare module '@gerts/di' {
+// Type-mapping extension points
+declare module '@gertsai/di' {
   interface ServiceTypeMapping {
-    User: {
-      profile: UserProfileService;
-      settings: UserSettingsService;
-      notifications: NotificationService;
-    };
-    Chat: {
-      messages: MessagesService;
-      typing: TypingIndicatorService;
-    };
+    User: { profile: ProfileService; settings: SettingsService };
   }
-
   interface GlobalServiceTypeMapping {
     logger: LoggerService;
-    config: ConfigService;
-    http: HttpClientService;
   }
 }
 ```
 
-### If you want to declare and register services in separate files
+Exports: `createIdentifier`, `diContainer`, `AbstractService`, `ServiceDirectory`,
+`ServicesRegistry`, plus types `IService`, `IGlobalService`, `ConsumerType`,
+`ServiceConsumer`, `ServiceIdentifier`, `ServiceFactory`,
+`ServiceTypeMapping`, `GlobalServiceTypeMapping`, `DefaultServiceTypeMapping`.
 
-You can declare and register services in separate files.
+## Comparison
 
-For example, you can create a file `services.ts` and declare the service type mappings there:
+| | `@gertsai/di` | InversifyJS | TSyringe |
+|---|---|---|---|
+| Decorators / `reflect-metadata` | no | required | required |
+| Lifecycle bound to a consumer entity | yes | manual scopes | manual scopes |
+| Bundle footprint | minimal (one workspace dep) | medium | small |
+| Primary use case | entity-scoped services in long-lived apps | enterprise IoC | request-scoped DI |
 
-```typescript
-declare module '@gerts/di' {
-  // Declare empty interface for service type mapping
-  declare interface UserServiceTypeMapping {}
-  interface ServiceTypeMapping {
-    User: UserServiceTypeMapping;
-  }
+## Status
 
-  interface GlobalServiceTypeMapping {
-    logger: LoggerService;
-    config: ConfigService;
-    http: HttpClientService;
-  }
-}
-
-// Extend the service type mapping in the another file
-declare module '@gerts/di' {
-  interface UserServiceTypeMapping {
-    profile: UserProfileService;
-  }
-}
-
-// Extend the service type mapping in the another file
-declare module '@gerts/di' {
-  interface UserServiceTypeMapping {
-    settings: UserSettingsService;
-  }
-}
-```
-
-### Service Consumer Interface
-
-Make your consumers implement the `ServiceConsumer` interface for better integration:
-
-```typescript
-class UserEntity extends EventEmitter implements ConsumerType, ServiceConsumer<'User', UserEntity> {
-  public $sd: ServiceDirectory<'User', UserEntity>;
-
-  constructor(id: string, name: string) {
-    super();
-    // Service directory will be injected by the DI system
-    this.$sd = diContainer.resolveServiceDirectory('User', UserEntity, this);
-  }
-
-  // Now you can access services directly
-  getProfileService() {
-    return this.$sd.get(profileServiceId);
-  }
-
-  $destroy() {
-    this.emit('destroy');
-    this.removeAllListeners();
-  }
-}
-```
-
-## Best Practices
-
-### 1. Service Initialization
-
-Always resolve the `_isReady` promise when your service is ready:
-
-```typescript
-class DatabaseService extends AbstractService<AppEntity> {
-  private _connection: any = null;
-
-  constructor({ consumer }: { consumer: AppEntity }) {
-    super({ consumer });
-    this.connect();
-  }
-
-  private async connect() {
-    try {
-      this._connection = await connectToDatabase();
-      this._isReady.resolve(); // ✅ Mark as ready
-    } catch (error) {
-      this._isReady.reject(error); // ❌ Mark as failed
-    }
-  }
-
-  $destroy() {
-    this._connection?.close();
-    this.removeAllListeners();
-  }
-}
-```
-
-### 2. Memory Management
-
-Always clean up resources in the `$destroy` method:
-
-```typescript
-class TimerService extends AbstractService<UserEntity> {
-  private _interval: NodeJS.Timeout | null = null;
-
-  constructor({ consumer }: { consumer: UserEntity }) {
-    super({ consumer });
-    this._interval = setInterval(() => {
-      this.emit('tick');
-    }, 1000);
-    this._isReady.resolve();
-  }
-
-  $destroy() {
-    if (this._interval) {
-      clearInterval(this._interval); // ✅ Clean up timer
-      this._interval = null;
-    }
-    this.removeAllListeners(); // ✅ Clean up event listeners
-  }
-}
-```
-
-### 3. Error Handling
-
-Handle errors gracefully in service methods:
-
-```typescript
-class ApiService extends AbstractService<UserEntity> {
-  async fetchUserData() {
-    await this.isReady; // Wait for service to be ready
-
-    try {
-      const response = await fetch('/api/user');
-      return await response.json();
-    } catch (error) {
-      this.emit('error', error);
-      throw error;
-    }
-  }
-}
-```
-
-### 4. Service Dependencies
-
-If a service depends on another service, inject it through the constructor:
-
-```typescript
-class UserService extends AbstractService<UserEntity> {
-  constructor(
-    { consumer }: { consumer: UserEntity },
-    private _apiService: ApiService,
-    private _logger: LoggerService,
-  ) {
-    super({ consumer });
-    this.initialize();
-  }
-
-  private async initialize() {
-    await this._apiService.isReady;
-    this._logger.info('UserService initialized');
-    this._isReady.resolve();
-  }
-}
-
-// Register with dependencies
-diContainer.registerService(UserEntity, userServiceId, ({ consumer }) => {
-  const apiService = userDirectory.get(apiServiceId);
-  const logger = diContainer.$sd.get(loggerServiceId);
-  return new UserService({ consumer }, apiService, logger);
-});
-```
-
-## Testing
-
-The library includes comprehensive test utilities:
-
-```typescript
-import { describe, it, expect, beforeEach } from 'vitest';
-import { createIdentifier, diContainer } from '@gerts/di';
-
-describe('MyService', () => {
-  let consumer: MyConsumer;
-  let service: MyService;
-
-  beforeEach(() => {
-    consumer = new MyConsumer();
-    const directory = diContainer.resolveServiceDirectory('My', MyConsumer, consumer);
-    service = directory.get(myServiceId);
-  });
-
-  it('should initialize correctly', async () => {
-    await service.isReady;
-    expect(service.Consumer).toBe(consumer);
-  });
-
-  it('should clean up properly', () => {
-    const destroySpy = vi.spyOn(service, '$destroy');
-    consumer.$destroy();
-    expect(destroySpy).toHaveBeenCalled();
-  });
-});
-```
-
-## API Reference
-
-### Core Functions
-
-- `createIdentifier<Service>(name: string)` - Creates a type-safe service identifier
-- `diContainer.registerService(ConsumerClass, serviceId, factory)` - Registers a consumer-specific service
-- `diContainer.registerGlobalService(serviceId, factory)` - Registers a global service
-- `diContainer.resolveServiceDirectory(name, ConsumerClass, instance)` - Gets service directory for consumer
-- `diContainer.$sd` - Global service directory
-
-### Core Classes
-
-- `AbstractService<Consumer>` - Base class for all services
-- `ServiceDirectory<ConsumerClassName, Consumer>` - Manages services for a consumer
-- `ServicesRegistry<Consumer>` - Stores service factories
-
-### Interfaces
-
-- `IService<Consumer>` - Interface for consumer-specific services
-- `IGlobalService` - Interface for global services
-- `ConsumerType` - Base type for service consumers
-- `ServiceConsumer<ClassName, Consumer>` - Interface for consumers with service directories
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Run the test suite: `pnpm test`
-6. Submit a pull request
+Alpha — `0.1.0`, internal Orchestra/GertsAi consumption. Public API may shift
+before `1.0`. Tier 2 in the workspace dependency graph (depends on `@gertsai/utils`).
 
 ## License
 
-This project is licensed under the terms specified in the package.json file.
+UNLICENSED — internal use only. See repository root for terms.

@@ -1,329 +1,211 @@
-# @gerts/ws-rpc
+<div align="center">
 
-WebSocket JSON-RPC 2.0 client with auto-reconnect and topic-based subscriptions.
+# @gertsai/ws-rpc
 
-## Installation
+### WebSocket JSON-RPC 2.0 — auto-reconnect, topics, type-safe
+
+A Tier-1 client for talking to JSON-RPC 2.0 servers over WebSocket. Exponential backoff,
+topic subscriptions with wildcards, message queuing, heartbeat — and a typed surface for both
+browser and Node.
+
+[![npm](https://img.shields.io/badge/npm-%40gertsai%2Fws--rpc-orange?style=flat-square)](https://www.npmjs.com/package/@gertsai/ws-rpc)
+[![License: MIT](https://img.shields.io/badge/license-MIT-000.svg?style=flat-square)](LICENSE)
+[![Tier](https://img.shields.io/badge/tier-1%20(no%20deps)-blue?style=flat-square)](#status)
+
+</div>
+
+---
+
+## Why @gertsai/ws-rpc
+
+<table>
+<tr>
+<td width="50%">
+
+### Without
+- Hand-rolled `WebSocket` with ad-hoc reconnect
+- Pending promises that hang forever after a drop
+- Topic routing reinvented per-app
+- "Did the server actually receive that?" — silence
+- Browser/Node split into two clients
+
+</td>
+<td width="50%">
+
+### With
+- One `WsRpcClient` — `connect`, `call`, `notify`, `subscribe`
+- Pending requests rejected on disconnect, no leaks
+- Wildcards built-in (`user.*`, `pipeline.**`)
+- Message queue while offline, drained on reconnect
+- Same API in browser and Node (`ws` peer optional)
+
+</td>
+</tr>
+</table>
+
+## Install
 
 ```bash
-pnpm add @gerts/ws-rpc
+pnpm add @gertsai/ws-rpc
+# Node-side only: provide a WebSocket implementation
+pnpm add ws
 ```
 
-## Features
+Peer `ws@^8` is optional — browsers use the global `WebSocket`.
 
-- **JSON-RPC 2.0** — Full protocol support (requests, responses, notifications)
-- **Auto-reconnect** — Exponential backoff with configurable limits
-- **Subscriptions** — Topic-based with wildcard support (`user.*`, `**`)
-- **Message queuing** — Queues messages when disconnected
-- **Heartbeat** — Built-in ping/pong support
-- **TypeScript** — Full type safety
-- **Cross-platform** — Works in browser and Node.js
+## Quickstart
 
-> **Note:** See [TODO.md](./TODO.md) for pending security hardening tasks before production use.
-
-## Quick Start
+### Connect
 
 ```typescript
-import { WsRpcClient } from '@gerts/ws-rpc';
+import { WsRpcClient } from '@gertsai/ws-rpc';
 
 const client = new WsRpcClient({
   url: 'ws://localhost:3023/ws',
-  reconnect: { maxAttempts: 5, delay: 1000 },
+  timeout: 30000,
+  reconnect: { maxAttempts: 5, delay: 1000, factor: 2, jitter: true },
 });
 
 await client.connect();
-
-// RPC call with typed response
-const result = await client.call<{ answer: string }>('graph.query', {
-  question: 'What is NeuraTech?',
-  tenantId: 'demo',
-});
-console.log(result.answer);
-
-// Subscribe to events
-const unsubscribe = client.subscribe('ingest.progress', (event) => {
-  console.log(`Progress: ${event.progress}%`);
-});
-
-// Subscribe with wildcard
-client.subscribe('user.*', (event) => {
-  console.log('User event:', event);
-});
-
-// Cleanup
-unsubscribe();
-client.disconnect();
 ```
 
-## Configuration
+### Call (request → response)
 
 ```typescript
-const client = new WsRpcClient({
-  // Required
-  url: 'ws://localhost:3023/ws',
+import { RpcError, RpcTimeoutError } from '@gertsai/ws-rpc';
 
-  // Optional
-  protocols: 'json-rpc',         // WebSocket sub-protocol
-  timeout: 30000,                // Request timeout (ms)
-  heartbeatInterval: 30000,      // Heartbeat interval (ms, 0 to disable)
-  maxQueueSize: 100,             // Max queued messages when disconnected
-  headers: { 'X-API-Key': '...' }, // Custom headers (Node.js only)
-
-  // Reconnection
-  reconnect: {
-    enabled: true,               // Enable auto-reconnect
-    maxAttempts: 5,              // Max retry attempts
-    delay: 1000,                 // Initial delay (ms)
-    maxDelay: 30000,             // Max delay (ms)
-    factor: 2,                   // Backoff multiplier
-    jitter: true,                // Add randomness to delay
-  },
-});
+try {
+  const result = await client.call<{ answer: string }>('graph.query', {
+    question: 'What is NeuraTech?',
+    tenantId: 'demo',
+  });
+  console.log(result.answer);
+} catch (err) {
+  if (err instanceof RpcError)        console.error(err.code, err.message);
+  if (err instanceof RpcTimeoutError) console.error('timeout', err.method);
+}
 ```
 
-## API Reference
-
-### WsRpcClient
-
-#### `connect(): Promise<void>`
-
-Connect to WebSocket server.
-
-```typescript
-await client.connect();
-```
-
-#### `disconnect(code?: number, reason?: string): void`
-
-Disconnect from server.
-
-```typescript
-client.disconnect(1000, 'Normal closure');
-```
-
-#### `call<TResult, TParams>(method: string, params?: TParams): Promise<TResult>`
-
-Make JSON-RPC call and wait for response.
-
-```typescript
-const result = await client.call<User>('user.get', { id: '123' });
-```
-
-#### `notify<TParams>(method: string, params?: TParams): void`
-
-Send notification (no response expected).
-
-```typescript
-client.notify('analytics.track', { event: 'page_view' });
-```
-
-#### `subscribe<T>(topic: string, callback: (data: T) => void): () => void`
-
-Subscribe to server events. Returns unsubscribe function.
+### Subscribe (topic stream)
 
 ```typescript
 // Exact topic
-const unsub = client.subscribe('user.created', (user) => {
-  console.log('New user:', user);
+const off = client.subscribe<{ progress: number }>('ingest.progress', (e) => {
+  console.log(`${e.progress}%`);
 });
 
-// Wildcard (single segment)
-client.subscribe('user.*', (event) => {
-  // Matches: user.created, user.updated, user.deleted
-});
+// Single-segment wildcard: matches user.created, user.updated, ...
+client.subscribe('user.*', (e) => console.log('user event', e));
 
-// Wildcard (multiple segments)
-client.subscribe('api.**', (event) => {
-  // Matches: api.request, api.users.get, api.orders.create
-});
+// Multi-segment wildcard: matches api.users.get, api.orders.create, ...
+client.subscribe('api.**', (e) => console.log('api event', e));
 
-unsub(); // Unsubscribe
+off();              // unsubscribe one
+client.disconnect(); // close cleanly
 ```
 
-### Events
+## What you get
+
+| Feature | Status | Notes |
+|---|---|---|
+| **JSON-RPC 2.0** | Full | Requests, responses, notifications, batches via type guards |
+| **Auto-reconnect** | Built-in | Exponential backoff + jitter, configurable cap |
+| **Topic subscriptions** | Built-in | Wildcards `*` (one segment) and `**` (many) |
+| **Message queuing** | Built-in | Buffers up to `maxQueueSize` while offline; drains on reconnect |
+| **Heartbeat** | Built-in | Configurable ping interval; `0` to disable |
+| **Type safety** | Strict | Generic `call<TResult, TParams>`, typed events, exhaustive guards |
+| **Cross-platform** | Yes | Browser `WebSocket` or Node `ws` peer (optional) |
+| **Backpressure** | Yes | `maxMessageSize` (1MB default), `maxPendingRequests` (1000 default) |
+| **Pending hygiene** | Yes | All in-flight calls rejected on `disconnect()` |
+
+## API surface
+
+Documented exports from `@gertsai/ws-rpc`:
 
 ```typescript
-client.on('open', () => {
-  console.log('Connected');
-});
+// Client + utilities
+export { WsRpcClient }          // main class
+export { ReconnectStrategy }    // standalone backoff calculator
+export { SubscriptionManager }  // standalone topic dispatcher
 
-client.on('close', (code, reason) => {
-  console.log(`Disconnected: ${code} ${reason}`);
-});
+// Errors
+export { RpcError, ConnectionError, RpcTimeoutError }
 
-client.on('error', (error) => {
-  console.error('Error:', error);
-});
+// Constants
+export { JSON_RPC_VERSION, JsonRpcErrorCode }
 
-client.on('reconnecting', (attempt, delay) => {
-  console.log(`Reconnecting in ${delay}ms (attempt ${attempt})`);
-});
+// Type guards
+export {
+  isValidJsonRpcId,
+  isJsonRpcRequest, isJsonRpcNotification,
+  isJsonRpcResponse, isJsonRpcSuccessResponse, isJsonRpcErrorResponse,
+}
 
-client.on('reconnected', () => {
-  console.log('Reconnected!');
-});
-
-client.on('notification', (method, params) => {
-  console.log(`Notification: ${method}`, params);
-});
-
-client.on('message', (data) => {
-  console.log('Raw message:', data);
-});
-```
-
-### Utility Methods
-
-```typescript
-client.isConnected();         // boolean
-client.getState();            // 'connecting' | 'open' | 'closing' | 'closed'
-client.getPendingCount();     // Number of pending requests
-client.getQueueSize();        // Number of queued messages
-client.getSubscriptionCount(); // Number of active subscriptions
-```
-
-## Error Handling
-
-```typescript
-import { RpcError, RpcTimeoutError, ConnectionError } from '@gerts/ws-rpc';
-
-try {
-  await client.call('some.method');
-} catch (error) {
-  if (error instanceof RpcError) {
-    console.log(`RPC Error: ${error.code} - ${error.message}`);
-    console.log('Data:', error.data);
-  }
-
-  if (error instanceof RpcTimeoutError) {
-    console.log(`Timeout calling ${error.method} after ${error.timeout}ms`);
-  }
-
-  if (error instanceof ConnectionError) {
-    console.log('Connection error:', error.message);
-  }
+// Types
+export type {
+  JsonRpcId, JsonRpcRequest, JsonRpcNotification, JsonRpcError,
+  JsonRpcResponse, JsonRpcSuccessResponse, JsonRpcErrorResponse,
+  WsRpcOptions, ReconnectOptions,
+  Subscription, SubscriptionCallback,
+  WsRpcEvents, PendingRequest,
 }
 ```
 
-### Standard JSON-RPC Error Codes
+### `WsRpcClient` — core methods
+
+| Method | Returns | Purpose |
+|---|---|---|
+| `connect()` | `Promise<void>` | Open the socket; resolves on `open`, rejects on fatal error |
+| `disconnect(code?, reason?)` | `void` | Close cleanly; rejects all pending calls |
+| `call<TResult, TParams>(method, params?)` | `Promise<TResult>` | JSON-RPC request with timeout |
+| `notify<TParams>(method, params?)` | `void` | Fire-and-forget notification |
+| `subscribe<T>(topic, cb)` | `() => void` | Subscribe to topic; returns unsubscribe |
+| `isConnected()` | `boolean` | Quick liveness check |
+| `getState()` | `'connecting' \| 'open' \| 'closing' \| 'closed'` | Detailed state |
+| `getPendingCount()` / `getQueueSize()` / `getSubscriptionCount()` | `number` | Introspection |
+
+### Events (typed via `WsRpcEvents`)
+
+`open` · `close(code, reason)` · `error(error)` · `reconnecting(attempt, delay)` ·
+`reconnected` · `notification(method, params)` · `message(data)`
+
+### Options highlights — `WsRpcOptions`
 
 ```typescript
-import { JsonRpcErrorCode } from '@gerts/ws-rpc';
-
-JsonRpcErrorCode.PARSE_ERROR      // -32700
-JsonRpcErrorCode.INVALID_REQUEST  // -32600
-JsonRpcErrorCode.METHOD_NOT_FOUND // -32601
-JsonRpcErrorCode.INVALID_PARAMS   // -32602
-JsonRpcErrorCode.INTERNAL_ERROR   // -32603
-```
-
-## Type Guards
-
-```typescript
-import {
-  isJsonRpcRequest,
-  isJsonRpcNotification,
-  isJsonRpcResponse,
-  isJsonRpcSuccessResponse,
-  isJsonRpcErrorResponse,
-} from '@gerts/ws-rpc';
-
-const message = JSON.parse(data);
-
-if (isJsonRpcRequest(message)) {
-  console.log('Request:', message.method);
-}
-
-if (isJsonRpcNotification(message)) {
-  console.log('Notification:', message.method);
-}
-
-if (isJsonRpcResponse(message)) {
-  if (isJsonRpcSuccessResponse(message)) {
-    console.log('Success:', message.result);
-  } else {
-    console.log('Error:', message.error);
-  }
+{
+  url: string;                       // required
+  protocols?: string | string[];     // WebSocket sub-protocols
+  timeout?: number;                  // request timeout, default 30000ms
+  heartbeatInterval?: number;        // default 30000ms, 0 to disable
+  maxQueueSize?: number;             // default 100
+  maxMessageSize?: number;           // default 1MB
+  maxPendingRequests?: number;       // default 1000
+  headers?: Record<string, string>;  // Node only
+  reconnect?: ReconnectOptions;
 }
 ```
 
-## Standalone Utilities
+## Reconnect strategy
 
-### ReconnectStrategy
+`ReconnectStrategy` computes `delay * factor^attempts`, clamped at `maxDelay`, with optional
+±25% jitter to spread reconnect storms. After `maxAttempts`, the client stops retrying and
+surfaces a `ConnectionError`. Call `client.connect()` again to reset the counter — or use
+`ReconnectStrategy` standalone for any other reconnect loop.
 
-```typescript
-import { ReconnectStrategy } from '@gerts/ws-rpc';
+## Status
 
-const strategy = new ReconnectStrategy({
-  maxAttempts: 5,
-  delay: 1000,
-  maxDelay: 30000,
-  factor: 2,
-  jitter: true,
-});
+**v0.1.0 — pre-1.0, stable surface.** Tier 1: zero internal deps, only `eventemitter3`
+runtime + optional `ws` peer.
 
-while (strategy.shouldReconnect()) {
-  const delay = strategy.getDelay();
-  await sleep(delay);
-  strategy.recordAttempt();
-
-  try {
-    await connect();
-    strategy.reset(); // Success - reset counter
-    break;
-  } catch (error) {
-    continue;
-  }
-}
-```
-
-### SubscriptionManager
-
-```typescript
-import { SubscriptionManager } from '@gerts/ws-rpc';
-
-const manager = new SubscriptionManager();
-
-const id = manager.subscribe('topic', (data) => {
-  console.log(data);
-});
-
-manager.dispatch('topic', { message: 'Hello' });
-
-manager.unsubscribe(id);
-```
-
-## Integration with @gerts/api-types
-
-```typescript
-import { WsRpcClient } from '@gerts/ws-rpc';
-import type { PipelineEvent, isIngestEvent } from '@gerts/api-types';
-
-const client = new WsRpcClient({ url: 'ws://localhost:3023/ws' });
-
-client.subscribe<PipelineEvent>('pipeline.*', (event) => {
-  if (isIngestEvent(event)) {
-    console.log(`Ingest ${event.type}: ${event.jobId}`);
-  }
-});
-```
-
-## Package Structure
-
-```
-src/
-├── types.ts          # JSON-RPC 2.0 types, errors, type guards
-├── client.ts         # WsRpcClient class
-├── reconnect.ts      # ReconnectStrategy
-├── subscription.ts   # SubscriptionManager
-└── index.ts          # Exports
-```
-
-## References
-
-Based on patterns from:
-- [Gong WebSocketManager](../../sources/orchestra/gong/) — Connection, reconnect, heartbeat
-- [JSON-RPC 2.0 Spec](https://www.jsonrpc.org/specification) — Protocol types
+- 107 tests passing across `client`, `reconnect`, `subscription`, `types`
+- Hardened: message size cap, pending-request cap, XOR-correct response guard, pending cleanup on disconnect
+- Pre-production work tracked in [`TODO.md`](./TODO.md): rate limiting, structured logging, token refresh on reconnect, URL validation
+- API additions before 1.0 will be additive; breaking changes will go through a deprecation cycle
 
 ## License
 
-MIT
+MIT — see [LICENSE](./LICENSE).
+
+<div align="center">
+<sub>Part of the <b>@gertsai</b> shared toolkit. Tier 1 — no internal dependencies.</sub>
+</div>
