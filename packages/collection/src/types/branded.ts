@@ -1,5 +1,5 @@
 /**
- * Branded types for @gerts/collection
+ * Branded types for @gertsai/collection
  *
  * Branded types provide compile-time type safety for primitive values
  * that have semantic meaning (IDs, keys, indices, etc.)

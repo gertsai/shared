@@ -32,8 +32,8 @@ export * from './entity-reference';
 
 // RAG API Standard (RFC-036)
 // Exported as namespace to avoid name collisions with existing types
-// Usage: import { rag } from '@gerts/core'; const response: rag.RAGResponse<{}> = ...
-// Or: import { RAGResponse } from '@gerts/core/rag';
+// Usage: import { rag } from '@gertsai/core'; const response: rag.RAGResponse<{}> = ...
+// Or: import { RAGResponse } from '@gertsai/core/rag';
 export * as rag from './rag';
 
 // Data Connectors System (RFC-042)

@@ -10,7 +10,7 @@
  *   MemoryDenyLedger,
  *   type DenyLedgerProvider,
  *   type DenyEntry,
- * } from '@gerts/core/deny-ledger';
+ * } from '@gertsai/core/deny-ledger';
  *
  * // Create provider
  * const ledger: DenyLedgerProvider = new MemoryDenyLedger({ maxCacheSize: 10000 });

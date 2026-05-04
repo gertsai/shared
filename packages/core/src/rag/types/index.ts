@@ -3,7 +3,7 @@
  *
  * Re-exports all RAG API Standard types.
  *
- * @module @gerts/core/rag/types
+ * @module @gertsai/core/rag/types
  */
 
 // Response types

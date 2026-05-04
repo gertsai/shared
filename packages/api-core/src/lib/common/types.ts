@@ -1,4 +1,4 @@
-import type { UserType, UsersMetaType } from '@gerts/core';
+import type { UserType, UsersMetaType } from '@gertsai/core';
 import type typia from 'typia';
 
 /**

@@ -8,7 +8,7 @@
 
 import EventEmitter from 'events';
 
-import { DeferredPromise } from '@gerts/utils';
+import { DeferredPromise } from '@gertsai/utils';
 
 import type { ConsumerType, IService } from './types';
 

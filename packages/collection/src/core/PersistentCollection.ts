@@ -54,7 +54,7 @@ import { PersistentMap } from './PersistentMap';
  * Symbol for storing cached internal Map representation.
  * Used to avoid repeated O(N) materialization on every [INTERNAL_DATA]() call.
  */
-const CACHED_MAP = Symbol('@@gerts/collection/cached-map@@');
+const CACHED_MAP = Symbol('@@gertsai/collection/cached-map@@');
 
 export class PersistentCollection<K, V>
   implements

@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Anthropic LLM Provider
+ * @gertsai/core - Anthropic LLM Provider
  * Phase 21: LLM Abstraction
  *
  * Native Anthropic SDK integration with:

@@ -1,5 +1,5 @@
 {
-  "name": "@gerts/utils",
+  "name": "@gertsai/utils",
   "version": "0.1.0",
   "description": "Orchestra Utilities library",
   "types": "./dist/esm/index.d.ts",

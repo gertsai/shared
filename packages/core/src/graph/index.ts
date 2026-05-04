@@ -1,4 +1,4 @@
 /**
- * @gerts/core - Graph Store Interfaces
+ * @gertsai/core - Graph Store Interfaces
  */
 export * from './stores';

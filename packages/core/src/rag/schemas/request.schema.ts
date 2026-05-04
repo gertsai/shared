@@ -4,7 +4,7 @@
  * Runtime validation schemas for RAG API requests.
  * Uses Zod for type-safe validation with TypeScript inference.
  *
- * @module @gerts/core/rag/schemas
+ * @module @gertsai/core/rag/schemas
  */
 
 import { z } from 'zod';

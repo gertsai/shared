@@ -4,7 +4,7 @@
  * Manages multiple StateMachine instances keyed by string IDs.
  * Useful for managing a pool of FSM instances (e.g., one per job).
  *
- * @module @gerts/fsm
+ * @module @gertsai/fsm
  */
 
 import type { StateValue, StateMachineConfig, StateMachineSnapshot } from './types';

@@ -1,6 +1,6 @@
 {
-  "name": "@gerts/core",
-  "version": "0.0.1",
+  "name": "@gertsai/core",
+  "version": "0.1.0",
   "description": "Core primitives for gerts.ai platform",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -47,14 +47,14 @@
   },
   "dependencies": {
     "gpt-tokenizer": "^2.5.0",
-    "@gerts/llm-costs": "workspace:*",
+    "@gertsai/llm-costs": "workspace:*",
     "llm-info": "^1.0.69",
     "typia": "^11.0.0",
     "zod": "^3.22.0",
     "zod-to-json-schema": "^3.25.1"
   },
   "devDependencies": {
-    "@gerts/database": "workspace:*",
+    "@gertsai/database": "workspace:*",
     "@ryoppippi/unplugin-typia": "^2.6.5",
     "@standard-schema/spec": "^1.1.0",
     "ts-patch": "^3.3.0",

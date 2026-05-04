@@ -4,7 +4,7 @@
  * Error codes specific to OAuth2 and OpenID Connect flows.
  * Based on RFC 6749 (OAuth 2.0) and OpenID Connect Core 1.0.
  *
- * @module @gerts/api-core/error/codes/oidc
+ * @module @gertsai/api-core/error/codes/oidc
  */
 
 /**

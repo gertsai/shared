@@ -8,7 +8,7 @@
  * - Standard events: `start`, `text-delta`, `finish` (Vercel AI SDK compatible)
  * - RAG events: `rag.*` namespace (retrieval, grounding, graph)
  *
- * @module @gerts/core/rag
+ * @module @gertsai/core/rag
  */
 
 import type {

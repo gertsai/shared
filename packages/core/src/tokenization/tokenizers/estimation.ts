@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Estimation Tokenizer
+ * @gertsai/core - Estimation Tokenizer
  *
  * Heuristic-based token estimation for models without local tokenizers.
  * Uses provider-specific multipliers to approximate token counts.

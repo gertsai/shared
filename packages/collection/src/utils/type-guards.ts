@@ -1,5 +1,5 @@
 /**
- * Type guards for @gerts/collection
+ * Type guards for @gertsai/collection
  * Provides reusable type predicates and assertion functions for runtime type checking
  *
  * Type guards (is*) return boolean and narrow types via type predicates

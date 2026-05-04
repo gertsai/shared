@@ -1,7 +1,7 @@
 /**
  * @fileoverview HSM Utilities
  *
- * @module @gerts/hsm/utils
+ * @module @gertsai/hsm/utils
  */
 
 export { withRetry, sleep, createCircuitBreaker, DEFAULT_RETRY_OPTIONS } from './retry.js';

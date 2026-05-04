@@ -4,7 +4,7 @@
  * Inspired by Rust's Result and Option types, providing type-safe error handling
  * without exceptions. Based on VoltAgent patterns and neverthrow/ts-results.
  *
- * @module @gerts/core/result
+ * @module @gertsai/core/result
  * @since 1.0.0
  */
 

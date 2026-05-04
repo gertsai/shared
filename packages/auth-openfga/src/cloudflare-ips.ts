@@ -9,7 +9,7 @@
  *
  * IMPORTANT: Update periodically from https://www.cloudflare.com/ips-v4 and /ips-v6
  *
- * @module @gerts/auth-openfga
+ * @module @gertsai/auth-openfga
  */
 
 /**

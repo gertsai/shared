@@ -4,10 +4,10 @@
  * Core response types for RAG API Standard.
  * These types are used across:
  * - HTTP API (RFC-030)
- * - Agent responses (@gerts/agent)
- * - GraphRAG queries (@gerts/graph)
+ * - Agent responses (@gertsai/agent)
+ * - GraphRAG queries (@gertsai/graph)
  *
- * @module @gerts/core/rag
+ * @module @gertsai/core/rag
  */
 
 import { randomUUID } from 'crypto';

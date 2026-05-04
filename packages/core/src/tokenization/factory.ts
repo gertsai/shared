@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Tokenizer Factory
+ * @gertsai/core - Tokenizer Factory
  *
  * Central factory for creating tokenizers.
  * Auto-detects provider from model name and returns appropriate tokenizer.

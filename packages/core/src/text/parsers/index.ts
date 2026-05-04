@@ -18,16 +18,16 @@
  * @example
  * ```typescript
  * // Hot path (API, queue) → Typia
- * import { TypiaOutputParser } from '@gerts/core/text/parsers';
+ * import { TypiaOutputParser } from '@gertsai/core/text/parsers';
  * const parser = new TypiaOutputParser(validateMyType, schema);
  *
  * // LLM parsing → Zod
- * import { ZodOutputParser } from '@gerts/core/text/parsers';
+ * import { ZodOutputParser } from '@gertsai/core/text/parsers';
  * const parser = new ZodOutputParser(MyZodSchema);
  * ```
  *
  * @see ADR: apps/pipeline/docs/architecture/ADR-ZOD-TYPIA-STRATEGY.md
- * @module @gerts/core/text/parsers
+ * @module @gertsai/core/text/parsers
  */
 
 // ============================================================================

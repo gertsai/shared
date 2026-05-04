@@ -3,7 +3,7 @@
  *
  * Provides exponential backoff retry logic for transient failures.
  *
- * @module @gerts/hsm/utils/retry
+ * @module @gertsai/hsm/utils/retry
  */
 
 // =============================================================================

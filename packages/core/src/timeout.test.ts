@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Timeout Utilities Tests
+ * @gertsai/core - Timeout Utilities Tests
  *
  * Uses real timers with minimal delays due to vitest fake timer issues.
  */

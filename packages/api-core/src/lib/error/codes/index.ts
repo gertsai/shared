@@ -3,7 +3,7 @@
  *
  * Re-exports all domain-specific error codes for unified access.
  *
- * @module @gerts/api-core/error/codes
+ * @module @gertsai/api-core/error/codes
  */
 
 export { AuthErrorCodes } from './auth';

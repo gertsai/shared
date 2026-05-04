@@ -1,6 +1,6 @@
 {
-  "name": "@gerts/fsm",
-  "version": "1.0.0",
+  "name": "@gertsai/fsm",
+  "version": "0.1.0",
   "description": "Generic, zero-dependency finite state machine library with strong TypeScript generics",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -18,7 +18,7 @@
  * ### Basic Response
  *
  * ```typescript
- * import { RAGResponse, createResponseId, createSourceId } from '@gerts/core/rag';
+ * import { RAGResponse, createResponseId, createSourceId } from '@gertsai/core/rag';
  *
  * const response: RAGResponse<{}> = {
  *   id: createResponseId(),
@@ -40,7 +40,7 @@
  * ### With Capabilities
  *
  * ```typescript
- * import { RAGResponse } from '@gerts/core/rag';
+ * import { RAGResponse } from '@gertsai/core/rag';
  *
  * const response: RAGResponse<{ grounding: true; graph: true }> = {
  *   ...coreFields,
@@ -60,7 +60,7 @@
  * ### Streaming
  *
  * ```typescript
- * import { RAGStreamEvent, encodeSSE, createTextDelta } from '@gerts/core/rag';
+ * import { RAGStreamEvent, encodeSSE, createTextDelta } from '@gertsai/core/rag';
  *
  * function* streamResponse(): Generator<string> {
  *   yield encodeSSE({ type: 'start', id: 'rag_123', timestamp: new Date().toISOString() });
@@ -73,7 +73,7 @@
  * ### Error Handling
  *
  * ```typescript
- * import { RAGErrors, RAGResult, isSuccess } from '@gerts/core/rag';
+ * import { RAGErrors, RAGResult, isSuccess } from '@gertsai/core/rag';
  *
  * async function query(req: RAGRequest): Promise<RAGResult<{}>> {
  *   try {
@@ -96,7 +96,7 @@
  * ### Request Validation
  *
  * ```typescript
- * import { RAGRequestSchema, safeValidateRAGRequest } from '@gerts/core/rag';
+ * import { RAGRequestSchema, safeValidateRAGRequest } from '@gertsai/core/rag';
  *
  * const result = safeValidateRAGRequest(requestBody);
  * if (result.success) {
@@ -106,7 +106,7 @@
  * }
  * ```
  *
- * @module @gerts/core/rag
+ * @module @gertsai/core/rag
  */
 
 // ============================================

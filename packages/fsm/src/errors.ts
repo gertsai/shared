@@ -5,7 +5,7 @@
  * allowing consumers to inspect `from`, `to`, and `validTargets` with
  * full type safety.
  *
- * @module @gerts/fsm
+ * @module @gertsai/fsm
  */
 
 import type { StateValue } from './types';

@@ -4,7 +4,7 @@
  * Runtime validation schemas for RAG API responses.
  * Useful for validating external API responses.
  *
- * @module @gerts/core/rag/schemas
+ * @module @gertsai/core/rag/schemas
  */
 
 import { z } from 'zod';

@@ -4,7 +4,7 @@
  * Implements HSMProvider using Vault Transit secrets engine for convergent encryption.
  * Supports token, AppRole, and Kubernetes authentication methods.
  *
- * @module @gerts/hsm/providers/vault
+ * @module @gertsai/hsm/providers/vault
  */
 
 import { createHash } from 'crypto';

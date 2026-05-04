@@ -1,4 +1,4 @@
-/** @deprecated Use BaseLLM from @gerts/core/llm instead */
+/** @deprecated Use BaseLLM from @gertsai/core/llm instead */
 export interface LegacyLLMProvider {
   generate(prompt: string, options?: Record<string, unknown>): Promise<string>;
 }

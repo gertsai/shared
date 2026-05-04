@@ -1,4 +1,4 @@
 /**
- * @gerts/core - Streaming Interfaces
+ * @gertsai/core - Streaming Interfaces
  */
 export * from './types';

@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Tokenization Tests
+ * @gertsai/core - Tokenization Tests
  *
  * Comprehensive tests for the tokenization module.
  */
@@ -19,7 +19,7 @@ import {
   type IUniversalTokenizer,
 } from './index.js';
 
-describe('@gerts/core/tokenization', () => {
+describe('@gertsai/core/tokenization', () => {
   afterEach(() => {
     TokenizerFactory.clearAll();
   });

@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Hook Decorators
+ * @gertsai/core - Hook Decorators
  * Phase 19: Hooks & Lifecycle
  *
  * Decorator functions for hooks.

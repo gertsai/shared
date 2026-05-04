@@ -1,5 +1,5 @@
 /**
- * Tests for @gerts/flux utility functions.
+ * Tests for @gertsai/flux utility functions.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';

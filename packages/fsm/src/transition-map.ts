@@ -8,7 +8,7 @@
  * - All target states must be known states
  * - Initial state must be a known state
  *
- * @module @gerts/fsm
+ * @module @gertsai/fsm
  */
 
 import type { StateValue, TransitionMap, StateMachineConfig } from './types';

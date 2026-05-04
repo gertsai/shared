@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { UserType } from '@gerts/core';
+import { UserType } from '@gertsai/core';
 import typia from 'typia';
 
 import type { ActionOptions } from '..';

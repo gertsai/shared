@@ -131,8 +131,8 @@ const BUILTINS: DiagnosticEntry[] = [
     component: 'Prisma Schema / Database Migrations',
     severity: 'critical',
     fix: [
-      'pnpm --filter @gerts/database exec prisma migrate dev',
-      'pnpm --filter @gerts/database exec prisma generate',
+      'pnpm --filter @gertsai/database exec prisma migrate dev',
+      'pnpm --filter @gertsai/database exec prisma generate',
     ],
     envHint: 'Database schema may be out of sync. Run migrations first.',
   },

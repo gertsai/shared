@@ -3,7 +3,7 @@
  *
  * Error codes specific to file storage and management operations.
  *
- * @module @gerts/api-core/error/codes/files
+ * @module @gertsai/api-core/error/codes/files
  */
 
 /**

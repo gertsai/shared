@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Tokenizer Implementations
+ * @gertsai/core - Tokenizer Implementations
  *
  * Export all tokenizer implementations.
  */

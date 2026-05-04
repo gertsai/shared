@@ -4,10 +4,10 @@
  * APIError is the standard error class for all API endpoints.
  * Extends GertsError for unified error handling across the platform.
  *
- * @module @gerts/api-core/error/APIError
+ * @module @gertsai/api-core/error/APIError
  */
 
-import { GertsError, ErrorKind, HTTP_TO_ERROR_KIND, type SerializedError } from '@gerts/core';
+import { GertsError, ErrorKind, HTTP_TO_ERROR_KIND, type SerializedError } from '@gertsai/core';
 import type { ResponseDataType } from '../apiResponse';
 import { ResponseCode, responseMetadata } from '../apiResponse';
 
@@ -44,7 +44,7 @@ export interface APIErrorOptions {
  * });
  *
  * // Using helper functions (recommended)
- * import { notFoundError, conflictError } from '@gerts/api-core';
+ * import { notFoundError, conflictError } from '@gertsai/api-core';
  * throw notFoundError('User', userId);
  * ```
  */

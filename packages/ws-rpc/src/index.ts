@@ -1,12 +1,12 @@
 /**
- * @gerts/ws-rpc
+ * @gertsai/ws-rpc
  *
  * WebSocket JSON-RPC 2.0 client with auto-reconnect and subscriptions.
  *
  * ## Quick Start
  *
  * ```typescript
- * import { WsRpcClient } from '@gerts/ws-rpc';
+ * import { WsRpcClient } from '@gertsai/ws-rpc';
  *
  * const client = new WsRpcClient({
  *   url: 'ws://localhost:3023/ws',

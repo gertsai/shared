@@ -49,16 +49,16 @@ interface PrismaClientForTest {
 /**
  * Creates a minimal PrismaClient for testing
  *
- * @note Run from monorepo root: `pnpm --filter @gerts/core test -- hybrid.integration`
+ * @note Run from monorepo root: `pnpm --filter @gertsai/core test -- hybrid.integration`
  */
 async function createTestPrisma(): Promise<{
   prisma: unknown;
   cleanup: () => Promise<void>;
   disconnect: () => Promise<void>;
 }> {
-  // Dynamic import - available when running from monorepo with @gerts/database built
-  // @ts-expect-error - @gerts/database is not a direct dependency but available in monorepo
-  const { PrismaClient } = await import('@gerts/database');
+  // Dynamic import - available when running from monorepo with @gertsai/database built
+  // @ts-expect-error - @gertsai/database is not a direct dependency but available in monorepo
+  const { PrismaClient } = await import('@gertsai/database');
   const prisma = new PrismaClient() as PrismaClientForTest;
   await prisma.$connect();
 

@@ -3,7 +3,7 @@
  *
  * Re-exports all Zod schemas for RAG API validation.
  *
- * @module @gerts/core/rag/schemas
+ * @module @gertsai/core/rag/schemas
  */
 
 // Request schemas

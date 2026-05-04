@@ -1,5 +1,5 @@
 /**
- * Security utilities for @gerts/utils
+ * Security utilities for @gertsai/utils
  */
 
 export * from './url-validator';

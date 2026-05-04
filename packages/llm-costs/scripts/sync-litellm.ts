@@ -1,9 +1,9 @@
 #!/usr/bin/env tsx
 /**
  * Sync script: transforms LiteLLM model_prices_and_context_window.json
- * into @gerts/llm-costs normalized format.
+ * into @gertsai/llm-costs normalized format.
  *
- * Usage: pnpm --filter @gerts/llm-costs sync
+ * Usage: pnpm --filter @gertsai/llm-costs sync
  * Source: sources/litellm/model_prices_and_context_window.json
  * Output: src/data/models.json
  */

@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Agent Interface
+ * @gertsai/core - Agent Interface
  *
  * Core interface for agent implementations to avoid circular dependencies.
  * This interface defines the contract that all agent implementations must follow.

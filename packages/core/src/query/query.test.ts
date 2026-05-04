@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Query System Tests
+ * @gertsai/core - Query System Tests
  *
  * Comprehensive tests for RFC-032 Universal Query System Phase 1.
  */

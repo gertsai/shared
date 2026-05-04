@@ -3,7 +3,7 @@
  *
  * Exports all HSM provider implementations.
  *
- * @module @gerts/hsm/providers
+ * @module @gertsai/hsm/providers
  */
 
 export { VaultProvider } from './vault.provider.js';

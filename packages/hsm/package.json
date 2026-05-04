@@ -1,6 +1,6 @@
 {
-  "name": "@gerts/hsm",
-  "version": "0.0.1",
+  "name": "@gertsai/hsm",
+  "version": "0.1.0",
   "description": "Hardware Security Module (HSM) integration for convergent encryption",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -44,6 +44,6 @@
     "vitest": "^3.0.0"
   },
   "peerDependencies": {
-    "@gerts/core": "workspace:*"
+    "@gertsai/core": "workspace:*"
   }
 }

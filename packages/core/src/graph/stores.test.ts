@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Graph Store Interfaces Tests
+ * @gertsai/core - Graph Store Interfaces Tests
  *
  * Tests for Interface Segregation Principle (ISP) compliance.
  * Verifies that:

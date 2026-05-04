@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Gemini LLM Provider
+ * @gertsai/core - Gemini LLM Provider
  * Phase 21: LLM Abstraction
  *
  * Native Gemini REST integration with:

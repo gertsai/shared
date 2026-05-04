@@ -4,7 +4,7 @@
  * High-level API for convergent encryption operations on CAS content.
  * Wraps HSMProvider with content-specific logic.
  *
- * @module @gerts/hsm/convergent-encryption
+ * @module @gertsai/hsm/convergent-encryption
  */
 
 import { createHash } from 'crypto';

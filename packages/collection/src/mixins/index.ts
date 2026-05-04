@@ -4,7 +4,7 @@
  * Design:
  * - Each mixin is a thin wrapper attaching pure methods onto the collection instance
  * - Methods are non-enumerable and preserve `this` binding
- * - This entrypoint enables subpath imports (`@gerts/collection/mixins/*`) and tree-shaking
+ * - This entrypoint enables subpath imports (`@gertsai/collection/mixins/*`) and tree-shaking
  */
 
 // Extended operations (random, sweep, tap, partition, etc.)

@@ -3,7 +3,7 @@
  *
  * Error codes specific to database operations and Prisma errors.
  *
- * @module @gerts/api-core/error/codes/database
+ * @module @gertsai/api-core/error/codes/database
  */
 
 /**

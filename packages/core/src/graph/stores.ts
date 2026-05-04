@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Graph Store Interfaces (Interface Segregation Principle)
+ * @gertsai/core - Graph Store Interfaces (Interface Segregation Principle)
  *
  * Split IGraphStore (~40 methods) into focused, single-responsibility interfaces.
  * Following ISP: clients should not be forced to depend on interfaces they don't use.

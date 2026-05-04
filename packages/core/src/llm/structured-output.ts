@@ -4,7 +4,7 @@
  * Converts Zod schemas to LiteLLM-compatible JSON Schema format
  * for structured output (guaranteed schema compliance).
  *
- * @module @gerts/core/llm/structured-output
+ * @module @gertsai/core/llm/structured-output
  */
 
 import { zodToJsonSchema } from 'zod-to-json-schema';
@@ -106,7 +106,7 @@ export interface ZodToLiteLLMOptions {
  * @example
  * ```typescript
  * import { z } from 'zod';
- * import { zodToResponseFormat } from '@gerts/core';
+ * import { zodToResponseFormat } from '@gertsai/core';
  *
  * const PersonSchema = z.object({
  *   name: z.string(),
@@ -154,7 +154,7 @@ export function zodToResponseFormat(
 /**
  * Convert a Zod schema to core LLMResponseFormat.
  *
- * Use this for @gerts/core LLM providers (BaseLLM.call).
+ * Use this for @gertsai/core LLM providers (BaseLLM.call).
  * Returns camelCase format compatible with LLMCallOptions.
  *
  * @param schema - Zod schema to convert
@@ -164,7 +164,7 @@ export function zodToResponseFormat(
  * @example
  * ```typescript
  * import { z } from 'zod';
- * import { zodToLLMResponseFormat } from '@gerts/core';
+ * import { zodToLLMResponseFormat } from '@gertsai/core';
  *
  * const EntitySchema = z.object({
  *   name: z.string(),

@@ -6,7 +6,7 @@
  *
  * @example
  * ```typescript
- * import { memoizedFilter, memoizedMap } from '@gerts/collection/operations/memoized';
+ * import { memoizedFilter, memoizedMap } from '@gertsai/collection/operations/memoized';
  *
  * // Results will be cached
  * const filtered1 = memoizedFilter(collection, x => x > 10);

@@ -4,7 +4,7 @@
  * Error codes specific to authentication and session management.
  * Use with APIError for consistent auth error handling.
  *
- * @module @gerts/api-core/error/codes/auth
+ * @module @gertsai/api-core/error/codes/auth
  */
 
 /**

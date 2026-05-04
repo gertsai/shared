@@ -1,5 +1,5 @@
 /**
- * @gerts/core - LLM Module
+ * @gertsai/core - LLM Module
  * Phase 21: LLM Abstraction
  *
  * Exports:
@@ -104,7 +104,7 @@ export {
   CONTEXT_WINDOW_USAGE_RATIO,
   DEFAULT_CONTEXT_WINDOW_SIZE,
   DEFAULT_OUTPUT_TOKEN_LIMIT,
-  // @gerts/llm-costs re-exports (2,600+ models, 100+ providers)
+  // @gertsai/llm-costs re-exports (2,600+ models, 100+ providers)
   getLlmCostInfo,
   findLlmCostInfo,
   calculateLlmCost,

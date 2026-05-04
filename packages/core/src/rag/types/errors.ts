@@ -5,7 +5,7 @@
  * - RFC 9457 Problem Details for HTTP APIs
  * - OpenAI-compatible error format
  *
- * @module @gerts/core/rag
+ * @module @gertsai/core/rag
  */
 
 import { createResponseId, type ResponseId } from './response';

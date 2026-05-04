@@ -1,10 +1,10 @@
 /**
- * @gerts/core - Unified Retry Logic
+ * @gertsai/core - Unified Retry Logic
  *
  * Provides exponential backoff with jitter for reliable retry operations.
- * Consolidates retry patterns from @gerts/agent and @gerts/scheduler.
+ * Consolidates retry patterns from @gertsai/agent and @gertsai/scheduler.
  *
- * @module @gerts/core/retry
+ * @module @gertsai/core/retry
  */
 
 import type { GertsError } from './errors';

@@ -3,7 +3,7 @@
  *
  * Error codes specific to input validation and data integrity.
  *
- * @module @gerts/api-core/error/codes/validation
+ * @module @gertsai/api-core/error/codes/validation
  */
 
 /**

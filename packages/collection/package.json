@@ -1,5 +1,5 @@
 {
-  "name": "@gerts/collection",
+  "name": "@gertsai/collection",
   "version": "0.1.0",
   "description": "Modern TypeScript collection library with mutable, immutable, and persistent data structures",
   "main": "dist/index.js",

@@ -280,42 +280,42 @@ describe('UsageInfo Guards', () => {
 describe('PackageJson Guards', () => {
   describe('extractPackageInfo', () => {
     it('should extract name and version from valid package.json', () => {
-      const pkg = { name: '@gerts/test', version: '1.2.3' };
-      expect(extractPackageInfo(pkg)).toEqual({ name: '@gerts/test', version: '1.2.3' });
+      const pkg = { name: '@gertsai/test', version: '1.2.3' };
+      expect(extractPackageInfo(pkg)).toEqual({ name: '@gertsai/test', version: '1.2.3' });
     });
 
     it('should return defaults for missing fields', () => {
       expect(extractPackageInfo({})).toEqual({
-        name: '@gerts/pipeline',
+        name: '@gertsai/pipeline',
         version: '1.0.0',
       });
     });
 
     it('should return defaults for non-string fields', () => {
       expect(extractPackageInfo({ name: 123, version: true })).toEqual({
-        name: '@gerts/pipeline',
+        name: '@gertsai/pipeline',
         version: '1.0.0',
       });
     });
 
     it('should return defaults for invalid input', () => {
       expect(extractPackageInfo(null)).toEqual({
-        name: '@gerts/pipeline',
+        name: '@gertsai/pipeline',
         version: '1.0.0',
       });
       expect(extractPackageInfo(undefined)).toEqual({
-        name: '@gerts/pipeline',
+        name: '@gertsai/pipeline',
         version: '1.0.0',
       });
     });
 
     it('should handle partial package.json', () => {
-      expect(extractPackageInfo({ name: '@gerts/partial' })).toEqual({
-        name: '@gerts/partial',
+      expect(extractPackageInfo({ name: '@gertsai/partial' })).toEqual({
+        name: '@gertsai/partial',
         version: '1.0.0',
       });
       expect(extractPackageInfo({ version: '2.0.0' })).toEqual({
-        name: '@gerts/pipeline',
+        name: '@gertsai/pipeline',
         version: '2.0.0',
       });
     });

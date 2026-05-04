@@ -9,7 +9,7 @@
  *
  * @example Basic Usage
  * ```typescript
- * import { seq, cachedSeq, Seq } from '@gerts/collection';
+ * import { seq, cachedSeq, Seq } from '@gertsai/collection';
  *
  * // Create from iterable
  * const s = seq([['a', 1], ['b', 2], ['c', 3]]);

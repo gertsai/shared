@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Query Executor Interface
+ * @gertsai/core - Query Executor Interface
  *
  * Core IQueryExecutor interface (Port in Hexagonal Architecture).
  * Adapters implement this interface to provide query execution.
@@ -152,7 +152,7 @@ export interface IQueryExecutor<
    * @param options - Tool options
    * @returns Agent tool
    */
-  asTool(options?: QueryToolOptions): unknown; // Tool type from @gerts/tools
+  asTool(options?: QueryToolOptions): unknown; // Tool type from @gertsai/tools
 
   /**
    * Executor metadata for routing and discovery
@@ -220,7 +220,7 @@ export abstract class BaseQueryExecutor<
    * Default tool wrapper implementation.
    *
    * Returns a basic tool structure. For full tool support,
-   * use createQueryTool() from @gerts/tools.
+   * use createQueryTool() from @gertsai/tools.
    */
   asTool(options?: QueryToolOptions): unknown {
     const name = options?.name ?? `query_${this.metadata.supportedTypes[0]}`;
@@ -230,7 +230,7 @@ export abstract class BaseQueryExecutor<
       name,
       description,
       executor: this,
-      // Note: Full tool implementation is in @gerts/tools/query-tool.ts
+      // Note: Full tool implementation is in @gertsai/tools/query-tool.ts
     };
   }
 

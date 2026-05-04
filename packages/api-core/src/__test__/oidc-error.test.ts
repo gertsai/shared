@@ -17,7 +17,7 @@ import {
   oidcInvalidToken,
   oidcServerError,
 } from '../lib/error/OIDCError.class';
-import { ErrorKind } from '@gerts/core';
+import { ErrorKind } from '@gertsai/core';
 
 describe('OIDCError', () => {
   // ─────────────────────────────────────────────────────────────────────────

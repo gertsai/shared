@@ -1,5 +1,5 @@
 {
-  "name": "@gerts/auth-openfga",
+  "name": "@gertsai/auth-openfga",
   "version": "0.1.0",
   "description": "OpenFGA integration for gerts.ai authorization (Zanzibar-style ReBAC)",
   "type": "module",
@@ -40,8 +40,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@gerts/auth": "workspace:*",
-    "@gerts/core": "workspace:*",
+    "@gertsai/core": "workspace:*",
     "@openfga/sdk": "^0.8.1"
   },
   "devDependencies": {

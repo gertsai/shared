@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Hooks & Lifecycle Tests
+ * @gertsai/core - Hooks & Lifecycle Tests
  * Phase 19: Hooks & Lifecycle
  *
  * Comprehensive tests for the hooks system covering:

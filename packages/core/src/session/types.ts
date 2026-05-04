@@ -2,7 +2,7 @@
  * Session types for GraphRAG Pipeline
  *
  * Migrated from Zod to pure TypeScript interfaces with manual type guards.
- * This removes the Zod dependency from @gerts/core for better performance
+ * This removes the Zod dependency from @gertsai/core for better performance
  * and simpler bundle size.
  *
  * Note: For runtime validation in apps/pipeline, use Typia validators.

@@ -280,7 +280,7 @@ function isIpAddress(hostname: string): boolean {
  *
  * @example
  * ```typescript
- * import { validateWebhookUrl } from '@gerts/utils';
+ * import { validateWebhookUrl } from '@gertsai/utils';
  *
  * // Throws SsrfError for blocked URLs
  * validateWebhookUrl('http://localhost:8080'); // throws

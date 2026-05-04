@@ -1,10 +1,10 @@
 /**
- * @fileoverview @gerts/fsm — Generic, zero-dependency finite state machine library
+ * @fileoverview @gertsai/fsm — Generic, zero-dependency finite state machine library
  *
  * Provides strongly-typed FSM primitives that unify patterns found across
  * the codebase (queue/job-state, etl/step-run, a2a/task-manager).
  *
- * @module @gerts/fsm
+ * @module @gertsai/fsm
  *
  * @example
  * ```typescript
@@ -12,7 +12,7 @@
  *   StateMachine,
  *   createTransitionMap,
  *   InvalidTransitionError,
- * } from '@gerts/fsm';
+ * } from '@gertsai/fsm';
  *
  * type Light = 'red' | 'yellow' | 'green';
  *

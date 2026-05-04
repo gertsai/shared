@@ -1,5 +1,5 @@
 /**
- * @gerts/core - LLM Tests
+ * @gertsai/core - LLM Tests
  * Phase 21: LLM Abstraction
  *
  * Tests for:

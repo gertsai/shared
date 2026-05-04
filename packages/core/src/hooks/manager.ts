@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Hook Manager
+ * @gertsai/core - Hook Manager
  * Phase 19: Hooks & Lifecycle
  *
  * Global hook registry for LLM and Tool hooks.
@@ -489,7 +489,7 @@ export class HookManager {
  * Global hook manager instance.
  *
  * @example
- * import { hookManager } from '@gerts/core';
+ * import { hookManager } from '@gertsai/core';
  *
  * // Register hooks
  * hookManager.registerBeforeLLMHook(myHook);

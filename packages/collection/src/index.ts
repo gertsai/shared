@@ -1,5 +1,5 @@
 /**
- * @gerts/collection - Modern TypeScript collection library
+ * @gertsai/collection - Modern TypeScript collection library
  *
  * A high-performance, TypeScript-first collection library providing:
  * - Multiple collection types (Mutable, Immutable, Persistent)
@@ -44,7 +44,7 @@
  * - {@link withPositionalAccess} - Adds index-based access methods
  *
  * @packageDocumentation
- * @module @gerts/collection
+ * @module @gertsai/collection
  * @version 0.1.0
  *
  * @example Basic Usage
@@ -55,7 +55,7 @@
  *   seq,
  *   filter,
  *   map,
- * } from '@gerts/collection';
+ * } from '@gertsai/collection';
  *
  * // Create a mutable collection
  * const users = new MutableCollection([['u1', { name: 'Alice', age: 30 }]]);
@@ -74,7 +74,7 @@
  *
  * @example Specialized Collections
  * ```typescript
- * import { BiMap, MultiMap, OrderedMap } from '@gerts/collection';
+ * import { BiMap, MultiMap, OrderedMap } from '@gertsai/collection';
  *
  * // BiMap for bidirectional lookups
  * const bimap = new BiMap<string, number>();

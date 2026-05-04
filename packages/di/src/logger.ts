@@ -1,4 +1,4 @@
-import { createLogger } from '@gerts/utils';
+import { createLogger } from '@gertsai/utils';
 
 /** Logger for DI module */
-export const diLogger: ReturnType<typeof createLogger> = createLogger('@gerts/di');
+export const diLogger: ReturnType<typeof createLogger> = createLogger('@gertsai/di');

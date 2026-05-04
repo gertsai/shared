@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Hooks & Lifecycle System
+ * @gertsai/core - Hooks & Lifecycle System
  * Phase 19: Hooks & Lifecycle
  *
  * Unified hooks system merging Agno (decorators, background execution)
@@ -19,7 +19,7 @@
  *   hookExecutor,
  *   LLMCallContext,
  *   ToolCallContext,
- * } from '@gerts/core';
+ * } from '@gertsai/core';
  *
  * // Create a background hook
  * const logHook = hook({ runInBackground: true })(

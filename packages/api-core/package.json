@@ -1,5 +1,5 @@
 {
-  "name": "@gerts/api-core",
+  "name": "@gertsai/api-core",
   "version": "0.1.0",
   "description": "Core API utilities for Gerts Moleculer services",
   "types": "./dist/src/index.d.ts",
@@ -22,8 +22,8 @@
     "postinstall": "ts-patch install -s"
   },
   "dependencies": {
-    "@gerts/auth-openfga": "workspace:*",
-    "@gerts/core": "workspace:*",
+    "@gertsai/auth-openfga": "workspace:*",
+    "@gertsai/core": "workspace:*",
     "@standard-schema/spec": "^1.1.0",
     "@google-cloud/logging-bunyan": "^5.1.0",
     "@r2d2bzh/moleculer-healthcheck-middleware": "^1.0.6",

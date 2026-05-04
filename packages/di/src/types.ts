@@ -196,7 +196,7 @@ export type InferServiceFromMapping<
  *
  * @example
  * ```typescript
- * declare module '@gerts/di' {
+ * declare module '@gertsai/di' {
  *   interface GlobalServiceTypeMapping {
  *     'logger': LoggerService;
  *     'config': ConfigService;
@@ -214,7 +214,7 @@ export interface GlobalServiceTypeMapping {}
  *
  * @example
  * ```typescript
- * declare module '@gerts/di' {
+ * declare module '@gertsai/di' {
  *   interface DefaultServiceTypeMapping {
  *     'storage': StorageService;
  *     'validation': ValidationService;
@@ -231,7 +231,7 @@ export interface DefaultServiceTypeMapping {}
  *
  * @example
  * ```typescript
- * declare module '@gerts/di' {
+ * declare module '@gertsai/di' {
  *   interface ServiceTypeMapping {
  *     'User': {
  *       'profile': UserProfileService;

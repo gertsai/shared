@@ -1,12 +1,12 @@
 /**
- * @gerts/auth-openfga
+ * @gertsai/auth-openfga
  *
  * OpenFGA integration for gerts.ai authorization.
  * Supports RBAC + ReBAC + ABAC (Zanzibar-style).
  *
  * @example Standard RBAC/ReBAC check
  * ```typescript
- * import { getFgaClient, checkPermission, canView, canEdit } from '@gerts/auth-openfga';
+ * import { getFgaClient, checkPermission, canView, canEdit } from '@gertsai/auth-openfga';
  *
  * // Check permission
  * const allowed = await checkPermission({
@@ -23,7 +23,7 @@
  *
  * @example ABAC check with context
  * ```typescript
- * import { checkPermission, buildABACContext } from '@gerts/auth-openfga';
+ * import { checkPermission, buildABACContext } from '@gertsai/auth-openfga';
  *
  * // Build context from HTTP request
  * const context = buildABACContext(req, {

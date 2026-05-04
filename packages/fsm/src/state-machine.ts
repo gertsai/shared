@@ -9,7 +9,7 @@
  * - `StepRunStateMachine` (packages/etl): append-only store, modifier pattern
  * - `TaskManager` (packages/a2a): event emitter pattern with unsubscribe
  *
- * @module @gerts/fsm
+ * @module @gertsai/fsm
  */
 
 import type {

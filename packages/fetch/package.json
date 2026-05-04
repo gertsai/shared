@@ -1,5 +1,5 @@
 {
-  "name": "@gerts/fetch",
+  "name": "@gertsai/fetch",
   "version": "0.1.0",
   "description": "HTTP client wrapper for gerts.ai using undici with Fetch API compatibility",
   "main": "dist/index.js",

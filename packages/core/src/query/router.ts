@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Query Router
+ * @gertsai/core - Query Router
  *
  * Routes queries to appropriate executors based on type or custom logic.
  * Inspired by LlamaIndex RouterQueryEngine and TrustGraph OntoRAG.
@@ -394,7 +394,7 @@ export class QueryRouter implements IQueryExecutor<QueryRequest, unknown> {
         options?.description ??
         `Query knowledge base. Supports: ${supportedTypes.join(', ')}`,
       router: this,
-      // Note: Full tool implementation is in @gerts/tools/query-tool.ts
+      // Note: Full tool implementation is in @gertsai/tools/query-tool.ts
     };
   }
 }

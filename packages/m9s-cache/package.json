@@ -1,6 +1,6 @@
 {
-  "name": "@gerts/m9s-cache",
-  "version": "0.0.1",
+  "name": "@gertsai/m9s-cache",
+  "version": "0.1.0",
   "description": "Moleculer-compatible cache abstraction with Redis/Valkey driver support",
   "type": "module",
   "engines": {

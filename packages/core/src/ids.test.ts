@@ -1,9 +1,9 @@
 /**
- * @gerts/core - Branded ID Types Tests
+ * @gertsai/core - Branded ID Types Tests
  *
  * Tests for type-safe branded IDs to prevent ID mixups at compile time.
  *
- * @module @gerts/core/ids.test
+ * @module @gertsai/core/ids.test
  */
 
 import { describe, it, expect } from 'vitest';

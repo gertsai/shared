@@ -1,5 +1,5 @@
 /**
- * @gerts/flux - High-performance library for managing data streams and events
+ * @gertsai/flux - High-performance library for managing data streams and events
  *
  * This package provides reactive data structures and utilities for building
  * event-driven applications with TypeScript.
@@ -13,7 +13,7 @@
  *
  * @example
  * ```typescript
- * import { FluxilisCollection, DataStream, FluxilisEventEmitter } from '@gerts/flux';
+ * import { FluxilisCollection, DataStream, FluxilisEventEmitter } from '@gertsai/flux';
  *
  * // Event-driven collection with TTL
  * const cache = new FluxilisCollection<string, User>();
@@ -125,8 +125,8 @@ export type {
   IStreamAdapter,
 } from './types';
 
-// Re-export useful types from @gerts/collection
-export type { ReadableCollection, WritableCollection } from '@gerts/collection';
+// Re-export useful types from @gertsai/collection
+export type { ReadableCollection, WritableCollection } from '@gertsai/collection';
 
 // ---------------------------------------------------------------------------
 // Utilities
@@ -281,7 +281,7 @@ export { JsonSerializer } from './lib/adapters/serializer/json.serializer';
  *
  * @example
  * ```typescript
- * import { ComponentFactory } from '@gerts/flux';
+ * import { ComponentFactory } from '@gertsai/flux';
  *
  * const factory = new ComponentFactory();
  * factory.registerBackend('redis', RedisBackend);
@@ -309,12 +309,12 @@ export type { ISerializer as ISerializerBackend } from './lib/types/serializer.i
 // ---------------------------------------------------------------------------
 
 /**
- * Current version of the @gerts/flux library.
+ * Current version of the @gertsai/flux library.
  *
  * @example
  * ```typescript
- * import { VERSION } from '@gerts/flux';
- * console.log(`Using @gerts/flux v${VERSION}`);
+ * import { VERSION } from '@gertsai/flux';
+ * console.log(`Using @gertsai/flux v${VERSION}`);
  * ```
  */
 export const VERSION = '0.1.0';

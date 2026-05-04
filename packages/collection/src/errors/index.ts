@@ -1,5 +1,5 @@
 /**
- * Custom error classes for @gerts/collection
+ * Custom error classes for @gertsai/collection
  * Provides typed errors for better error handling and debugging
  */
 

@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Entity Reference Protocol
+ * @gertsai/core - Entity Reference Protocol
  *
  * Standard format for entity mentions across chat and discovery:
  * `[[Type:uuid|Label]]`

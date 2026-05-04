@@ -231,7 +231,7 @@ const globalServiceDirectory = new ServiceDirectory({
  *
  * @example
  * ```typescript
- * import { diContainer } from '@gerts/di';
+ * import { diContainer } from '@gertsai/di';
  *
  * // Register a service for a specific consumer type
  * diContainer.registerService(UserEntity, profileServiceId, ({ consumer }) => {

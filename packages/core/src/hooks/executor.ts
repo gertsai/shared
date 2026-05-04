@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Hook Executor
+ * @gertsai/core - Hook Executor
  * Phase 19: Hooks & Lifecycle
  *
  * Executes hooks with support for background execution and deep copy.

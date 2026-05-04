@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Streaming Interfaces
+ * @gertsai/core - Streaming Interfaces
  *
  * Core streaming abstractions for async operations.
  * Used by Graph RAG, LLM providers, and other async operations.

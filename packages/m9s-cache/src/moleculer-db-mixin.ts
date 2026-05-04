@@ -82,7 +82,7 @@ export type EntityChangedHandler<T extends CacheableEntity = CacheableEntity> = 
  *
  * @example
  * ```typescript
- * import { moleculerDbCacheMixin } from '@gerts/m9s-cache';
+ * import { moleculerDbCacheMixin } from '@gertsai/m9s-cache';
  *
  * export default {
  *   name: 'users',

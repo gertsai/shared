@@ -279,8 +279,8 @@ export interface RedisDenyLedgerOptions {
  * @example
  * ```typescript
  * import Redis from 'ioredis';
- * import { getDatabase } from '@gerts/database';
- * import { RedisDenyLedger, PostgresDenyLedger } from '@gerts/core';
+ * import { getDatabase } from '@gertsai/database';
+ * import { RedisDenyLedger, PostgresDenyLedger } from '@gertsai/core';
  *
  * const redis = new Redis({ host: 'localhost', port: 6379 });
  * const postgres = new PostgresDenyLedger({ prisma: getDatabase() });

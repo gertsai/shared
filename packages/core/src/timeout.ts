@@ -1,10 +1,10 @@
 /**
- * @gerts/core - Timeout Utilities
+ * @gertsai/core - Timeout Utilities
  *
  * Provides utilities for adding timeouts to promises and managing
  * AbortController-based timeout cancellation.
  *
- * @module @gerts/core/timeout
+ * @module @gertsai/core/timeout
  */
 
 // Note: We use a local TimeoutError class instead of importing from errors.ts

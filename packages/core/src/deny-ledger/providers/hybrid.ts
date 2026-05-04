@@ -61,8 +61,8 @@ export interface HybridDenyLedgerOptions {
  *
  * @example
  * ```typescript
- * import { getDatabase } from '@gerts/database';
- * import { HybridDenyLedger, MemoryDenyLedger, PostgresDenyLedger } from '@gerts/core';
+ * import { getDatabase } from '@gertsai/database';
+ * import { HybridDenyLedger, MemoryDenyLedger, PostgresDenyLedger } from '@gertsai/core';
  *
  * const memory = new MemoryDenyLedger({ maxCacheSize: 10000 });
  * const postgres = new PostgresDenyLedger({ prisma: getDatabase() });

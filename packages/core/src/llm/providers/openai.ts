@@ -1,5 +1,5 @@
 /**
- * @gerts/core - OpenAI LLM Provider
+ * @gertsai/core - OpenAI LLM Provider
  * Phase 21: LLM Abstraction
  *
  * Native OpenAI SDK integration with:

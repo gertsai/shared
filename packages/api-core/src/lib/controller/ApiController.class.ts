@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 import type { Message, Subscription, SubscriptionOptions } from '@google-cloud/pubsub';
-import type { OrchestraSession } from '@gerts/core';
-import { UserType, defaultSession } from '@gerts/core';
+import type { OrchestraSession } from '@gertsai/core';
+import { UserType, defaultSession } from '@gertsai/core';
 import { Queue, Worker } from 'bullmq';
 import type { Job } from 'bullmq';
 import color from 'colorts';

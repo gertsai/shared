@@ -2,7 +2,7 @@
  * RFC-030 Envelope Type Definitions
  *
  * Source of truth for all gerts.ai API envelope types.
- * Re-exported by @gerts/api-types for backwards compatibility.
+ * Re-exported by @gertsai/api-types for backwards compatibility.
  *
  * @packageDocumentation
  */

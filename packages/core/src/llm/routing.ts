@@ -1,5 +1,5 @@
 /**
- * @gerts/core - LLM Model Router
+ * @gertsai/core - LLM Model Router
  * Phase 21: LLM Abstraction
  *
  * Factory pattern with smart routing to native providers:

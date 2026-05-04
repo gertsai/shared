@@ -1,5 +1,5 @@
 {
-  "name": "@gerts/ws-rpc",
+  "name": "@gertsai/ws-rpc",
   "version": "0.1.0",
   "description": "WebSocket JSON-RPC 2.0 client with auto-reconnect and subscriptions",
   "main": "./dist/index.js",

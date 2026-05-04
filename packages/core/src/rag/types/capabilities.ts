@@ -9,7 +9,7 @@
  * - **observability**: Timing, tracing, metadata
  * - **graph**: Entities, relationships, subgraph
  *
- * @module @gerts/core/rag
+ * @module @gertsai/core/rag
  */
 
 import type { CitationId, SourceId, RAGResponseCore } from './response';

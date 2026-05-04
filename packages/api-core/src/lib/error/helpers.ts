@@ -4,7 +4,7 @@
  * Provides convenient factory functions for creating APIError instances.
  * These helpers ensure consistent error messages and proper error codes.
  *
- * @module @gerts/api-core/error/helpers
+ * @module @gertsai/api-core/error/helpers
  */
 
 import { APIError } from './APIError.class';

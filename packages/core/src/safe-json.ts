@@ -7,7 +7,7 @@
  *
  * @example
  * ```typescript
- * import { safeJsonParse } from '@gerts/core';
+ * import { safeJsonParse } from '@gertsai/core';
  *
  * // All of these work:
  * safeJsonParse('{"key": "value"}');                    // direct JSON

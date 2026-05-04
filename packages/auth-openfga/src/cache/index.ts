@@ -6,7 +6,7 @@
  * - Event-driven invalidation
  * - Wildcard invalidation patterns
  *
- * @module @gerts/auth-openfga/cache
+ * @module @gertsai/auth-openfga/cache
  */
 
 import type { FgaCheckResponse, FgaResourceType } from '../types.js';

@@ -4,7 +4,7 @@
  * Pure functions for querying FSM topology: validity checks,
  * state classification, and predicate factories.
  *
- * @module @gerts/fsm
+ * @module @gertsai/fsm
  */
 
 import type { StateValue, TransitionMap } from './types';

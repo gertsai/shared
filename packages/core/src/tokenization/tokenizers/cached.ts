@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Cached Tokenizer
+ * @gertsai/core - Cached Tokenizer
  *
  * LRU cache wrapper for tokenizers.
  * Caches token counts by text hash to avoid repeated computation.

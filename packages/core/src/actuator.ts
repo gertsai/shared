@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Actuator Interfaces
+ * @gertsai/core - Actuator Interfaces
  *
  * The Actuator pattern decouples logical steps (JSON schema) from physical execution (code).
  * This is the "Node Bridge" - connecting flow definitions to actual business logic.
@@ -59,7 +59,7 @@ export type ActuatorResult<T> = ActuatorSuccess<T> | ActuatorSuspended | Actuato
  * Execution context passed to actuators.
  * Provides access to kernel services, state, and utilities.
  *
- * This is a minimal interface - the full implementation is in @gerts/flow
+ * This is a minimal interface - the full implementation is in @gertsai/flow
  */
 export interface ExecutionContext {
   /** Get input data for current step */

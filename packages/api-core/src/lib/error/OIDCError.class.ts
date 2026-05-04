@@ -4,10 +4,10 @@
  * Specialized error class for OAuth2/OIDC endpoints.
  * Extends APIError with OAuth2-compliant error formatting.
  *
- * @module @gerts/api-core/error/OIDCError
+ * @module @gertsai/api-core/error/OIDCError
  */
 
-import { ErrorKind } from '@gerts/core';
+import { ErrorKind } from '@gertsai/core';
 import { APIError } from './APIError.class';
 import { ResponseCode } from '../apiResponse';
 

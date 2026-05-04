@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Query System
+ * @gertsai/core - Query System
  *
  * Universal query types for type-safe query → result mapping.
  *
@@ -13,7 +13,7 @@
  *   isQuerySuccess,
  *   type NLQuery,
  *   type QueryResult,
- * } from '@gerts/core';
+ * } from '@gertsai/core';
  *
  * // Create typed query
  * const query = createNLQuery(tenantId, 'Who works at NeuraTech?');

@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Tokenization Module
+ * @gertsai/core - Tokenization Module
  *
  * Universal tokenization system for multi-model support.
  *
@@ -12,7 +12,7 @@
  *
  * @example
  * ```typescript
- * import { TokenizerFactory, countTokens } from '@gerts/core';
+ * import { TokenizerFactory, countTokens } from '@gertsai/core';
  *
  * // Quick counting
  * const count = await countTokens('Hello, world!', 'gpt-4o');

@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Tiktoken Tokenizer
+ * @gertsai/core - Tiktoken Tokenizer
  *
  * Exact token counting using gpt-tokenizer.
  * Supports GPT-4, GPT-4o, o1, and GPT-3.5 models.

@@ -10,7 +10,7 @@
  * - Azure Key Vault (future)
  * - Mock (for testing)
  *
- * @module @gerts/hsm/types
+ * @module @gertsai/hsm/types
  */
 
 // =============================================================================

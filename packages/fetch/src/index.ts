@@ -1,15 +1,15 @@
 /**
- * @gerts/fetch - HTTP client wrapper for gerts.ai
+ * @gertsai/fetch - HTTP client wrapper for gerts.ai
  *
  * @description Provides a Fetch API-compatible HTTP client built on undici,
  * with proper body resolution and response normalization for Node.js environments.
  *
  * @packageDocumentation
- * @module @gerts/fetch
+ * @module @gertsai/fetch
  *
  * @example Basic usage
  * ```typescript
- * import { httpCaller } from '@gerts/fetch';
+ * import { httpCaller } from '@gertsai/fetch';
  *
  * const response = await httpCaller('https://api.example.com/data', {
  *   method: 'GET',
@@ -23,7 +23,7 @@
  *
  * @example POST with JSON body
  * ```typescript
- * import { makeRequest } from '@gerts/fetch';
+ * import { makeRequest } from '@gertsai/fetch';
  *
  * const response = await makeRequest('https://api.example.com/users', {
  *   method: 'POST',
@@ -34,7 +34,7 @@
  *
  * @example Stream response body
  * ```typescript
- * import httpCaller from '@gerts/fetch';
+ * import httpCaller from '@gertsai/fetch';
  *
  * const response = await httpCaller('https://api.example.com/stream');
  *

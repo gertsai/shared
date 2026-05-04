@@ -1,5 +1,5 @@
 /**
- * @gerts/llm-costs — LLM Model Costs, Capabilities & Provider Registry
+ * @gertsai/llm-costs — LLM Model Costs, Capabilities & Provider Registry
  *
  * Comprehensive model pricing database sourced from LiteLLM (2,600+ models, 100+ providers).
  * Prices stored in per-token format (native LiteLLM).

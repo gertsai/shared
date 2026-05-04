@@ -1,5 +1,5 @@
 /**
- * @module @gerts/m9s-cache/types
+ * @module @gertsai/m9s-cache/types
  * Advanced type definitions for cache system with branded types and generics.
  */
 

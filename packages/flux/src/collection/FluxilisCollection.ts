@@ -1,7 +1,7 @@
 /**
  * FluxilisCollection - Event-driven collection with TTL support.
  *
- * Extends MutableCollection from @gerts/collection with:
+ * Extends MutableCollection from @gertsai/collection with:
  * - Event emission on add/update/delete/clear
  * - TTL (time-to-live) support for automatic expiration
  * - Reactive data patterns
@@ -9,7 +9,7 @@
  * @packageDocumentation
  */
 
-import { MutableCollection } from '@gerts/collection';
+import { MutableCollection } from '@gertsai/collection';
 import { FluxilisEventEmitter } from '../events/FluxilisEventEmitter';
 import type { CollectionEventMap, FluxilisKey } from '../types';
 

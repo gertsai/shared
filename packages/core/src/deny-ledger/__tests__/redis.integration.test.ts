@@ -94,8 +94,8 @@ async function createTestPrisma(): Promise<{
   cleanup: () => Promise<void>;
   disconnect: () => Promise<void>;
 }> {
-  // @ts-expect-error - @gerts/database is available in test environment
-  const { PrismaClient } = await import('@gerts/database');
+  // @ts-expect-error - @gertsai/database is available in test environment
+  const { PrismaClient } = await import('@gertsai/database');
   const prisma = new PrismaClient() as PrismaClientForTest;
   await prisma.$connect();
 

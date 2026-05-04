@@ -1,5 +1,5 @@
 /**
- * @gerts/core - LLM Types
+ * @gertsai/core - LLM Types
  * Phase 21: LLM Abstraction
  *
  * Core types for LLM integration following CrewAI patterns:

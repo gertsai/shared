@@ -1,5 +1,5 @@
 /**
- * @gerts/llm-costs — LLM Model Costs, Capabilities & Provider Registry
+ * @gertsai/llm-costs — LLM Model Costs, Capabilities & Provider Registry
  *
  * Comprehensive database of 2,600+ models from 100+ providers.
  * Data sourced from LiteLLM and normalized for TypeScript consumption.
@@ -10,7 +10,7 @@
  *   getModel, findModel, calculateCost, toPerMillion,
  *   getModelsByMode, getModelsByProvider, filterModels,
  *   getProvider, compareCosts, getPricingSummary,
- * } from '@gerts/llm-costs';
+ * } from '@gertsai/llm-costs';
  *
  * // Get model info
  * const gpt4o = getModel('gpt-4o');

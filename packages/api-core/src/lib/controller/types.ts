@@ -8,7 +8,7 @@ import type {
   SubscriptionOptions,
 } from '@google-cloud/pubsub';
 import type { StatusError } from '@google-cloud/pubsub/build/src/message-stream';
-import type { OrchestraSession, UserType } from '@gerts/core';
+import type { OrchestraSession, UserType } from '@gertsai/core';
 import type { Job, Queue, JobsOptions, ConnectionOptions as BullMQConnectionType } from 'bullmq';
 import type { ServiceSchema } from 'moleculer';
 import type Moleculer from 'moleculer';
@@ -149,7 +149,7 @@ export type ApiControllerConfigOptions = {
  * @example
  * ```typescript
  * // In your app (e.g., apps/pipeline/src/services/types.ts)
- * declare module '@gerts/api-core' {
+ * declare module '@gertsai/api-core' {
  *   interface KnownServices {
  *     'v1.queue': true;
  *     'v1.graph': true;
@@ -435,7 +435,7 @@ import type {
   StaticOpenFgaCheck as _StaticOpenFgaCheck,
   CheckableResourceType,
   RelationFor,
-} from '@gerts/auth-openfga';
+} from '@gertsai/auth-openfga';
 
 // Re-export for consumers
 export type {
@@ -443,9 +443,9 @@ export type {
   StaticOpenFgaCheck,
   CheckableResourceType,
   RelationFor,
-} from '@gerts/auth-openfga';
+} from '@gertsai/auth-openfga';
 
-export { createOpenFgaCheck } from '@gerts/auth-openfga';
+export { createOpenFgaCheck } from '@gertsai/auth-openfga';
 
 /**
  * Legacy OpenFGA check configuration (string-based).

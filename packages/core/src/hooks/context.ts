@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Hook Context Classes
+ * @gertsai/core - Hook Context Classes
  * Phase 19: Hooks & Lifecycle
  *
  * Context objects passed to hooks for LLM and Tool operations.

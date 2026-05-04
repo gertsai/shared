@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Query Type Registry
+ * @gertsai/core - Query Type Registry
  *
  * Type-safe registry mapping query types to their request/result types.
  * Provides compile-time type safety for query → result mapping.
@@ -102,7 +102,7 @@ export interface GraphQuery extends QueryRequest<'graph'> {
 
 /**
  * Graph entity in query result.
- * Named QueryGraphEntity to avoid conflict with @gerts/core/graph GraphEntity.
+ * Named QueryGraphEntity to avoid conflict with @gertsai/core/graph GraphEntity.
  */
 export interface QueryGraphEntity {
   /** Unique ID */

@@ -5,7 +5,7 @@
  * Supports capability selection, retrieval configuration,
  * and generation options.
  *
- * @module @gerts/core/rag
+ * @module @gertsai/core/rag
  */
 
 import type { RAGCapabilities } from './capabilities';

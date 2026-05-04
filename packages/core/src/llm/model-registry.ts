@@ -1,5 +1,5 @@
 /**
- * @gerts/core - LLM Model Registry
+ * @gertsai/core - LLM Model Registry
  * Phase 21: LLM Abstraction
  *
  * Uses llm-info package for up-to-date model information:
@@ -351,7 +351,7 @@ export function getMostCapableModel(provider: AI_PROVIDER_TYPE): string | undefi
 }
 
 // ---------------------------------------------------------------------------
-// Re-exports from @gerts/llm-costs (2,600+ models, 100+ providers)
+// Re-exports from @gertsai/llm-costs (2,600+ models, 100+ providers)
 // Aliased with LlmCost* prefix to avoid conflicts with llm-info exports above
 // ---------------------------------------------------------------------------
 export {
@@ -373,4 +373,4 @@ export {
   type ProviderConfig as LlmCostProviderConfig,
   type CostResult as LlmCostResult,
   type ModelFilter as LlmCostModelFilter,
-} from '@gerts/llm-costs';
+} from '@gertsai/llm-costs';

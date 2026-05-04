@@ -1,10 +1,10 @@
 /**
- * @fileoverview Core generic types for @gerts/fsm
+ * @fileoverview Core generic types for @gertsai/fsm
  *
  * All types are parameterized by `S extends StateValue` to provide
  * compile-time safety for state machine definitions.
  *
- * @module @gerts/fsm
+ * @module @gertsai/fsm
  */
 
 // =============================================================================

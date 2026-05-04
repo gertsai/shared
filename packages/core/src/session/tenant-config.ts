@@ -25,7 +25,7 @@ import { z } from 'zod';
 
 /**
  * Supported LLM providers for tenant config
- * Note: Prefixed with "Tenant" to avoid collision with @gerts/core/llm
+ * Note: Prefixed with "Tenant" to avoid collision with @gertsai/core/llm
  */
 export type TenantLLMProvider =
   | 'openai'
@@ -38,7 +38,7 @@ export type TenantLLMProvider =
 
 /**
  * LLM configuration for the tenant
- * Note: Prefixed with "Tenant" to avoid collision with @gerts/core/llm
+ * Note: Prefixed with "Tenant" to avoid collision with @gertsai/core/llm
  */
 export interface TenantLLMConfig {
   /** LLM provider */
@@ -1108,7 +1108,7 @@ export interface MemoryConfig {
  * Observability configuration for the tenant
  *
  * Controls LLM tracing, metrics collection, and data retention.
- * Used by @gerts/observe for per-tenant sampling and storage settings.
+ * Used by @gertsai/observe for per-tenant sampling and storage settings.
  *
  * @see RFC-062 LLM Observability Platform
  */
@@ -2479,7 +2479,7 @@ export type SanitizedTenantConfig = Omit<TenantConfig, 'llm' | 'embedding' | 're
  * @example
  * ```typescript
  * // In session middleware (line ~732)
- * import { sanitizeTenantConfig } from '@gerts/core';
+ * import { sanitizeTenantConfig } from '@gertsai/core';
  *
  * // BEFORE (vulnerable)
  * ctx.meta.tenantConfig = response.data;

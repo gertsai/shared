@@ -1,8 +1,8 @@
 /**
- * @gerts/core - Query System Types
+ * @gertsai/core - Query System Types
  *
  * Universal query types for type-safe query → result mapping.
- * Aligned with @gerts/tools ToolResult pattern and @gerts/api-types Source.
+ * Aligned with @gertsai/tools ToolResult pattern and @gertsai/api-types Source.
  *
  * @see RFC-032: Universal Query System
  */
@@ -68,7 +68,7 @@ export type SourceType =
 
 /**
  * Source reference for provenance tracking.
- * Aligned with @gerts/api-types Source interface.
+ * Aligned with @gertsai/api-types Source interface.
  *
  * @example
  * ```typescript
@@ -138,7 +138,7 @@ export interface QuerySuccess<TData, TMeta = unknown> {
 
 /**
  * Failed query result.
- * Aligned with @gerts/graph QueryError pattern.
+ * Aligned with @gertsai/graph QueryError pattern.
  */
 export interface QueryFailure {
   readonly status: 'error';

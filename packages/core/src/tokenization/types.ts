@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Tokenization Types
+ * @gertsai/core - Tokenization Types
  *
  * Universal tokenization interface for multi-model support.
  * Works with OpenAI, Anthropic, Google, and other LLM providers.

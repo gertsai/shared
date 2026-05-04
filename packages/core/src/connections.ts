@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Connection Types
+ * @gertsai/core - Connection Types
  *
  * 24 typed connections for AI/Graph RAG components.
  * Based on n8n's NodeConnectionTypes + Graph RAG specific types.

@@ -4,11 +4,11 @@
  * Hardware Security Module (HSM) integration for convergent encryption.
  * Provides secure key management and encryption for CAS deduplication.
  *
- * @module @gerts/hsm
+ * @module @gertsai/hsm
  *
  * @example
  * ```typescript
- * import { ConvergentEncryption, VaultProvider } from '@gerts/hsm';
+ * import { ConvergentEncryption, VaultProvider } from '@gertsai/hsm';
  *
  * // Create Vault provider
  * const provider = new VaultProvider({

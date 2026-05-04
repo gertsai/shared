@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Hook Types
+ * @gertsai/core - Hook Types
  * Phase 19: Hooks & Lifecycle
  *
  * Core types for the hooks system merging Agno (decorators, background execution)

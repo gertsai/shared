@@ -1,5 +1,5 @@
 /**
- * @gerts/core - Text Processing Core
+ * @gertsai/core - Text Processing Core
  * Phase 22: Text Processing
  * Phase 23: Entity Extraction & Deduplication
  *

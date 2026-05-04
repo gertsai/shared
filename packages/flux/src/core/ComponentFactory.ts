@@ -43,7 +43,7 @@ type EventEmitterConstructor<EventMap extends Record<string, (...args: unknown[]
  *
  * @example Basic usage with singleton
  * ```typescript
- * import { componentFactory } from '@gerts/flux';
+ * import { componentFactory } from '@gertsai/flux';
  *
  * const backend = componentFactory.getBackend('map');
  * const serializer = componentFactory.getSerializer('json');
@@ -51,7 +51,7 @@ type EventEmitterConstructor<EventMap extends Record<string, (...args: unknown[]
  *
  * @example Registering custom adapters
  * ```typescript
- * import { ComponentFactory } from '@gerts/flux';
+ * import { ComponentFactory } from '@gertsai/flux';
  *
  * const factory = new ComponentFactory();
  *
@@ -357,7 +357,7 @@ export class ComponentFactory {
  *
  * @example
  * ```typescript
- * import { componentFactory } from '@gerts/flux';
+ * import { componentFactory } from '@gertsai/flux';
  *
  * const backend = componentFactory.getBackend('map');
  * const serializer = componentFactory.getSerializer('json');

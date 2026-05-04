@@ -13,11 +13,11 @@
  * 2. If denied, return false immediately
  * 3. Otherwise, proceed to OpenFGA check
  *
- * @module @gerts/auth-openfga/deny
+ * @module @gertsai/auth-openfga/deny
  */
 
 import type { FgaResourceType } from '../types.js';
-import type { DenyLedgerProvider as CoreDenyLedgerProvider } from '@gerts/core';
+import type { DenyLedgerProvider as CoreDenyLedgerProvider } from '@gertsai/core';
 
 // =============================================================================
 // Types
@@ -255,14 +255,14 @@ export interface RedisDenyLedgerAdapterConfig {
 /**
  * Redis-backed Deny Ledger Adapter for production use.
  *
- * Wraps @gerts/core's DenyLedgerProvider to implement the auth-openfga DenyLedger interface.
+ * Wraps @gertsai/core's DenyLedgerProvider to implement the auth-openfga DenyLedger interface.
  * Provides persistence and multi-node sync through Redis + PostgreSQL.
  *
  * @example
  * ```typescript
- * import { RedisDenyLedger, PostgresDenyLedger } from '@gerts/core';
+ * import { RedisDenyLedger, PostgresDenyLedger } from '@gertsai/core';
  * import Redis from 'ioredis';
- * import { getDatabase } from '@gerts/database';
+ * import { getDatabase } from '@gertsai/database';
  *
  * const redis = new Redis();
  * const postgres = new PostgresDenyLedger({ prisma: getDatabase() });

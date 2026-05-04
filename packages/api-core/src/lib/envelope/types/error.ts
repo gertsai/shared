@@ -1,5 +1,5 @@
 /**
- * @gerts/api-types - Unified Error Response
+ * @gertsai/api-types - Unified Error Response
  *
  * RFC-030: GertsErrorResponse — unified error response for all gerts.ai API errors.
  * Combines RFC 9457 Problem Details + OpenAI error format + Agno retryable flag.

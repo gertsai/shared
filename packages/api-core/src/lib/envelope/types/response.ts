@@ -1,5 +1,5 @@
 /**
- * @gerts/api-types - Unified Response Envelope
+ * @gertsai/api-types - Unified Response Envelope
  *
  * RFC-030: GertsResponse<T> — unified response envelope for all gerts.ai API responses.
  * Combines VoltAgent envelope + OpenAI fields + CrewAI usage tracking.

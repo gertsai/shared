@@ -1,5 +1,5 @@
 /**
- * Test fixtures and builders for @gerts/flux tests.
+ * Test fixtures and builders for @gertsai/flux tests.
  *
  * Implements FixtureBuilder pattern from TYPESCRIPT-BEST-PRACTICES-REVIEW.md
  * for type-safe, reusable test data creation.

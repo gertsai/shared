@@ -1,5 +1,5 @@
 {
-  "name": "@gerts/flux",
+  "name": "@gertsai/flux",
   "version": "0.1.0",
   "description": "High-performance library for managing data streams and events",
   "main": "dist/index.js",
@@ -39,7 +39,7 @@
   "author": "Gerts AI",
   "license": "MIT",
   "dependencies": {
-    "@gerts/collection": "workspace:*"
+    "@gertsai/collection": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

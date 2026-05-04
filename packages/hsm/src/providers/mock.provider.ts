@@ -4,7 +4,7 @@
  * Implements HSMProvider with in-memory key storage.
  * Provides deterministic convergent encryption for testing.
  *
- * @module @gerts/hsm/providers/mock
+ * @module @gertsai/hsm/providers/mock
  */
 
 import { createHash, createHmac, createCipheriv, createDecipheriv } from 'crypto';

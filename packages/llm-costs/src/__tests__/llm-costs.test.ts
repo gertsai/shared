@@ -25,7 +25,7 @@ import {
   getAllProviders,
 } from '../index';
 
-describe('@gerts/llm-costs', () => {
+describe('@gertsai/llm-costs', () => {
   describe('metadata', () => {
     it('should have 2500+ models loaded', () => {
       const meta = getMeta();

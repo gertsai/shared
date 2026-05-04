@@ -1,5 +1,5 @@
 /**
- * @gerts/core - BaseLLM Abstract Class
+ * @gertsai/core - BaseLLM Abstract Class
  * Phase 21: LLM Abstraction
  *
  * Abstract base class for LLM implementations following CrewAI patterns:
