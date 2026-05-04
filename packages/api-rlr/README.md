@@ -1,684 +1,224 @@
-# <div align="center"> `Orchestra rate limit request` </div>
-
-<br>
-
 <div align="center">
 
-A `api-rlr` middleware with [`redis`](https://github.com/redis/redis) store for the
-[`orch-api-services`](https://gitlab.com/orchdev/api/orch-api-services)
+# @gertsai/api-rlr
+
+### Production-grade rate limit middleware for Moleculer.js APIs
+
+Sliding-window и GCRA algorithms через Redis Lua scripts, PostgreSQL adapter
+с structural-typed `PgClient` interface (Prisma/Drizzle/raw-pg drop-in), и
+in-memory adapter для tests/dev. Draft-6 и Draft-7 IETF rate-limit headers
+из коробки.
+
+[![Tier](https://img.shields.io/badge/tier-5-red?style=flat-square)](#status)
+[![Build](https://img.shields.io/badge/build-tsc-blue?style=flat-square)](#status)
+[![Status](https://img.shields.io/badge/status-stable-green?style=flat-square)](#status)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](#license)
 
 </div>
 
-## Access key
-
-Request `{GITLAB_CI_KEY}` from the administrator to access the private repository
-
-### Setting the key to an environment variable
-
-Activate environment variable in terminal, will work until system reboots
-
-```sh
-export GITLAB_CI_KEY="test-keyh28hfu4-wrx34"
-```
-
-You can also add a variable to the `~/.bash_profile` or `~/.bashrc` file
-
-```sh
-nano ~/.bash_profile
-```
-
-Paste a line into a file and save
-
-```sh
-export GITLAB_AUTH_TOKEN="test-keyh28hfu4-wrx34"
-```
-
-Activating a profile after modification with the `source` command
-
-```sh
-source ~/.bash_profile
-```
-
-## Installation
-
-It is necessary to create a .npmrc file in the place where the package is used and add the following line to it
-
-```sh
-# Add to .nprmrc
-
-# api-rlr
-> '//gitlab.com/api/v4/projects/57516921/packages/npm/:_authToken'="${GITLAB_AUTH_TOKEN}"
-```
-
-```sh
-# Using npm
-> pnpm add @gerts/api-rlr
-# Using yarn or pnpm
-> yarn/pnpm add @gerts/api-rlr
-```
-
-## Usage
-
-### Importing
-
-This library is provided in ESM as well as CJS forms, and works with both
-Javascript and Typescript projects.
-
-Import it in a CommonJS project (`type: commonjs` or no `type` field in
-`package.json`) as follows:
-
-```ts
-const { RLRMiddleware } = require('@gerts/api-rlr');
-```
-
-Import it in a ESM project (`type: module` in `package.json`) as follows:
-
-```ts
-import { RLRMiddleware } from '@gerts/api-rlr';
-```
-
-### Examples
-
-Global middleware with Redis store and GCRA strategy (recommended for webhook follow‑up/pull endpoints):
-
-```ts
-import { createApiService } from '@gerts/api-core';
-import RLRMiddleware from '@gerts/api-rlr';
-import RedisClient from 'ioredis';
-
-import pjson from '../../package.json';
-import config from '../project.config';
-
-export default createApiService(
-  {
-    name: 'api.analytics',
-    version: 'v1',
-    settings: {
-      host: config.SERVICE_HOST,
-      port: config.SERVICE_PORT,
-      rateLimit: null,
-      use: [
-        RLRMiddleware({
-          // base window and rate
-          timeFrame: +config.RLR_TIMEFRAME, // e.g. 60000 ms
-          limit: +config.RLR_LIMIT, // e.g. 60 req / window
-
-          // strategy (optional): 'gcra' | 'sliding_window'
-          strategy: 'gcra',
-          // burst for GCRA (optional): additional short burst capacity
-          burst: 3,
-
-          // optional per-route overrides (path can be string or RegExp)
-          routes: [
-            {
-              path: /\/v2\/messages\/.*/,
-              method: 'GET',
-              strategy: 'gcra',
-              burst: 4, // override burst for this route
-              timeFrame: 60000, // override window
-              limit: 60, // override limit
-            },
-            {
-              path: '/v2/media/download',
-              method: 'GET',
-              strategy: 'sliding_window',
-              timeFrame: 60000,
-              limit: 90,
-            },
-          ],
-
-          // Redis connection factory (REQUIRED)
-          store: () =>
-            new RedisClient(
-              !config.RLR_CLUSTER
-                ? { host: config.RLR_HOST, port: config.RLR_PORT }
-                : {
-                    sentinels: [{ host: config.RLR_HOST, port: config.RLR_PORT }],
-                    name: config.RLR_CLUSTER_NAME,
-                  },
-            ),
-        }),
-      ],
-    },
-    routes: [
-      {
-        path: '/',
-        whitelist: ['v1.analytics.**'],
-        bodyParsers: {
-          json: {
-            strict: false,
-            limit: '1MB',
-          },
-          urlencoded: {
-            extended: true,
-            limit: '1MB',
-          },
-        },
-        autoAliases: true,
-        authentication: true,
-      },
-    ],
-  },
-  pjson,
-);
-```
-
-### Headers
-
-By default, the middleware returns Draft 6 headers. To return Draft 7 headers, set `draftVersion: DraftVersionType.DRAFT7`.
-
-- Draft 6 (default)
-  - `X-RateLimit-Policy`: `<limit>;w=<windowSeconds>`
-  - `X-RateLimit-Limit`: `<limit>`
-  - `X-RateLimit-Remaining`: `<remaining>`
-  - `X-RateLimit-Retry-After`: `<seconds>` (seconds until a retry is allowed)
-  - `X-RateLimit-Retry`: `<epochMillis>` (absolute timestamp when a retry is allowed)
-  - `X-RateLimit-Bucket`: `<method>:<normalized-path>[/bulk][/sse]` (optional)
-
-- Draft 7 (enable via `draftVersion: DraftVersionType.DRAFT7`)
-  - `RateLimit-Policy`: `<limit>;w=<windowSeconds>`
-  - `RateLimit`: `limit=<limit>, remaining=<remaining>, reset=<seconds>`
-
-Clients like `@orchlab/gong` parse both families and apply the max delay with a small offset and per‑bucket cooldown.
-
-### Strategies
-
-- `sliding_window` (default): time window with weighted previous window; simple and compatible with most clients.
-- `gcra`: highly predictable pacing with accurate `Retry-After`; recommended for webhook follow‑up/pull endpoints.
-- `leaky_bucket` (new): smooth traffic shaping with constant drain rate; ideal for API gateways requiring predictable throughput.
-
-Use `strategy` globally and/or override per route via `routes[]` entries.
-
-### Leaky Bucket Strategy (New)
-
-The Leaky Bucket algorithm models a bucket that fills with each request and drains at a constant rate:
-
-```typescript
-import { RLRMiddleware, LimiterStrategy } from '@gerts/api-rlr';
-
-RLRMiddleware({
-  limit: 100, // drain rate: 100 requests per timeFrame
-  timeFrame: 1000, // 1 second = 100 req/s drain rate
-  strategy: LimiterStrategy.LEAKY_BUCKET,
-  burst: 10, // max bucket capacity (burst allowance)
-  store: () => redis,
-});
-```
-
-**Benefits:**
-
-- Smooth, predictable output rate (no traffic spikes)
-- Natural burst absorption up to capacity
-- Ideal for protecting downstream services with fixed throughput
-
-**When to use:**
-
-- API gateways with strict throughput requirements
-- Rate limiting to external APIs with fixed limits
-- Traffic shaping for microservices
-
-### Cost-Based Rate Limiting (New)
-
-Different requests can consume different amounts of rate limit quota:
-
-```typescript
-RLRMiddleware({
-  limit: 1000, // 1000 tokens per minute
-  timeFrame: 60000,
-  cost: 1, // default cost per request
-  routes: [
-    {
-      path: '/api/ai/inference',
-      method: 'POST',
-      cost: 50, // AI calls cost 50 tokens
-    },
-    {
-      path: '/api/bulk/export',
-      method: 'POST',
-      cost: 100, // Bulk exports cost 100 tokens
-    },
-    {
-      path: '/api/data/:id',
-      method: 'GET',
-      cost: 1, // Simple reads cost 1 token (default)
-    },
-  ],
-  store: () => redis,
-});
-```
-
-**Use cases:**
-
-- AI/LLM endpoints that are computationally expensive
-- Bulk operations that stress the backend
-- Tiered API pricing based on operation complexity
-
-### Redis/Valkey Time Synchronization (New)
-
-For distributed systems, use `useRedisTime` to avoid clock skew issues:
-
-```typescript
-RLRMiddleware({
-  limit: 100,
-  timeFrame: 60000,
-  useRedisTime: true, // Use Redis TIME command instead of Date.now()
-  store: () => redis,
-});
-```
-
-**When to enable:**
-
-- Multi-node deployments with potential clock drift
-- Strict rate limiting requirements across distributed systems
-- When consistency is more important than minimal latency
-
-**Note:** Adds ~0.3-0.5ms latency per request for the TIME call.
-
-### In-Memory Adapter (New)
-
-Fallback when Redis is unavailable:
-
-```typescript
-import { MemoryAdapter, RateLimiter } from '@gerts/api-rlr';
-
-// Create in-memory adapter
-const adapter = new MemoryAdapter({
-  maxKeys: 10000, // LRU eviction limit
-  cleanupInterval: 60000, // Cleanup expired entries every 60s
-  debug: false,
-});
-
-// Use with RateLimiter directly
-const limiter = new RateLimiter(adapter, {
-  limit: 100,
-  timeFrame: 60000,
-  store: () => null as any, // Not used with MemoryAdapter
-});
-```
-
-**Limitations:**
-
-- Not distributed (each node has its own state)
-- Memory bound (configure maxKeys appropriately)
-- Best for single-node deployments or development
-
-### Recommendations
-
-- Default for API gateways: use `gcra`.
-  - Suggested baseline: `timeFrame = 60000`, `limit = 60`, `burst = 3–5`.
-  - Bucket key: per API key and route pattern (optionally include a major id), e.g. `<apiKey>:<routePattern>[:<majorId>]`.
-
-- Media/multipart endpoints (short spikes):
-  - Keep `gcra` and raise `burst` (e.g. 8–12) and/or `limit`, or
-  - Use `sliding_window` with a higher `limit` for a wider start.
-
-- Public read-only GET traffic:
-  - Prefer `gcra` with a higher `limit` and a small `burst` (1–2),
-  - `sliding_window` is acceptable if you already rely on it.
-
-- Headers:
-  - If you need `RateLimit` (draft 7), set `draftVersion: DraftVersionType.DRAFT7`.
-  - By default, Draft 6 headers are returned.
-
-- Redis connection reuse (hot‑reload):
-  - Pass `storeSingletonKey: 'rlr:redis:default'` to reuse a single Redis client per process; graceful shutdown hooks are attached automatically.
-
-- Observability:
-  - Emit metrics for `remainingHits`, `expiryTime` (or computed `retryAfter`), and per‑bucket deny counts.
-  - If using `sliding_window`, periodically check ZSET sizes and TTLs to ensure keys don’t accumulate.
-
-- Client retry guidance:
-  - Respect `Retry-After`/`X-RateLimit-Retry(-After)` from responses; add small jitter; avoid synchronized retries across workers.
-
-#### Subjects, routes and fallback
-
-- `whiteList` applies to subjects (e.g., IP/API key/tenant), not to routes.
-- To ignore specific endpoints, use `routes[].ignore: true`.
-- If `routes` are provided and no entry matches, the global limit applies as a fallback for the normalized URL (`<method>:<normalized-path>`).
-
-#### Bucket id, normalization and security
-
-- Subject is resolved via `bucketKeyResolver(req)` (e.g., `acct:<id>`/`key:<apiKey>`). If it returns `null`, the client IP is used.
-- Bucket id format (default): `<method>:<normalized-path>[/bulk][/sse]`.
-  - Normalization: lowercase; long numeric/uuid-like segments → `:id`; `/reactions/*` → `/reactions/:reaction`; trim trailing slash.
-- Do not include sensitive information in the bucket id returned to clients; consider hashing if necessary.
-
-#### Time and consistency
-
-- The middleware uses the application clock (`Date.now()`). Ensure NTP sync across nodes. If you need Redis time, consider extending the store to call `TIME` and propagate it to scripts.
-
-#### Store reuse and resilience
-
-- Always pass `storeSingletonKey` to reuse a single Redis client per process; graceful shutdown hooks are attached automatically.
-- Configure ioredis with sensible timeouts and retry strategies. Prefer a dedicated Redis (or cluster) for rate‑limiting.
-- Define an operational failure policy: for public read‑only GET you may choose fail‑open; for write/webhooks prefer fail‑closed.
-
-#### Perimeter
-
-- Combine app‑level limits with CDN/WAF rate‑limiting for volumetric protection at the edge.
-
-### Dynamic subject and plan‑based limits
-
-You can bind rate limits to an account/tenant (instead of IP) and dynamically increase limits for PRO/Enterprise plans using two optional resolvers:
-
-- `bucketKeyResolver(req)`: returns the subject used to key the bucket (e.g., apiKey, accountId, tenantId). Fallback is client IP.
-- `limitsResolver({ req, route, base })`: overrides `{ limit, timeFrame, strategy, burst }` per request (ideal for plans/tiers).
-
-Example configuration:
-
-```ts
-RLRMiddleware({
-  timeFrame: 60_000,
-  limit: 60,
-  strategy: 'gcra',
-  burst: 3,
-  routes: [
-    /* ... */
-  ],
-
-  // Decide bucket subject: prefer bearer token or api key; fallback to IP
-  bucketKeyResolver: (req) => {
-    const auth = req.headers?.authorization || '';
-    const m = /^Bearer\s+(.+)$/i.exec(auth);
-    if (m) return `acct:${m[1]}`; // subject bound to account token
-    const apiKey = req.headers?.['x-api-key'];
-    if (typeof apiKey === 'string' && apiKey) return `key:${apiKey}`;
-    return null; // fallback to IP
-  },
-
-  // Bump limits for PRO/Enterprise plans
-  limitsResolver: ({ req, route, base }) => {
-    // Option A: plan from JWT (already decoded by auth middleware)
-    //   const plan = (req as any).user?.plan;
-    // Option B: plan from a DB lookup (sync or cached async)
-    //   const accountId = (req as any).user?.id || /* parse from token */
-    //   const plan = plansCache.get(accountId) || 'free';
-
-    const planHeader = req.headers?.['x-plan'];
-    const plan = Array.isArray(planHeader) ? planHeader[0] : planHeader; // 'pro' | 'enterprise' | 'free'
-
-    if (plan === 'pro') {
-      return {
-        limit: Math.ceil(base.limit * 2),
-        burst: Math.max(base.burst, 6),
-      };
-    }
-    if (plan === 'enterprise') {
-      return { limit: base.limit * 4, burst: Math.max(base.burst, 10) };
-    }
-    return null; // no overrides
-  },
-});
-```
-
-Notes:
-
-- If you resolve the subject to an `accountId`, multiple IPs/clients of the same account will share the same bucket.
-- You can also switch strategies per plan or route (e.g., `gcra` for webhooks on PRO, `sliding_window` for others).
-- Prefer caching plan lookups to avoid adding latency to the fast path.
-
-#### Example: wiring JWT/DB plan in api.service.ts
-
-```ts
-// api/services/src/mol-services/api.service.ts
-import { createApiService } from '@gerts/api-core';
-import RLRMiddleware from '@gerts/api-rlr';
-import RedisClient from 'ioredis';
-import jwt from 'jsonwebtoken';
-
-import pjson from '../../package.json';
-import config from '../project.config';
-
-type AccountPlan = 'free' | 'pro' | 'enterprise';
-
-// Simple in-memory cache for plan lookups
-const plansCache = new Map<string, { plan: AccountPlan; exp: number }>();
-const getCachedPlan = (accountId: string) => {
-  const hit = plansCache.get(accountId);
-  if (hit && hit.exp > Date.now()) return hit.plan;
-  return null;
-};
-const setCachedPlan = (accountId: string, plan: AccountPlan, ttlMs = 60_000) => {
-  plansCache.set(accountId, { plan, exp: Date.now() + ttlMs });
-};
-
-function getAccountFromJwt(req: any): {
-  accountId?: string;
-  plan?: AccountPlan;
-} {
-  const auth = req.headers?.authorization || '';
-  const m = /^Bearer\s+(.+)$/i.exec(auth);
-  if (!m) return {};
-  try {
-    const payload: any = jwt.decode(m[1]); // verify() if needed
-    return { accountId: payload?.account_id, plan: payload?.plan };
-  } catch {
-    return {};
-  }
-}
-
-export default createApiService(
-  {
-    settings: {
-      host: config.SERVICE_HOST,
-      port: config.SERVICE_PORT,
-      rateLimit: null,
-      use: [
-        RLRMiddleware({
-          timeFrame: +config.RLR_TIMEFRAME,
-          limit: +config.RLR_LIMIT,
-          strategy: 'gcra',
-          burst: 3,
-
-          bucketKeyResolver: (req) => {
-            const { accountId } = getAccountFromJwt(req);
-            if (accountId) return `acct:${accountId}`;
-            const apiKey = req.headers?.['x-api-key'];
-            if (typeof apiKey === 'string' && apiKey) return `key:${apiKey}`;
-            return null; // fallback to IP
-          },
-
-          limitsResolver: ({ req, base }) => {
-            const { accountId, plan: planFromJwt } = getAccountFromJwt(req);
-
-            const headerPlan = req.headers?.['x-plan'];
-            const quickPlan = Array.isArray(headerPlan) ? headerPlan[0] : headerPlan;
-            const plan: AccountPlan =
-              quickPlan === 'pro' || quickPlan === 'enterprise'
-                ? (quickPlan as AccountPlan)
-                : planFromJwt || 'free';
-
-            if (plan === 'pro') {
-              return {
-                limit: Math.ceil(base.limit * 2),
-                burst: Math.max(base.burst, 6),
-              };
-            }
-            if (plan === 'enterprise') {
-              return { limit: base.limit * 4, burst: Math.max(base.burst, 10) };
-            }
-
-            // Async refresh of cached plan via Moleculer (optional)
-            if (accountId && !planFromJwt && !quickPlan) {
-              const ctx = (req as any).$ctx;
-              ctx
-                .call('v2.accounts.getPlan', { accountId })
-                .then((p: AccountPlan) =>
-                  setCachedPlan(accountId, ['pro', 'enterprise'].includes(p as any) ? p : 'free'),
-                )
-                .catch(() => {});
-            }
-
-            return null;
-          },
-
-          routes: [
-            /* your route patterns */
-          ],
-          storeSingletonKey: 'rlr:redis:default',
-          store: () =>
-            new RedisClient(
-              !config.RLR_CLUSTER
-                ? { host: config.RLR_HOST, port: config.RLR_PORT }
-                : {
-                    sentinels: [{ host: config.RLR_HOST, port: config.RLR_PORT }],
-                    name: config.RLR_CLUSTER_NAME,
-                  },
-            ),
-        }),
-      ],
-    },
-    name: 'api.gate',
-    version: 'v2',
-    routes: [
-      /* ... */
-    ],
-  },
-  pjson,
-);
-```
-
-### Server buckets and routes
-
-This middleware can emit a server bucket id so clients can align queues. The id is returned via `X-RateLimit-Bucket`.
-
-- Bucket id format (default): `<method>:<normalized-path>[/bulk][/sse]`
-  - Normalization: numeric/uuid-like segments → `:id`, collapse `/reactions/*` → `/reactions/:reaction`, trim trailing slash, lowercase.
-  - If a route entry in `routes[]` matches, that normalized path is used. Otherwise, the raw URL is normalized on the fly as a fallback.
-
-- Example routes table (typical Gateway):
-
-| Path (RegExp)                    | Method                | Limit       | Window(ms)       | Strategy       | Burst          |
-| -------------------------------- | --------------------- | ----------- | ---------------- | -------------- | -------------- | -------------- | -------------- | --- |
-| ^/v2/messages(/.\*)?$            | POST                  | 60          | 60000            | gcra           | 3              |
-| ^/v2/messages(/.\*)?$            | PATCH                 | 30          | 60000            | sliding_window | -              |
-| ^/v2/chats/[^/]+/messages$       | POST                  | 60          | 60000            | gcra           | 3              |
-| ^/v2/chats/[^/]+/messages/[^/]+$ | PATCH                 | 30          | 60000            | sliding_window | -              |
-| ^/v2/chats(/.\*)?$               | GET                   | 120         | 60000            | sliding_window | -              |
-| ^/v2/webhooks/outgoing(/.\*)?$   | POST                  | 30          | 60000            | sliding_window | -              |
-| ^/v2/webhooks/outgoing(/.\*)?$   | PATCH                 | 20          | 60000            | sliding_window | -              |
-| ^/v2/webhooks/outgoing(/.\*)?$   | DELETE                | 10          | 60000            | sliding_window | -              |
-| ^/v2/webhooks/outgoing(/.\*)?$   | GET                   | 120         | 60000            | sliding_window | -              |
-| ^/v2/users/me/avatar$            | PUT                   | 10          | 60000            | sliding_window | -              |
-| ^/v1/analytics/(groups           | identifies            | pages       | ...)$            | POST           | 40             | 60000          | gcra           | 5   |
-| ^/v1/sapi/sendWithFiles$         | POST                  | 30          | 60000            | sliding_window | -              |
-| ^/v2/(projects                   | tasks                 | teams       | members)(/.\*)?$ | POST           | 40             | 60000          | sliding_window | -   |
-| ^/v2/(projects                   | tasks                 | teams       | members)(/.\*)?$ | PATCH          | 30             | 60000          | sliding_window | -   |
-| ^/v2/(bots                       | applications)(/.\*)?$ | POST        | 30               | 60000          | sliding_window | -              |
-| ^/v2/(bots                       | applications)(/.\*)?$ | GET         | 120              | 60000          | sliding_window | -              |
-| ^/v2/payments(/.\*)?$            | POST                  | 20          | 60000            | sliding_window | -              |
-| ^/v2/payments(/.\*)?$            | PUT                   | 20          | 60000            | sliding_window | -              |
-| ^/v2/(search                     | meetings              | ai)(/.\*)?$ | GET              | 180            | 60000          | sliding_window | -              |
-
-- SSE policy: for `GET` endpoints ending with `/events` or `/stream`, consider separate buckets or stricter concurrency on the client. This library appends `/sse` suffix to the bucket id by default for such paths.
-
-## Benchmarks
-
-Run benchmarks to compare algorithms and stores:
+---
+
+`@gertsai/api-rlr` is a battle-tested rate limit middleware for Moleculer.js
+HTTP services. It plugs into `moleculer-web` as a single middleware function,
+chooses an algorithm and storage backend независимо, и emits standards-compliant
+rate-limit headers — без зависимости от конкретного ORM или storage.
+
+The PostgreSQL adapter is **database-agnostic by design** (per ADR-011): it
+accepts any client structurally compatible с Prisma's `$queryRawUnsafe` /
+`$executeRawUnsafe` / `$transaction` surface. Pass your `PrismaClient` and it
+works; swap in Drizzle, Kysely, raw `pg`, or your own wrapper — same code path.
+
+## Why @gertsai/api-rlr
+
+- **Two algorithms, three storage backends** — Sliding-Window (precise count
+  per time window) и GCRA (smooth bursts, RFC-2698 inspired); Redis (production,
+  Lua-atomic), PostgreSQL (database-agnostic), MemoryAdapter (tests/dev).
+- **Lua scripts for atomicity** — Redis path uses pre-compiled Lua scripts
+  (sliding window + GCRA + leaky bucket) — single round-trip, atomic CAS-free
+  rate decisions. Scripts shipped в `dist/scripts/*.lua` через `pnpm copy:lua`.
+- **Database-agnostic PostgreSQL adapter** — local `PgClient` interface (3
+  methods) means PrismaClient instances are drop-in compatible; Drizzle,
+  Kysely, raw `pg`, or wrapper of your choice all work без code changes.
+- **Standards-compliant headers** — IETF Draft-6 (`X-RateLimit-*`) и Draft-7
+  (`RateLimit-*`) header writers; client-side parser (`updateFromHeaders`)
+  for self-throttling clients.
+- **Per-route presets** — `RateLimitPresets` (strict/lenient/burst/api-tier),
+  `RoutePresets` for common path patterns, `withPreset()` for ergonomic
+  composition.
+- **Operational toolkit** — `RateLimitHealthCheck` (Redis ping, queue depth),
+  `RateLimitDebugger` (per-key trace), `RateLimitTestUtils` (simulate burst
+  patterns в unit tests), `ConfigValidator` (early failure for invalid configs).
+- **Path normalization** — `PathNormalizer` collapses `/users/123` / `/users/456`
+  into one bucket via configurable rules, preventing per-id key explosion.
+
+## Install
 
 ```bash
-# Throughput benchmark (Redis)
-RLR_PORT=6379 pnpm exec tsx benchmarks/rate-limit/rlr-throughput.bench.ts
-
-# Throughput benchmark (Valkey)
-RLR_PORT=6381 pnpm exec tsx benchmarks/rate-limit/rlr-throughput.bench.ts
-
-# Algorithm comparison
-pnpm exec tsx benchmarks/rate-limit/rlr-algorithms.bench.ts
-
-# New features benchmark (Leaky Bucket, Cost-based, useRedisTime)
-pnpm exec tsx benchmarks/rate-limit/rlr-new-features.bench.ts
-
-# Client-side rate limit features
-pnpm exec tsx benchmarks/rate-limit/client-rate-limit.bench.ts
+pnpm add @gertsai/api-rlr ioredis
+# peers (если используете Moleculer integration):
+pnpm add moleculer moleculer-web
 ```
 
-### Performance Summary
-
-#### In-Memory Adapter (MemoryAdapter)
-
-| Benchmark                | Ops/s    | Avg (ms) | P95 (ms) | P99 (ms) |
-| ------------------------ | -------- | -------- | -------- | -------- |
-| **Sliding Window**       |
-| Sequential (unique keys) | 425K     | 0.002    | 0.002    | 0.005    |
-| Concurrent (unique keys) | 419K     | 0.118    | 0.510    | 2.517    |
-| Contention (single key)  | 33K      | 1.518    | 2.372    | 3.718    |
-| **GCRA**                 |
-| Sequential (unique keys) | 898K     | 0.001    | 0.001    | 0.003    |
-| Concurrent (unique keys) | 779K     | 0.063    | 0.145    | 0.521    |
-| Contention (single key)  | **2.2M** | 0.021    | 0.037    | 0.063    |
-| **Leaky Bucket**         |
-| Sequential (unique keys) | **951K** | 0.001    | 0.002    | 0.008    |
-| Concurrent (unique keys) | 423K     | 0.117    | 0.204    | 5.076    |
-| Contention (single key)  | **2.2M** | 0.022    | 0.040    | 0.052    |
-| High throughput          | **2.5M** | 0.020    | 0.023    | 0.036    |
-
-#### Redis 7 vs Valkey 9 (Lua Scripts)
-
-| Benchmark               | Redis 7   | Valkey 9  | Winner    | Δ         |
-| ----------------------- | --------- | --------- | --------- | --------- |
-| **Throughput**          |
-| PING concurrent         | 79.1K     | 79.8K     | ~Tie      | +1%       |
-| GCRA concurrent         | 27.8K     | **52.4K** | 🏆 Valkey | **+89%**  |
-| SW concurrent           | 50.4K     | 50.4K     | Tie       | 0%        |
-| Single key contention   | **66.4K** | 59.2K     | Redis     | -11%      |
-| **Concurrency Scaling** |
-| Concurrency=50          | 15.3K     | **61.5K** | 🏆 Valkey | **+302%** |
-| Concurrency=100         | 38.5K     | **90.6K** | 🏆 Valkey | **+135%** |
-| Concurrency=200         | 40.7K     | 61.3K     | 🏆 Valkey | +51%      |
-| **Sustained Load**      |
-| 10 seconds              | 46.8K     | **53.1K** | 🏆 Valkey | **+13%**  |
-| **Pipeline Mode**       |
-| Speedup                 | 16.8x     | **21.5x** | 🏆 Valkey | +28%      |
-
-#### Cost-Based Rate Limiting
-
-| Cost    | Ops/s | Notes             |
-| ------- | ----- | ----------------- |
-| cost=1  | 951K  | Simple reads      |
-| cost=5  | 1.1M  | Writes            |
-| cost=10 | 1.5M  | Medium operations |
-| cost=50 | 1.1M  | AI/bulk calls     |
-
-Mixed workload (100 requests):
-
-- Reads (cost=1): 69 requests
-- Writes (cost=5): 23 requests
-- AI calls (cost=50): 8 requests
-- **Total tokens: 584/1000** in 1.15ms
-
-#### useRedisTime Overhead
-
-| Source      | Ops/s | Overhead    |
-| ----------- | ----- | ----------- |
-| Date.now()  | 19.6M | baseline    |
-| Redis TIME  | 2.5K  | +0.4ms/call |
-| Clock drift | -     | 1-2ms       |
-
-**Recommendations:**
-
-- Use **Valkey 9** with `io-threads 8` for production (up to 89% faster on GCRA)
-- Use **GCRA** for predictable pacing and low-latency contention handling
-- Use **Leaky Bucket** for strict throughput control and traffic shaping
-- Use **MemoryAdapter** for single-node deployments or testing (up to 2.5M ops/s)
-- Enable **useRedisTime** only when clock sync is critical (adds ~0.4ms latency)
-
-### Valkey Configuration
-
-For optimal performance, use this Valkey config:
-
-```conf
-# /etc/valkey/valkey.conf
-io-threads 8
-io-threads-do-reads yes
-maxmemory 512mb
-maxmemory-policy allkeys-lru
-appendonly yes
-appendfsync everysec
-lazyfree-lazy-eviction yes
-jemalloc-bg-thread yes
+```jsonc
+// package.json
+{
+  "dependencies": {
+    "@gertsai/api-rlr": "^0.1.0",
+    "ioredis": "^5.7.0"
+  },
+  "peerDependencies": {
+    "moleculer": "^0.14.35",
+    "moleculer-web": "^0.10.6"
+  }
+}
 ```
+
+## Quickstart
+
+### Moleculer middleware
+
+```typescript
+import { RLRMiddleware, LimiterStrategy } from '@gertsai/api-rlr';
+import RedisClient from 'ioredis';
+
+const redis = new RedisClient(process.env.REDIS_URL);
+
+export const rlr = RLRMiddleware({
+  redis,
+  strategy: LimiterStrategy.SLIDING_WINDOW,
+  windowMs: 60_000,           // 1-minute window
+  max: 100,                   // 100 requests per window
+  keyGenerator: (req) => req.ip,
+  draftVersion: 7,            // Emit RateLimit-* headers (IETF Draft-7)
+});
+
+// Wire into moleculer-web
+broker.createService({
+  mixins: [ApiGateway],
+  settings: {
+    routes: [{ path: '/api', use: [rlr] }],
+  },
+});
+```
+
+### Direct adapter usage (no Moleculer)
+
+```typescript
+import { RedisAdapter, SlidingWindowStrategy } from '@gertsai/api-rlr';
+import RedisClient from 'ioredis';
+
+const adapter = new RedisAdapter({ redis: new RedisClient() });
+const strategy = new SlidingWindowStrategy(adapter);
+
+const result = await strategy.check({
+  key: 'user:123:api',
+  windowMs: 60_000,
+  max: 100,
+});
+
+if (!result.allowed) {
+  throw new Error(`Rate limited. Retry in ${result.resetMs}ms`);
+}
+```
+
+### PostgreSQL adapter (Prisma/Drizzle/raw-pg)
+
+```typescript
+import { PrismaClient } from '@prisma/client';
+import { PostgreSQLAdapter, GCRAStrategy } from '@gertsai/api-rlr';
+
+const prisma = new PrismaClient();
+const adapter = new PostgreSQLAdapter({ prisma, keyPrefix: 'rl:' });
+const strategy = new GCRAStrategy(adapter);
+
+// Same StorageAdapter contract as Redis — algorithms work unchanged
+```
+
+The `PostgreSQLAdapter` accepts any object matching the `PgClient` interface:
+
+```typescript
+interface PgClient {
+  $queryRawUnsafe<T>(query: string, ...values: unknown[]): Promise<T>;
+  $executeRawUnsafe(query: string, ...values: unknown[]): Promise<number>;
+  $transaction<T>(fn: (tx: TransactionClient) => Promise<T>): Promise<T>;
+}
+```
+
+## What you get
+
+| Adapter | When to use | Backing store |
+|---|---|---|
+| **`RedisAdapter`** | Production, multi-node, hot path | Redis 6+ с Lua scripts |
+| **`PostgreSQLAdapter`** | Single-DB stacks, no Redis ops budget | Any Prisma-shaped client |
+| **`MemoryAdapter`** | Tests, single-process dev | In-process Map |
+
+| Strategy | Behaviour | Best for |
+|---|---|---|
+| **`SlidingWindowStrategy`** | Precise count в скользящем окне | API quotas, fairness |
+| **`GCRAStrategy`** | Generic Cell Rate Algorithm (smooth bursts) | Token-bucket-style limits |
+| **`LeakyBucketStrategy`** | Token bucket с continuous drain | Smoothing burst traffic |
+
+## API surface
+
+```typescript
+// Middleware factory (default export)
+import RLRMiddleware from '@gertsai/api-rlr';
+
+// Named exports — config & types
+import {
+  RLRMiddleware,
+  LimiterStrategy,
+  DraftVersionType,
+  Methods,
+  type RateLimitOptions,
+  type RateLimitInfo,
+  type RateLimitScope,
+} from '@gertsai/api-rlr';
+
+// Adapters & strategies
+import {
+  RedisAdapter,
+  PostgreSQLAdapter,
+  MemoryAdapter,
+  SlidingWindowStrategy,
+  GCRAStrategy,
+  LeakyBucketStrategy,
+  type StorageAdapter,
+  type PostgreSQLAdapterConfig,
+} from '@gertsai/api-rlr';
+
+// Services & utilities
+import {
+  PathNormalizer,
+  KeyGenerator,
+  RouteResolver,
+  RateLimitPresets,
+  RoutePresets,
+  withPreset,
+  ConfigValidator,
+  RateLimitHealthCheck,
+  RateLimitDebugger,
+  RateLimitTestUtils,
+  RateLimitError,
+  setDraft6Headers,
+  setDraft7Headers,
+} from '@gertsai/api-rlr';
+```
+
+## Status
+
+- **Tier 5** of `@gertsai/*` first-wave packages (per [ADR-011][adr-011]).
+- **Stable** — extracted from `gertsai_codex` с preserved git history;
+  production-tested in the Hub Tenant Delivery API path.
+- **Tests** — 35 test files; algorithmic unit tests pass без external infra.
+  Redis-backed tests опционально run with `HAS_REDIS=1 pnpm test:redis`.
+  PostgreSQL integration tests skipped в OSS extraction (depended on internal
+  Prisma helpers — see [`KNOWN-ISSUES.md`](../../KNOWN-ISSUES.md#api-rlr)).
+- **Database-agnostic** — `PgClient` interface (per ADR-011 invariants I-1, I-2):
+  no dependency on `@gertsai/database` или any specific ORM.
 
 ## License
 
-GNU LGPLv3 © [Eli Rum](https://gitlab.com/explosivebit)
+[Apache 2.0](./LICENSE) — same as the rest of `@gertsai/*`.
+
+[adr-011]: https://github.com/gertsai/shared/blob/main/.forgeplan/adrs/ADR-011-first-wave-extension-to-14-packages-add-api-rlr-refines-adr-009.md
