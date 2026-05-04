@@ -50,6 +50,12 @@ importers:
       '@gertsai/utils':
         specifier: workspace:*
         version: link:../../packages/utils
+      '@moleculer/channels':
+        specifier: ^0.1.8
+        version: 0.1.8(moleculer@0.14.35(bunyan@1.8.15)(debug@4.4.3)(ioredis@5.10.1)(nats@2.29.3)(protobufjs@7.5.6))
+      '@moleculer/workflows':
+        specifier: ^0.1.2
+        version: 0.1.2(moleculer@0.14.35(bunyan@1.8.15)(debug@4.4.3)(ioredis@5.10.1)(nats@2.29.3)(protobufjs@7.5.6))
       ioredis:
         specifier: ^5.8.0
         version: 5.10.1
@@ -828,6 +834,18 @@ packages:
 
   '@manypkg/get-packages@1.1.3':
     resolution: {integrity: sha512-fo+QhuU3qE/2TQMQmbVMqaQ6EWbMhi4ABWP+O4AM1NqPBuy0OrApV5LO6BrrgnhtAHS2NH6RrVk9OL181tTi8A==}
+
+  '@moleculer/channels@0.1.8':
+    resolution: {integrity: sha512-nCWzYCjvrV2IaHAwKCZQPUYu4IV1067Q9wByd+dVRiXB44auy9dv8Whyl1oBTGzk78CcZNejfBG9Dw0UbRtkXA==}
+    engines: {node: '>= 12.x.x'}
+    peerDependencies:
+      moleculer: ^0.14.12
+
+  '@moleculer/workflows@0.1.2':
+    resolution: {integrity: sha512-6UI5+ZEZRL70HC4+0rgmS2lleVV5QL8dZa6szRtEGX2QDfXbYyXwg8xDzDUrjbTgrtBrZm56o8sTI+F/wAqvpQ==}
+    engines: {node: '>= 20.x.x'}
+    peerDependencies:
+      moleculer: ^0.14.12 || ^0.15.0-0
 
   '@moonrepo/cli@1.41.7':
     resolution: {integrity: sha512-zZdE/2m/V/33B3DZOhsuNwRPme+WZiEpggcK6N2og6FCezD/4AxNjc9uZNPBAj2qaDFl3Q+bgtfrHBjdKy4ilg==}
@@ -1664,6 +1682,10 @@ packages:
   cron-parser@4.9.0:
     resolution: {integrity: sha512-p0SaNjrHOnQeR8/VnfGbmg9te2kfyYSQ7Sc/j/6DtPL3JQvKxmjO9TSjNFpujqV3vEYYBvNNvXSxzyksBWAx1Q==}
     engines: {node: '>=12.0.0'}
+
+  cron-parser@5.5.0:
+    resolution: {integrity: sha512-oML4lKUXxizYswqmxuOCpgFS8BNUJpIu6k/2HVHyaL8Ynnf3wdf9tkns0yRdJLSIjkJ+b0DXHMZEHGpMwjnPww==}
+    engines: {node: '>=18'}
 
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
@@ -4332,6 +4354,21 @@ snapshots:
       globby: 11.1.0
       read-yaml-file: 1.1.0
 
+  '@moleculer/channels@0.1.8(moleculer@0.14.35(bunyan@1.8.15)(debug@4.4.3)(ioredis@5.10.1)(nats@2.29.3)(protobufjs@7.5.6))':
+    dependencies:
+      lodash: 4.18.1
+      moleculer: 0.14.35(bunyan@1.8.15)(debug@4.4.3)(ioredis@5.10.1)(nats@2.29.3)(protobufjs@7.5.6)
+      semver: 7.7.4
+
+  '@moleculer/workflows@0.1.2(moleculer@0.14.35(bunyan@1.8.15)(debug@4.4.3)(ioredis@5.10.1)(nats@2.29.3)(protobufjs@7.5.6))':
+    dependencies:
+      cron-parser: 5.5.0
+      ioredis: 5.10.1
+      lodash: 4.18.1
+      moleculer: 0.14.35(bunyan@1.8.15)(debug@4.4.3)(ioredis@5.10.1)(nats@2.29.3)(protobufjs@7.5.6)
+    transitivePeerDependencies:
+      - supports-color
+
   '@moonrepo/cli@1.41.7':
     dependencies:
       detect-libc: 2.1.2
@@ -5145,6 +5182,10 @@ snapshots:
   create-require@1.1.1: {}
 
   cron-parser@4.9.0:
+    dependencies:
+      luxon: 3.7.2
+
+  cron-parser@5.5.0:
     dependencies:
       luxon: 3.7.2
 

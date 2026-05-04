@@ -30,6 +30,8 @@
 import type { BrokerOptions, Cacher } from 'moleculer';
 import { Errors } from 'moleculer';
 import { M9sCacheCacher, MemoryCacheDriver } from '@gertsai/m9s-cache';
+import { Middleware as ChannelsMiddleware } from '@moleculer/channels';
+import { Middleware as WorkflowsMiddleware } from '@moleculer/workflows';
 
 import config from './project.config';
 
@@ -73,6 +75,88 @@ const transporter: BrokerOptions['transporter'] =
           options: { redis: config.REDIS_URL },
         }
       : null;
+
+// ---------------------------------------------------------------------------
+// Middlewares
+//
+// `@moleculer/workflows` adds a Temporal-like idempotent workflow runtime on
+// top of Moleculer. It needs Redis for the event log (replay-after-crash
+// semantics rely on a durable journal), so we gate the middleware on
+// `REDIS_URL` exactly the way we already gate the BullMQ queue and the
+// optional Redis transporter. When `REDIS_URL` is unset, `broker.wf` is
+// undefined and any `broker.wf.run(...)` call site must check for that
+// (see `services/ingest/src/actions/start-workflow.action.ts`).
+//
+// `schemaProperty: 'workflows'` is the default — we set it explicitly so
+// the contract with workflow services (`wf-ingest`) is visible here.
+// `prefix` namespaces all Redis keys to keep parallel installs / shared
+// Redis instances separated.
+//
+// The `as unknown as` cast bypasses a transitive type clash between the two
+// `moleculer` versions present in the pnpm graph (one resolved through
+// `@gertsai/m9s-cache` with `redlock`, one without). Same structural shape,
+// different nominal identity — same pattern we use for `M9sCacheCacher`
+// above. At runtime the middleware object is forwarded verbatim into
+// `broker.middlewares.add(...)`.
+// ---------------------------------------------------------------------------
+type BrokerMiddleware = NonNullable<BrokerOptions['middlewares']>[number];
+const middlewares: BrokerMiddleware[] = [];
+if (config.REDIS_URL) {
+  // ---------------------------------------------------------------------------
+  // @moleculer/channels — reliable cross-service messaging (Redis Streams).
+  //
+  // Adds `broker.sendToChannel(topic, payload, opts?)` for publishing and
+  // discovers per-service `channels: { 'topic': { handler, group, ... } }`
+  // schema properties for consumers. Provides at-least-once delivery,
+  // consumer groups (load balancing across instances), NACK + retry, and
+  // optional dead-letter queue. Used in our example to broadcast
+  // `m9s-example.document.indexed` after the BullMQ ingest worker
+  // completes — independent of the synchronous response path.
+  //
+  // ChannelsMiddleware is the *default export* (note: workflows uses a
+  // named `Middleware` export, hence the slight asymmetry).
+  // ---------------------------------------------------------------------------
+  // Type cast: @moleculer/channels uses a UNION DeadLetteringOptions type
+  // that requires AMQP-specific fields (exchangeName, exchangeOptions...).
+  // For Redis Streams those fields are unused. The runtime accepts the
+  // simpler { enabled, queueName } shape — same idiom api-core uses.
+  middlewares.push(
+    ChannelsMiddleware({
+      adapter: {
+        type: 'Redis',
+        options: {
+          redis: { host: extractRedisHost(config.REDIS_URL), port: extractRedisPort(config.REDIS_URL) },
+          maxRetries: 3,
+          deadLettering: { enabled: true, queueName: 'm9s-example:dlq' },
+        },
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any) as unknown as BrokerMiddleware,
+  );
+
+  middlewares.push(
+    WorkflowsMiddleware({
+      adapter: {
+        type: 'Redis',
+        options: {
+          url: config.REDIS_URL,
+          prefix: 'm9s-example:wf:',
+        },
+      },
+      schemaProperty: 'workflows',
+    }) as unknown as BrokerMiddleware,
+  );
+}
+
+// Tiny URL parser — avoids pulling a full URL lib for two integers.
+function extractRedisHost(url: string): string {
+  const m = url.match(/^redis:\/\/(?:[^@]+@)?([^:/]+)/);
+  return m?.[1] ?? '127.0.0.1';
+}
+function extractRedisPort(url: string): number {
+  const m = url.match(/^redis:\/\/(?:[^@]+@)?[^:/]+:(\d+)/);
+  return m ? Number(m[1]) : 6379;
+}
 
 const brokerConfig: BrokerOptions = {
   namespace: config.MOLECULER_NAMESPACE,
@@ -126,6 +210,10 @@ const brokerConfig: BrokerOptions = {
   // Tracing/metrics disabled — example focuses on hexagonal wiring.
   tracing: { enabled: false },
   metrics: { enabled: false },
+
+  // Workflows middleware (gated on REDIS_URL). When omitted, broker.wf
+  // is undefined and the start-workflow action returns 400.
+  middlewares,
 };
 
 export default brokerConfig;

@@ -35,6 +35,16 @@
  *                         e.g. WORKERS=m9s-example.ingest
  *                         (default: all registered workers)
  *
+ *   EMBEDDER_PROVIDER     'mock' | 'ollama' | 'openai'        (default: 'mock')
+ *                         — mock:   deterministic offline hash (no deps)
+ *                         — ollama: POST {EMBEDDER_URL}/api/embeddings
+ *                         — openai: POST https://api.openai.com/v1/embeddings
+ *   EMBEDDER_URL          Ollama base URL                     (default: http://localhost:11434)
+ *   EMBEDDER_MODEL        Embedding model tag                 (default: nomic-embed-text)
+ *                         — Ollama: 'nomic-embed-text', 'mxbai-embed-large', ...
+ *                         — OpenAI: 'text-embedding-3-small', 'text-embedding-3-large'
+ *   EMBEDDER_API_KEY      OpenAI API key (required when EMBEDDER_PROVIDER=openai)
+ *
  * Usage:
  *
  *   import config from '../project.config';
@@ -108,6 +118,20 @@ const config = {
   RLR_STRATEGY: process.env.RLR_STRATEGY ?? 'gcra',
   /** Redis key prefix to namespace bucket entries */
   RLR_PREFIX: process.env.RLR_PREFIX ?? 'm9s-example:rlr:',
+
+  // Embedder selection (composition root in src/composition/infrastructure.ts)
+  /** Which IEmbedder adapter to instantiate. */
+  EMBEDDER_PROVIDER: oneOf(
+    process.env.EMBEDDER_PROVIDER,
+    ['mock', 'ollama', 'openai'] as const,
+    'mock',
+  ),
+  /** Ollama daemon base URL (used when EMBEDDER_PROVIDER='ollama'). */
+  EMBEDDER_URL: process.env.EMBEDDER_URL ?? 'http://localhost:11434',
+  /** Embedding model tag (interpretation depends on the provider). */
+  EMBEDDER_MODEL: process.env.EMBEDDER_MODEL ?? 'nomic-embed-text',
+  /** OpenAI API key (required when EMBEDDER_PROVIDER='openai'). */
+  EMBEDDER_API_KEY: process.env.EMBEDDER_API_KEY,
 } as const;
 
 export type Config = typeof config;

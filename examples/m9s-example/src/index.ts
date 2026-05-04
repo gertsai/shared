@@ -47,6 +47,19 @@ import { ApiController } from '@gertsai/api-core';
 import config from '../project.config';
 import brokerConfig from '../moleculer.config';
 import ApiService from './mol-services/api.service';
+// Plain Moleculer service (not via ApiController) hosting the
+// `wf-ingest.ingest.process` workflow definition that
+// `@moleculer/workflows` discovers via its `workflows: {...}` schema
+// property. Loaded unconditionally — when REDIS_URL is unset the
+// middleware is omitted, the service still boots but contains zero
+// active workflows (broker.wf is undefined too).
+import IngestWorkflowService from './services/workflows/ingest-process.workflow';
+// Plain Moleculer service hosting `@moleculer/channels` subscribers
+// (cross-service reliable events). Loaded unconditionally; the channels
+// middleware (gated on REDIS_URL in moleculer.config.ts) is what makes
+// the handlers active. Without REDIS_URL the service registers but no
+// Redis Streams consumer-groups are created.
+import DocumentEventsChannelService from './services/channels/document-events.channel';
 
 // =============================================================================
 // Env parsing helpers — mirror apps/pipeline/src/index.ts
@@ -120,7 +133,7 @@ async function main(): Promise<void> {
 
   await ApiController.Start({
     brokerConfig,
-    services: [ApiService],
+    services: [ApiService, IngestWorkflowService, DocumentEventsChannelService],
     repl: replEnabled,
     enabledServices,
     workersEnabled,

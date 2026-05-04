@@ -3,11 +3,17 @@
  *
  * Mirrors `apps/pipeline/src/services/ingest/lifecycle.ts` shape:
  *
- *   - On service started: build outbound adapters (memory stores, mock
- *     embedder, allow-all gate), wire them into `IngestDocumentUseCase`,
- *     and stash everything on `ctx.service` so action handlers (and the
- *     queue worker registered in `src/queues/`) can reach them via the
- *     typed `IngestServiceContext` generic.
+ *   - On service started: read the SHARED infrastructure singleton
+ *     (`src/composition/infrastructure.ts`), wire it into a fresh
+ *     `IngestDocumentUseCase`, and stash everything on `ctx.service` so
+ *     action handlers (and the queue worker registered in `src/queues/`)
+ *     can reach them via the typed `IngestServiceContext` generic.
+ *
+ *   - The shared infrastructure is built ONCE at module-load time (in the
+ *     composition root) so this lifecycle and the search lifecycle observe
+ *     the same `MemoryDocumentStore` / `MemoryVectorStore` / `IEmbedder`
+ *     instances. That's what lets a write here become a search hit there
+ *     without a network-attached vector DB.
  *
  *   - Queue lifecycle is OWNED by api-core: `ApiController.configure({queue})`
  *     in `services/index.ts` provides the BullMQ connection; api-core's
@@ -18,18 +24,13 @@
  *
  *   - On service stopped: nothing to tear down — api-core closes the BullMQ
  *     Queue/Worker handles for us.
- *
- * This file is the single composition root for the ingest domain — the only
- * place that knows about both ports and concrete adapters.
  */
 import { resolveExampleController } from '../../lib/example-controller';
 import { IngestDocumentUseCase } from '../../application/IngestDocumentUseCase';
-import { MemoryDocumentStore } from '../../infrastructure/memory-document.store';
-import { MemoryVectorStore } from '../../infrastructure/memory-vector.store';
-import { MockEmbedder } from '../../infrastructure/mock-embedder';
-import { AllowAllPermissionGate } from '../../infrastructure/allow-all-permission.gate';
+import { infrastructure } from '../../composition/infrastructure';
 // Note: openfga-permission.gate is intentionally NOT imported by default.
-// Swap the gate construction below to enable real OpenFGA enforcement.
+// Swap the gate construction in src/composition/infrastructure.ts to enable
+// real OpenFGA enforcement.
 // import { OpenFgaPermissionGate } from '../../infrastructure/openfga-permission.gate';
 
 import type { IngestServiceContext } from './types';
@@ -44,25 +45,22 @@ controller.setRestBasePath('/');
 controller.addStartedHandler(async (ctx) => {
   ctx.logger?.info('[v1.ingest] starting...');
 
-  // 1. Concrete outbound adapters (swap any of these for production impls).
-  const docStore = new MemoryDocumentStore();
-  const chunkStore = new MemoryVectorStore();
-  const embedder = new MockEmbedder(384);
-  const gate = new AllowAllPermissionGate(ctx.logger ?? console);
+  // Use case wires the (shared) adapters — pure application logic.
+  const useCase = new IngestDocumentUseCase(infrastructure);
 
-  // 2. Use case wires the adapters together — pure application logic.
-  const useCase = new IngestDocumentUseCase({ docStore, chunkStore, embedder, gate });
-
-  // 3. Stash everything on the typed service context. Queue handles are
-  //    contributed by api-core (service.addJob, service.getQueue) when
-  //    ApiController.configure({queue}) was called in services/index.ts.
-  ctx.service.docStore = docStore;
-  ctx.service.chunkStore = chunkStore;
-  ctx.service.embedder = embedder;
-  ctx.service.gate = gate;
+  // Stash everything on the typed service context. The references on
+  // ctx.service are the SAME instances the search lifecycle hands out,
+  // so search-after-ingest sees the freshly written chunks.
+  ctx.service.docStore = infrastructure.docStore;
+  ctx.service.chunkStore = infrastructure.chunkStore;
+  ctx.service.embedder = infrastructure.embedder;
+  ctx.service.gate = infrastructure.gate;
   ctx.service.useCase = useCase;
 
-  ctx.logger?.info(`[v1.ingest] ready (embedder dims=${embedder.dimensions})`);
+  ctx.logger?.info(
+    `[v1.ingest] ready (embedder=${infrastructure.embedder.constructor.name}, ` +
+      `dims=${infrastructure.embedder.dimensions})`,
+  );
 });
 
 controller.addStoppedHandler(async (ctx) => {

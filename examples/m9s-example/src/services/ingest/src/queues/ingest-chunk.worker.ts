@@ -24,11 +24,22 @@
  * `service.addJob(QUEUE_NAME, JOB_PROCESS_DOCUMENT, payload)`.
  */
 import type { QueueHandlerCtx } from '@gertsai/api-core';
+import type Moleculer from 'moleculer';
 
 import { resolveExampleController } from '../../../../lib/example-controller';
 import config from '../../../../../project.config';
 import { PermissionDeniedError } from '../../../../application/IngestDocumentUseCase';
+import { DOCUMENT_INDEXED_CHANNEL } from '../../../channels/document-events.channel';
 import type { IngestServiceContext } from '../../types';
+
+/**
+ * Handler `this` shape: api-core binds the Moleculer service instance to
+ * `this` when invoking the queue handler — same pattern pipeline uses.
+ * The service has our typed IngestServiceContext fields (useCase, etc.)
+ * plus the standard Moleculer.Service surface (logger, broker, ...).
+ */
+type IngestQueueThis = IngestServiceContext &
+  Pick<Moleculer.Service, 'logger' | 'broker'>;
 
 // =============================================================================
 // Public Constants & Job Shapes
@@ -75,32 +86,53 @@ controller.registerWorker(INGEST_QUEUE_NAME, [
     name: JOB_PROCESS_DOCUMENT,
     concurrency: config.WORKER_CONCURRENCY,
     /**
-     * Handler runs on the BullMQ Worker created by api-core. The `service`
-     * argument is the Moleculer service instance; we recover the typed
-     * `IngestServiceContext` shape we wired in `lifecycle.ts`.
+     * Handler runs on the BullMQ Worker created by api-core.
+     *
+     * api-core invokes the handler with `handler.call(service, ctxObj)` —
+     * `this` is the Moleculer service instance (with our typed
+     * `IngestServiceContext` fields), `ctxObj` carries `{ job, call, ... }`.
+     * Use a non-arrow function to capture `this` correctly.
      */
-    handler: async (
+    async handler(
+      this: IngestQueueThis,
       ctx: QueueHandlerCtx<import('bullmq').Job<ProcessDocumentJobData>>,
-    ): Promise<ProcessDocumentJobResult> => {
-      // `service` is the Moleculer.Service this queue lives on; cast to our
-      // typed context to access `useCase`.
-      const service = (ctx as unknown as { service: IngestServiceContext & { logger?: Console } })
-        .service;
+    ): Promise<ProcessDocumentJobResult> {
       const job = ctx.job;
       const payload = job.data;
 
-      service.logger?.info?.(
+      this.logger?.info?.(
         `[ingest queue] worker handling job ${job.id} (docId=${payload.docId}, ` +
           `text=${payload.text.length} chars)`,
       );
 
       try {
-        const { docId, chunkCount } = await service.useCase.execute({
+        const { docId, chunkCount } = await this.useCase.execute({
           userId: payload.userId,
           docId: payload.docId,
           text: payload.text,
           metadata: payload.metadata,
         });
+
+        // Publish a durable cross-service event via @moleculer/channels.
+        // Subscribers (`channel-document-events` service) get at-least-once
+        // delivery with consumer-group balancing + DLQ on persistent failure.
+        // No-op when REDIS_URL is unset (channels middleware not loaded).
+        const broker = this.broker as unknown as {
+          sendToChannel?: (topic: string, payload: Record<string, unknown>) => Promise<void>;
+        };
+        if (broker?.sendToChannel) {
+          await broker.sendToChannel(DOCUMENT_INDEXED_CHANNEL, {
+            docId,
+            chunkCount,
+            userId: payload.userId,
+            indexedAt: Date.now(),
+            jobId: String(job.id ?? ''),
+          });
+          this.logger?.info?.(
+            `[ingest queue] published ${DOCUMENT_INDEXED_CHANNEL} (job=${job.id})`,
+          );
+        }
+
         return { docId, chunkCount };
       } catch (err) {
         // Convert domain errors to standard errors so BullMQ records them.

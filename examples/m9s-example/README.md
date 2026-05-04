@@ -174,12 +174,77 @@ Override via env vars:
 | `RLR_BURST`            | `5`                       | token-bucket / GCRA burst                               |
 | `RLR_STRATEGY`         | `gcra`                    | `sliding_window`/`fixed_window`/`token_bucket`/`gcra`/`leaky_bucket` |
 | `RLR_PREFIX`           | `m9s-example:rlr:`        | Redis key namespace                                     |
+| `EMBEDDER_PROVIDER`    | `mock`                    | `mock` / `ollama` / `openai` — see "Realistic mode"     |
+| `EMBEDDER_URL`         | `http://localhost:11434`  | Ollama base URL                                         |
+| `EMBEDDER_MODEL`       | `nomic-embed-text`        | Model tag (Ollama or OpenAI, depending on provider)     |
+| `EMBEDDER_API_KEY`     | _(unset)_                 | Required when `EMBEDDER_PROVIDER=openai`                |
 
 In another terminal:
 
 ```bash
 bash examples/m9s-example/scripts/smoke.sh
 ```
+
+## Realistic mode (real embeddings + shared store)
+
+The default mock embedder + per-process in-memory stores let the broker
+boot without external dependencies, but searches always return `0`
+results because mock embeddings are deterministic hashes that don't
+encode semantic similarity. To see an actual end-to-end ingest → search
+round-trip, point the example at a real embedding model.
+
+The composition root in `src/composition/infrastructure.ts` builds the
+adapter graph ONCE at module-load time and shares it between the
+`ingest` and `search` services — so a write through one is visible to a
+query through the other within the same Node.js process.
+
+### Option A — Ollama (local, free, no API key)
+
+```bash
+# 1. Install Ollama: https://ollama.com
+ollama pull nomic-embed-text
+
+# 2. Start the example with the real embedder + shared store
+EMBEDDER_PROVIDER=ollama \
+  pnpm --filter @gertsai-examples/m9s-example run dev:no-repl
+
+# 3. Ingest, then search
+curl -s -X POST http://localhost:3000/api/v1/ingest/document \
+  -H 'content-type: application/json' \
+  -d '{"docId":"d1","text":"Hexagonal architecture isolates the core."}'
+
+curl -s -X POST http://localhost:3000/api/v1/search/query \
+  -H 'content-type: application/json' \
+  -d '{"query":"core isolation","topK":3}' | jq
+# → returns top-K matching chunks with cosine similarity scores
+```
+
+Override the model with `EMBEDDER_MODEL=mxbai-embed-large` (or any
+embedding model you have pulled), and the daemon URL with
+`EMBEDDER_URL=http://other-host:11434`.
+
+### Option B — OpenAI
+
+```bash
+EMBEDDER_PROVIDER=openai \
+EMBEDDER_API_KEY=sk-... \
+EMBEDDER_MODEL=text-embedding-3-small \
+  pnpm --filter @gertsai-examples/m9s-example run dev:no-repl
+```
+
+`text-embedding-3-small` (default) → 1536 dims;
+`text-embedding-3-large` → 3072 dims.
+
+### Option C — Mock (default)
+
+```bash
+pnpm --filter @gertsai-examples/m9s-example run dev:no-repl
+```
+
+Everything boots (broker, BullMQ, RLR), but search returns no semantic
+hits because the mock embedder is a stable hash, not a semantic model.
+Useful for showing the broker / queue / RLR machinery without any ML
+dependencies.
 
 Expected response shape (envelope from `@gertsai/api-core`):
 
@@ -215,7 +280,7 @@ on locally once you have run `pnpm run build`.
 | `@gertsai/m9s-cache`     | `moleculer.config.ts` (M9sCacheCacher + MemoryCacheDriver)           |
 | `@gertsai/auth-openfga`  | `infrastructure/openfga-permission.gate.ts` (lazy import)            |
 | `@gertsai/core`          | available via `@gertsai/api-core` re-exports (session typing)        |
-| `@gertsai/fetch`         | referenced in `mock-embedder.ts` JSDoc as the real-impl pattern      |
+| `@gertsai/fetch`         | `infrastructure/ollama-embedder.ts`, `infrastructure/openai-embedder.ts` |
 | `@gertsai/collection`    | mentioned in `memory-vector.store.ts` as a future swap point         |
 | `@gertsai/utils`         | available as a workspace dep — usage left to the reader              |
 | `bullmq` + `ioredis`     | `services/ingest/src/queues/ingest-chunk.queue.ts`                   |
@@ -254,6 +319,58 @@ automatically once `REDIS_URL` is exported.
 Env knobs: `RLR_ENABLED`, `RLR_TIMEFRAME`, `RLR_LIMIT`, `RLR_BURST`,
 `RLR_STRATEGY` (`sliding_window` / `fixed_window` / `token_bucket` /
 `gcra` / `leaky_bucket`), `RLR_PREFIX`.
+
+## Workflow with replay (`@moleculer/workflows`)
+
+The example also demonstrates the **idempotent workflow** pattern via
+`@moleculer/workflows`. The `ingest.process` workflow orchestrates the
+ingest pipeline as discrete steps, with each `ctx.call()` automatically
+journaled to Redis. If the worker crashes mid-flight, the workflow
+restarts from the beginning but **skips already-executed steps**
+(reads results from the event log) — Temporal-/Restate-style replay.
+
+Steps:
+
+1. Validate text (inline, deterministic)
+2. Chunk text (inline, deterministic)
+3. `ctx.call('v1.ingest._embed', { texts })` — journaled
+4. `ctx.call('v1.ingest._store', { docId, chunks, vectors })` — journaled
+
+The two `ctx.call` boundaries are the replay barriers: a worker crash
+between step 3 and step 4 will NOT re-run the embedder on retry — the
+middleware reads the previous vectors from the Redis event log.
+
+Try it:
+
+```bash
+# Workflows require Redis (the event-log adapter)
+REDIS_URL=redis://localhost:6379 pnpm --filter @gertsai-examples/m9s-example run dev:cluster
+
+# Trigger via REST (async — returns a job id immediately)
+curl -s -X POST http://localhost:3000/api/v1/ingest/workflow \
+  -H 'content-type: application/json' \
+  -d '{"docId":"d1","text":"Hexagonal architecture isolates the core. Ports describe seams."}' | jq
+# {"success":true,"data":{"docId":"d1","workflowJobId":"...","status":"started","chunkCount":null}}
+
+# Or sync — wait for the workflow to finish and return its result
+curl -s -X POST http://localhost:3000/api/v1/ingest/workflow \
+  -H 'content-type: application/json' \
+  -d '{"docId":"d2","text":"Reliable workflows.","sync":true}' | jq
+# {"success":true,"data":{"docId":"d2","workflowJobId":"...","status":"completed","chunkCount":1}}
+```
+
+The workflow registry is the `wf-ingest` Moleculer service (defined in
+`src/services/workflows/ingest-process.workflow.ts`). Without
+`REDIS_URL` the workflow middleware is not loaded, and the
+`/api/v1/ingest/workflow` endpoint returns 400 with a hint:
+
+```
+"Workflows require REDIS_URL — set REDIS_URL=redis://... and restart"
+```
+
+The workflow runtime is verified manually (see "Try it" snippet above);
+no automated test is shipped because that would require a real or fake
+Redis adapter — out of scope for the unit suite.
 
 ## Status
 
