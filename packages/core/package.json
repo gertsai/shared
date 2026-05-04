@@ -1,0 +1,64 @@
+{
+  "name": "@gerts/core",
+  "version": "0.0.1",
+  "description": "Core primitives for gerts.ai platform",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    },
+    "./rag": {
+      "import": {
+        "types": "./dist/rag/index.d.ts",
+        "default": "./dist/rag/index.js"
+      },
+      "require": {
+        "types": "./dist/rag/index.d.ts",
+        "default": "./dist/rag/index.js"
+      }
+    },
+    "./llm": {
+      "import": {
+        "types": "./dist/llm/index.d.ts",
+        "default": "./dist/llm/index.js"
+      },
+      "require": {
+        "types": "./dist/llm/index.d.ts",
+        "default": "./dist/llm/index.js"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tspc --build tsconfig.json",
+    "test": "vitest run",
+    "postinstall": "ts-patch install -s"
+  },
+  "dependencies": {
+    "gpt-tokenizer": "^2.5.0",
+    "@gerts/llm-costs": "workspace:*",
+    "llm-info": "^1.0.69",
+    "typia": "^11.0.0",
+    "zod": "^3.22.0",
+    "zod-to-json-schema": "^3.25.1"
+  },
+  "devDependencies": {
+    "@gerts/database": "workspace:*",
+    "@ryoppippi/unplugin-typia": "^2.6.5",
+    "@standard-schema/spec": "^1.1.0",
+    "ts-patch": "^3.3.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.0.0"
+  }
+}
