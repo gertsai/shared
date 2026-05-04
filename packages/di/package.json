@@ -1,0 +1,42 @@
+{
+  "name": "@gerts/di",
+  "version": "0.1.0",
+  "description": "Orchestra Dependency Injection library - A lightweight, type-safe dependency injection container for TypeScript applications",
+  "keywords": [
+    "dependency-injection",
+    "di",
+    "container",
+    "typescript",
+    "vue"
+  ],
+  "author": "Orchestra Team",
+  "license": "UNLICENSED",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "tsc --watch",
+    "build": "pnpm run \"/^build:(esm|cjs)$/\"",
+    "build:esm": "tsc",
+    "build:cjs": "tsc --outDir dist/cjs --module commonjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.2.2"
+  },
+  "dependencies": {
+    "@gerts/utils": "workspace:*"
+  }
+}
