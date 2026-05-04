@@ -57,7 +57,51 @@ extracted. All such references are guarded:
 These will resolve when their target packages are published in a subsequent
 extraction wave.
 
-## 5. Peer-dependency warnings on install
+## 5. `@gertsai/api-rlr` — PostgreSQL integration tests force-skipped
+
+**Status:** intentional, deferred (per ADR-011)
+
+`PostgreSQLAdapter.test.ts` contains an integration `describe.skip(...)` block
+that originally relied on the upstream Hub's `@gerts/database` helpers
+(`getDatabase()` / `initializeDatabase()` / `disconnectDatabase()`) — Prisma
+client wired against the Hub's specific schema. That helper package is **not**
+part of the OSS first-wave extraction (per ADR-009), and `@gertsai/api-rlr` is
+explicitly database-agnostic (per ADR-011 invariants I-1, I-2): it depends only
+on the local `PgClient` interface (3 methods), not on any specific ORM or
+schema package.
+
+Behaviour validation для PostgreSQL path is preserved via:
+
+- **Algorithmic unit tests** (`PostgreSQLAdapter.test.ts (unit)`, ~25 tests с
+  mock `PgClient` instances) — these run by default and pass green.
+- **Redis integration tests** (`HAS_REDIS=1 pnpm test:redis`) — same algorithms
+  on the Redis adapter path provide cross-adapter algorithmic coverage.
+
+To re-enable PostgreSQL integration locally, instantiate any
+`PgClient`-compatible client (Prisma, Drizzle, raw `pg`, or wrapper) и pass
+it via `new PostgreSQLAdapter({ prisma })`. Schema setup is not bundled
+with the OSS package — consumers manage their own migrations.
+
+## 6. `@gertsai/api-rlr` — Redis-required tests skipped by default
+
+**Status:** intentional
+
+Eight test files require a running Redis instance and are `describe.skipIf(!HAS_REDIS)`:
+
+- `__tests__/lua-sliding.test.ts`, `__tests__/lua-sliding.edge.test.ts`,
+  `__tests__/lua-sliding.behaviour.test.ts`
+- `__tests__/lua-gcra.test.ts`, `__tests__/lua-gcra.edge.test.ts`,
+  `__tests__/lua-gcra.behaviour.test.ts`
+- `__tests__/middleware.integration.test.ts`,
+  `__tests__/comprehensive-integration.test.ts` (16 tests)
+
+Run locally with `HAS_REDIS=1 pnpm --filter @gertsai/api-rlr test:redis`. CI
+will get a separate Redis-enabled job in v0.1.x once docker-compose fixtures
+are wired (планируется отдельный workflow).
+
+Without Redis: 289 tests pass, 48 skipped (35 test files: 27 passed, 8 skipped).
+
+## 7. Peer-dependency warnings on install
 
 ```
 packages/core
