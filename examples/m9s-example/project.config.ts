@@ -93,6 +93,21 @@ const config = {
   // BullMQ workers
   WORKER_CONCURRENCY: num(process.env.WORKER_CONCURRENCY, 4),
   WORKERS_ENABLED: bool(process.env.WORKERS_ENABLED, true),
+
+  // Rate limiting (@gertsai/api-rlr) — requires REDIS_URL since the store
+  // is a Redis-shaped key-value backend. Skipped automatically when
+  // REDIS_URL is unset (single-process dev runs without throttling).
+  RLR_ENABLED: bool(process.env.RLR_ENABLED, !!process.env.REDIS_URL),
+  /** Window in ms (default 60_000 = 1 minute) */
+  RLR_TIMEFRAME: num(process.env.RLR_TIMEFRAME, 60_000),
+  /** Max requests per window per key */
+  RLR_LIMIT: num(process.env.RLR_LIMIT, 100),
+  /** Burst (only meaningful for GCRA / token-bucket strategies) */
+  RLR_BURST: num(process.env.RLR_BURST, 5),
+  /** Strategy: sliding_window | fixed_window | token_bucket | gcra | leaky_bucket */
+  RLR_STRATEGY: process.env.RLR_STRATEGY ?? 'gcra',
+  /** Redis key prefix to namespace bucket entries */
+  RLR_PREFIX: process.env.RLR_PREFIX ?? 'm9s-example:rlr:',
 } as const;
 
 export type Config = typeof config;

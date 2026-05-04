@@ -21,7 +21,8 @@ need a single, runnable, dependency-free reference that demonstrates:
    api-core owns BullMQ Queue/Worker lifecycle; the producer side is
    `service.addJob(...)`. Falls back to synchronous in-process execution
    when no `REDIS_URL` is configured.
-5. Where future packages (e.g. `api-rlr`) plug in.
+5. How `@gertsai/api-rlr` plugs in as an Express-style middleware in
+   `settings.use` for tenant/IP-keyed rate limiting.
 
 ## Architecture
 
@@ -167,6 +168,12 @@ Override via env vars:
 | `WORKERS_ENABLED`      | `true`                    | `false` → producer-only (jobs added, not consumed here) |
 | `SERVICES`             | _(all)_                   | CSV of service short names (`ingest,search`)            |
 | `WORKERS`              | _(all)_                   | CSV of worker queue names                               |
+| `RLR_ENABLED`          | `true` if REDIS_URL else `false` | gate api-rlr middleware                          |
+| `RLR_TIMEFRAME`        | `60000`                   | rate-limit window (ms)                                  |
+| `RLR_LIMIT`            | `100`                     | max requests per window per key                         |
+| `RLR_BURST`            | `5`                       | token-bucket / GCRA burst                               |
+| `RLR_STRATEGY`         | `gcra`                    | `sliding_window`/`fixed_window`/`token_bucket`/`gcra`/`leaky_bucket` |
+| `RLR_PREFIX`           | `m9s-example:rlr:`        | Redis key namespace                                     |
 
 In another terminal:
 
@@ -217,19 +224,36 @@ The remaining six packages (`fsm`, `hsm`, `flux`, `ws-rpc`, `di`,
 `llm-costs`) are out of scope for this minimal demo. They each have
 their own example or test surface in `packages/*/`.
 
-## Where `api-rlr` fits
+## Rate limiting via `@gertsai/api-rlr`
 
-`api-rlr` (rate-limiter) is being extracted in Phase 2. The hook point
-is already laid out in `src/mol-services/api.service.ts`:
+The example imports `RLRMiddleware` from `@gertsai/api-rlr` and plugs it
+into `mol-services/api.service.ts` `settings.use`. Pipeline-style:
 
 ```ts
-// TODO: add RLRMiddleware from @gertsai/api-rlr once extracted (Phase 2)
-//   .use(RLRMiddleware({ default: { rule: { type: 'gcra', limit: 60, period: 60 } } }))
+const rlrUseChain = config.RLR_ENABLED && config.REDIS_URL
+  ? [RLRMiddleware({
+      timeFrame: config.RLR_TIMEFRAME,    // 60_000 ms (1 min)
+      limit:     config.RLR_LIMIT,        // 100 req/window
+      burst:     config.RLR_BURST,        // 5 (GCRA token bucket)
+      strategy:  config.RLR_STRATEGY,     // 'gcra' (default)
+      prefix:    config.RLR_PREFIX,       // 'm9s-example:rlr:'
+      store:     () => new IORedis(config.REDIS_URL, { lazyConnect: true }),
+      bucketKeyResolver: (req) => {
+        // tenant-scoped (X-Tenant-ID), fallback to IP
+        const tenant = req.headers['x-tenant-id'];
+        return tenant ? `tenant:${tenant}` : `ip:${extractIp(req)}`;
+      },
+    })]
+  : [];
 ```
 
-When the package lands, drop the import in `mol-services/api.service.ts`,
-add it to `settings.use`, and you get tenant-aware rate limiting with
-zero domain-layer churn.
+Gated on `REDIS_URL` because the only shipped store is Redis-shaped. In
+no-Redis dev mode the chain is empty (no throttling) — RLR re-engages
+automatically once `REDIS_URL` is exported.
+
+Env knobs: `RLR_ENABLED`, `RLR_TIMEFRAME`, `RLR_LIMIT`, `RLR_BURST`,
+`RLR_STRATEGY` (`sliding_window` / `fixed_window` / `token_bucket` /
+`gcra` / `leaky_bucket`), `RLR_PREFIX`.
 
 ## Status
 

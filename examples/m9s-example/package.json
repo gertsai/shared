@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@gertsai/api-core": "workspace:*",
+    "@gertsai/api-rlr": "workspace:*",
     "@gertsai/auth-openfga": "workspace:*",
     "@gertsai/collection": "workspace:*",
     "@gertsai/core": "workspace:*",

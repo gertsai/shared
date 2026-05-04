@@ -1,9 +1,62 @@
 import { createApiService } from '@gertsai/api-core';
+import RLRMiddleware from '@gertsai/api-rlr';
+import IORedis from 'ioredis';
+
+import config from '../../project.config';
 
 // `package.json` is read at build-time and embedded into the response
 // envelope by createApiService. We import it as JSON.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pkg = require('../../package.json') as Record<string, unknown>;
+
+// =============================================================================
+// Rate limiter (@gertsai/api-rlr) — pipeline pattern
+//
+// RLR sits as an Express-style middleware in moleculer-web's `settings.use`
+// chain (BEFORE Moleculer routes). It's gated on REDIS_URL since the only
+// shipped store is Redis-shaped. When disabled, the chain is empty and no
+// throttling happens — useful for local single-process dev.
+//
+// See apps/pipeline/src/mol-services/api.service.ts for the production
+// reference (per-route presets + tenant key extraction + IP fallback).
+// =============================================================================
+
+const rlrUseChain = config.RLR_ENABLED && config.REDIS_URL
+  ? [
+      RLRMiddleware({
+        timeFrame: config.RLR_TIMEFRAME,
+        limit: config.RLR_LIMIT,
+        burst: config.RLR_BURST,
+        // Cast to LimiterStrategy literal — env strings are validated at
+        // import time but TS can't infer the union narrowing here.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        strategy: config.RLR_STRATEGY as any,
+        prefix: config.RLR_PREFIX,
+        store: () =>
+          new IORedis(config.REDIS_URL, {
+            maxRetriesPerRequest: 1,
+            lazyConnect: true,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          }) as any,
+        bucketKeyResolver: (req: { headers: Record<string, string | string[] | undefined> }) => {
+          // Pipeline pattern: tenant-scoped bucket if X-Tenant-ID present;
+          // otherwise fall back to client IP. Real apps should call
+          // `validateTenantIdFormat()` from @gertsai/api-core to prevent
+          // Redis-injection via raw header values.
+          const rawTenant = req.headers['x-tenant-id'] ?? req.headers['x-tenant'];
+          const tenantId = Array.isArray(rawTenant) ? rawTenant[0] : rawTenant;
+          if (tenantId && /^[a-zA-Z0-9_-]{1,64}$/.test(tenantId)) {
+            return `tenant:${tenantId}`;
+          }
+          // Lightweight IP extractor for example purposes — pipeline uses
+          // `extractClientIp` from @gertsai/api-core for proxy-aware headers.
+          const xff = req.headers['x-forwarded-for'];
+          const ip = Array.isArray(xff) ? xff[0] : xff;
+          return `ip:${(ip ?? 'unknown').split(',')[0].trim()}`;
+        },
+      }),
+    ]
+  : [];
 
 /**
  * API Gateway service — exposes the registered Moleculer actions over HTTP.
@@ -35,17 +88,12 @@ export function createDocumentsApiService() {
         },
 
         // -------------------------------------------------------------------
-        // Express-style middleware chain.
-        //
-        // TODO: add RLRMiddleware from @gertsai/api-rlr once extracted (Phase 2)
-        //   .use(RLRMiddleware({ default: { rule: { type: 'gcra', limit: 60, period: 60 } } }))
-        //
-        // For now we keep the chain empty — moleculer-web's built-in
-        // rate-limiting is also disabled to avoid double-throttling once
-        // RLR lands.
+        // Express-style middleware chain. moleculer-web's built-in rate
+        // limiter is disabled (rateLimit: null) so api-rlr is the only
+        // throttling pass. See `rlrUseChain` above for gating.
         // -------------------------------------------------------------------
         rateLimit: null,
-        use: [],
+        use: rlrUseChain,
 
         routes: [
           {
