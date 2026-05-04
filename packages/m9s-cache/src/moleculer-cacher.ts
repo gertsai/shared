@@ -402,15 +402,22 @@ export class M9sCacheCacher extends BaseCacherClass {
 
   /**
    * Moleculer cache middleware with tag invalidation and double-check locking.
+   *
+   * Returns a Moleculer 0.14.x **middleware object** (`{ name, localAction }`)
+   * — NOT a bare function. The bare-function shape is deprecated and emits
+   * "Validator middleware returning a Function is deprecated…" (the Moleculer
+   * source has a copy-paste typo: that warning fires from `cacher.js` too).
    */
   middleware() {
-    return <TParams = Record<string, unknown>, TMeta = Record<string, unknown>>(
-      handler: (ctx: MoleculerContext<TParams, TMeta>) => Promise<unknown>,
-      action: { name: string; cache?: boolean | MoleculerCacheOptions },
-    ) => {
-      const opts = normalizeCacheOptions(action.cache);
+    return {
+      name: 'M9sCache',
+      localAction: <TParams = Record<string, unknown>, TMeta = Record<string, unknown>>(
+        handler: (ctx: MoleculerContext<TParams, TMeta>) => Promise<unknown>,
+        action: { name: string; cache?: boolean | MoleculerCacheOptions },
+      ) => {
+        const opts = normalizeCacheOptions(action.cache);
 
-      if (opts.enabled === false) return handler;
+        if (opts.enabled === false) return handler;
 
       const isEnabledFn = typeof opts.enabled === 'function';
 
@@ -510,6 +517,7 @@ export class M9sCacheCacher extends BaseCacherClass {
 
         return requestNewData();
       };
+      },
     };
   }
 

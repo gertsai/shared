@@ -44,7 +44,8 @@ describe('M9sCacheCacher', () => {
     };
 
     const mw = cacher.middleware();
-    const wrapped = mw(handler, action as any);
+    // Moleculer 0.14+ middleware-object shape: { name, localAction }.
+    const wrapped = mw.localAction(handler, action as any);
 
     const first = await wrapped(ctx);
     expect(first).toEqual([{ id: 1, updatedAt: 10 }]);
