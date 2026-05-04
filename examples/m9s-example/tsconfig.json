@@ -1,5 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
+  "ts-node": {
+    "compiler": "ts-patch/compiler",
+    "transpileOnly": false,
+    "experimentalSpecifierResolution": "node"
+  },
   "compilerOptions": {
     "noEmit": false,
     "declaration": true,
@@ -24,6 +29,6 @@
       }
     ]
   },
-  "include": ["src"],
+  "include": ["src", "moleculer.config.ts", "project.config.ts"],
   "exclude": ["**/*.test.ts", "**/*.spec.ts", "tests", "dist"]
 }

@@ -10,7 +10,7 @@ PORT="${PORT:-3000}"
 BASE="http://localhost:${PORT}/api/v1"
 
 echo "==> Ingesting d1"
-curl -fsS -X POST "${BASE}/ingest" \
+curl -fsS -X POST "${BASE}/ingest/document" \
   -H 'content-type: application/json' \
   -d '{
     "docId": "d1",
@@ -20,7 +20,7 @@ curl -fsS -X POST "${BASE}/ingest" \
 
 echo
 echo "==> Ingesting d2"
-curl -fsS -X POST "${BASE}/ingest" \
+curl -fsS -X POST "${BASE}/ingest/document" \
   -H 'content-type: application/json' \
   -d '{
     "docId": "d2",
@@ -29,13 +29,13 @@ curl -fsS -X POST "${BASE}/ingest" \
 
 echo
 echo "==> Search: hexagonal"
-curl -fsS -X POST "${BASE}/search" \
+curl -fsS -X POST "${BASE}/search/query" \
   -H 'content-type: application/json' \
   -d '{ "query": "hexagonal", "topK": 3 }' | jq .
 
 echo
 echo "==> Search: moleculer caching"
-curl -fsS -X POST "${BASE}/search" \
+curl -fsS -X POST "${BASE}/search/query" \
   -H 'content-type: application/json' \
   -d '{ "query": "moleculer caching" }' | jq .
 
