@@ -24,6 +24,61 @@ importers:
         specifier: ^3.0.0
         version: 3.2.4(@types/node@22.19.17)(tsx@4.21.0)
 
+  examples/m9s-example:
+    dependencies:
+      '@gertsai/api-core':
+        specifier: workspace:*
+        version: link:../../packages/api-core
+      '@gertsai/auth-openfga':
+        specifier: workspace:*
+        version: link:../../packages/auth-openfga
+      '@gertsai/collection':
+        specifier: workspace:*
+        version: link:../../packages/collection
+      '@gertsai/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@gertsai/fetch':
+        specifier: workspace:*
+        version: link:../../packages/fetch
+      '@gertsai/m9s-cache':
+        specifier: workspace:*
+        version: link:../../packages/m9s-cache
+      '@gertsai/utils':
+        specifier: workspace:*
+        version: link:../../packages/utils
+      moleculer:
+        specifier: ^0.14.35
+        version: 0.14.35(bunyan@1.8.15)(debug@4.4.3)(ioredis@5.10.1)(nats@2.29.3)(protobufjs@7.5.6)(redlock@5.0.0-beta.2)
+      moleculer-web:
+        specifier: ^0.10.6
+        version: 0.10.8(moleculer@0.14.35(bunyan@1.8.15)(debug@4.4.3)(ioredis@5.10.1)(nats@2.29.3)(protobufjs@7.5.6))
+      typia:
+        specifier: ^9.7.0
+        version: 9.7.2(@types/node@22.19.17)(typescript@5.9.3)
+    devDependencies:
+      '@standard-schema/spec':
+        specifier: ^1.1.0
+        version: 1.1.0
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.19.17
+      ts-patch:
+        specifier: ^3.3.0
+        version: 3.3.0
+      typescript:
+        specifier: ^5.9.0
+        version: 5.9.3
+      typescript-transform-paths:
+        specifier: ^3.5.4
+        version: 3.5.6(typescript@5.9.3)
+      vite-tsconfig-paths:
+        specifier: ^5.1.4
+        version: 5.1.4(typescript@5.9.3)(vite@7.3.2(@types/node@22.19.17)(tsx@4.21.0))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.4(@types/node@22.19.17)(tsx@4.21.0)
+
   packages/api-core:
     dependencies:
       '@gertsai/auth-openfga':

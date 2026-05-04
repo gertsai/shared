@@ -1,0 +1,39 @@
+{
+  "name": "@gertsai-examples/m9s-example",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Hexagonal Moleculer.js example consuming @gertsai/* packages",
+  "license": "Apache-2.0",
+  "main": "./dist/src/index.js",
+  "scripts": {
+    "build": "tspc",
+    "dev": "tspc --watch",
+    "start": "node dist/src/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tspc --noEmit",
+    "postinstall": "ts-patch install -s",
+    "smoke": "bash scripts/smoke.sh"
+  },
+  "dependencies": {
+    "@gertsai/api-core": "workspace:*",
+    "@gertsai/auth-openfga": "workspace:*",
+    "@gertsai/collection": "workspace:*",
+    "@gertsai/core": "workspace:*",
+    "@gertsai/fetch": "workspace:*",
+    "@gertsai/m9s-cache": "workspace:*",
+    "@gertsai/utils": "workspace:*",
+    "moleculer": "^0.14.35",
+    "moleculer-web": "^0.10.6",
+    "typia": "^9.7.0"
+  },
+  "devDependencies": {
+    "@standard-schema/spec": "^1.1.0",
+    "@types/node": "^22.10.0",
+    "ts-patch": "^3.3.0",
+    "typescript": "^5.9.0",
+    "typescript-transform-paths": "^3.5.4",
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^3.0.0"
+  }
+}
