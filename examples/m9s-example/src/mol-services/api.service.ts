@@ -65,7 +65,9 @@ export function createDocumentsApiService() {
           },
           {
             // Placeholder: serves a static OpenAPI shell. Replace once
-            // typia.json.schema<OpenApiMapper<...>>() is wired in composition.
+            // typia.json.schema<OpenApiMapper<...>>() is wired in (the
+            // pipeline app does this via `@gerts/api-types`, which is not
+            // yet extracted into this monorepo).
             path: '/openapi',
             aliases: {
               'GET /'(_req: unknown, res: { setHeader: (k: string, v: string) => void; end: (b: string) => void }) {
@@ -75,10 +77,10 @@ export function createDocumentsApiService() {
                     openapi: '3.1.0',
                     info: { title: 'm9s-example', version: '0.0.1' },
                     paths: {
-                      '/api/v1/ingest': {
+                      '/api/v1/ingest/document': {
                         post: { summary: 'Ingest a document', responses: { 201: { description: 'Created' } } },
                       },
-                      '/api/v1/search': {
+                      '/api/v1/search/query': {
                         post: { summary: 'Search documents', responses: { 200: { description: 'OK' } } },
                       },
                     },

@@ -1,4 +1,4 @@
-import type { IEmbedder } from '../../domain/ports/IEmbedder';
+import type { IEmbedder } from '../domain/ports/IEmbedder';
 
 /**
  * MockEmbedder

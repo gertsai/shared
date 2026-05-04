@@ -47,6 +47,12 @@ importers:
       '@gertsai/utils':
         specifier: workspace:*
         version: link:../../packages/utils
+      bullmq:
+        specifier: ^5.34.8
+        version: 5.76.5
+      ioredis:
+        specifier: ^5.8.0
+        version: 5.10.1
       moleculer:
         specifier: ^0.14.35
         version: 0.14.35(bunyan@1.8.15)(debug@4.4.3)(ioredis@5.10.1)(nats@2.29.3)(protobufjs@7.5.6)(redlock@5.0.0-beta.2)

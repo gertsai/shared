@@ -1,14 +1,13 @@
 import { describe, it, expect } from 'vitest';
 
 /**
- * End-to-end test placeholder.
+ * End-to-end placeholder.
  *
- * The example app is single-node and uses the in-memory M9sCacheCacher,
- * so a real broker boot test does NOT require Redis. However, starting a
- * Moleculer broker inside vitest with typia validators requires the
- * `tspc` build step to have produced the transformed code; we therefore
- * mark the e2e suite as skipped to keep the unit-test command fast and
- * dependency-free.
+ * The example uses single-node, in-memory M9sCacheCacher, so a real broker
+ * boot test does NOT require Redis. However, starting a Moleculer broker
+ * inside vitest with typia validators requires the `tspc` build step to
+ * have produced the transformed code; we therefore mark the e2e suite as
+ * skipped to keep the unit-test command fast and dependency-free.
  *
  * To run a true e2e check locally:
  *   1. `pnpm --filter @gertsai-examples/m9s-example run build`
@@ -17,23 +16,22 @@ import { describe, it, expect } from 'vitest';
  */
 describe.skip('m9s-example e2e (broker.call)', () => {
   it('ingest then search via broker.call', async () => {
-    const { ServiceBroker } = await import('moleculer');
-    const { createBrokerConfig } = await import('../src/composition/broker');
-    const { registerServices } = await import('../src/composition/services');
+    // Side-effect: registers v1.ingest + v1.search controllers.
+    await import('../src/services');
 
-    registerServices();
-
-    const broker = new ServiceBroker(createBrokerConfig());
-    // Generate service schemas for every registered controller.
     const { ApiController } = await import('@gertsai/api-core');
-    for (const ctrl of Object.values(ApiController.controllers)) {
-      broker.createService(ctrl.generateServiceSchema());
-    }
+    const brokerConfig = (await import('../moleculer.config')).default;
+    const ApiService = (await import('../src/mol-services/api.service')).default;
 
-    await broker.start();
+    const broker = await ApiController.Start({
+      brokerConfig,
+      services: [ApiService],
+      repl: false,
+    });
+
     try {
       const ingestResp = await broker.call<unknown, { docId: string; text: string }>(
-        'v1.documents.ingest',
+        'v1.ingest.document',
         {
           docId: 'doc-e2e-1',
           text: 'Hexagonal architecture isolates the core from infrastructure. Search returns the most relevant chunks.',
@@ -42,7 +40,7 @@ describe.skip('m9s-example e2e (broker.call)', () => {
       expect(ingestResp).toBeDefined();
 
       const searchResp = await broker.call<{ data: { results: unknown[] } }, { query: string }>(
-        'v1.documents.search',
+        'v1.search.query',
         { query: 'hexagonal' },
       );
       expect(searchResp).toBeDefined();

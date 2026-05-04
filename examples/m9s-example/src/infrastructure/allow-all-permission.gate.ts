@@ -1,4 +1,4 @@
-import type { IPermissionGate } from '../../domain/ports/IPermissionGate';
+import type { IPermissionGate } from '../domain/ports/IPermissionGate';
 
 /**
  * AllowAllPermissionGate

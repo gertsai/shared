@@ -1,5 +1,5 @@
-import type { Chunk, ChunkSearchHit } from '../../domain/chunk';
-import type { IChunkStore } from '../../domain/ports/IChunkStore';
+import type { Chunk, ChunkSearchHit } from '../domain/chunk';
+import type { IChunkStore } from '../domain/ports/IChunkStore';
 
 /**
  * In-memory cosine-similarity vector store.

@@ -1,5 +1,5 @@
-import type { Document } from '../../domain/document';
-import type { IDocumentStore } from '../../domain/ports/IDocumentStore';
+import type { Document } from '../domain/document';
+import type { IDocumentStore } from '../domain/ports/IDocumentStore';
 
 /**
  * In-memory IDocumentStore.

@@ -1,68 +1,135 @@
 /**
  * m9s-example — main entry point.
  *
- * Boot sequence:
- *   1. Build broker config (composition/broker.ts)
- *   2. Register services + wire adapters (composition/services.ts)
- *   3. Start broker via ApiController.Start, attaching the API gateway
+ * Mirrors `apps/pipeline/src/index.ts` shape:
  *
- * Run with:
- *   pnpm --filter @gertsai-examples/m9s-example run build
+ *   1. Side-effect import `./services` — each domain folder registers its
+ *      controller in `ApiController._controllers` and attaches lifecycle
+ *      handlers as a side effect.
+ *   2. Parse env-driven launch params (SERVICES, WORKERS_ENABLED, WORKERS,
+ *      --repl) — same shape as pipeline so deployment commands transfer.
+ *   3. Call `ApiController.Start({ brokerConfig, services, repl,
+ *      enabledServices, workersEnabled, enabledWorkers })` — the launcher
+ *      creates the broker, generates a Moleculer service schema for every
+ *      registered controller, and starts everything.
+ *
+ * NO direct `new ServiceBroker(...)` — `ApiController.Start` owns broker
+ * construction so the lifecycle handlers fire before any action runs.
+ *
+ * Run examples:
+ *
  *   pnpm --filter @gertsai-examples/m9s-example run start
  *
+ *   # Only ingest service, no workers (producer-only / API Gateway mode):
+ *   WORKERS_ENABLED=false SERVICES=ingest pnpm start
+ *
+ *   # All services, BullMQ-backed queue with 8 workers:
+ *   REDIS_URL=redis://localhost:6379 WORKER_CONCURRENCY=8 pnpm start
+ *
+ *   # Interactive REPL:
+ *   pnpm start -- --repl
+ *
  * Then try:
- *   curl -X POST http://localhost:3000/api/v1/ingest \
+ *   curl -X POST http://localhost:3000/api/v1/ingest/document \
  *        -H 'content-type: application/json' \
  *        -d '{"docId":"d1","text":"Hexagonal architecture isolates the core."}'
  *
- *   curl -X POST http://localhost:3000/api/v1/search \
+ *   curl -X POST http://localhost:3000/api/v1/search/query \
  *        -H 'content-type: application/json' \
  *        -d '{"query":"hexagonal"}'
  */
+
+// 1. Side-effect: register all domain controllers + lifecycle handlers.
+import './services';
+
 import { ApiController } from '@gertsai/api-core';
 
-import { createBrokerConfig } from './composition/broker';
-import { registerServices } from './composition/services';
+import config from '../project.config';
+import brokerConfig from '../moleculer.config';
 import ApiService from './mol-services/api.service';
 
+// =============================================================================
+// Env parsing helpers — mirror apps/pipeline/src/index.ts
+// =============================================================================
+
+/**
+ * Parse SERVICES env var into full service names.
+ * Short names (e.g. "ingest") are auto-prefixed with API_VERSION.
+ */
+function parseServicesEnv(): string[] | undefined {
+  const raw = process.env.SERVICES;
+  if (!raw) return undefined;
+  const parts = raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (parts.length === 0) return undefined;
+  return parts.map((name) => (name.includes('.') ? name : `${config.API_VERSION}.${name}`));
+}
+
+/**
+ * Parse WORKERS env var into worker queue names. `undefined` = all workers.
+ */
+function parseWorkersEnv(): string[] | undefined {
+  const raw = process.env.WORKERS;
+  if (!raw) return undefined;
+  const parts = raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return parts.length > 0 ? parts : undefined;
+}
+
+// =============================================================================
+// Main
+// =============================================================================
+
 async function main(): Promise<void> {
-  // 1. Wire the adapters and register inbound actions BEFORE starting the broker.
-  registerServices();
-
-  // 2. Build broker config (cacher, transporter, etc.).
-  const brokerConfig = createBrokerConfig();
-
-  // 3. Start the broker. ApiController.Start handles service-schema generation
-  //    for every controller registered in registerServices().
+  const enabledServices = parseServicesEnv();
+  const workersEnabled = config.WORKERS_ENABLED;
+  const enabledWorkers = parseWorkersEnv();
   const replEnabled = process.argv.includes('--repl');
-  const broker = await ApiController.Start({
+
+  // eslint-disable-next-line no-console
+  console.log(
+    `[m9s-example] starting v${config.APP_VERSION} ` +
+      `(namespace=${config.MOLECULER_NAMESPACE}, port=${config.WEB_SERVER_PORT})`,
+  );
+
+  if (enabledServices) {
+    // eslint-disable-next-line no-console
+    console.log(`[m9s-example] Loading services: ${enabledServices.join(', ')}`);
+  } else {
+    // eslint-disable-next-line no-console
+    console.log('[m9s-example] Loading ALL services');
+  }
+
+  if (!workersEnabled) {
+    // eslint-disable-next-line no-console
+    console.log('[m9s-example] Workers DISABLED (API Gateway / producer-only mode)');
+  } else if (enabledWorkers) {
+    // eslint-disable-next-line no-console
+    console.log(
+      `[m9s-example] Workers ENABLED: ${enabledWorkers.join(', ')} ` +
+        `(concurrency=${config.WORKER_CONCURRENCY})`,
+    );
+  } else {
+    // eslint-disable-next-line no-console
+    console.log(`[m9s-example] Workers ENABLED (concurrency=${config.WORKER_CONCURRENCY})`);
+  }
+
+  await ApiController.Start({
     brokerConfig,
     services: [ApiService],
     repl: replEnabled,
+    enabledServices,
+    workersEnabled,
+    enabledWorkers,
   });
-
-  broker.logger.info(
-    `[m9s-example] broker ready, services: ${broker.services.map((s) => s.fullName ?? s.name).join(', ')}`,
-  );
-
-  // Graceful shutdown — important so ts-node-dev / nodemon restart cleanly
-  // and so the in-memory cache cleanup timer is released.
-  const shutdown = async (signal: string): Promise<void> => {
-    broker.logger.info(`[m9s-example] received ${signal}, shutting down...`);
-    try {
-      await broker.stop();
-      process.exit(0);
-    } catch (err) {
-      broker.logger.error('[m9s-example] error during shutdown', err);
-      process.exit(1);
-    }
-  };
-  process.once('SIGINT', () => void shutdown('SIGINT'));
-  process.once('SIGTERM', () => void shutdown('SIGTERM'));
 }
 
-// Only run when executed directly. Allows tests to import this file without
-// triggering broker startup as a side effect.
+// Only run when executed directly. Allows tests to import this file
+// without triggering broker startup as a side effect.
 if (require.main === module) {
   main().catch((err) => {
     // eslint-disable-next-line no-console
