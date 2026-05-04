@@ -1,0 +1,2 @@
+# Ignore script files that use CommonJS
+scripts/*
