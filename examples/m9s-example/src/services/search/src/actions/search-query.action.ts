@@ -25,7 +25,7 @@ const controller = resolveExampleController<'v1', 'search', SearchServiceContext
 export const searchQuery: any = controller.register('query', {
   auth: 'none',
 
-  rest: 'POST /query',
+  rest: 'POST /search/query',
 
   params: typia.createValidate<SearchQueryRequest>(),
   response: typia.createValidate<SearchQueryResponse>(),

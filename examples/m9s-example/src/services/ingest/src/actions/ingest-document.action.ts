@@ -49,7 +49,10 @@ export const ingestDocument: any = controller.register('document', {
   // provider; switch to 'required' once a real auth middleware is in place.
   auth: 'none',
 
-  rest: 'POST /document',
+  // setRestBasePath('/') strips the service-name prefix, so we add it
+  // explicitly here for URL namespacing — keeps /api/v1/ingest/document
+  // distinct from /api/v1/search/query.
+  rest: 'POST /ingest/document',
 
   params: typia.createValidate<IngestDocumentRequest>(),
   response: typia.createValidate<IngestDocumentResponse>(),

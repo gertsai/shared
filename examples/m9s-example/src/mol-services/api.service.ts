@@ -106,7 +106,10 @@ export function createDocumentsApiService() {
               urlencoded: { extended: true, limit: '1MB' },
             },
             // Allow access to all v1.* actions registered via ApiController.
-            whitelist: ['v1.*'],
+            // Double-asterisk matches nested action names (v1.ingest.document
+            // is "v1" + "ingest" + "document" — single-asterisk only matches
+            // one segment). Pipeline uses the same `v1.<service>.**` shape.
+            whitelist: ['v1.**'],
             // ApiController already wraps responses; no auth at the gateway.
             authentication: false,
             authorization: false,
