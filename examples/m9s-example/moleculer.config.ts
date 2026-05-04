@@ -100,6 +100,14 @@ const brokerConfig: BrokerOptions = {
 
   serializer: 'JSON',
 
+  // Disable Moleculer's built-in params validator middleware. api-core
+  // already validates params via typia (compile-time generated) inside
+  // `controller.register`'s wrapper — see `getValidator(action.options.params)`
+  // in ApiController.class.ts. Leaving Moleculer's validator on causes a
+  // double-validation pass AND emits a 0.14.x deprecation warning
+  // ("Validator middleware returning a Function is deprecated…").
+  validator: false,
+
   requestTimeout: config.REQUEST_TIMEOUT,
 
   retryPolicy: {

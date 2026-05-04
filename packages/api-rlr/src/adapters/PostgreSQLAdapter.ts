@@ -12,16 +12,29 @@
  *
  * @module @gerts/api-rlr/adapters
  */
-import type { PrismaClient } from '@gerts/database';
-
 import type { GCRAResult, SlidingWindowResult, StorageAdapter } from './StorageAdapter';
 
 /**
- * Prisma transaction client type - simplified for raw SQL operations
+ * Minimal transaction client — subset of Prisma's transaction client surface.
+ * Compatible с Prisma, Drizzle, raw `pg`, etc. через structural typing.
  */
-interface TransactionClient {
+export interface TransactionClient {
   $queryRawUnsafe<T>(query: string, ...values: unknown[]): Promise<T>;
   $executeRawUnsafe(query: string, ...values: unknown[]): Promise<number>;
+}
+
+/**
+ * Database client interface — structurally compatible с Prisma, Drizzle, raw pg, etc.
+ *
+ * Per ADR-011 (invariants I-1, I-2): @gertsai/api-rlr core НЕ зависит от
+ * @gertsai/database или конкретного ORM. PrismaClient instances drop-in
+ * совместимы через structural typing — потребители продолжают передавать
+ * `prisma: prismaInstance` без изменений.
+ */
+export interface PgClient {
+  $queryRawUnsafe<T>(query: string, ...values: unknown[]): Promise<T>;
+  $executeRawUnsafe(query: string, ...values: unknown[]): Promise<number>;
+  $transaction<T>(fn: (tx: TransactionClient) => Promise<T>): Promise<T>;
 }
 
 /**
@@ -29,9 +42,9 @@ interface TransactionClient {
  */
 export interface PostgreSQLAdapterConfig {
   /**
-   * Prisma client instance
+   * Database client instance (Prisma, Drizzle, raw pg — structurally compatible).
    */
-  prisma: PrismaClient;
+  prisma: PgClient;
 
   /**
    * Optional prefix for rate limit keys
@@ -77,7 +90,7 @@ export interface PostgreSQLAdapterConfig {
  * ```
  */
 export class PostgreSQLAdapter implements StorageAdapter {
-  private readonly prisma: PrismaClient;
+  private readonly prisma: PgClient;
   private readonly keyPrefix: string;
 
   constructor(config: PostgreSQLAdapterConfig) {
