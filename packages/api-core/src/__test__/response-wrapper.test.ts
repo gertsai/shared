@@ -233,7 +233,7 @@ describe('wrapSuccessResponse', () => {
     const result = wrapSuccessResponse({
       ctx,
       orchResponse,
-      packageJson: { name: '@gertsai/test', version: '1.0.0' },
+      packageJson: { name: '@example/test', version: '1.0.0' },
       nodeName: 'test-node',
     });
 
@@ -242,7 +242,7 @@ describe('wrapSuccessResponse', () => {
     expect(result._legacy.app).toEqual({
       name: 'test-node',
       node_id: 'test-node',
-      package: '@gertsai/test',
+      package: '@example/test',
       version: '1.0.0',
     });
   });

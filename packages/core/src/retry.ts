@@ -2,7 +2,6 @@
  * @gertsai/core - Unified Retry Logic
  *
  * Provides exponential backoff with jitter for reliable retry operations.
- * Consolidates retry patterns from @gertsai/agent and @gertsai/scheduler.
  *
  * @module @gertsai/core/retry
  */

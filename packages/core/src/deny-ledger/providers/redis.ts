@@ -279,11 +279,10 @@ export interface RedisDenyLedgerOptions {
  * @example
  * ```typescript
  * import Redis from 'ioredis';
- * import { getDatabase } from '@gertsai/database';
  * import { RedisDenyLedger, PostgresDenyLedger } from '@gertsai/core';
  *
  * const redis = new Redis({ host: 'localhost', port: 6379 });
- * const postgres = new PostgresDenyLedger({ prisma: getDatabase() });
+ * const postgres = new PostgresDenyLedger({ prisma: yourPrismaClient });
  *
  * const ledger = new RedisDenyLedger({
  *   redis,

@@ -362,7 +362,7 @@ export interface PackageJsonLike {
  * @returns Object with name and version strings
  */
 export function extractPackageInfo(pkg: unknown): { name: string; version: string } {
-  const defaults = { name: '@gertsai/pipeline', version: '1.0.0' };
+  const defaults = { name: 'unknown', version: '1.0.0' };
 
   if (typeof pkg !== 'object' || pkg === null) {
     return defaults;

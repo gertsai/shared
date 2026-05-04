@@ -2,10 +2,8 @@
  * @fileoverview RAG Response Types (RFC-036)
  *
  * Core response types for RAG API Standard.
- * These types are used across:
- * - HTTP API (RFC-030)
- * - Agent responses (@gertsai/agent)
- * - GraphRAG queries (@gertsai/graph)
+ * These types are used across HTTP APIs (RFC-030), agent responses,
+ * and GraphRAG queries.
  *
  * @module @gertsai/core/rag
  */

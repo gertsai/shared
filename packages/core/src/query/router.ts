@@ -394,7 +394,6 @@ export class QueryRouter implements IQueryExecutor<QueryRequest, unknown> {
         options?.description ??
         `Query knowledge base. Supports: ${supportedTypes.join(', ')}`,
       router: this,
-      // Note: Full tool implementation is in @gertsai/tools/query-tool.ts
     };
   }
 }

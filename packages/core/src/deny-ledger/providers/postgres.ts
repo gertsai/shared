@@ -70,7 +70,7 @@ interface PrismaDenyLedgerEntry {
 
 /**
  * Minimal PrismaClient interface for deny ledger operations
- * Uses duck typing to avoid circular dependency on @gertsai/database
+ * Uses duck typing to avoid a hard dependency on a specific Prisma client.
  */
 interface PrismaClientLike {
   denyLedgerEntry: {
@@ -190,8 +190,7 @@ function fromPrismaEntry(prisma: PrismaDenyLedgerEntry): DenyEntry {
 
 export interface PostgresDenyLedgerOptions {
   /**
-   * Prisma client instance
-   * Pass `getDatabase()` from @gertsai/database
+   * Prisma client instance.
    */
   prisma: PrismaClientLike;
 }
@@ -203,10 +202,9 @@ export interface PostgresDenyLedgerOptions {
  *
  * @example
  * ```typescript
- * import { getDatabase } from '@gertsai/database';
  * import { PostgresDenyLedger } from '@gertsai/core';
  *
- * const ledger = new PostgresDenyLedger({ prisma: getDatabase() });
+ * const ledger = new PostgresDenyLedger({ prisma: yourPrismaClient });
  * await ledger.initialize();
  * ```
  */

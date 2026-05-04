@@ -262,10 +262,9 @@ export interface RedisDenyLedgerAdapterConfig {
  * ```typescript
  * import { RedisDenyLedger, PostgresDenyLedger } from '@gertsai/core';
  * import Redis from 'ioredis';
- * import { getDatabase } from '@gertsai/database';
  *
  * const redis = new Redis();
- * const postgres = new PostgresDenyLedger({ prisma: getDatabase() });
+ * const postgres = new PostgresDenyLedger({ prisma: yourPrismaClient });
  * const coreLedger = new RedisDenyLedger({ redis, postgres });
  * await coreLedger.initialize();
  *

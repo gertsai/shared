@@ -61,11 +61,10 @@ export interface HybridDenyLedgerOptions {
  *
  * @example
  * ```typescript
- * import { getDatabase } from '@gertsai/database';
  * import { HybridDenyLedger, MemoryDenyLedger, PostgresDenyLedger } from '@gertsai/core';
  *
  * const memory = new MemoryDenyLedger({ maxCacheSize: 10000 });
- * const postgres = new PostgresDenyLedger({ prisma: getDatabase() });
+ * const postgres = new PostgresDenyLedger({ prisma: yourPrismaClient });
  *
  * const ledger = new HybridDenyLedger({ memory, postgres });
  * await ledger.initialize(); // Loads from PostgreSQL into memory

@@ -59,7 +59,7 @@ export type ActuatorResult<T> = ActuatorSuccess<T> | ActuatorSuspended | Actuato
  * Execution context passed to actuators.
  * Provides access to kernel services, state, and utilities.
  *
- * This is a minimal interface - the full implementation is in @gertsai/flow
+ * This is a minimal interface intended for downstream flow runtimes to extend.
  */
 export interface ExecutionContext {
   /** Get input data for current step */

@@ -1108,7 +1108,6 @@ export interface MemoryConfig {
  * Observability configuration for the tenant
  *
  * Controls LLM tracing, metrics collection, and data retention.
- * Used by @gertsai/observe for per-tenant sampling and storage settings.
  *
  * @see RFC-062 LLM Observability Platform
  */

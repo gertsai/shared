@@ -152,7 +152,7 @@ export interface IQueryExecutor<
    * @param options - Tool options
    * @returns Agent tool
    */
-  asTool(options?: QueryToolOptions): unknown; // Tool type from @gertsai/tools
+  asTool(options?: QueryToolOptions): unknown;
 
   /**
    * Executor metadata for routing and discovery
@@ -219,8 +219,7 @@ export abstract class BaseQueryExecutor<
   /**
    * Default tool wrapper implementation.
    *
-   * Returns a basic tool structure. For full tool support,
-   * use createQueryTool() from @gertsai/tools.
+   * Returns a basic tool structure.
    */
   asTool(options?: QueryToolOptions): unknown {
     const name = options?.name ?? `query_${this.metadata.supportedTypes[0]}`;
@@ -230,7 +229,6 @@ export abstract class BaseQueryExecutor<
       name,
       description,
       executor: this,
-      // Note: Full tool implementation is in @gertsai/tools/query-tool.ts
     };
   }
 

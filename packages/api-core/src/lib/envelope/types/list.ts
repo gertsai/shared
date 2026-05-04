@@ -1,5 +1,5 @@
 /**
- * @gertsai/api-types - Paginated List Response
+ * Paginated List Response
  *
  * RFC-030: GertsListResponse<T> — paginated list response for collection endpoints.
  * Follows cursor-based pagination pattern for efficient large dataset handling.

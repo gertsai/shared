@@ -247,7 +247,7 @@ export const createApiService = (
         },
       );
     } else if (
-      // Duck typing for AuthenticationError/AuthorizationError from @gertsai/auth-moleculer
+      // Duck typing for AuthenticationError/AuthorizationError from external auth middleware.
       // These have statusCode: 401 or 403, and type: 'AUTHENTICATION_ERROR' | 'AUTHORIZATION_ERROR'
       typeof (err as { statusCode?: number }).statusCode === 'number' &&
       typeof (err as { type?: string }).type === 'string' &&

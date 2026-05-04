@@ -2,14 +2,12 @@
  * RFC-030 Envelope Module
  *
  * Provides response and error wrapping for unified API format.
- * Source of truth for envelope types (moved from @gertsai/api-types).
  *
  * @packageDocumentation
  */
 
 // ============================================================================
 // Envelope Type Definitions (source of truth)
-// Re-exported by @gertsai/api-types for backwards compatibility
 //
 // NOTE: Some names are excluded to avoid collisions with api-core's own exports:
 //   - validationError, notFoundError, rateLimitError, internalError, authError
