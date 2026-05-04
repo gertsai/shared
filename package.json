@@ -1,0 +1,36 @@
+{
+  "name": "@gertsai/shared-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shared OSS infrastructure packages for the gerts.ai ecosystem",
+  "license": "Apache-2.0",
+  "author": "gerts.ai",
+  "homepage": "https://github.com/gertsai/shared",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gertsai/shared.git"
+  },
+  "packageManager": "pnpm@10.29.2",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "scripts": {
+    "build": "pnpm -r --workspace-concurrency=4 run build",
+    "test": "pnpm -r --workspace-concurrency=4 run test",
+    "typecheck": "pnpm -r run typecheck",
+    "clean": "pnpm -r run clean && rm -rf .moon/cache node_modules/.cache",
+    "moon:build": "moon run :build",
+    "moon:test": "moon run :test",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "pnpm build && changeset publish"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.10",
+    "@moonrepo/cli": "^1.30.0",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.0.0"
+  }
+}

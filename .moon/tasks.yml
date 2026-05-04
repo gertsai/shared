@@ -1,0 +1,49 @@
+$schema: 'https://moonrepo.dev/schemas/tasks.json'
+
+fileGroups:
+  sources:
+    - 'src/**/*'
+  tests:
+    - 'tests/**/*'
+    - '**/*.test.ts'
+    - '**/*.spec.ts'
+  configs:
+    - 'package.json'
+    - 'tsconfig.json'
+
+tasks:
+  build:
+    command: 'tsc --build'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+      - '/tsconfig.base.json'
+    outputs:
+      - 'dist'
+    options:
+      cache: true
+
+  test:
+    command: 'vitest run'
+    inputs:
+      - '@group(sources)'
+      - '@group(tests)'
+      - '@group(configs)'
+    deps:
+      - '~:build'
+    options:
+      cache: true
+
+  typecheck:
+    command: 'tsc --noEmit'
+    inputs:
+      - '@group(sources)'
+      - '@group(configs)'
+      - '/tsconfig.base.json'
+    options:
+      cache: true
+
+  clean:
+    command: 'rm -rf dist tsconfig.tsbuildinfo'
+    options:
+      cache: false
