@@ -1,0 +1,62 @@
+{
+  "name": "@gerts/api-core",
+  "version": "0.1.0",
+  "description": "Core API utilities for Gerts Moleculer services",
+  "types": "./dist/src/index.d.ts",
+  "main": "./dist/src/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    }
+  },
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "prepublish": "pnpm build",
+    "dev": "tspc --watch",
+    "build": "tspc",
+    "build:watch": "tspc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "postinstall": "ts-patch install -s"
+  },
+  "dependencies": {
+    "@gerts/auth-openfga": "workspace:*",
+    "@gerts/core": "workspace:*",
+    "@standard-schema/spec": "^1.1.0",
+    "@google-cloud/logging-bunyan": "^5.1.0",
+    "@r2d2bzh/moleculer-healthcheck-middleware": "^1.0.6",
+    "@samchon/openapi": "^4.7.1",
+    "bullmq": "^5.34.8",
+    "bunyan": "^1.8.15",
+    "colorts": "^0.1.63",
+    "dotenv": "^16.6.1",
+    "express-fingerprint": "^1.2.2",
+    "helmet": "^6.2.0",
+    "lodash.forin": "^4.4.0",
+    "lodash.merge": "^4.6.2",
+    "oauth2-server": "^3.1.1",
+    "openapi-merge": "^1.3.3",
+    "typia": "^9.7.0"
+  },
+  "peerDependencies": {
+    "ioredis": "^5.8.0",
+    "moleculer": "^0.14.35",
+    "moleculer-repl": "^0.7.3",
+    "moleculer-web": "^0.10.6",
+    "nats": "^2.13.1"
+  },
+  "devDependencies": {
+    "@google-cloud/pubsub": "^4.11.0",
+    "@ryoppippi/unplugin-typia": "^2.6.5",
+    "@types/bunyan": "^1.8.11",
+    "@types/lodash.forin": "^4.4.9",
+    "@types/lodash.merge": "^4.6.9",
+    "@types/oauth2-server": "^3.0.18",
+    "ts-patch": "^3.3.0",
+    "typescript": "^5.2.2",
+    "typescript-transform-paths": "^3.5.4",
+    "vitest": "^3.2.4"
+  }
+}
