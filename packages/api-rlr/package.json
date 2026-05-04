@@ -65,6 +65,7 @@
     "moleculer": "^0.14.35",
     "moleculer-web": "^0.10.8",
     "typescript": "^5.3.0",
+    "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^3.2.4"
   }
 }
