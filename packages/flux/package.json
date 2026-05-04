@@ -45,6 +45,7 @@
     "@types/node": "^22.0.0",
     "rimraf": "^5.0.0",
     "typescript": "^5.3.0",
+    "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^3.0.0"
   },
   "peerDependencies": {

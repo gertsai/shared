@@ -19,3 +19,4 @@ coverage/
 *.swp
 *.swo
 .pnpm-store/
+packages/*/reports/

@@ -80,6 +80,7 @@
   "license": "MIT",
   "devDependencies": {
     "typescript": "^5.3.0",
+    "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^3.0.0"
   }
 }

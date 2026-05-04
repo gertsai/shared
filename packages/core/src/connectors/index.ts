@@ -10,4 +10,7 @@
 
 export * from './acl';
 export * from './enums';
-export * from './identity-resolver';
+// NOTE: identity-resolver was untracked in gertsai_codex due to a global
+// `connectors/` .gitignore pattern. Restore in v0.1.x once the source is
+// re-committed upstream with proper history. See ADR-006 / EPIC-007.
+// export * from './identity-resolver';

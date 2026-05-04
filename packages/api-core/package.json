@@ -57,6 +57,7 @@
     "ts-patch": "^3.3.0",
     "typescript": "^5.2.2",
     "typescript-transform-paths": "^3.5.4",
+    "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^3.2.4"
   }
 }

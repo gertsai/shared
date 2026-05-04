@@ -54,11 +54,11 @@
     "zod-to-json-schema": "^3.25.1"
   },
   "devDependencies": {
-    "@gertsai/database": "workspace:*",
     "@ryoppippi/unplugin-typia": "^2.6.5",
     "@standard-schema/spec": "^1.1.0",
     "ts-patch": "^3.3.0",
     "typescript": "^5.9.2",
+    "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^3.0.0"
   }
 }
