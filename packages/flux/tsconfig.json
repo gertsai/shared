@@ -15,12 +15,7 @@
     "strict": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "composite": true,
-    "baseUrl": ".",
-    "paths": {
-      "@gerts/collection": ["../collection/dist/index.d.ts"],
-      "@gerts/collection/*": ["../collection/dist/*"]
-    }
+    "composite": true
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]

@@ -8,7 +8,20 @@
     ".": {
       "types": "./dist/src/index.d.ts",
       "default": "./dist/src/index.js"
-    }
+    },
+    "./contracts": {
+      "types": "./dist/src/contracts/index.d.ts",
+      "default": "./dist/src/contracts/index.js"
+    },
+    "./moleculer": {
+      "types": "./dist/src/moleculer/index.d.ts",
+      "default": "./dist/src/moleculer/index.js"
+    },
+    "./runtime/node": {
+      "types": "./dist/src/runtime/node/index.d.ts",
+      "default": "./dist/src/runtime/node/index.js"
+    },
+    "./package.json": "./package.json"
   },
   "license": "Apache-2.0",
   "private": false,

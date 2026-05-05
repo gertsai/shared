@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import { loadConfig } from '..';
+import { loadConfig } from '../runtime/node';
 
 test('Load config', () => {
   process.env['STRING'] = 'string';
