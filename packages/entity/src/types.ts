@@ -60,7 +60,23 @@ export interface ModelOpts {
 /** Constructor options for `Entity`. */
 export interface EntityOpts<Data extends object> extends ModelOpts {
   readonly data?: Partial<Data>;
-  readonly uid?: string;
+  /**
+   * Entity uid. Three forms supported:
+   *  - `string`: a fixed uid set at construction.
+   *  - `() => string`: a getter evaluated each time `_uuid` is read (mirrors
+   *    Orchestra `Entity._uidGetter`). Lets consumers bind the uid to an
+   *    upstream source (e.g., a row id, parent ref) and have it reflect
+   *    automatically.
+   *  - omitted: uid is generated via `uuidProvider` (default
+   *    `crypto.randomUUID()`).
+   */
+  readonly uid?: string | (() => string);
+  /**
+   * Optional hierarchical id path — e.g., `['tenantId', 'projectId',
+   * 'entityId']` for a nested entity in a multi-tenant model. Universal,
+   * no Firestore tie. Read via `entity.$uidPath`.
+   */
+  readonly uidPath?: readonly string[];
   readonly reactive?: ReactiveAdapter;
   readonly uuidProvider?: UuidProvider;
 }
@@ -72,4 +88,31 @@ export interface EntityWithMetadataOpts<
 > extends EntityOpts<Data> {
   readonly metadata?: Partial<Metadata>;
   readonly isMockup?: boolean;
+}
+
+/**
+ * Plain JSON shape produced by `Entity.toJSONObject()`.
+ *
+ * Mirrors Orchestra's `EntityJSON` shape with two simplifications:
+ *  - no Firelord `Timestamp.toDate()` `updated_at` fallback (consumers that
+ *    need a timestamp should put it in `data` themselves);
+ *  - no `metadata` slot (see `EntityWithMetadataJSON`).
+ */
+export interface EntityJSON<Data extends object> {
+  readonly _uid: string;
+  readonly data: Data;
+}
+
+/**
+ * Plain JSON shape produced by `EntityWithMetadata.toJSONObject()`.
+ * Extends `EntityJSON<Data>` with the `metadata` payload and the
+ * `__typename` discriminator.
+ */
+export interface EntityWithMetadataJSON<
+  Data extends object,
+  Metadata extends object,
+  Typename extends string = string,
+> extends EntityJSON<Data> {
+  readonly metadata: Metadata;
+  readonly __typename: Typename;
 }

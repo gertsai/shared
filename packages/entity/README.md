@@ -20,7 +20,7 @@ pnpm add @gertsai/entity
 pnpm add @vue/runtime-core
 ```
 
-## Usage
+## Quickstart
 
 ```ts
 import { Entity, EntityWithMetadata } from '@gertsai/entity';
@@ -38,8 +38,53 @@ class User extends Entity<UserData> {
 
 const u = new User({ data: { name: 'Alice', email: 'a@example.com' } });
 u.on('patched', ({ partial }) => console.log('patched', partial));
-u.$patch({ name: 'Alice B.' });
+const changed = u.$patch({ name: 'Alice B.' }); // returns boolean
 ```
+
+## Migration from Orchestra `OrchestraEntity`
+
+If you are porting code from Orchestra's `orchlab/core`, the following list
+covers every behaviour change. None are silent — all are caught at the type
+or test level if you rebuild against `@gertsai/entity`.
+
+| Orchestra | `@gertsai/entity` | Why / Notes |
+|---|---|---|
+| `'destroy'` event | `'destroyed'` | Past-participle family for consistency (`'patched'`, `'saved'`, `'staled'`, `'refreshed'`, `'metadata-changed'`). |
+| `metadata.isMockup` default `false` | `_isMockup` default **`true`** | A fresh `new MyEntity()` is unsaved/optimistic until `$markSaved()`. **Polarity-flipped.** Re-audit any `if (!entity.$isMockup) ...` branch. |
+| `$isMockup` (single name) | `$isMockup` + aliases `$isUnsaved`, `$isOptimistic` | Same boolean, three names — pick the one that reads best in your domain. |
+| `$patch(partial, check?)` returned `boolean` | `$patch(partial, check = true)` returns `boolean` | Preserved (was lost in the pre-fix Sprint 3.4, restored in 3.4.1). Per-key `deepEqual` gating; emits `'patched'` only on real change. Use `$patch(partial, false)` to force. |
+| `$setMetadata(partial)` returned `boolean` | `$setMetadata(partial, check = true)` returns `boolean` | Same pattern as `$patch`. |
+| `$markStaled(true \| false)` (single setter) | `$markStaled()` + `$markFresh()` | Two no-arg methods. Idempotent: each emits its event only on transition. |
+| `static $generateUid()` | `EntityOpts.uuidProvider` | Defaults to `crypto.randomUUID()`. Pass `() => new Xid().toString()` if you still want xid-ts ids. |
+| `OrchestraModel.globalSession` singleton | dropped | Pass `session` explicitly (`new MyEntity({ session })`) or work session-less. |
+| `toJSONObject()` returned `EntityJSON` with `updated_at: this._data.updated_at?.toDate?.() ?? new Date()` | `toJSONObject(): EntityJSON<Data>` returns `{ _uid, data }` (and on `EntityWithMetadata`: `{ _uid, data, metadata, __typename }`) | No Firelord `Timestamp.toDate` fallback. If you need a timestamp, put it in `data` yourself. |
+| `markRaw(this)` was called automatically in the Entity constructor | preserved | Still called — via the configured `ReactiveAdapter.markRaw(this)`. The Vue adapter routes to `@vue/runtime-core`'s `markRaw`; the default plain adapter sets a Symbol marker. |
+| `_uid` could be `string \| (() => string)` | preserved on `EntityOpts.uid` | Function form is re-evaluated on every `_uuid` access. |
+| `EntityOptions._uid_path?: string[]` | `EntityOpts.uidPath?: readonly string[]` | Renamed. Read via `entity.$uidPath`. Universal (no Firestore tie). |
+| Required `_uid` in opts (constructor threw) | optional — auto-generated via `uuidProvider` | Aligns with library-first OSS use (no upstream id needed for in-memory entities). |
+
+## API surface
+
+| Export | Kind | Notes |
+|---|---|---|
+| `Model` | abstract class | session + lifecycle (`$destroy` emits `'destroyed'`) |
+| `Entity<Data>` | abstract class | uid + `$data` + `$patch` (returns `boolean`, emits `'patched'` only on change) + `$uidPath` + `toJSONObject` / `toJSON` |
+| `EntityWithMetadata<Data, Metadata, Typename>` | abstract class | adds `$metadata`, mockup/staled lifecycle, `__typename`, widened `toJSONObject` |
+| `plainReactiveAdapter` | const | default no-op adapter (sets a Symbol marker on `markRaw`) |
+| `deepEqual` | function | vendored structural equality |
+| `vueReactiveAdapter` (`/vue` subpath) | const | wraps `shallowReactive`/`markRaw`/`isReactive` |
+| Types: `Session`, `WithTypename`, `ReactiveAdapter`, `UuidProvider`, `ModelOpts`, `EntityOpts`, `EntityWithMetadataOpts`, `EntityJSON`, `EntityWithMetadataJSON` | type | public contracts |
+
+## Events
+
+| Class | Event | Payload | Notes |
+|---|---|---|---|
+| `Model` | `destroyed` | — | Emitted once by `$destroy()`; idempotent on a second call. |
+| `Entity` | `patched` | `{ partial, data }` | **Skipped on no-op** (`$patch` returns `false`, no event). Pass `$patch(partial, false)` to bypass and force emission. |
+| `EntityWithMetadata` | `metadata-changed` | `{ partial, metadata }` | **Skipped on no-op** (`$setMetadata` returns `false`, no event). Pass `$setMetadata(partial, false)` to bypass. |
+| `EntityWithMetadata` | `saved` | — | Emitted by `$markSaved()` (no idempotency guard — re-emits on each call). |
+| `EntityWithMetadata` | `staled` | — | Emitted by `$markStaled()` only on transition `false → true`. |
+| `EntityWithMetadata` | `refreshed` | — | Emitted by `$markFresh()` only on transition `true → false`. |
 
 ### Vue adapter (optional)
 
@@ -49,6 +94,8 @@ import { vueReactiveAdapter } from '@gertsai/entity/vue';
 
 const u = new User({ reactive: vueReactiveAdapter, data: { name: 'A' } });
 // u.$data is now wrapped in shallowReactive(), works in Vue templates/computed.
+// u itself is markRaw'd, so Vue won't recursively wrap the instance when you
+// push it into reactive([...]) — instanceof checks keep working.
 ```
 
 ## Reactivity adapters for any UI framework
@@ -60,13 +107,20 @@ project (no need to wait for an `@gertsai/*` package).
 
 ### React (`useSyncExternalStore`)
 
-React doesn't have an "observable wrap" primitive — instead, hook into the
-entity's `'patched'` / `'metadata-changed'` events with `useSyncExternalStore`:
+React doesn't have an "observable wrap" primitive. Drive re-renders by
+subscribing to the entity's events and returning a fresh snapshot on each
+notification. The default `plainReactiveAdapter` is correct here — entity
+data is just a plain object that React reads on each render.
 
-```ts
+```tsx
 import { useSyncExternalStore } from 'react';
-import type { Entity, EntityWithMetadata } from '@gertsai/entity';
+import type { Entity } from '@gertsai/entity';
 
+/**
+ * Subscribes to `'patched'` (and, for EntityWithMetadata, `'metadata-changed'`)
+ * and returns a NEW reference on each notification so React's referential
+ * equality bail-out fires the re-render.
+ */
 export function useEntity<E extends Entity<object>>(entity: E) {
   return useSyncExternalStore(
     (cb) => {
@@ -77,35 +131,36 @@ export function useEntity<E extends Entity<object>>(entity: E) {
         entity.off('metadata-changed', cb);
       };
     },
-    () => entity.$data, // also supports server snapshot
-    () => entity.$data,
+    // getSnapshot: clone-on-read so each subscribe-fire produces a NEW ref.
+    () => ({ ...entity.$data }),
+    // getServerSnapshot
+    () => ({ ...entity.$data }),
   );
 }
 
-// Usage in component:
+// Usage:
 //   const data = useEntity(user); // re-renders on $patch
 ```
 
-The `plainReactiveAdapter` (default) is the right choice for React — no
-proxy, just plain objects + event-driven re-renders.
+> Why the spread? `useSyncExternalStore` bails out when `getSnapshot`
+> returns referentially equal values. With `plainReactiveAdapter` the
+> underlying object reference is stable across `$patch`, so we shallow-clone
+> to force React to see a new reference whenever an event fires.
 
 ### Svelte (writable store wrapper)
 
 ```ts
 import { readable } from 'svelte/store';
-import type { ReactiveAdapter } from '@gertsai/entity';
 import type { Entity } from '@gertsai/entity';
 
-// 1) Use plainReactiveAdapter (default).
-// 2) Wrap any Entity in a readable store driven by its events:
 export function entityStore<E extends Entity<object>>(entity: E) {
   return readable(entity.$data, (set) => {
-    const onPatched = () => set(entity.$data);
-    entity.on('patched', onPatched);
-    entity.on('metadata-changed', onPatched);
+    const onChange = () => set({ ...entity.$data });
+    entity.on('patched', onChange);
+    entity.on('metadata-changed', onChange);
     return () => {
-      entity.off('patched', onPatched);
-      entity.off('metadata-changed', onPatched);
+      entity.off('patched', onChange);
+      entity.off('metadata-changed', onChange);
     };
   });
 }
@@ -113,39 +168,33 @@ export function entityStore<E extends Entity<object>>(entity: E) {
 // In .svelte: $: data = $entityStore(user);
 ```
 
-### Solid (`createStore`)
+### Solid (`createStore` + `reconcile`)
 
 ```ts
 import { createStore, reconcile } from 'solid-js/store';
-import type { ReactiveAdapter } from '@gertsai/entity';
+import type { Entity } from '@gertsai/entity';
 
-export function makeSolidReactiveAdapter(): ReactiveAdapter {
-  const SOLID_RAW = Symbol.for('@gertsai/entity:solid-raw');
-  return {
-    reactive<T extends object>(target: T): T {
-      const [store, setStore] = createStore(target);
-      // Re-export setter via Proxy for Object.assign() to flow through:
-      return new Proxy(store, {
-        set(_, key, value) {
-          setStore(reconcile({ ...store, [key]: value }) as T);
-          return true;
-        },
-      }) as T;
-    },
-    markRaw<T>(value: T): T {
-      if (value && typeof value === 'object') {
-        (value as Record<symbol, true>)[SOLID_RAW] = true;
-      }
-      return value;
-    },
-    isReactive(value: unknown): boolean {
-      return !!value && typeof value === 'object' && !((value as Record<symbol, unknown>)[SOLID_RAW]);
-    },
-  };
+export function makeSolidEntity<E extends Entity<object>>(entity: E) {
+  const [state, setState] = createStore({ ...entity.$data });
+  entity.on('patched', () => {
+    setState(reconcile({ ...entity.$data }));
+  });
+  entity.on('metadata-changed', () => {
+    setState(reconcile({ ...entity.$data }));
+  });
+  return state;
 }
+
+// Usage:
+//   const data = makeSolidEntity(user);
+//   <span>{data.name}</span>
 ```
 
-### MobX (`observable`)
+`reconcile` keeps Solid's fine-grained reactivity intact (only changed leaves
+trigger updates), and we read from `entity.$data` (plain object) inside the
+listener.
+
+### MobX (`observable.shallow`)
 
 ```ts
 import { observable, isObservable } from 'mobx';
@@ -153,10 +202,14 @@ import type { ReactiveAdapter } from '@gertsai/entity';
 
 export const mobxReactiveAdapter: ReactiveAdapter = {
   reactive<T extends object>(target: T): T {
-    return observable(target, undefined, { deep: false }); // shallow, mirrors shallowReactive
+    // observable.shallow mirrors the semantics of Vue's shallowReactive:
+    // only the top-level keys are tracked; nested mutations are NOT
+    // automatically observable (matches how Entity._data is meant to be
+    // patched at the first level).
+    return observable.shallow(target) as T;
   },
   markRaw<T>(value: T): T {
-    return value; // MobX inspects deep:false already
+    return value; // shallow tracking already excludes nested objects.
   },
   isReactive(value: unknown): boolean {
     return isObservable(value);
@@ -168,13 +221,18 @@ export const mobxReactiveAdapter: ReactiveAdapter = {
 
 ```ts
 import { signal, effect } from '@preact/signals-core';
-import type { ReactiveAdapter } from '@gertsai/entity';
+import type { Entity } from '@gertsai/entity';
 
-// Signals don't wrap objects; instead, use plainReactiveAdapter and connect
-// via effect() inside your component:
-//
-//   effect(() => { renderUserCard(user.$data); });
-//   user.on('patched', () => /* trigger signal */);
+// Signals don't wrap objects; instead, use plainReactiveAdapter and bridge
+// to a signal you control:
+export function entitySignal<E extends Entity<object>>(entity: E) {
+  const tick = signal(0);
+  entity.on('patched', () => (tick.value = tick.value + 1));
+  entity.on('metadata-changed', () => (tick.value = tick.value + 1));
+  // Inside an `effect()`, read tick.value AND entity.$data — `effect` will
+  // re-run on every patch.
+  return { tick, data: () => entity.$data };
+}
 ```
 
 ### Nano Stores / Zustand / Valtio / Jotai
@@ -194,32 +252,89 @@ packages in **Wave 5+** based on demand:
 - `@gertsai/entity-mobx`
 - `@gertsai/entity-preact-signals`
 
-Each will be peer-dep-only, ≤30 LOC, and version-independent from
+Each will be peer-dep-only, ~30 LOC, and version-independent from
 `@gertsai/entity` core. Track progress under [PRD-002](../../.forgeplan/prds/PRD-002*.md)
 + a future `@gertsai/entity-*` ADR.
 
-## API surface
+## Compatibility
 
-| Export | Kind | Notes |
+`@gertsai/entity` is intentionally minimal — no `crypto-browserify`-style
+shims, no polyfills. The hard runtime requirements are:
+
+| Runtime | Minimum | Notes |
 |---|---|---|
-| `Model` | abstract class | session + lifecycle (`$destroy` emits `'destroyed'`) |
-| `Entity<Data>` | abstract class | uid + `$data` + `$patch` (emits `'patched'`) |
-| `EntityWithMetadata<Data, Metadata, Typename>` | abstract class | adds `$metadata`, mockup/staled lifecycle, `__typename` |
-| `plainReactiveAdapter` | const | default no-op adapter |
-| `deepEqual` | function | vendored structural equality |
-| `vueReactiveAdapter` (`/vue` subpath) | const | wraps `shallowReactive`/`markRaw`/`isReactive` |
-| Types: `Session`, `WithTypename`, `ReactiveAdapter`, `UuidProvider`, `ModelOpts`, `EntityOpts`, `EntityWithMetadataOpts` | type | public contracts |
+| Node | **22 LTS recommended**; **19+ minimum** | `crypto.randomUUID()` was added in Node 19; the package imports it via `node:crypto`. Older Node consumers must pass a custom `UuidProvider`. |
+| Chrome | **92+** | `crypto.randomUUID()` shipped in Chrome 92 / April 2021. |
+| Firefox | **95+** | Shipped December 2021. |
+| Safari | **15.4+** | Shipped March 2022. |
+| Vue (optional) | **`@vue/runtime-core` ^3.0.0** | Only required if you import `@gertsai/entity/vue`. Declared as `peerDependenciesMeta.optional`. |
 
-## Events
+For older Node versions or legacy browsers, pass a custom `UuidProvider`:
 
-| Class | Event | Payload |
-|---|---|---|
-| `Model` | `destroyed` | — |
-| `Entity` | `patched` | `{ partial, data }` |
-| `EntityWithMetadata` | `metadata-changed` | `{ partial, metadata }` |
-| `EntityWithMetadata` | `saved` | — |
-| `EntityWithMetadata` | `staled` | — |
-| `EntityWithMetadata` | `refreshed` | — |
+```ts
+import { Entity } from '@gertsai/entity';
+import { Xid } from 'xid-ts';
+
+class User extends Entity<{ name: string }> {
+  $defaultData() {
+    return { name: '' };
+  }
+}
+
+const u = new User({ uuidProvider: () => new Xid().toString() });
+```
+
+The same hook works for ULID, NanoID, snowflake, or any deterministic
+in-test stub.
+
+## Troubleshooting / FAQ
+
+### Why is my new entity `$isMockup === true`?
+
+Default polarity in `@gertsai/entity` is `true` — a freshly constructed
+entity is considered unsaved/optimistic until you call `$markSaved()`. This
+is **inverted** from Orchestra's `OrchestraEntity` (where the default was
+`false`). If you ported code that relied on the Orchestra default, audit
+any `if (!entity.$isMockup) ...` branches; they will now run for unsaved
+entities. Aliases `$isUnsaved` and `$isOptimistic` are exposed for
+clarity — they all read the same boolean.
+
+To opt out, construct with `isMockup: false`:
+
+```ts
+const u = new User({ isMockup: false, data: serverRow });
+```
+
+### React doesn't re-render on `$patch` — what's wrong?
+
+`Entity._data` is a plain object (under `plainReactiveAdapter`); its
+reference doesn't change across `$patch`. React's `useSyncExternalStore`
+needs a *new* snapshot reference on every notification, so the
+recommended pattern is:
+
+```ts
+() => ({ ...entity.$data })   // shallow-clone in getSnapshot
+```
+
+See the React snippet above for the full hook.
+
+### Vue: my `instanceof MyEntity` check fails inside a `reactive([])` array
+
+It shouldn't — the constructor calls `this._reactive.markRaw(this)` for
+exactly this reason. The plain adapter sets a marker symbol; the Vue
+adapter calls `@vue/runtime-core`'s `markRaw`. If your check still fails,
+verify:
+
+1. You constructed the entity with `reactive: vueReactiveAdapter` (not the
+   default plain adapter, whose marker Vue does not honor).
+2. You did not manually `reactive(myEntity)` somewhere — that bypasses the
+   marker check.
+
+### Can I use this on the server, without any UI framework?
+
+Yes. The default `plainReactiveAdapter` is a no-op pass-through. `Entity`
+and `EntityWithMetadata` work without Vue, without Solid, without React,
+without anything in the DOM. Events are plain Node `EventEmitter` events.
 
 ## License
 

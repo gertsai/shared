@@ -38,6 +38,23 @@ describe('EntityWithMetadata', () => {
     expect(o.$isMockup).toBe(false);
   });
 
+  // ---------------- F-1: alias getters ----------------
+
+  it('exposes $isUnsaved and $isOptimistic as aliases of $isMockup', () => {
+    const o1 = new Order();
+    expect(o1.$isUnsaved).toBe(true);
+    expect(o1.$isOptimistic).toBe(true);
+
+    o1.$markSaved();
+    expect(o1.$isMockup).toBe(false);
+    expect(o1.$isUnsaved).toBe(false);
+    expect(o1.$isOptimistic).toBe(false);
+
+    const o2 = new Order({ isMockup: false });
+    expect(o2.$isUnsaved).toBe(false);
+    expect(o2.$isOptimistic).toBe(false);
+  });
+
   it('merges $defaultMetadata with opts.metadata', () => {
     const o = new Order({ metadata: { source: 'web' } });
     expect(o.$metadata).toEqual({ source: 'web', version: 1 });
@@ -78,12 +95,15 @@ describe('EntityWithMetadata', () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
-  it('$setMetadata merges + emits "metadata-changed"', () => {
+  // ---------------- F-3: $setMetadata boolean + per-key gating ----------------
+
+  it('$setMetadata merges + emits "metadata-changed" + returns true', () => {
     const o = new Order();
     const handler = vi.fn();
     o.on('metadata-changed', handler);
 
-    o.$setMetadata({ source: 'mobile', version: 2 });
+    const result = o.$setMetadata({ source: 'mobile', version: 2 });
+    expect(result).toBe(true);
     expect(o.$metadata).toEqual({ source: 'mobile', version: 2 });
     expect(handler).toHaveBeenCalledTimes(1);
     const payload = handler.mock.calls[0]![0] as {
@@ -94,10 +114,60 @@ describe('EntityWithMetadata', () => {
     expect(payload.metadata).toBe(o.$metadata);
   });
 
+  it('$setMetadata with identical values returns false and does not emit', () => {
+    const o = new Order({ metadata: { source: 'web', version: 5 } });
+    const handler = vi.fn();
+    o.on('metadata-changed', handler);
+
+    const result = o.$setMetadata({ source: 'web', version: 5 });
+    expect(result).toBe(false);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('$setMetadata(partial, false) bypasses equality check and always emits', () => {
+    const o = new Order({ metadata: { source: 'web', version: 5 } });
+    const handler = vi.fn();
+    o.on('metadata-changed', handler);
+
+    const result = o.$setMetadata({ source: 'web', version: 5 }, false);
+    expect(result).toBe(true);
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
   it('$setMetadata throws after $destroy', () => {
     const o = new Order();
     o.$destroy();
     expect(() => o.$setMetadata({ source: 'web' })).toThrow(/destroyed Entity/);
+  });
+
+  // ---------------- F-4: toJSONObject (override) ----------------
+
+  it('toJSONObject returns the widened shape with metadata + __typename', () => {
+    const o = new Order({
+      uid: 'order-1',
+      data: { total: 100, currency: 'EUR' },
+      metadata: { source: 'web', version: 3 },
+    });
+    expect(o.toJSONObject()).toEqual({
+      _uid: 'order-1',
+      data: { total: 100, currency: 'EUR' },
+      metadata: { source: 'web', version: 3 },
+      __typename: 'Order',
+    });
+  });
+
+  it('toJSON round-trips and preserves __typename', () => {
+    const o = new Order({ uid: 'o-2', data: { total: 7, currency: 'USD' } });
+    const restored = JSON.parse(o.toJSON()) as {
+      _uid: string;
+      data: OrderData;
+      metadata: OrderMeta;
+      __typename: string;
+    };
+    expect(restored._uid).toBe('o-2');
+    expect(restored.__typename).toBe('Order');
+    expect(restored.data).toEqual({ total: 7, currency: 'USD' });
+    expect(restored.metadata).toEqual({ source: 'unknown', version: 1 });
   });
 
   it('exposes a typed __typename discriminator', () => {

@@ -21,4 +21,6 @@ export type {
   ModelOpts,
   EntityOpts,
   EntityWithMetadataOpts,
+  EntityJSON,
+  EntityWithMetadataJSON,
 } from './types';

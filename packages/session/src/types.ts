@@ -14,7 +14,8 @@
  * Categories grouped by purpose:
  *  - **Human surfaces**: `web`, `ios`, `android`, `electron`, `desktop`, `cli`,
  *    `tui`, `extension` (browser extension).
- *  - **Programmatic**: `api`, `sdk`, `webhook`, `cron`, `service`.
+ *  - **Programmatic**: `api`, `sdk`, `webhook`, `cron`, `service`, `auth`
+ *    (auth-service callers — token issuance, refresh, revocation flows).
  *  - **Agent / automation**: `ai`, `agent`, `assistant`, `bot`.
  *  - **Protocol-bridges**: `mcp` (Model Context Protocol), `grpc`, `graphql`.
  *  - **System / internal**: `system`, `migration`, `test`, `unknown`.
@@ -40,6 +41,7 @@ export type OperatorType =
   | 'webhook'
   | 'cron'
   | 'service'
+  | 'auth'
   // Agent / automation
   | 'ai'
   | 'agent'

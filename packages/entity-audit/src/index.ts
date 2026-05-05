@@ -11,13 +11,15 @@ export {
   buildDataForDelete,
   buildDataForRestore,
 } from './builders';
-export type { BuilderOpts } from './builders';
+export type { BuilderOpts, SetBuilderOpts, UpdateOpts } from './builders';
 export type {
   Timestamp,
   MutationMarks,
   UpdateAction,
   UpdateActionMap,
+  UpdateActionType,
   UpdateActionGeneric,
+  UnionToIntersection,
   EntityBasicStatus,
   EntityData,
   EntityDataCreate,
