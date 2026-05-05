@@ -29,7 +29,7 @@ packages, extracted из `gertsai_codex` (RFC-extracted с preserved git history
 ## Что это за проект
 
 - **Тип**: TypeScript-only multi-package OSS monorepo (npm packages).
-- **Scope**: `@gertsai/*` — 14 packages в first wave (v0.1.0).
+- **Scope**: `@gertsai/*` — **19 packages** (14 first-wave v0.1.0 + 5 foundation libs Wave 1 v0.2.0 per ADR-004).
 - **Стек**: Node ≥22 LTS · pnpm 10.x · TypeScript 5.9 · Vitest · moonrepo · Changesets.
 - **Источник foundation-решений**: `~/Work/GertsHub/.forgeplan/{adrs,epics,evidence}/`
   (read-only, не править отсюда). Главные: ADR-005, ADR-006, ADR-009, EPIC-007, EVID-008.
@@ -78,31 +78,48 @@ pnpm-workspace.yaml       ← packages: ['packages/*']
 
 ---
 
-## 14 packages — деп-граф и build-команды
+## 19 packages — tier таблица + build (post-Sprint 3.0/3.0.1/3.2 per ADR-004)
 
-| Tier | Package | Internal deps | Build |
-|---|---|---|---|
-| 1 | `@gertsai/fsm` | — | `tsc --build tsconfig.json` |
-| 1 | `@gertsai/fetch` | — | `tsc` |
-| 1 | `@gertsai/collection` | — | `tsc --build tsconfig.json` |
-| 1 | `@gertsai/llm-costs` | — | dual `build:esm` + `build:cjs` |
-| 1 | `@gertsai/utils` | — | dual `build:esm` + `build:cjs` |
-| 1 | `@gertsai/m9s-cache` | — | `tsc --build tsconfig.json` |
-| 1 | `@gertsai/ws-rpc` | — | `tsc -p tsconfig.json` |
-| 2 | `@gertsai/di` | utils | dual `build:esm` + `build:cjs` |
-| 2 | `@gertsai/flux` | collection | `tsc --build tsconfig.json` |
-| 3 | `@gertsai/core` | llm-costs | `tspc --build tsconfig.json` (ts-patch + typia) |
-| 3 | `@gertsai/hsm` | — | `tspc --build tsconfig.json` |
-| 4 | `@gertsai/auth-openfga` | core | `tsc` |
-| 4 | `@gertsai/api-core` | core, auth-openfga | `tspc` |
-| 5 | `@gertsai/api-rlr` | api-core | dual `build:esm` + `build:cjs` |
+Все 19 packages используют **uniform tsup dual ESM+CJS** (Sprint 3.0 §U-1..U-6) с фиксированными scripts (`build`, `clean`, `test`, `typecheck`, `lint` — Sprint 3.0.1 F-8).
+
+| Tier | Package | Internal deps | Source | Notes |
+|---|---|---|---|---|
+| 1 | `@gertsai/fsm` | — | first wave | finite state machine primitives |
+| 1 | `@gertsai/fetch` | — | first wave | HTTP fetch wrapper |
+| 1 | `@gertsai/collection` | — | first wave | collection utilities (subpaths) |
+| 1 | `@gertsai/llm-costs` | — | first wave | LLM cost calculation |
+| 1 | `@gertsai/utils` | — | first wave | generic utilities |
+| 1 | `@gertsai/m9s-cache` | — | first wave | Moleculer cache adapter |
+| 1 | `@gertsai/ws-rpc` | — | first wave | WebSocket RPC primitives |
+| **1** | **`@gertsai/config`** | api-core | **Sprint 3.2 W-1 (S shim)** | re-exports api-core/runtime/node — ADR-004 |
+| **1** | **`@gertsai/tenant`** | — | **Sprint 3.2 W-2 (F fresh)** | TenantId brand + getTenantIdStrict/Optional + `/moleculer` adapter |
+| **1** | **`@gertsai/otel`** | — | **Sprint 3.2 W-3 (F fresh)** | OTel SDK setup + `/moleculer` tracing; lazy peer-deps |
+| **1** | **`@gertsai/pg-client`** | — | **Sprint 3.2 W-4 (F fresh)** | agnostic 3-method PgClient interface + mockPgClient (ADR-011 I-1/I-2) |
+| 2 | `@gertsai/di` | utils | first wave | DI container |
+| 2 | `@gertsai/flux` | collection | first wave | reactive streams |
+| **2** | **`@gertsai/queue`** | — | **Sprint 3.2 W-5 (P+F)** | BullMQ wrappers + `/standalone` runner; consumed BY api-core (Sprint 3.x migration) |
+| 3 | `@gertsai/core` | llm-costs | first wave | platform contracts (Workflow types, Sprint 3.1 W-1; Sprint 3.0.1 F-9 meta) |
+| 3 | `@gertsai/hsm` | — | first wave | hierarchical state machines |
+| 4 | `@gertsai/auth-openfga` | core | first wave | OpenFGA ReBAC adapter |
+| 4 | `@gertsai/api-core` | core, auth-openfga | first wave | Moleculer SDK; subpaths /contracts /moleculer /runtime/node (Sprint 2 ADR-003) |
+| 5 | `@gertsai/api-rlr` | api-core | first wave | rate limiter / retry loop runtime (ADR-011) |
+
+**Strategy markers** (per ADR-004):
+- **P** = Preserve git history; **F** = Fresh code; **S** = Shim/thin re-export; **P+F** = Preserve-history core + fresh boundary.
 
 **Что важно знать**:
-- `tspc` = ts-patch wrapped tsc (для typia transformer). Если build падает с
-  "transform not found" — `pnpm rebuild` или `ts-patch install -s`.
-- `dual ESM+CJS` packages выводят в `dist/esm/` + `dist/cjs/`.
-- `core/src/connectors/identity-resolver.ts` — закомментирован экспорт. См.
-  `KNOWN-ISSUES.md` пункт 1.
+- All 14 first-wave + 5 Sprint 3.2 packages: uniform tsup dual ESM+CJS (Sprint 3.0 §U-3..U-6).
+- `tspc` only used in m9s-example (typia transformer). Production packages migrated off ts-patch.
+- `core` + `api-core` имеют subpath exports + typesVersions для Node10 fallback (Sprint 3.0.1 F-4).
+- `tenant`, `otel`, `queue` имеют `/moleculer`, `/moleculer`, `/standalone` subpaths соответственно — typesVersions добавлен per Sprint 3.0.1 F-4 pattern.
+- ApiController workflow internal hook keyed by `Symbol.for('@gertsai/api-core:registerWorkflow')` — never surfaces в emitted `.d.ts` (Sprint 3.0.1 F-1).
+- `core/src/connectors/identity-resolver.ts` — закомментирован экспорт. См. `KNOWN-ISSUES.md` пункт 1.
+
+**Cross-references**:
+- ADR-004 (Foundation libs naming + extraction strategy) — обоснование rename `observe→otel`, `database→pg-client`, drop `auth-moleculer`.
+- ADR-003 (Platform Runtime Boundaries) — subpath patterns; new packages follow.
+- ADR-002 (Hex layer enforcement) — applies к `examples/m9s-example/` only; foundation libs flat utility packages OUTSIDE hex.
+- ADR-011 (Hub) — `@gertsai/pg-client` invariants I-1, I-2 (agnostic, no Prisma binding).
 
 ---
 
