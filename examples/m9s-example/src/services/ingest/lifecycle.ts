@@ -25,8 +25,11 @@
  *   - On service stopped: nothing to tear down — api-core closes the BullMQ
  *     Queue/Worker handles for us.
  */
+import { setWorkflows } from '@gertsai/api-core/moleculer';
+
 import { resolveExampleController } from '../../lib/example-controller';
 import { IngestDocumentUseCase } from '../../application/IngestDocumentUseCase';
+import { createIngestProcessWorkflow } from '../../application/IngestProcessWorkflow';
 import { infrastructure } from '../../composition/infrastructure';
 // Note: openfga-permission.gate is intentionally NOT imported by default.
 // Swap the gate construction in src/composition/infrastructure.ts to enable
@@ -42,11 +45,44 @@ const controller = resolveExampleController<'v1', 'ingest', IngestServiceContext
 // duplication that autoAliases would otherwise produce.
 controller.setRestBasePath('/');
 
+// ---------------------------------------------------------------------------
+// Workflow registration (Sprint 3.1 §W-7).
+//
+// Previously: `IngestWorkflowService` was a separate Moleculer service
+// (`wf-ingest`) hand-rolled in `services/workflows/ingest-process.workflow.ts`
+// and added to `ApiController.Start({ services: [...] })`. That worked but
+// coupled the workflow body to Moleculer (handler took a `Context`).
+//
+// Now: the workflow is a pure `WorkflowDefinition` from the application
+// layer. `setWorkflows()` adapts it to the Moleculer-flavoured schema and
+// stores it in the controller's pending-workflows map; api-core's
+// `_attachWorkflowsToServices()` mutates the synthesized service schema
+// (in `generateServiceSchema()`, BEFORE `broker.start()`) to add the
+// `workflows: {...}` block that `@moleculer/workflows` middleware reads
+// during `serviceCreated`.
+//
+// Naming: `@moleculer/workflows` builds the runtime workflow name as
+// `<svc.fullName>.<wf.name>`. The synthesized service is `v1.ingest`,
+// the registration key here is `'process'`, so the runtime name becomes
+// `v1.ingest.process`. The matching `start-workflow.action.ts` calls
+// `broker.wf.run('v1.ingest.process', ...)`.
+//
+// Use-case dependency: `createIngestProcessWorkflow` accepts the
+// `IngestDocumentUseCase` directly, but the use case needs to be a
+// stable reference that observes the SAME shared infrastructure as the
+// `addStartedHandler` below. Constructing it here at module-load time
+// is safe because `infrastructure` is a module-load singleton (see
+// `src/composition/infrastructure.ts`). The lifecycle handler reuses
+// the same instance via closure.
+// ---------------------------------------------------------------------------
+const ingestUseCase = new IngestDocumentUseCase(infrastructure);
+
+setWorkflows(controller as unknown as Parameters<typeof setWorkflows>[0], {
+  process: createIngestProcessWorkflow({ useCase: ingestUseCase }),
+});
+
 controller.addStartedHandler(async (ctx) => {
   ctx.logger?.info('[v1.ingest] starting...');
-
-  // Use case wires the (shared) adapters — pure application logic.
-  const useCase = new IngestDocumentUseCase(infrastructure);
 
   // Stash everything on the typed service context. The references on
   // ctx.service are the SAME instances the search lifecycle hands out,
@@ -55,7 +91,7 @@ controller.addStartedHandler(async (ctx) => {
   ctx.service.chunkStore = infrastructure.chunkStore;
   ctx.service.embedder = infrastructure.embedder;
   ctx.service.gate = infrastructure.gate;
-  ctx.service.useCase = useCase;
+  ctx.service.useCase = ingestUseCase;
 
   ctx.logger?.info(
     `[v1.ingest] ready (embedder=${infrastructure.embedder.constructor.name}, ` +

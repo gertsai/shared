@@ -47,13 +47,14 @@ import { ApiController } from '@gertsai/api-core/moleculer';
 import config from '../project.config';
 import brokerConfig from '../moleculer.config';
 import ApiService from './mol-services/api.service';
-// Plain Moleculer service (not via ApiController) hosting the
-// `wf-ingest.ingest.process` workflow definition that
-// `@moleculer/workflows` discovers via its `workflows: {...}` schema
-// property. Loaded unconditionally — when REDIS_URL is unset the
-// middleware is omitted, the service still boots but contains zero
-// active workflows (broker.wf is undefined too).
-import IngestWorkflowService from './services/workflows/ingest-process.workflow';
+// Sprint 3.1 §W-7: the `ingest.process` workflow is now registered onto
+// the `v1.ingest` controller via `setWorkflows(...)` in
+// `services/ingest/lifecycle.ts` (api-core attaches it to the synthesized
+// Moleculer schema before broker.start). The previous standalone
+// `IngestWorkflowService` (`wf-ingest`) is gone — workflows are no longer
+// a separate Moleculer service in this example. The runtime workflow
+// name moved from `wf-ingest.ingest.process` to `v1.ingest.process`.
+//
 // Plain Moleculer service hosting `@moleculer/channels` subscribers
 // (cross-service reliable events). Loaded unconditionally; the channels
 // middleware (gated on REDIS_URL in moleculer.config.ts) is what makes
@@ -133,7 +134,7 @@ async function main(): Promise<void> {
 
   await ApiController.Start({
     brokerConfig,
-    services: [ApiService, IngestWorkflowService, DocumentEventsChannelService],
+    services: [ApiService, DocumentEventsChannelService],
     repl: replEnabled,
     enabledServices,
     workersEnabled,
