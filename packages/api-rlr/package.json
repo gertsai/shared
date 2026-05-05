@@ -40,7 +40,8 @@
     "test:watch": "vitest",
     "test:redis": "HAS_REDIS=1 vitest run",
     "test:coverage": "vitest run --coverage.enabled --coverage.reporter=html",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0"
   },
   "author": "Eli Rum <explosivebit@gmail.com>",
   "license": "Apache-2.0",
@@ -77,7 +78,6 @@
     "ioredis": "5.7.0",
     "moleculer": "^0.14.35",
     "moleculer-web": "^0.10.8",
-    "typescript": "^5.3.0",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^3.2.4"
   }

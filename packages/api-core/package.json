@@ -50,6 +50,13 @@
     },
     "./package.json": "./package.json"
   },
+  "typesVersions": {
+    "*": {
+      "contracts": ["./dist/contracts/index.d.ts"],
+      "moleculer": ["./dist/moleculer/index.d.ts"],
+      "runtime/node": ["./dist/runtime/node/index.d.ts"]
+    }
+  },
   "files": [
     "dist",
     "README.md",
@@ -64,10 +71,11 @@
   "scripts": {
     "prepublish": "pnpm build",
     "build": "tsup",
-    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "clean": "rm -rf dist .tsbuildinfo *.tsbuildinfo",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0"
   },
   "dependencies": {
     "@gertsai/auth-openfga": "workspace:*",
@@ -112,7 +120,6 @@
     "@types/lodash.forin": "^4.4.9",
     "@types/lodash.merge": "^4.6.9",
     "@types/oauth2-server": "^3.0.18",
-    "typescript": "^5.2.2",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^3.2.4"
   }

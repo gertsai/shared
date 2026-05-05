@@ -36,10 +36,12 @@
   ],
   "scripts": {
     "build": "tsup",
-    "test": "vitest run"
+    "clean": "rm -rf dist .tsbuildinfo *.tsbuildinfo",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0"
   },
   "devDependencies": {
-    "typescript": "^5.2.2",
     "vitest": "^3.0.0"
   },
   "dependencies": {

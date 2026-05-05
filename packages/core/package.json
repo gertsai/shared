@@ -40,6 +40,12 @@
     },
     "./package.json": "./package.json"
   },
+  "typesVersions": {
+    "*": {
+      "rag": ["./dist/rag/index.d.ts"],
+      "llm": ["./dist/llm/index.d.ts"]
+    }
+  },
   "files": [
     "dist",
     "README.md",
@@ -48,7 +54,10 @@
   ],
   "scripts": {
     "build": "tsup",
-    "test": "vitest run"
+    "clean": "rm -rf dist .tsbuildinfo *.tsbuildinfo",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0"
   },
   "dependencies": {
     "gpt-tokenizer": "^2.5.0",
@@ -62,7 +71,6 @@
     "@ryoppippi/unplugin-typia": "^2.6.5",
     "@standard-schema/spec": "^1.1.0",
     "ts-patch": "^3.3.0",
-    "typescript": "^5.9.2",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^3.0.0"
   }

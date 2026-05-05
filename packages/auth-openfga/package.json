@@ -50,14 +50,14 @@
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0"
   },
   "dependencies": {
     "@gertsai/core": "workspace:*",
     "@openfga/sdk": "^0.8.1"
   },
   "devDependencies": {
-    "typescript": "^5.3.0",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^3.0.0"
   },

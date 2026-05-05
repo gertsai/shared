@@ -70,7 +70,8 @@
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0"
   },
   "keywords": [
     "collection",
@@ -84,7 +85,6 @@
   "author": "gerts.ai",
   "license": "Apache-2.0",
   "devDependencies": {
-    "typescript": "^5.3.0",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^3.0.0"
   }

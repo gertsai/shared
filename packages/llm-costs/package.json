@@ -28,11 +28,13 @@
   ],
   "scripts": {
     "build": "tsup",
+    "clean": "rm -rf dist .tsbuildinfo *.tsbuildinfo",
     "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0",
     "sync": "tsx scripts/sync-litellm.ts"
   },
   "devDependencies": {
-    "typescript": "^5.2.2",
     "tsx": "^4.7.0",
     "vitest": "^3.0.0"
   }

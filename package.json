@@ -42,7 +42,7 @@
     "eslint-plugin-boundaries": "^6.0.2",
     "publint": "^0.3.18",
     "tsup": "^8.5.1",
-    "typescript": "^5.9.0",
+    "typescript": "5.9.3",
     "vitest": "^3.0.0"
   }
 }
