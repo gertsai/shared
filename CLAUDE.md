@@ -29,7 +29,7 @@ packages, extracted из `gertsai_codex` (RFC-extracted с preserved git history
 ## Что это за проект
 
 - **Тип**: TypeScript-only multi-package OSS monorepo (npm packages).
-- **Scope**: `@gertsai/*` — 13 packages в first wave (v0.1.0).
+- **Scope**: `@gertsai/*` — 14 packages в first wave (v0.1.0).
 - **Стек**: Node ≥22 LTS · pnpm 10.x · TypeScript 5.9 · Vitest · moonrepo · Changesets.
 - **Источник foundation-решений**: `~/Work/GertsHub/.forgeplan/{adrs,epics,evidence}/`
   (read-only, не править отсюда). Главные: ADR-005, ADR-006, ADR-009, EPIC-007, EVID-008.
@@ -44,7 +44,7 @@ packages, extracted из `gertsai_codex` (RFC-extracted с preserved git history
 ```bash
 git status && git log --oneline -5
 cat KNOWN-ISSUES.md       # текущие limitations v0.1.0
-ls packages/              # подтверди 13 пакетов на месте
+ls packages/              # подтверди 14 пакетов на месте
 ```
 
 **Не читать на старте** (читать только когда релевантно):
@@ -65,7 +65,7 @@ ls packages/              # подтверди 13 пакетов на месте
 ## Repo layout
 
 ```
-packages/<13-packages>/   ← @gertsai/<name> sources
+packages/<14-packages>/   ← @gertsai/<name> sources
 .changeset/               ← pending bumps (config.json: public access)
 .moon/                    ← workspace.yml + toolchain.yml + tasks.yml
 .github/workflows/        ← ci.yml + release.yml (changesets/action)
@@ -78,7 +78,7 @@ pnpm-workspace.yaml       ← packages: ['packages/*']
 
 ---
 
-## 13 packages — деп-граф и build-команды
+## 14 packages — деп-граф и build-команды
 
 | Tier | Package | Internal deps | Build |
 |---|---|---|---|
@@ -95,6 +95,7 @@ pnpm-workspace.yaml       ← packages: ['packages/*']
 | 3 | `@gertsai/hsm` | — | `tspc --build tsconfig.json` |
 | 4 | `@gertsai/auth-openfga` | core | `tsc` |
 | 4 | `@gertsai/api-core` | core, auth-openfga | `tspc` |
+| 5 | `@gertsai/api-rlr` | api-core | dual `build:esm` + `build:cjs` |
 
 **Что важно знать**:
 - `tspc` = ts-patch wrapped tsc (для typia transformer). Если build падает с
@@ -184,7 +185,7 @@ git push --follow-tags origin main
 
 ```bash
 pnpm install --frozen-lockfile        # lockfile должен быть консистентен
-pnpm build                             # 13/13 packages Done
+pnpm build                             # 14/14 packages Done
 pnpm test                              # ожидание: ~3187 passed, ~54 skipped
 pnpm typecheck 2>&1 | tail -10        # отдельная проверка типов
 ```
@@ -195,8 +196,27 @@ pnpm typecheck 2>&1 | tail -10        # отдельная проверка ти
 
 ## AI-агентам (для autonomous session)
 
-- `MEMORY.md` (если есть в `~/.claude/projects/.../memory/`) подгружается автоматически
-  Claude Code — не дёргай `memory_recall` зря.
+### Память (hindsight MCP)
+
+- **Bank**: `gerts_shared` (config в `.mcp.json` репо). Проверь подключение
+  через `memory_status` в начале сессии — если `connected`, см. **общее
+  правило в `~/.claude/rules/hindsight.md`**.
+- **На старте сессии**: `memory_recall("project context")` для restore
+  основных фактов (что extracted, какие пакеты, текущий state).
+- **Доступные группы** (10): list через `memory_recall("memory recall guide")`.
+  Прямой доступ: `recall("pipeline pattern parity")`,
+  `recall("m9s-example feature inventory")`,
+  `recall("@gertsai api-core surface")`,
+  `recall("queue handler this binding bug")`,
+  `recall("workflows event log replay")` и т. д.
+- **Когда retain**: новый bug + root cause + fix; новый pattern; что
+  отложено / не extracted; live-tested integration с подтверждёнными env.
+- **Не retain**: содержимое файлов, git log, ephemeral state.
+- **Auto-MEMORY.md**: если есть `~/.claude/projects/.../memory/MEMORY.md`,
+  подгружается автоматически — не дублируй recall тех же фактов.
+
+### Subagents и safety
+
 - Для сложных подсессий (filter-repo prep, bulk rename, audit) — **используй subagents**
   параллельно для prep, sequentially для merge/git-write (lock файла).
 - При неуверенности про push/publish/destructive — **STOP и спроси**, не "решай за человека".
@@ -210,7 +230,7 @@ pnpm typecheck 2>&1 | tail -10        # отдельная проверка ти
   Application code остаётся в `gertsai_codex` и `GertsHub`.
 - **Не использует Turborepo** (несмотря на typical TS-monorepo выбор) — moonrepo
   per ADR-003 (workspace consistency с Hub).
-- **Не зависит** от `@gertsai/*` packages вне 13-package wave. Если код требует
+- **Не зависит** от `@gertsai/*` packages вне 14-package wave. Если код требует
   `@gertsai/database`, `@gertsai/api-types` и т.п. — это либо future work
   (вторая волна extraction), либо stub/comment-out (см. `KNOWN-ISSUES.md`).
 - **Не публикуется на private registry** — только public npm, Apache 2.0.
@@ -228,4 +248,6 @@ pnpm typecheck 2>&1 | tail -10        # отдельная проверка ти
 - **`KNOWN-ISSUES.md`** — текущие v0.1.0 limitations + workarounds
 - **`README.md`** — public-facing intro для npm/GitHub visitors
 - **`CONTRIBUTING.md`** — workflow для external contributors
-- **`~/Work/GertsHub/.forgeplan/`** — архитектурные решения (read-only из этой сессии)
+- **`~/Work/GertsHub/.forgeplan/`** — архитектурные решения (read-only из этой сессии).
+  Среди прочих: **ADR-011** — обоснование добавления `@gertsai/api-rlr` как Tier 5
+  пакета (rate-limiter / retry-loop runtime поверх api-core).

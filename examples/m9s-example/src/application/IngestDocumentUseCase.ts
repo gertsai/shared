@@ -4,6 +4,7 @@ import type { IDocumentStore } from '../domain/ports/IDocumentStore';
 import type { IChunkStore } from '../domain/ports/IChunkStore';
 import type { IEmbedder } from '../domain/ports/IEmbedder';
 import type { IPermissionGate } from '../domain/ports/IPermissionGate';
+import { PermissionDeniedError } from './errors/permission-denied.error';
 
 /**
  * Dependencies injected at composition time.
@@ -33,24 +34,6 @@ export interface IngestDocumentInput {
 export interface IngestDocumentResult {
   readonly docId: string;
   readonly chunkCount: number;
-}
-
-/**
- * Domain error thrown when the permission gate denies the operation.
- * The inbound adapter is responsible for translating this into an HTTP 403.
- */
-export class PermissionDeniedError extends Error {
-  public readonly userId: string;
-  public readonly action: string;
-  public readonly resource: string;
-
-  constructor(userId: string, action: string, resource: string) {
-    super(`User '${userId}' is not allowed to '${action}' on '${resource}'`);
-    this.name = 'PermissionDeniedError';
-    this.userId = userId;
-    this.action = action;
-    this.resource = resource;
-  }
 }
 
 /**

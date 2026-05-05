@@ -16,7 +16,7 @@ import { APIError, ResponseCode } from '@gertsai/api-core';
 import typia from 'typia';
 
 import { resolveExampleController } from '../../../../lib/example-controller';
-import { PermissionDeniedError } from '../../../../application/IngestDocumentUseCase';
+import { PermissionDeniedError } from '../../../../application/errors/permission-denied.error';
 import type { SearchServiceContext, SearchQueryRequest, SearchQueryResponse } from '../../types';
 
 const controller = resolveExampleController<'v1', 'search', SearchServiceContext>('v1', 'search');

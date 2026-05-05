@@ -5,7 +5,7 @@ import {
   DEFAULT_TOP_K,
   MAX_TOP_K,
 } from '../src/application/SearchDocumentsUseCase';
-import { PermissionDeniedError } from '../src/application/IngestDocumentUseCase';
+import { PermissionDeniedError } from '../src/application/errors/permission-denied.error';
 import type { IChunkStore } from '../src/domain/ports/IChunkStore';
 import type { IEmbedder } from '../src/domain/ports/IEmbedder';
 import type { IPermissionGate } from '../src/domain/ports/IPermissionGate';

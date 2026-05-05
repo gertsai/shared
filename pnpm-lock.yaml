@@ -35,9 +35,6 @@ importers:
       '@gertsai/auth-openfga':
         specifier: workspace:*
         version: link:../../packages/auth-openfga
-      '@gertsai/collection':
-        specifier: workspace:*
-        version: link:../../packages/collection
       '@gertsai/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -47,9 +44,6 @@ importers:
       '@gertsai/m9s-cache':
         specifier: workspace:*
         version: link:../../packages/m9s-cache
-      '@gertsai/utils':
-        specifier: workspace:*
-        version: link:../../packages/utils
       '@moleculer/channels':
         specifier: ^0.1.8
         version: 0.1.8(moleculer@0.14.35(bunyan@1.8.15)(debug@4.4.3)(ioredis@5.10.1)(nats@2.29.3)(protobufjs@7.5.6))

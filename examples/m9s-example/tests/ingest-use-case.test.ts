@@ -2,9 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 
 import {
   IngestDocumentUseCase,
-  PermissionDeniedError,
   splitIntoChunks,
 } from '../src/application/IngestDocumentUseCase';
+import { PermissionDeniedError } from '../src/application/errors/permission-denied.error';
 import type { IDocumentStore } from '../src/domain/ports/IDocumentStore';
 import type { IChunkStore } from '../src/domain/ports/IChunkStore';
 import type { IEmbedder } from '../src/domain/ports/IEmbedder';

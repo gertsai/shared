@@ -23,7 +23,7 @@ import typia from 'typia';
 
 import config from '../../../../../project.config';
 import { resolveExampleController } from '../../../../lib/example-controller';
-import { PermissionDeniedError } from '../../../../application/IngestDocumentUseCase';
+import { PermissionDeniedError } from '../../../../application/errors/permission-denied.error';
 import { INGEST_QUEUE_NAME, JOB_PROCESS_DOCUMENT } from '../queues';
 import type {
   IngestServiceContext,

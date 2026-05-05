@@ -10,7 +10,17 @@ import config from '../config';
 
 import logLevel from './logLevel';
 
-const loggingBunyan = new LoggingBunyan({});
+let _loggingBunyan: LoggingBunyan | undefined;
+const getLoggingBunyan = (): LoggingBunyan => {
+  if (!_loggingBunyan) {
+    _loggingBunyan = new LoggingBunyan({});
+  }
+  return _loggingBunyan;
+};
+
+export const createGcpLoggerStream = (
+  severity: Parameters<LoggingBunyan['stream']>[0] = config.LOGGER_GOOGLE__SEVERITY,
+) => getLoggingBunyan().stream(severity);
 
 export const createMoleculerConfig = (
   optionsOverride: BrokerOptions = {},
@@ -34,7 +44,7 @@ export const createMoleculerConfig = (
               name: config.MOLECULER_NODE_NAME,
               streams: [
                 // { stream: process.stdout, level: config.LOGGER_GOOGLE__SEVERITY },
-                loggingBunyan.stream(config.LOGGER_GOOGLE__SEVERITY),
+                getLoggingBunyan().stream(config.LOGGER_GOOGLE__SEVERITY),
               ],
             },
           },

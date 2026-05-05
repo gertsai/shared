@@ -2,7 +2,7 @@ import type { ChunkSearchHit } from '../domain/chunk';
 import type { IChunkStore } from '../domain/ports/IChunkStore';
 import type { IEmbedder } from '../domain/ports/IEmbedder';
 import type { IPermissionGate } from '../domain/ports/IPermissionGate';
-import { PermissionDeniedError } from './IngestDocumentUseCase';
+import { PermissionDeniedError } from './errors/permission-denied.error';
 
 /**
  * Dependencies for the Search use case (constructor-injected).
