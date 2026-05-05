@@ -1,0 +1,82 @@
+{
+  "name": "@gertsai/otel",
+  "version": "0.0.0",
+  "description": "OpenTelemetry setup for @gertsai/* services. Lazy peer-deps; minimal coupling.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./moleculer": {
+      "import": {
+        "types": "./dist/moleculer.d.ts",
+        "default": "./dist/moleculer.js"
+      },
+      "require": {
+        "types": "./dist/moleculer.d.cts",
+        "default": "./dist/moleculer.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "moleculer": ["./dist/moleculer.d.ts"]
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo *.tsbuildinfo",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0"
+  },
+  "peerDependencies": {
+    "@opentelemetry/sdk-node": "^0.50.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.50.0",
+    "@opentelemetry/resources": "^1.20.0",
+    "@opentelemetry/semantic-conventions": "^1.20.0",
+    "moleculer": "^0.14.0"
+  },
+  "peerDependenciesMeta": {
+    "@opentelemetry/sdk-node": { "optional": true },
+    "@opentelemetry/exporter-trace-otlp-http": { "optional": true },
+    "@opentelemetry/resources": { "optional": true },
+    "@opentelemetry/semantic-conventions": { "optional": true },
+    "moleculer": { "optional": true }
+  },
+  "devDependencies": {
+    "moleculer": "^0.14.35",
+    "vitest": "^3.0.0"
+  },
+  "keywords": [
+    "otel",
+    "opentelemetry",
+    "tracing",
+    "moleculer",
+    "gerts",
+    "gertsai"
+  ],
+  "author": "gerts.ai"
+}
