@@ -4,6 +4,9 @@ id: PRD-001
 kind: prd
 last_modified_at: 2026-05-05T07:30:31.155892+00:00
 last_modified_by: claude-code/2.1.128
+links:
+- target: ADR-004
+  relation: refines
 status: draft
 title: Wave 2 — Backend Foundation Extension for @gertsai/* monorepo
 ---
@@ -25,6 +28,17 @@ stepsCompleted: ["shape:start", "reframe:library-first"]
 # PRD-001: Wave 2 — Clean Library Platform
 
 > **Reframe note (2026-05-05)**: PRD-001 был изначально написан как «backend foundation для Hub» с YAML composition framework + Hub adapters в scope. После аудита `docs/dd.md` и user pivot — переписан в **library-first** философию: чистые либы, на которых можно собрать любой проект (Hub — частный случай). YAML composition framework переехал в **Wave 3** (ADR-001 superseded). Hub-specific adapters (`git-client`, `artifact-client`, `rdf-client`) — отложены до момента, когда Hub реально пишет код. m9s-example стал **acceptance test** для всей foundation.
+
+> **Amendment 2026-05-05 — Sprint 3.2 scope redesign per ADR-004**: audit-pre-sprint-3-2 (5 reviewers) выявил 3 critical scope-level findings: `@gertsai/observe` collision (PRD-001 OTel SDK vs upstream ClickHouse-backed LLM-observability SDK), `@gertsai/database` semantics (PRD-001 agnostic 3-method client vs upstream Prisma 29k LOC schema), `@gertsai/auth-moleculer` transitive `@gerts/auth` workspace drag (19 субдиректорий). **ADR-004 (active 2026-05-05)** фиксирует решение:
+>
+> - **FR-016 `@gertsai/config`** — strategy: **Shim** (re-export from `api-core/runtime/node`) **OR defer**; финальный выбор в SPEC-007.
+> - **FR-017 `@gertsai/tenant`** — strategy: **Preserve-history** (P) — pure types + ctx-shape interface, sub-path `/moleculer` для adapter.
+> - **FR-018 ~~`@gertsai/observe`~~ → `@gertsai/otel`** — RENAMED. Strategy: **Fresh** (F) — OTel SDK setup, lazy peer-dep `@opentelemetry/*`. Upstream LLM-observability SDK deferred к отдельной wave под другим именем (e.g. `@gertsai/llm-observe`).
+> - **FR-019 ~~`@gertsai/database`~~ → `@gertsai/pg-client`** — RENAMED. Strategy: **Fresh** (F) — agnostic 3-method client interface (per ADR-011 invariants); **NOT** history-preserved from upstream Prisma.
+> - **FR-019 (additional) `@gertsai/queue`** — strategy: **Preserve-history + fresh boundary** (P+F); import direction specified в SPEC-007.
+> - **FR-020 ~~`@gertsai/auth-moleculer`~~** — DROPPED from Sprint 3.2. Auth остаётся в `@gertsai/api-core/moleculer/auth/` subpath до отдельного ADR + `@gertsai/auth` extraction wave.
+>
+> Sprint 3.2 scope теперь = **5 packages** (config, tenant, otel, pg-client, queue) вместо 6. См. ADR-004 для полного rationale + invariants + rollback plan. SPEC-007 (Sprint 3.2 implementation checklist) implements ADR-004.
 
 ## Progress
 
@@ -457,6 +471,8 @@ And   `controller.setWorkflows(...)` in `@gertsai/api-core/moleculer` accepts Wo
 ---
 
 > **Next step**: review + activate ADR-003 + SPEC-001; затем Sprint 1 implementation (~3 часа); затем Sprint 2 typia smoke + decomposition Phase A.
+
+
 
 
 
