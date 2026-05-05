@@ -1,7 +1,7 @@
 artifact_id: ADR-002
 workflow_type: greenfield
-current_phase: validate
-advanced_at: 2026-05-05T07:02:19.960463Z
+current_phase: done
+advanced_at: 2026-05-05T11:41:50.362745Z
 history:
 - to: shape
   at: 2026-05-05T07:00:30.769894Z
@@ -10,4 +10,8 @@ history:
   to: validate
   at: 2026-05-05T07:02:19.960463Z
   reason: 'auto: forgeplan_validate PASS'
+- from: validate
+  to: done
+  at: 2026-05-05T11:41:50.362745Z
+  reason: 'auto: forgeplan_activate'
 schema_version: 1

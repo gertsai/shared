@@ -7,7 +7,7 @@ last_modified_by: claude-code/2.1.128
 links:
 - target: PRD-001
   relation: based_on
-status: draft
+status: active
 title: Sprint 2 — Decomposition Phase A checklist (api-core subpaths + workflow contracts + tsconfig migration)
 ---
 
@@ -565,6 +565,8 @@ Phases с conflict-free worker scope:
 | docs/dd.md | external doc | informs |
 
 > **Next step**: после approve этого SPEC-002 — запустить Sprint 2 implementation team (Phase 1 → 2 → 3 → 4 → 5).
+
+
 
 
 
