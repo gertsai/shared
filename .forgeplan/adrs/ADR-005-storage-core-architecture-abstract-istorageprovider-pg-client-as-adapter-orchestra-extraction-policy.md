@@ -241,3 +241,5 @@ NOT admissible под этим ADR:
 
 > **Next step**: Activate PRD-002 → Activate ADR-005 → SPEC-007 → Build → SPEC-008 → Build.
 
+
+
