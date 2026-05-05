@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-import type { WorkflowDefinition } from '@gertsai/core';
-
 /**
- * Map of workflow name → WorkflowDefinition.
- * Used by ApiController.setWorkflows() to register workflows на broker.
+ * NOTE (Sprint 3.1): `WorkflowRegistration` moved to `./setWorkflows` so the
+ * setter's signature lives next to its type. This file is intentionally kept
+ * as a stable module path; future Moleculer-workflow-specific types may land
+ * here without revisiting the barrel.
  */
-export type WorkflowRegistration = Record<string, WorkflowDefinition>;
+export {};

@@ -12,6 +12,7 @@ import type { BrokerOptions, LoggerInstance, ServiceSchema } from 'moleculer';
 import { ServiceBroker } from 'moleculer';
 
 import config from '../../config';
+import type { MoleculerWorkflowSchema } from '../../moleculer/workflow/adapter';
 import { ResponseCode } from '../apiResponse';
 import type { ContextMeta, TypiaValidator } from '../common';
 import {
@@ -449,6 +450,42 @@ export class ApiController<
    */
   setChannels(channels: Record<string, unknown>): void {
     this._channels = { ...this._channels, ...channels };
+  }
+
+  /**
+   * Pending workflows, keyed by registration name.
+   * Populated by {@link _registerWorkflow} (used by `setWorkflows()` helper),
+   * consumed by {@link _attachWorkflowsToServices} at schema-build time so the
+   * `@moleculer/workflows` middleware can pick them up during broker start.
+   * @private
+   */
+  private _pendingWorkflows: Map<string, MoleculerWorkflowSchema> = new Map();
+
+  /**
+   * @internal Used by setWorkflows() helper. NOT a public API.
+   *
+   * Stores an adapted `MoleculerWorkflowSchema` to be attached to the
+   * synthesized service schema before broker.start(). Calling this directly
+   * is unsupported — go through `setWorkflows(controller, defs)`.
+   */
+  public _registerWorkflow(name: string, schema: MoleculerWorkflowSchema): void {
+    this._pendingWorkflows.set(name, schema);
+  }
+
+  /**
+   * Attach pending workflows onto the synthesized Moleculer service schema.
+   * No-op when no workflows were registered. Mutates `synthSchema` in place
+   * to add a `workflows` block (mirrors `@moleculer/workflows` contract).
+   * @private
+   */
+  private _attachWorkflowsToServices(synthSchema: ServiceSchema): void {
+    if (this._pendingWorkflows.size === 0) return;
+    const workflowsBlock: Record<string, MoleculerWorkflowSchema> = {};
+    for (const [name, schema] of this._pendingWorkflows) {
+      workflowsBlock[name] = schema;
+    }
+    (synthSchema as unknown as { workflows: Record<string, MoleculerWorkflowSchema> }).workflows =
+      workflowsBlock;
   }
 
   /**
@@ -991,7 +1028,7 @@ export class ApiController<
     // Save reference to controller for use in started/stopped methods
     const controller = this satisfies ApiController<ServiceVersion, ServiceName, ServiceContext>;
 
-    return {
+    const schema: CoreServiceSchema = {
       name: this._options.name,
       version: this._options.version,
       // Moleculer service dependencies (wait for these services before started handler)
@@ -1415,6 +1452,14 @@ export class ApiController<
         }
       },
     };
+
+    // RFC-001 amendment 2026-05-05: workflow attach (Option a)
+    // Attach pending workflows alongside channels (synthesized schema, pre-broker.start).
+    // Mirrors the existing channels attachment pattern; @moleculer/workflows middleware
+    // will read schema.workflows during service registration.
+    this._attachWorkflowsToServices(schema as unknown as ServiceSchema);
+
+    return schema;
   }
 
   /**

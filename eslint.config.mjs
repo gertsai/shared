@@ -5,9 +5,41 @@
  * Migrated from .eslintrc.cjs (legacy eslintrc format) to flat config —
  * ESLint 10 deprecated eslintrc without an opt-in flag. See SPEC-004 §U-9.
  *
- * Currently scoped narrowly: enforces no-restricted-imports rule for
- * @gertsai/api-core root path (per ADR-003 §I-9). Sprint 3+ may add more.
+ * Scope:
+ *   1. Workspace-wide `no-restricted-imports` for @gertsai/api-core root
+ *      path (per ADR-003 §I-9, surfaces ADR-009 pre-rename guard).
+ *   2. Hex-layer enforcement for examples/m9s-example/src/** via
+ *      eslint-plugin-boundaries — mirrors the rules in
+ *      examples/m9s-example/.dependency-cruiser.cjs (Sprint 3.1 §W-8).
+ *      Dependency-cruiser remains the CI gate; boundaries provides the
+ *      same feedback live in the IDE.
  */
+
+import tsParser from '@typescript-eslint/parser';
+import tsPlugin from '@typescript-eslint/eslint-plugin';
+import boundaries from 'eslint-plugin-boundaries';
+
+/**
+ * Shared `no-restricted-imports` policy for the @gertsai/api-core root path.
+ * ADR-003 §I-9 (subpath imports) + ADR-009 (rename guard).
+ */
+const apiCoreImportRule = [
+  'warn',
+  {
+    paths: [
+      {
+        name: '@gertsai/api-core',
+        message:
+          "Use subpath imports: '@gertsai/api-core/contracts' | '/moleculer' | '/runtime/node'. See ADR-003.",
+      },
+      {
+        name: '@gerts/api-core',
+        message:
+          "Pre-rename name. Use '@gertsai/api-core/<subpath>' instead. See ADR-009.",
+      },
+    ],
+  },
+];
 
 export default [
   {
@@ -21,7 +53,9 @@ export default [
       '.changeset/**',
     ],
   },
+  // Workspace-wide rules for JS/CJS/MJS files (preserves Sprint 3.0 §U-9 scope).
   {
+    files: ['**/*.{js,cjs,mjs}'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
@@ -34,22 +68,184 @@ export default [
         __filename: 'readonly',
         module: 'readonly',
         require: 'readonly',
+        exports: 'readonly',
       },
     },
     rules: {
-      'no-restricted-imports': [
-        'warn',
+      'no-restricted-imports': apiCoreImportRule,
+    },
+  },
+  // ===========================================================================
+  // eslint-plugin-boundaries — hex layer enforcement for examples/m9s-example
+  // ---------------------------------------------------------------------------
+  // Layer matrix mirrors examples/m9s-example/.dependency-cruiser.cjs.
+  // dep-cruiser is allow-by-default + explicit FORBID list, while boundaries
+  // is deny-by-default + explicit ALLOW list — so we translate the inverse:
+  //
+  //   forbid: domain     → !domain (i.e. domain leaks out)        → allow: domain
+  //   forbid: application→ infrastructure / services / lib / mol  → allow: domain, application
+  //   forbid: services   → infrastructure (direct, sans ctx)      → allow: application, lib, composition, services, domain
+  //   forbid: domain     → infrastructure                         → covered above
+  //
+  //   domain         → domain (intra; ports + entities)
+  //   application    → domain, application (intra)
+  //   infrastructure → domain, infrastructure (intra; domain/ports/* via DI)
+  //   services       → application, lib, composition, services, domain
+  //                    (NOT infrastructure direct — must wire via composition)
+  //   lib            → lib (only @gertsai/api-core wrappers)
+  //   mol-services   → services, lib, mol-services
+  //   composition    → domain, application, infrastructure, lib, composition
+  //                    (composition root — knows all)
+  //
+  // Notes:
+  //   - dep-cruiser remains the authoritative CI gate (`pnpm depcruise`).
+  //     Boundaries provides the same feedback live in the IDE — Sprint 3.1 §W-8.
+  //   - Scope is narrowed to examples/m9s-example/src/** so we don't start
+  //     linting all .ts files repo-wide (Sprint 3.0 baseline only linted
+  //     .js/.cjs/.mjs; broader TS lint would surface noise unrelated to W-8).
+  //   - The @typescript-eslint plugin is registered (without enabling its
+  //     rules) so existing inline `// eslint-disable-next-line
+  //     @typescript-eslint/...` directives don't fail rule-not-found.
+  // ===========================================================================
+  {
+    files: ['examples/m9s-example/src/**/*.{ts,tsx}'],
+    languageOptions: {
+      parser: tsParser,
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      parserOptions: {
+        ecmaVersion: 2022,
+        sourceType: 'module',
+      },
+    },
+    plugins: {
+      boundaries,
+      '@typescript-eslint': tsPlugin,
+    },
+    settings: {
+      'boundaries/elements': [
         {
-          paths: [
+          type: 'domain',
+          pattern: 'examples/m9s-example/src/domain/**/*',
+          mode: 'file',
+        },
+        {
+          type: 'application',
+          pattern: 'examples/m9s-example/src/application/**/*',
+          mode: 'file',
+        },
+        {
+          type: 'infrastructure',
+          pattern: 'examples/m9s-example/src/infrastructure/**/*',
+          mode: 'file',
+        },
+        {
+          type: 'services',
+          pattern: 'examples/m9s-example/src/services/**/*',
+          mode: 'file',
+        },
+        {
+          type: 'lib',
+          pattern: 'examples/m9s-example/src/lib/**/*',
+          mode: 'file',
+        },
+        {
+          type: 'mol-services',
+          pattern: 'examples/m9s-example/src/mol-services/**/*',
+          mode: 'file',
+        },
+        {
+          type: 'composition',
+          pattern: 'examples/m9s-example/src/composition/**/*',
+          mode: 'file',
+        },
+      ],
+      'boundaries/include': ['examples/m9s-example/src/**/*'],
+      'boundaries/ignore': ['**/*.test.ts', '**/*.spec.ts'],
+      // Boundaries resolves import targets via eslint-import-resolver-node
+      // (its bundled default). Teach it to recognize TS file extensions so
+      // relative imports like `'../infrastructure/foo'` map back to a real
+      // file path — without this every `to` is `isUnknown: true` and rules
+      // silently skip the dependency.
+      'import/resolver': {
+        node: {
+          extensions: ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs', '.json'],
+        },
+      },
+    },
+    linterOptions: {
+      // Source files contain inline `// eslint-disable-next-line
+      // @typescript-eslint/no-explicit-any` directives. We register the
+      // plugin above (so rules resolve) but keep them disabled — without
+      // this, ESLint reports those disables as "Unused" warnings.
+      reportUnusedDisableDirectives: 'off',
+    },
+    rules: {
+      'no-restricted-imports': apiCoreImportRule,
+      'boundaries/dependencies': [
+        'error',
+        {
+          default: 'disallow',
+          rules: [
+            // domain → domain (intra-layer entity/port deps only)
             {
-              name: '@gertsai/api-core',
-              message:
-                "Use subpath imports: '@gertsai/api-core/contracts' | '/moleculer' | '/runtime/node'. See ADR-003.",
+              from: { type: 'domain' },
+              allow: [{ to: { type: 'domain' } }],
             },
+            // application → domain (use cases consume ports), + intra-layer
             {
-              name: '@gerts/api-core',
-              message:
-                "Pre-rename name. Use '@gertsai/api-core/<subpath>' instead. See ADR-009.",
+              from: { type: 'application' },
+              allow: [
+                { to: { type: 'domain' } },
+                { to: { type: 'application' } },
+              ],
+            },
+            // infrastructure → domain (adapters implement ports), + intra-layer
+            {
+              from: { type: 'infrastructure' },
+              allow: [
+                { to: { type: 'domain' } },
+                { to: { type: 'infrastructure' } },
+              ],
+            },
+            // services → application/composition/lib/domain + intra-layer.
+            // NO infrastructure-direct (per .dependency-cruiser.cjs
+            // `no-services-to-infrastructure-direct`) — services wire
+            // infrastructure via composition root.
+            {
+              from: { type: 'services' },
+              allow: [
+                { to: { type: 'application' } },
+                { to: { type: 'composition' } },
+                { to: { type: 'lib' } },
+                { to: { type: 'domain' } },
+                { to: { type: 'services' } },
+              ],
+            },
+            // lib → lib (only @gertsai/api-core wrappers; intra-lib only)
+            {
+              from: { type: 'lib' },
+              allow: [{ to: { type: 'lib' } }],
+            },
+            // mol-services → services/lib + intra-layer (thin Moleculer transport)
+            {
+              from: { type: 'mol-services' },
+              allow: [
+                { to: { type: 'services' } },
+                { to: { type: 'lib' } },
+                { to: { type: 'mol-services' } },
+              ],
+            },
+            // composition root — knows all layers (incl. itself)
+            {
+              from: { type: 'composition' },
+              allow: [
+                { to: { type: 'domain' } },
+                { to: { type: 'application' } },
+                { to: { type: 'infrastructure' } },
+                { to: { type: 'lib' } },
+                { to: { type: 'composition' } },
+              ],
             },
           ],
         },

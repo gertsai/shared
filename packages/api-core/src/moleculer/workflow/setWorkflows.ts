@@ -1,20 +1,39 @@
 // SPDX-License-Identifier: Apache-2.0
-import type { WorkflowRegistration } from './types';
+import type { WorkflowDefinition } from '@gertsai/core';
+import { adaptWorkflowDefinition, type MoleculerWorkflowSchema } from './adapter';
 
 /**
- * Register workflows на ApiController.
- *
- * IMPLEMENTATION STATUS: experimental stub (ADR-003 §R-4).
- * Full implementation wires workflows через @moleculer/workflows mixin
- * когда implementation матуреет.
- *
- * Currently: validates definitions structure + console.warn experimental status.
+ * Map of workflow name → WorkflowDefinition.
+ * Used by `setWorkflows` to register workflows on an `ApiController`.
  */
-export function setWorkflows(controller: unknown, workflows: WorkflowRegistration): void {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- workflow inputs/outputs are heterogeneous by nature
+export type WorkflowRegistration = Record<string, WorkflowDefinition<any, any>>;
+
+/** @internal Hook contract used by setWorkflows to register on ApiController. */
+export interface ApiControllerInternalHook {
+  _registerWorkflow(name: string, schema: MoleculerWorkflowSchema): void;
+}
+
+/**
+ * Register one or more workflows on `ApiController`.
+ *
+ * Registrations are attached to the synthesized service schema(s) at
+ * `controller.start()`. Each `WorkflowDefinition` is adapted to the
+ * Moleculer-flavoured schema via `adaptWorkflowDefinition` and handed to the
+ * controller's internal `_registerWorkflow` hook.
+ *
+ * @param controller ApiController instance exposing the internal hook.
+ * @param workflows  Map of workflow name → definition.
+ * @throws {Error} If `workflows` is null/undefined or not an object.
+ */
+export function setWorkflows(
+  controller: ApiControllerInternalHook,
+  workflows: WorkflowRegistration,
+): void {
   if (!workflows || typeof workflows !== 'object') {
     throw new Error('setWorkflows: workflows must be a non-null object');
   }
-  // eslint-disable-next-line no-console
-  console.warn('[setWorkflows] Workflows API is experimental in Wave 2. See ADR-003 §R-4.');
-  // Real implementation в Phase A2 / Wave 3.
+  for (const [name, def] of Object.entries(workflows)) {
+    controller._registerWorkflow(name, adaptWorkflowDefinition(name, def));
+  }
 }

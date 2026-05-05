@@ -18,6 +18,12 @@ export interface WorkflowDefinition<TInput = unknown, TOutput = unknown> {
   readonly name: string;
   /** Schema version для compatibility tracking */
   readonly version: number;
+  /**
+   * Optional fastestValidator schema for input validation in @moleculer/workflows
+   * runtime adapter. Language-neutral (plain object) so non-Moleculer adapters can
+   * ignore or translate it. Additive and non-breaking — older definitions remain valid.
+   */
+  readonly params?: object;
   /** Handler — pure function от input + signal до output */
   readonly handler: (input: TInput, signal: WorkflowSignal) => Promise<TOutput>;
 }
