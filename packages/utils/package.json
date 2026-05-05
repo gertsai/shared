@@ -22,7 +22,7 @@
     "dev": "tsc --watch",
     "build": "pnpm run \"/^build:(esm|cjs)$/\"",
     "build:esm": "tsc",
-    "build:cjs": "tsc --outDir dist/cjs --module commonjs"
+    "build:cjs": "tsc --outDir dist/cjs --module commonjs --moduleResolution node"
   },
   "dependencies": {
     "consola": "^3.2.3",
