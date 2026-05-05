@@ -29,7 +29,7 @@ packages, extracted из `gertsai_codex` (RFC-extracted с preserved git history
 ## Что это за проект
 
 - **Тип**: TypeScript-only multi-package OSS monorepo (npm packages).
-- **Scope**: `@gertsai/*` — **19 packages** (14 first-wave v0.1.0 + 5 foundation libs Wave 1 v0.2.0 per ADR-004).
+- **Scope**: `@gertsai/*` — **23 packages** (14 first-wave v0.1.0 + 5 foundation libs Wave 1 v0.2.0 per ADR-004 + 4 entity/session/audit + di-enhanced Wave 4A per PRD-002 + ADR-005).
 - **Стек**: Node ≥22 LTS · pnpm 10.x · TypeScript 5.9 · Vitest · moonrepo · Changesets.
 - **Источник foundation-решений**: `~/Work/GertsHub/.forgeplan/{adrs,epics,evidence}/`
   (read-only, не править отсюда). Главные: ADR-005, ADR-006, ADR-009, EPIC-007, EVID-008.
@@ -95,17 +95,20 @@ pnpm-workspace.yaml       ← packages: ['packages/*']
 | **1** | **`@gertsai/tenant`** | — | **Sprint 3.2 W-2 (F fresh)** | TenantId brand + getTenantIdStrict/Optional + `/moleculer` adapter |
 | **1** | **`@gertsai/otel`** | — | **Sprint 3.2 W-3 (F fresh)** | OTel SDK setup + `/moleculer` tracing; lazy peer-deps |
 | **1** | **`@gertsai/pg-client`** | — | **Sprint 3.2 W-4 (F fresh)** | agnostic 3-method PgClient interface + mockPgClient (ADR-011 I-1/I-2) |
-| 2 | `@gertsai/di` | utils | first wave | DI container |
+| **1** | **`@gertsai/session`** | — | **Sprint 3.4 W-4A-2 (F fresh)** | Session class + AbstractDialog + 24-value OperatorType + dataAccessUuid scoping per ADR-005 |
+| **1** | **`@gertsai/entity-audit`** | session | **Sprint 3.4 W-4A-3 (F fresh)** | MutationMarks + UpdateActionMap + 4 builder funcs (set/update/delete/restore) — backend-agnostic Timestamp |
+| 2 | `@gertsai/di` | utils | **enhanced Sprint 3.4 W-4A-4 (E)** | DI container + new guards/destroy/inference helpers (Orchestra orchlab/di patterns) |
 | 2 | `@gertsai/flux` | collection | first wave | reactive streams |
 | **2** | **`@gertsai/queue`** | — | **Sprint 3.2 W-5 (P+F)** | BullMQ wrappers + `/standalone` runner; consumed BY api-core (Sprint 3.x migration) |
+| **2** | **`@gertsai/entity`** | session | **Sprint 3.4 W-4A-1 (F fresh)** | Model + Entity + EntityWithMetadata base classes; pluggable ReactiveAdapter; `/vue` subpath; multi-framework adapter snippets in README |
 | 3 | `@gertsai/core` | llm-costs | first wave | platform contracts (Workflow types, Sprint 3.1 W-1; Sprint 3.0.1 F-9 meta) |
 | 3 | `@gertsai/hsm` | — | first wave | hierarchical state machines |
 | 4 | `@gertsai/auth-openfga` | core | first wave | OpenFGA ReBAC adapter |
 | 4 | `@gertsai/api-core` | core, auth-openfga | first wave | Moleculer SDK; subpaths /contracts /moleculer /runtime/node (Sprint 2 ADR-003) |
 | 5 | `@gertsai/api-rlr` | api-core | first wave | rate limiter / retry loop runtime (ADR-011) |
 
-**Strategy markers** (per ADR-004):
-- **P** = Preserve git history; **F** = Fresh code; **S** = Shim/thin re-export; **P+F** = Preserve-history core + fresh boundary.
+**Strategy markers** (per ADR-004 + ADR-005 extensions):
+- **P** = Preserve git history; **F** = Fresh code; **S** = Shim/thin re-export; **P+F** = Preserve-history core + fresh boundary; **E** = Enhancement of existing package (additive only); **A** = Additive non-breaking adapter extension.
 
 **Что важно знать**:
 - All 14 first-wave + 5 Sprint 3.2 packages: uniform tsup dual ESM+CJS (Sprint 3.0 §U-3..U-6).
