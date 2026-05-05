@@ -51,6 +51,7 @@ export default [
       '**/*.tsbuildinfo',
       '.moon/cache/**',
       '.changeset/**',
+      '.forgeplan-web/**',
     ],
   },
   // Workspace-wide rules for JS/CJS/MJS files (preserves Sprint 3.0 §U-9 scope).

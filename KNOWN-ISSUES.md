@@ -113,6 +113,47 @@ packages/m9s-cache
   └── ✕ unmet peer redlock@^4.0.0: found 5.0.0-beta.2
 ```
 
-Both are warnings only. Build and tests pass. Will be addressed in v0.1.x by
-either downgrading TypeScript to 5.8 or upgrading the peer-declaring
-dependencies once compatible versions ship.
+Both are warnings only. Build and tests pass.
+
+**TypeScript pin (Sprint 3.0.1, F-7):** TypeScript is intentionally pinned to
+the exact version `5.9.3` workspace-wide via the root `package.json` (single
+source of truth — individual `packages/*/package.json` no longer declare a
+`typescript` devDependency). The `@ryoppippi/unplugin-typia 2.6.5` peer range
+(`>=4.8.0 <5.9.0`) is therefore knowingly violated. Tracked: Sprint 3.x will
+either bump `@ryoppippi/unplugin-typia` to a release that widens the peer
+constraint, or pin workspace TS to a 5.8.x line if upstream typia is slow to
+update. The full test suite passes green on 5.9.3, so the warning is
+informational only.
+
+The `redlock` warning is unchanged: `moleculer 0.14.35` declares
+`redlock@^4.0.0` as a peer, but `redlock@5.0.0-beta.2` is the only ESM-native
+release and is what `@gertsai/m9s-cache` is wired against. Will be addressed
+in v0.1.x once moleculer ships a compatible peer range.
+
+## 8. Subpath imports require `moduleResolution: "node16"` or higher
+
+`@gertsai/core` (`/rag`, `/llm`) and `@gertsai/api-core` (`/contracts`,
+`/moleculer`, `/runtime/node`) are exposed via `package.json#exports` subpath
+keys. To resolve their types, downstream TypeScript consumers must use
+`moduleResolution: "node16"`, `"nodenext"`, or `"bundler"`.
+
+For consumers stuck on `moduleResolution: "node"` (TS pre-4.7 or Node10
+profile), Sprint 3.0.1 added `typesVersions` fallback maps to both packages
+(see `packages/{core,api-core}/package.json`). The fallback maps each subpath
+to its `dist/<subpath>/index.d.ts` file, providing best-effort Node10
+resolution. Cases not covered by the fallback (e.g. unusual TS resolver
+configurations) should upgrade to `node16`+; documented in
+`audit-pre-sprint-3-2` (production-validator F-P-1, type-auditor F-T-4).
+
+## 9. `@gertsai/api-core` — `oauth.class.ts` placeholder console.log calls
+
+`packages/api-core/src/lib/oauth/oauth.class.ts:151..174` contains five
+`console.log(...)` lines (`'Getting user'`, `'Revoking token'`, etc.) that
+are placeholder bodies of `OAuth2Server`-style provider methods. These are
+extraction artifacts — they were stub bodies in the upstream code and were
+not replaced during the Wave 2 extraction.
+
+Real consumers wiring an OAuth provider will see noisy logs in production.
+Workaround: pass a custom provider implementation via `setAuthProvider(...)`
+that overrides these stubs. Permanent fix planned for the @gertsai/auth-*
+extraction (Sprint 3.x or Wave 3).

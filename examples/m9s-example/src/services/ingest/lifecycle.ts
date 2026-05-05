@@ -74,9 +74,31 @@ controller.setRestBasePath('/');
 // is safe because `infrastructure` is a module-load singleton (see
 // `src/composition/infrastructure.ts`). The lifecycle handler reuses
 // the same instance via closure.
+//
+// Sprint 3.0.1 audit F-CR-3 asked: "should this move into addStartedHandler
+// for test-isolation symmetry with the rest of the file?" The answer is
+// **no, by design**: module-load registration is a HARD runtime
+// requirement. `@moleculer/workflows` middleware reads `schema.workflows`
+// at `broker.createService(schema)` time (during the synchronous service-
+// creation path in `ApiController.Start({services})`) — which fires
+// BEFORE any `addStartedHandler` callback runs. If `setWorkflows` were
+// deferred into `addStartedHandler`, the middleware would see an empty
+// workflows block and `broker.wf.run('v1.ingest.process', ...)` would
+// throw at runtime (per Sprint 3.1 EVID-005 timing analysis).
+//
+// The test-isolation cost is small: `vi.mock` of infrastructure already
+// runs before this module is imported (vitest hoists `vi.mock` calls
+// above imports). For tests that need to substitute the use case
+// itself, use `setAuthProvider`-style controller hooks rather than
+// re-mocking this module-load side effect.
 // ---------------------------------------------------------------------------
 const ingestUseCase = new IngestDocumentUseCase(infrastructure);
 
+// TODO Sprint 3.0.1: drop the `as unknown as Parameters<...>` cast once F-3
+// (type-system-worker) lands `class ApiController implements
+// ApiControllerInternalHook`. Until then, the cast bridges the structural-
+// vs-nominal gap between `ApiController`'s `_registerWorkflow` method and
+// the `ApiControllerInternalHook` contract that `setWorkflows` requires.
 setWorkflows(controller as unknown as Parameters<typeof setWorkflows>[0], {
   process: createIngestProcessWorkflow({ useCase: ingestUseCase }),
 });

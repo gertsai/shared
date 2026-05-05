@@ -36,6 +36,45 @@ import { Middleware as WorkflowsMiddleware } from '@moleculer/workflows';
 import config from './project.config';
 
 // ---------------------------------------------------------------------------
+// Sprint 3.0.1 audit F-P-6 — design note on the WorkflowsMiddleware import
+//
+// `@gertsai/api-core/moleculer` exposes a `createMoleculerConfig({workflows})`
+// helper that lazy-`require`s `@moleculer/workflows` only when the option is
+// set, keeping the package an OPTIONAL peer-dep for consumers that do not
+// use workflows. Production consumers SHOULD prefer that path.
+//
+// This example pins `WorkflowsMiddleware` via static import instead, for
+// three deliberate reasons:
+//   1. The example demonstrates the alternative (manual middleware injection)
+//      so consumers can compare and pick. Both paths are valid.
+//   2. `createMoleculerConfig()` is opinionated for the upstream Hub stack
+//      (Bunyan + GCP logging, healthcheck middleware, fixed validator/cacher
+//      defaults). The example needs a different cacher (`M9sCacheCacher` with
+//      memory driver), a custom retry policy, console logger, validator off,
+//      and circuit-breaker off — overriding all of those through `merge()`
+//      in `optionsOverride` would be noisier than just hand-rolling the
+//      config here.
+//   3. The example explicitly bundles `@moleculer/workflows` as a regular
+//      `dependency` (not a peer-dep) — the lazy-require is a packaging
+//      optimisation that does not apply to first-party demo code.
+//
+// If you are copying THIS file into a real product, replace the static
+// import + manual `WorkflowsMiddleware(...)` block below with:
+//
+//   import { createMoleculerConfig } from '@gertsai/api-core/moleculer';
+//   export default createMoleculerConfig(
+//     {
+//       // any per-product overrides...
+//     },
+//     {
+//       workflows: { eventLogStore: 'redis', redis: { host: ... } },
+//     },
+//   );
+//
+// — and drop `@moleculer/workflows` from your direct deps.
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
 // Cacher: M9sCacheCacher + MemoryCacheDriver
 //   The cast is required because Moleculer's `Cacher` type and our class
 //   are structurally compatible but not nominal — same pattern as pipeline.
