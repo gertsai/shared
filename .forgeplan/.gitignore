@@ -1,0 +1,11 @@
+# Forgeplan derived/cache files — not committed.
+# Source of truth: markdown в prds/, rfcs/, adrs/, specs/, epics/, evidence/, problems/, solutions/, refresh/
+# + state YAML в state/
+
+lance/
+logs/
+config.yaml
+.lock
+memory/
+discovery/
+notes/
