@@ -25,8 +25,8 @@
  * });
  * ```
  */
-import { ApiController } from '@gertsai/api-core';
-import type { ServiceContextBase } from '@gertsai/api-core';
+import { ApiController } from '@gertsai/api-core/moleculer';
+import type { ServiceContextBase } from '@gertsai/api-core/moleculer';
 
 export function resolveExampleController<
   V extends string,

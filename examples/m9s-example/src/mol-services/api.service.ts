@@ -1,4 +1,4 @@
-import { createApiService } from '@gertsai/api-core';
+import { createApiService } from '@gertsai/api-core/moleculer';
 import RLRMiddleware from '@gertsai/api-rlr';
 import IORedis from 'ioredis';
 

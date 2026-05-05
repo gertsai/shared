@@ -23,7 +23,7 @@
  * Producer side lives in `actions/ingest-document.action.ts` and uses
  * `service.addJob(QUEUE_NAME, JOB_PROCESS_DOCUMENT, payload)`.
  */
-import type { QueueHandlerCtx } from '@gertsai/api-core';
+import type { QueueHandlerCtx } from '@gertsai/api-core/moleculer';
 import type Moleculer from 'moleculer';
 
 import { resolveExampleController } from '../../../../lib/example-controller';

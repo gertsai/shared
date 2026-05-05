@@ -12,7 +12,7 @@
  * No queue handle on the context — those methods come from api-core directly.
  */
 
-import type { ServiceContextBase } from '@gertsai/api-core';
+import type { ServiceContextBase } from '@gertsai/api-core/moleculer';
 
 import type { IngestDocumentUseCase } from '../../application/IngestDocumentUseCase';
 import type { IDocumentStore } from '../../domain/ports/IDocumentStore';

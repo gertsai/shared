@@ -1,4 +1,4 @@
-import type { ResponseCode, ResponseDataType } from '@gertsai/api-core';
+import type { ResponseCode, ResponseDataType } from '@gertsai/api-core/contracts';
 import { Errors } from 'moleculer';
 const { MoleculerError } = Errors;
 

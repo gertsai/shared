@@ -6,7 +6,7 @@
  * action.
  */
 
-import type { ServiceContextBase } from '@gertsai/api-core';
+import type { ServiceContextBase } from '@gertsai/api-core/moleculer';
 
 import type { SearchDocumentsUseCase } from '../../application/SearchDocumentsUseCase';
 import type { IChunkStore } from '../../domain/ports/IChunkStore';

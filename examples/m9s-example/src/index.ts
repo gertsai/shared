@@ -42,7 +42,7 @@
 // 1. Side-effect: register all domain controllers + lifecycle handlers.
 import './services';
 
-import { ApiController } from '@gertsai/api-core';
+import { ApiController } from '@gertsai/api-core/moleculer';
 
 import config from '../project.config';
 import brokerConfig from '../moleculer.config';

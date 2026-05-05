@@ -7,8 +7,8 @@
     "declarationMap": true,
     "skipLibCheck": true,
     "noEmitOnError": false,
-    "module": "CommonJS",
-    "moduleResolution": "node",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "types": ["node"]

@@ -18,7 +18,7 @@
  * The action stays pure transport — all business logic lives in
  * `IngestDocumentUseCase`, wired via the lifecycle handler.
  */
-import { APIError, ResponseCode } from '@gertsai/api-core';
+import { APIError, ResponseCode } from '@gertsai/api-core/contracts';
 import typia from 'typia';
 
 import config from '../../../../../project.config';

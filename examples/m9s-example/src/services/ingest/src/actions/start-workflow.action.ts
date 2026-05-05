@@ -25,7 +25,7 @@
  */
 import type { ServiceBroker } from 'moleculer';
 
-import { APIError, ResponseCode } from '@gertsai/api-core';
+import { APIError, ResponseCode } from '@gertsai/api-core/contracts';
 import typia from 'typia';
 
 import { resolveExampleController } from '../../../../lib/example-controller';

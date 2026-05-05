@@ -12,7 +12,7 @@
  *
  * Mirror: `apps/pipeline/src/services/graph/src/actions/*.ts`.
  */
-import { APIError, ResponseCode } from '@gertsai/api-core';
+import { APIError, ResponseCode } from '@gertsai/api-core/contracts';
 import typia from 'typia';
 
 import { resolveExampleController } from '../../../../lib/example-controller';

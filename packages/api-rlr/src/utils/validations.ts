@@ -1,6 +1,6 @@
 import { isIP } from 'node:net';
 
-import { APIError, ResponseCode } from '@gertsai/api-core';
+import { APIError, ResponseCode } from '@gertsai/api-core/contracts';
 import type { IncomingRequest } from 'moleculer-web';
 
 import type { Store } from './types.js';
