@@ -9,7 +9,7 @@ links:
   relation: based_on
 - target: PRD-001
   relation: based_on
-status: draft
+status: active
 title: Sprint 3.1 — workflows full implementation + ESLint boundaries IDE feedback
 ---
 
@@ -380,6 +380,8 @@ Phase C (sequential by team-lead):
 | EVID-003 (Sprint 2 complete) | Evidence | informs |
 
 > **Next step**: после approve SPEC-003 — Sprint 3.1 implementation team на feat/sprint-3-1-workflows.
+
+
 
 
 

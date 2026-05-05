@@ -1,7 +1,7 @@
 artifact_id: SPEC-003
 workflow_type: greenfield
-current_phase: validate
-advanced_at: 2026-05-05T11:52:08.227487Z
+current_phase: done
+advanced_at: 2026-05-05T19:23:54.495674Z
 history:
 - to: shape
   at: 2026-05-05T11:49:07.133210Z
@@ -10,4 +10,8 @@ history:
   to: validate
   at: 2026-05-05T11:52:08.227487Z
   reason: 'auto: forgeplan_validate PASS'
+- from: validate
+  to: done
+  at: 2026-05-05T19:23:54.495674Z
+  reason: 'auto: forgeplan_activate'
 schema_version: 1
