@@ -9,7 +9,7 @@ links:
   relation: based_on
 - target: ADR-003
   relation: refines
-status: draft
+status: active
 title: Moleculer workflows integration design — controller.setWorkflows full implementation
 ---
 
@@ -317,6 +317,8 @@ export const ingestProcessWorkflow: WorkflowDefinition<IngestInput, IngestResult
 | EVID-003 (Sprint 2 complete) | Evidence | informs (foundation для Sprint 3.1) |
 
 > **Next step**: SPEC-003 (Sprint 3.1 implementation checklist) → Sprint 3.1 implementation team.
+
+
 
 
 
