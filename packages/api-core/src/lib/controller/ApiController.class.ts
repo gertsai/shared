@@ -1141,7 +1141,10 @@ export class ApiController<
           } catch (error) {
             // Startup diagnostics — show actionable ASCII-box with fix suggestions
             try {
-              const { DiagnosticRegistry } = await import('../diagnostics');
+              const { DiagnosticRegistry, registerBuiltinDiagnostics } = await import(
+                '../diagnostics'
+              );
+              registerBuiltinDiagnostics();
               const svcName = `${controller._options.version}.${controller._options.name}`;
               const result = DiagnosticRegistry.diagnose(svcName, error);
               if (result.matched) {

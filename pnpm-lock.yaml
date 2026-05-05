@@ -132,6 +132,9 @@ importers:
       '@google-cloud/logging-bunyan':
         specifier: ^5.1.0
         version: 5.1.0(bunyan@1.8.15)
+      '@moleculer/workflows':
+        specifier: ^0.1.2
+        version: 0.1.2(moleculer@0.14.35(bunyan@1.8.15)(debug@4.4.3)(ioredis@5.10.1)(nats@2.29.3)(protobufjs@7.5.6))
       '@r2d2bzh/moleculer-healthcheck-middleware':
         specifier: ^1.0.6
         version: 1.0.6

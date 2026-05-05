@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Core API utilities for Gerts Moleculer services",
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -89,6 +90,7 @@
   },
   "peerDependencies": {
     "@google-cloud/pubsub": "^4.0.0",
+    "@moleculer/workflows": "^0.1.2",
     "ioredis": "^5.8.0",
     "moleculer": "^0.14.35",
     "moleculer-repl": "^0.7.3",
@@ -97,6 +99,9 @@
   },
   "peerDependenciesMeta": {
     "@google-cloud/pubsub": {
+      "optional": true
+    },
+    "@moleculer/workflows": {
       "optional": true
     }
   },
