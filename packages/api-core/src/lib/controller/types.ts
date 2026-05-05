@@ -881,6 +881,14 @@ export interface CoreServiceSchema extends ServiceSchema {
   queues?: ApiControllerQueues;
   $queues: Record<string, Queue>;
   $workers: Record<string, import('bullmq').Worker>;
+  /**
+   * Workflows block consumed by the `@moleculer/workflows` middleware at
+   * broker start. Moleculer's stock `ServiceSchema` does not declare this
+   * field — the middleware extends the schema at runtime — so we surface it
+   * here as an optional structural field, which lets `ApiController` attach
+   * workflows without casting (Sprint 3.0.1, F-10).
+   */
+  workflows?: Record<string, import('../../moleculer/workflow/adapter').MoleculerWorkflowSchema>;
 }
 
 export enum ProcessingEvents {

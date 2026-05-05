@@ -13,6 +13,10 @@ import { ServiceBroker } from 'moleculer';
 
 import config from '../../config';
 import type { MoleculerWorkflowSchema } from '../../moleculer/workflow/adapter';
+import {
+  REGISTER_WORKFLOW,
+  type ApiControllerInternalHook,
+} from '../../moleculer/workflow/setWorkflows';
 import { ResponseCode } from '../apiResponse';
 import type { ContextMeta, TypiaValidator } from '../common';
 import {
@@ -123,7 +127,7 @@ export class ApiController<
   ServiceName extends string,
   ServiceContext extends ServiceContextBase = ServiceContextBase,
   TMeta extends Record<string, any> = ContextMeta,
-> {
+> implements ApiControllerInternalHook {
   /**
    * Reference to the broker instance for accessing broker logger
    * @private
@@ -454,21 +458,23 @@ export class ApiController<
 
   /**
    * Pending workflows, keyed by registration name.
-   * Populated by {@link _registerWorkflow} (used by `setWorkflows()` helper),
-   * consumed by {@link _attachWorkflowsToServices} at schema-build time so the
-   * `@moleculer/workflows` middleware can pick them up during broker start.
+   * Populated via the Symbol-keyed `[REGISTER_WORKFLOW]` hook (used by the
+   * `setWorkflows()` helper), consumed by {@link _attachWorkflowsToServices}
+   * at schema-build time so the `@moleculer/workflows` middleware can pick
+   * them up during broker start.
    * @private
    */
   private _pendingWorkflows: Map<string, MoleculerWorkflowSchema> = new Map();
 
   /**
-   * @internal Used by setWorkflows() helper. NOT a public API.
+   * @internal Used by `setWorkflows()` helper. NOT a public API.
    *
-   * Stores an adapted `MoleculerWorkflowSchema` to be attached to the
-   * synthesized service schema before broker.start(). Calling this directly
-   * is unsupported — go through `setWorkflows(controller, defs)`.
+   * Symbol-keyed (Sprint 3.0.1, F-1) so the property does not appear as a
+   * callable string-keyed member on the emitted `.d.ts` (tsup with
+   * `dts: true` exposes every `public` method regardless of `@internal`
+   * JSDoc). External callers MUST go through `setWorkflows(controller, defs)`.
    */
-  public _registerWorkflow(name: string, schema: MoleculerWorkflowSchema): void {
+  [REGISTER_WORKFLOW](name: string, schema: MoleculerWorkflowSchema): void {
     this._pendingWorkflows.set(name, schema);
   }
 
@@ -476,16 +482,19 @@ export class ApiController<
    * Attach pending workflows onto the synthesized Moleculer service schema.
    * No-op when no workflows were registered. Mutates `synthSchema` in place
    * to add a `workflows` block (mirrors `@moleculer/workflows` contract).
+   *
+   * Sprint 3.0.1 (F-10): `CoreServiceSchema` declares `workflows` as an
+   * optional field, so the previous `as unknown as { workflows: ... }` cast
+   * is no longer needed.
    * @private
    */
-  private _attachWorkflowsToServices(synthSchema: ServiceSchema): void {
+  private _attachWorkflowsToServices(synthSchema: CoreServiceSchema): void {
     if (this._pendingWorkflows.size === 0) return;
     const workflowsBlock: Record<string, MoleculerWorkflowSchema> = {};
     for (const [name, schema] of this._pendingWorkflows) {
       workflowsBlock[name] = schema;
     }
-    (synthSchema as unknown as { workflows: Record<string, MoleculerWorkflowSchema> }).workflows =
-      workflowsBlock;
+    synthSchema.workflows = workflowsBlock;
   }
 
   /**
@@ -1457,7 +1466,8 @@ export class ApiController<
     // Attach pending workflows alongside channels (synthesized schema, pre-broker.start).
     // Mirrors the existing channels attachment pattern; @moleculer/workflows middleware
     // will read schema.workflows during service registration.
-    this._attachWorkflowsToServices(schema as unknown as ServiceSchema);
+    // Sprint 3.0.1 (F-10): no cast — `CoreServiceSchema` now declares `workflows`.
+    this._attachWorkflowsToServices(schema);
 
     return schema;
   }
