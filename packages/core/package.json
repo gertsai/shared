@@ -1,6 +1,7 @@
 {
   "name": "@gertsai/core",
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "description": "Core primitives for gerts.ai platform",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -42,7 +43,8 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsup",

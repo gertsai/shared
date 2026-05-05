@@ -62,7 +62,8 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsup",
@@ -81,7 +82,7 @@
     "typescript"
   ],
   "author": "gerts.ai",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "devDependencies": {
     "typescript": "^5.3.0",
     "vite-tsconfig-paths": "^5.1.4",

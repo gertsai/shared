@@ -22,7 +22,8 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsup",
@@ -41,7 +42,7 @@
     "data-flow"
   ],
   "author": "Gerts AI",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "dependencies": {
     "@gertsai/collection": "workspace:*"
   },

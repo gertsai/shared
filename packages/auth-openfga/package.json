@@ -42,7 +42,8 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsup",
@@ -70,5 +71,5 @@
     "gerts"
   ],
   "author": "gerts.ai",
-  "license": "MIT"
+  "license": "Apache-2.0"
 }

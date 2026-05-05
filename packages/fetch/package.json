@@ -28,7 +28,8 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "dependencies": {
     "undici": "^7.2.3"
@@ -45,7 +46,7 @@
     "client",
     "gerts"
   ],
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/gertsai/gertsai_codex.git",
