@@ -2,8 +2,10 @@
   "name": "@gertsai/fetch",
   "version": "0.1.0",
   "description": "HTTP client wrapper for gerts.ai using undici with Fetch API compatibility",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "import": {
@@ -11,18 +13,22 @@
         "default": "./dist/index.js"
       },
       "require": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
       }
-    }
+    },
+    "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsup",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
   },
   "files": [
-    "dist/**/*"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "dependencies": {
     "undici": "^7.2.3"

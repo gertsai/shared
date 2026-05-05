@@ -2,29 +2,34 @@
   "name": "@gertsai/llm-costs",
   "version": "0.1.0",
   "description": "LLM model costs, capabilities, and provider registry — 2,600+ models, 100+ providers",
-  "types": "./dist/esm/index.d.ts",
-  "files": [
-    "dist"
-  ],
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "import": {
-        "types": "./dist/esm/index.d.ts",
-        "default": "./dist/esm/index.js"
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
       },
       "require": {
-        "types": "./dist/cjs/index.d.ts",
-        "default": "./dist/cjs/index.js"
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
       }
-    }
+    },
+    "./package.json": "./package.json"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
   "scripts": {
-    "dev": "tsc --watch",
-    "build": "pnpm run \"/^build:(esm|cjs)$/\"",
-    "build:esm": "tsc",
-    "build:cjs": "tsc --outDir dist/cjs --module commonjs --moduleResolution node",
-    "sync": "tsx scripts/sync-litellm.ts",
-    "test": "vitest run"
+    "build": "tsup",
+    "test": "vitest run",
+    "sync": "tsx scripts/sync-litellm.ts"
   },
   "devDependencies": {
     "typescript": "^5.2.2",

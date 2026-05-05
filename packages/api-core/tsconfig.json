@@ -1,32 +1,19 @@
 {
   "extends": "../../tsconfig.base.json",
-  "ts-node": {
-    // Do not forget to `npm i -D tsconfig-paths`
-    "require": ["tsconfig-paths/register"]
-  },
   "compilerOptions": {
-    "composite": true,
-    "noEmit": false,
+    "outDir": "./dist",
+    "rootDir": "./src",
     "declaration": true,
     "declarationMap": true,
-    "baseUrl": ".",
-    "outDir": "./dist",
-    "target": "ES2020",
-    "module": "commonjs",
-    "moduleResolution": "node",
-    "plugins": [
-      {
-        "transform": "typescript-transform-paths"
-      },
-      {
-        "transform": "typescript-transform-paths",
-        "afterDeclarations": true
-      },
-      {
-        "transform": "typia/lib/transform"
-      }
-    ]
+    "skipLibCheck": true,
+    "noEmitOnError": false,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "target": "ES2022",
+    "types": ["node"]
   },
-  "include": ["src"],
-  "exclude": ["**/test/*", "**/*.spec.ts", "**/*.test.ts"]
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
 }

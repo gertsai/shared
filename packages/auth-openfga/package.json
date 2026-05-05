@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "description": "OpenFGA integration for gerts.ai authorization (Zanzibar-style ReBAC)",
   "type": "module",
-  "main": "./dist/index.js",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
@@ -12,29 +13,40 @@
         "default": "./dist/index.js"
       },
       "require": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
       }
     },
     "./queries": {
       "import": {
         "types": "./dist/queries/index.d.ts",
         "default": "./dist/queries/index.js"
+      },
+      "require": {
+        "types": "./dist/queries/index.d.cts",
+        "default": "./dist/queries/index.cjs"
       }
     },
     "./mutations": {
       "import": {
         "types": "./dist/mutations/index.d.ts",
         "default": "./dist/mutations/index.js"
+      },
+      "require": {
+        "types": "./dist/mutations/index.d.cts",
+        "default": "./dist/mutations/index.cjs"
       }
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
-    "src"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsup",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"

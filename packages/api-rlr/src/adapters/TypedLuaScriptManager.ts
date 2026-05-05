@@ -3,11 +3,9 @@
  * This is an improved version that uses TypedLuaScript for better type checking
  */
 
-import fs from 'fs';
-import path from 'path';
-
 import type { Redis } from 'ioredis';
 
+import { loadLuaScript } from '../lua-loader';
 import { LuaScriptFactory, TypedScriptManager } from '../scripts/TypedLuaScript';
 import type { GCRAScriptResult, SlidingWindowScriptResult } from '../scripts/TypedLuaScript';
 import type { RLRRedis } from '../utils/types';
@@ -22,15 +20,9 @@ type RLRRedisWithMarker = RLRRedis & {
  * Enhanced Lua script manager with type safety
  */
 export class TypedLuaScriptManager {
-  private static readonly SLIDING_WINDOW_SCRIPT = fs.readFileSync(
-    path.join(__dirname, '../scripts/limitSlightWindowMain.lua'),
-    'utf8',
-  );
+  private static readonly SLIDING_WINDOW_SCRIPT = loadLuaScript('limitSlightWindowMain');
 
-  private static readonly GCRA_SCRIPT = fs.readFileSync(
-    path.join(__dirname, '../scripts/limitGcra.lua'),
-    'utf8',
-  );
+  private static readonly GCRA_SCRIPT = loadLuaScript('limitGcra');
 
   /**
    * Get or create typed script manager for a store

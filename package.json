@@ -27,9 +27,17 @@
     "release": "pnpm build && changeset publish"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.2",
     "@changesets/cli": "^2.27.10",
     "@moonrepo/cli": "^1.30.0",
     "@types/node": "^22.10.0",
+    "@typescript-eslint/eslint-plugin": "^8.59.2",
+    "@typescript-eslint/parser": "^8.59.2",
+    "dependency-cruiser": "^17.4.0",
+    "eslint": "^10.3.0",
+    "eslint-plugin-boundaries": "^6.0.2",
+    "publint": "^0.3.18",
+    "tsup": "^8.5.1",
     "typescript": "^5.9.0",
     "vitest": "^3.0.0"
   }

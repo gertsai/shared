@@ -3,11 +3,9 @@
  * Handles dependency injection and configuration
  */
 
-import fs from 'fs';
-import path from 'path';
-
 import { AdapterFactory } from '../adapters/AdapterFactory';
 import { RateLimiter } from '../core/RateLimiter';
+import { loadLuaScript } from '../lua-loader';
 import { DefaultConfig } from '../utils/constants';
 import type { RLRRedis, RateLimitOptions, RequestHandler } from '../utils/types';
 import { configValidator } from '../validators/ConfigValidator';
@@ -96,12 +94,8 @@ export class MiddlewareFactory {
     });
 
     // Load Lua scripts
-    const incrementSW = fs.readFileSync(
-      path.join(__dirname, '../scripts/limitSlightWindowMain.lua'),
-      'utf8',
-    );
-
-    const gcra = fs.readFileSync(path.join(__dirname, '../scripts/limitGcra.lua'), 'utf8');
+    const incrementSW = loadLuaScript('limitSlightWindowMain');
+    const gcra = loadLuaScript('limitGcra');
 
     // Define commands
     store.defineCommand('incrementSW', {

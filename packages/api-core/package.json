@@ -2,27 +2,59 @@
   "name": "@gertsai/api-core",
   "version": "0.1.0",
   "description": "Core API utilities for Gerts Moleculer services",
-  "types": "./dist/src/index.d.ts",
-  "main": "./dist/src/index.js",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/src/index.d.ts",
-      "default": "./dist/src/index.js"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./contracts": {
-      "types": "./dist/src/contracts/index.d.ts",
-      "default": "./dist/src/contracts/index.js"
+      "import": {
+        "types": "./dist/contracts/index.d.ts",
+        "default": "./dist/contracts/index.js"
+      },
+      "require": {
+        "types": "./dist/contracts/index.d.cts",
+        "default": "./dist/contracts/index.cjs"
+      }
     },
     "./moleculer": {
-      "types": "./dist/src/moleculer/index.d.ts",
-      "default": "./dist/src/moleculer/index.js"
+      "import": {
+        "types": "./dist/moleculer/index.d.ts",
+        "default": "./dist/moleculer/index.js"
+      },
+      "require": {
+        "types": "./dist/moleculer/index.d.cts",
+        "default": "./dist/moleculer/index.cjs"
+      }
     },
     "./runtime/node": {
-      "types": "./dist/src/runtime/node/index.d.ts",
-      "default": "./dist/src/runtime/node/index.js"
+      "import": {
+        "types": "./dist/runtime/node/index.d.ts",
+        "default": "./dist/runtime/node/index.js"
+      },
+      "require": {
+        "types": "./dist/runtime/node/index.d.cts",
+        "default": "./dist/runtime/node/index.cjs"
+      }
     },
     "./package.json": "./package.json"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
   "license": "Apache-2.0",
   "private": false,
   "publishConfig": {
@@ -30,12 +62,11 @@
   },
   "scripts": {
     "prepublish": "pnpm build",
-    "dev": "tspc --watch",
-    "build": "tspc",
-    "build:watch": "tspc --watch",
+    "build": "tsup",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "test": "vitest run",
     "test:watch": "vitest",
-    "postinstall": "ts-patch install -s"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@gertsai/auth-openfga": "workspace:*",
@@ -76,9 +107,7 @@
     "@types/lodash.forin": "^4.4.9",
     "@types/lodash.merge": "^4.6.9",
     "@types/oauth2-server": "^3.0.18",
-    "ts-patch": "^3.3.0",
     "typescript": "^5.2.2",
-    "typescript-transform-paths": "^3.5.4",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^3.2.4"
   }

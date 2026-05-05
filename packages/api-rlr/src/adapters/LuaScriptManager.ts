@@ -1,6 +1,4 @@
-import fs from 'fs';
-import path from 'path';
-
+import { loadLuaScript } from '../lua-loader';
 import type { RLRRedis } from '../utils/types';
 
 // Internal type for tracking script definition
@@ -17,11 +15,8 @@ export class LuaScriptManager {
       return;
     }
 
-    const incrementSW = fs.readFileSync(
-      path.join(__dirname, '../scripts/limitSlightWindowMain.lua'),
-      'utf8',
-    );
-    const gcra = fs.readFileSync(path.join(__dirname, '../scripts/limitGcra.lua'), 'utf8');
+    const incrementSW = loadLuaScript('limitSlightWindowMain');
+    const gcra = loadLuaScript('limitGcra');
 
     store.defineCommand('incrementSW', { lua: incrementSW, numberOfKeys: 1 });
     store.defineCommand('gcraCheck', { lua: gcra, numberOfKeys: 1 });

@@ -1,14 +1,20 @@
 import { describe, it, expect } from 'vitest';
 
-// Use dynamic require to bypass unplugin-typia transform caching issue
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { DEFAULT_TENANT_CONFIG, mergeTenantConfigWithDefaults } = require(
-  '../../..' + '/dist/session/tenant-config.js',
-) as typeof import('../tenant-config');
-
 // SKIP: test expects renamed RFC-105 fields (chunkStrategy/chunkSizeUnit/etc)
 // that diverge from current source (chunkingStrategy). Pre-existing in
 // gertsai_codex; not an extraction artifact. Track as v0.1.x bug.
+// Lazy require: tsup bundles dist; per-file paths no longer exist.
+let DEFAULT_TENANT_CONFIG: typeof import('../tenant-config').DEFAULT_TENANT_CONFIG;
+let mergeTenantConfigWithDefaults: typeof import('../tenant-config').mergeTenantConfigWithDefaults;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  ({ DEFAULT_TENANT_CONFIG, mergeTenantConfigWithDefaults } = require(
+    '../../..' + '/dist/session/tenant-config.js',
+  ) as typeof import('../tenant-config'));
+} catch {
+  // Fallback: bundled dist — reference unused since suite is skipped.
+}
+
 describe.skip('IngestionConfig — RFC-105 composable pipeline fields', () => {
   it('DEFAULT_TENANT_CONFIG contains all new ingestion fields', () => {
     const ing = DEFAULT_TENANT_CONFIG.ingestion;

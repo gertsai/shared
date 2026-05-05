@@ -1,19 +1,15 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "composite": true,
-    "outDir": "./dist/esm",
+    "outDir": "./dist",
     "rootDir": "./src",
     "declaration": true,
     "declarationMap": true,
-    "sourceMap": true,
-    "noEmit": false
+    "skipLibCheck": true,
+    "noEmitOnError": false,
+    "module": "CommonJS",
+    "moduleResolution": "node"
   },
-  "include": ["src/**/*"],
-  "exclude": ["**/*.test.ts"],
-  "references": [
-    {
-      "path": "../utils"
-    }
-  ]
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts", "**/__tests__/**"]
 }

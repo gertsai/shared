@@ -2,8 +2,10 @@
   "name": "@gertsai/core",
   "version": "0.1.0",
   "description": "Core primitives for gerts.ai platform",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "import": {
@@ -11,8 +13,8 @@
         "default": "./dist/index.js"
       },
       "require": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
       }
     },
     "./rag": {
@@ -21,8 +23,8 @@
         "default": "./dist/rag/index.js"
       },
       "require": {
-        "types": "./dist/rag/index.d.ts",
-        "default": "./dist/rag/index.js"
+        "types": "./dist/rag/index.d.cts",
+        "default": "./dist/rag/index.cjs"
       }
     },
     "./llm": {
@@ -31,19 +33,20 @@
         "default": "./dist/llm/index.js"
       },
       "require": {
-        "types": "./dist/llm/index.d.ts",
-        "default": "./dist/llm/index.js"
+        "types": "./dist/llm/index.d.cts",
+        "default": "./dist/llm/index.cjs"
       }
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
-    "src"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
-    "build": "tspc --build tsconfig.json",
-    "test": "vitest run",
-    "postinstall": "ts-patch install -s"
+    "build": "tsup",
+    "test": "vitest run"
   },
   "dependencies": {
     "gpt-tokenizer": "^2.5.0",
