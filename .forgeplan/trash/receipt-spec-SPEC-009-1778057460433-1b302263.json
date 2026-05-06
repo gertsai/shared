@@ -1,0 +1,17 @@
+{
+  "receipt_id": "spec-SPEC-009-1778057460433-1b302263",
+  "ts": "2026-05-06T08:51:00.433Z",
+  "op": "delete",
+  "snapshot": {
+    "id": "SPEC-009",
+    "kind": "spec",
+    "status": "draft",
+    "title": "Sprint 3.5 — Wave 4B storage-core/entity-storage/query-dsl + pg-client adapter (3 packages + additive adapter per ADR-005)",
+    "depth": "standard",
+    "body": "---\nid: SPEC-009\ntitle: \"Sprint 3.5 — Wave 4B storage-core/entity-storage/query-dsl + pg-client adapter (3 packages + additive adapter per ADR-005)\"\nstatus: Draft\nauthor:\ncreated: 2026-05-06\nupdated: 2026-05-06\nprd: PRD-009\ntype: API / Data Model / Protocol / UI Spec\ndepth: standard / deep / critical\n---\n\n# SPEC-009: Sprint 3.5 — Wave 4B storage-core/entity-storage/query-dsl + pg-client adapter (3 packages + additive adapter per ADR-005)\n\n## Summary\n\nЧто специфицируется. Одно предложение.\n\n## Scope\n\nКакие контракты и модели описывает эта спецификация.\n\n## API Contracts\n\n### Endpoint: `{METHOD} /v1/{resource}`\n\n**Description**: ...\n\n**Request**:\n```json\n{\n  \"field1\": \"string (required)\",\n  \"field2\": 123\n}\n```\n\n**Response** (`200 OK`):\n```json\n{\n  \"id\": \"uuid\",\n  \"field1\": \"string\",\n  \"createdAt\": \"2026-01-01T00:00:00Z\"\n}\n```\n\n**Errors**:\n| Status | Code | Description |\n|--------|------|-------------|\n| 400 | INVALID_INPUT | ... |\n| 404 | NOT_FOUND | ... |\n| 409 | CONFLICT | ... |\n\n### Endpoint: `{METHOD} /v1/{resource}/{id}`\n\n...\n\n## Data Models\n\n### Entity: {EntityName}\n\n```typescript\ninterface {EntityName} {\n  id: string;           // UUID v7\n  tenantId: string;     // Tenant isolation\n  name: string;         // Display name\n  status: Status;       // Draft | Active | Archived\n  createdAt: Date;\n  updatedAt: Date;\n}\n\ntype Status = 'draft' | 'active' | 'archived';\n```\n\n**Constraints**:\n- `name`: 1-255 chars, unique per tenant\n- `id`: auto-generated, immutable\n\n### Entity: {AnotherEntity}\n\n...\n\n## Relationships\n\n```mermaid\nerDiagram\n    EntityA ||--o{ EntityB : \"has many\"\n    EntityA {\n        string id PK\n        string name\n    }\n    EntityB {\n        string id PK\n        string entityAId FK\n    }\n```\n\n## Validation Rules\n\n| Field | Rule | Error |\n|-------|------|-------|\n| `name` | Required, 1-255 chars | `name is required` |\n| `email` | Valid email format | `invalid email format` |\n\n## Events / Side Effects\n\n| Trigger | Event | Consumers |\n|---------|-------|-----------|\n| Create Entity | `entity.created` | Audit, Notifications |\n| Update Status | `entity.status.changed` | Workflow |\n\n## Versioning\n\n| Version | Date | Changes |\n|---------|------|---------|\n| 1.0 | 2026-05-06 | Initial specification |\n\n## Related\n\n- PRD-009: {link}\n- RFC-009: {link}\n- ADR-009: {link}\n\n---\n\n> **Next step**: После approve -> создать RFC с архитектурой реализации.\n",
+    "relations": [],
+    "projection_path": "/Users/explosovebit/Work/GertsAi/shared/.forgeplan/specs/SPEC-009-sprint-3-5-wave-4b-storage-core-entity-storage-query-dsl-pg-client-adapter-3-packages-additive-adapter-per-adr-005.md"
+  },
+  "trashed_projection": "/Users/explosovebit/Work/GertsAi/shared/.forgeplan/trash/body-spec-SPEC-009-1778057460433-1b302263.md",
+  "consumed": false
+}
