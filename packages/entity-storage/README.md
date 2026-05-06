@@ -77,9 +77,9 @@ await users.restore(id);  // un-delete
 | `ListenersNotSupportedError` | class | Thrown by listener wrappers when provider reports `capabilities.listeners === false`. |
 | `TransactionConflictError` | class | Thrown by `runTransaction` on optimistic-concurrency violation. |
 
-(Until Wave 4B Phase B lands, the storage-core types
-(`IStorageProvider`, `StorageMetadata`, etc.) are temporarily re-exported
-from a local stub. The public surface is unchanged.)
+The storage-core types (`IStorageProvider`, `StorageMetadata`, etc.) come
+from [`@gertsai/storage-core`](../storage-core), which is the canonical
+interface for backend-agnostic storage adapters per ADR-005.
 
 ## Events
 
@@ -149,7 +149,7 @@ implicit commit, `runTransaction` throws.
 | Node | **22 LTS recommended** | Uses `globalThis.crypto.randomUUID()` for default uid generation. |
 | `@gertsai/session` | `workspace:^` | Session identity used by audit builders. |
 | `@gertsai/entity-audit` | `workspace:^` | Builder functions for audit fields. |
-| `@gertsai/storage-core` | `workspace:^` (peer, optional during Wave 4B Phase A) | Real package lands in Phase B; types are stubbed locally until then. |
+| `@gertsai/storage-core` | `workspace:^` (peer, required) | Canonical `IStorageProvider<Meta>` interface per ADR-005. |
 | `@gertsai/di` | `workspace:^` | `IDestroyable` contract. |
 
 ## Migration from Orchestra `orchlab/storage`

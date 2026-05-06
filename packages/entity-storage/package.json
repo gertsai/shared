@@ -44,11 +44,6 @@
     "@gertsai/session": "workspace:^",
     "@gertsai/storage-core": "workspace:^"
   },
-  "peerDependenciesMeta": {
-    "@gertsai/storage-core": {
-      "optional": true
-    }
-  },
   "devDependencies": {
     "@gertsai/di": "workspace:*",
     "@gertsai/entity": "workspace:*",

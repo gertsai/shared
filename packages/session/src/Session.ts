@@ -16,6 +16,11 @@ import type {
   TokenGetter,
 } from './types';
 import { SESSION_EVENTS } from './types';
+// Phase B (Sprint 3.6 team-lead): swapped from `_errors-stub` to `@gertsai/errors` after pnpm install resolved workspace symlink. Stub deleted.
+// Original Amendment 1.4 fallback note (preserved for context):
+// workspace symlink resolves and the package re-exports these classes.
+// See SPEC-011 Amendment 1.4 / ADR-006.
+import { UnauthorizedError, ValidationError } from '@gertsai/errors';
 
 /**
  * Backend-agnostic session bound to a single operator identity.
@@ -55,6 +60,11 @@ export class Session extends EventEmitter {
   private readonly _errorHandler: ErrorHandler;
   private _dataAccessUuid: string | undefined;
   private _destroyed = false;
+  // Sprint 3.6 Wave 5 Phase 1 — additive multi-tenant scoping per ADR-006
+  // Decision C / I-17. Flat tags, no enforced hierarchy.
+  private readonly _tenantId: string | undefined;
+  private readonly _projectId: string | undefined;
+  private readonly _spaceId: string | undefined;
 
   constructor(opts: SessionOpts) {
     super();
@@ -71,6 +81,9 @@ export class Session extends EventEmitter {
         void err;
       });
     this._dataAccessUuid = opts.dataAccessUuid;
+    this._tenantId = opts.tenantId;
+    this._projectId = opts.projectId;
+    this._spaceId = opts.spaceId;
   }
 
   /**
@@ -128,6 +141,81 @@ export class Session extends EventEmitter {
 
   get destroyed(): boolean {
     return this._destroyed;
+  }
+
+  /**
+   * Tenant scope tag (Sprint 3.6 Wave 5 Phase 1, ADR-006 Decision C).
+   * Returns `undefined` when not provided at construction.
+   */
+  get tenantId(): string | undefined {
+    return this._tenantId;
+  }
+
+  /**
+   * Project scope tag. Flat — independent of `tenantId`/`spaceId` per
+   * ADR-006 I-17 (no enforced hierarchy).
+   */
+  get projectId(): string | undefined {
+    return this._projectId;
+  }
+
+  /**
+   * Space scope tag. Flat — independent of `tenantId`/`projectId` per
+   * ADR-006 I-17 (no enforced hierarchy).
+   */
+  get spaceId(): string | undefined {
+    return this._spaceId;
+  }
+
+  /**
+   * Strict accessor for `tenantId`. Throws `UnauthorizedError` (from
+   * `@gertsai/errors`) if missing — multi-tenancy is an authentication
+   * boundary per ADR-006 I-16.
+   *
+   * @throws UnauthorizedError when `tenantId` was not set at construction.
+   */
+  getTenantStrict(): string {
+    if (this._tenantId === undefined) {
+      throw new UnauthorizedError({
+        message:
+          'Session has no tenantId scope; multi-tenant operation requires tenant context',
+        details: { reason: `session-operator-${this._operatorUuid}-missing-tenant-scope` },
+      });
+    }
+    return this._tenantId;
+  }
+
+  /**
+   * Strict accessor for `projectId`. Throws `ValidationError` (from
+   * `@gertsai/errors`) if missing — project absence is an invalid-input
+   * condition, NOT an authentication failure (ADR-006 I-16).
+   *
+   * @throws ValidationError when `projectId` was not set at construction.
+   */
+  getProjectStrict(): string {
+    if (this._projectId === undefined) {
+      throw new ValidationError({
+        message: 'Session has no projectId scope',
+        details: { field: 'projectId', constraint: 'required-on-strict-call' },
+      });
+    }
+    return this._projectId;
+  }
+
+  /**
+   * Strict accessor for `spaceId`. Throws `ValidationError` if missing,
+   * matching `getProjectStrict` semantics per ADR-006 I-16.
+   *
+   * @throws ValidationError when `spaceId` was not set at construction.
+   */
+  getSpaceStrict(): string {
+    if (this._spaceId === undefined) {
+      throw new ValidationError({
+        message: 'Session has no spaceId scope',
+        details: { field: 'spaceId', constraint: 'required-on-strict-call' },
+      });
+    }
+    return this._spaceId;
   }
 
   /**

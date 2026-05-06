@@ -157,3 +157,54 @@ Real consumers wiring an OAuth provider will see noisy logs in production.
 Workaround: pass a custom provider implementation via `setAuthProvider(...)`
 that overrides these stubs. Permanent fix planned for the @gertsai/auth-*
 extraction (Sprint 3.x or Wave 3).
+
+## 10. `BaseEntityStorageService.upsert` performs 2 RTTs vs 1
+
+**Status:** acceptable; tracked for Wave 6+
+
+`upsert(...)` consolidated from m9s-example DocumentRepository (Sprint 3.6
+W-3-6-24) issues `provider.get(...)` followed by either `provider.set(...)`
+or `provider.update(...)` — two round-trips. For the in-memory provider
+this is negligible. For a future Postgres adapter (or any networked
+backend) the latency cost is non-trivial; a single-RTT `upsert` (e.g.
+`INSERT ... ON CONFLICT DO UPDATE`) requires a new method on
+`IStorageProvider` and per-adapter implementation. Tracked for Wave 6+;
+not a blocker because `set` / `update` paths remain available when the
+caller already knows existence.
+
+## 11. Sprint 3.6 P2 polish backlog (non-blocking)
+
+**Status:** deferred to Sprint 3.6.1 / 3.7 maintenance pass
+
+Post-Build fidelity audit (Phase C, 3 reviewers) raised 9 P2 polish items
+across the 3 new/extended packages. None are blockers; bundled here so the
+cleanup is discoverable when working in those modules:
+
+**`@gertsai/errors`** (errors-fidelity):
+- `wrapUnknownError(x, kind?, correlationId?)` declares `kind?` parameter
+  but ignores it (`_kind?` placeholder). Either remove from signature or
+  honour the override.
+- `AppError` constructor `Object.freeze({ ...details })` is shallow-only;
+  nested objects are not frozen. Either deep-freeze or document explicitly
+  in JSDoc.
+- `redactDetails()` is shallow-scan — nested objects with `password`/etc.
+  inside are not redacted. Add adversarial test fixture documenting the
+  contract; consider deep-scan if needed.
+- `errors/internal.ts` uses `<Record<string, unknown>>` catch-all where
+  spec example showed `{ trace?: string }`. Tighten generic if useful.
+- README cross-references use relative paths to `.forgeplan/...` which will
+  break post-npm-publish. Switch to absolute repo URL or mark "repo-only".
+
+**`@gertsai/tenant-resolver`** (tenant-resolver-fidelity):
+- `MOLECULER_INSTALL_HINT` error string in `moleculer/index.ts` is
+  misleading — fires on "non-Moleculer Context shape", not on missing peer
+  install. Rename or split.
+- PathStrategy `...` wildcard semantics: only valid as trailing token, but
+  README does not flag the placement constraint; add JSDoc note.
+- `lookupHeader()` exact-case-first short-circuit precedence undocumented;
+  harden with JSDoc to prevent future regression.
+
+**`@gertsai/session`** (session-scoping-fidelity):
+- `__tests__/scoping.test.ts:13-17` carries a 5-line stub comment that
+  references the deleted Phase B fallback. Compress to one line.
+- `Session.ts:19-22` post-swap history comment is verbose; can be reduced.

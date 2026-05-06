@@ -29,7 +29,7 @@ packages, extracted из `gertsai_codex` (RFC-extracted с preserved git history
 ## Что это за проект
 
 - **Тип**: TypeScript-only multi-package OSS monorepo (npm packages).
-- **Scope**: `@gertsai/*` — **23 packages** (14 first-wave v0.1.0 + 5 foundation libs Wave 1 v0.2.0 per ADR-004 + 4 entity/session/audit + di-enhanced Wave 4A per PRD-002 + ADR-005).
+- **Scope**: `@gertsai/*` — **28 packages** (14 first-wave v0.1.0 + 5 foundation libs Wave 1 v0.2.0 per ADR-004 + 4 entity/session/audit + di-enhanced Wave 4A per PRD-002 + ADR-005 + 2 Wave 5 Phase 1 errors/tenant-resolver per PRD-003 + ADR-006).
 - **Стек**: Node ≥22 LTS · pnpm 10.x · TypeScript 5.9 · Vitest · moonrepo · Changesets.
 - **Источник foundation-решений**: `~/Work/GertsHub/.forgeplan/{adrs,epics,evidence}/`
   (read-only, не править отсюда). Главные: ADR-005, ADR-006, ADR-009, EPIC-007, EVID-008.
@@ -78,9 +78,9 @@ pnpm-workspace.yaml       ← packages: ['packages/*']
 
 ---
 
-## 26 packages — tier таблица + build (post-Sprint 3.0/3.0.1/3.2/3.4/3.5 per ADR-004 + ADR-005)
+## 28 packages — tier таблица + build (post-Sprint 3.0/3.0.1/3.2/3.4/3.5/3.6 per ADR-004 + ADR-005 + ADR-006)
 
-Все 26 packages используют **uniform tsup dual ESM+CJS** (Sprint 3.0 §U-1..U-6) с фиксированными scripts (`build`, `clean`, `test`, `typecheck`, `lint` — Sprint 3.0.1 F-8).
+Все 28 packages используют **uniform tsup dual ESM+CJS** (Sprint 3.0 §U-1..U-6) с фиксированными scripts (`build`, `clean`, `test`, `typecheck`, `lint` — Sprint 3.0.1 F-8).
 
 | Tier | Package | Internal deps | Source | Notes |
 |---|---|---|---|---|
@@ -91,11 +91,13 @@ pnpm-workspace.yaml       ← packages: ['packages/*']
 | 1 | `@gertsai/utils` | — | first wave | generic utilities |
 | 1 | `@gertsai/m9s-cache` | — | first wave | Moleculer cache adapter |
 | 1 | `@gertsai/ws-rpc` | — | first wave | WebSocket RPC primitives |
+| **1** | **`@gertsai/errors`** | — | **Sprint 3.6 W-3-6-1..8 (F fresh)** | Universal error taxonomy (10 ErrorKind `as const`) + AppError<D> + 10 typed subclasses + `/http` (RFC 9457 ProblemDetails + bucket types + redaction) + `/grpc` (canonical status codes vendored) + cycle/depth guard. **Shared Kernel** for `@gertsai/*` ecosystem per ADR-006 §D §6 |
+| **1** | **`@gertsai/tenant-resolver`** | errors (peer) | **Sprint 3.6 W-3-6-9..17 (F fresh)** | Composable strategy chain + 3 hardened built-in strategies (Header trustProxy, Subdomain strict-suffix, Path URL-normalised) + `/moleculer` + `/http` subpaths; **default `mode: 'strict'`** fail-closed per ADR-006 I-18 |
 | **1** | **`@gertsai/config`** | api-core | **Sprint 3.2 W-1 (S shim)** | re-exports api-core/runtime/node — ADR-004 |
 | **1** | **`@gertsai/tenant`** | — | **Sprint 3.2 W-2 (F fresh)** | TenantId brand + getTenantIdStrict/Optional + `/moleculer` adapter |
 | **1** | **`@gertsai/otel`** | — | **Sprint 3.2 W-3 (F fresh)** | OTel SDK setup + `/moleculer` tracing; lazy peer-deps |
 | **1** | **`@gertsai/pg-client`** | — (root); storage-core, query-dsl peer (`/storage`) | **Sprint 3.2 W-4 (F)** + **Sprint 3.5 W-4B-4 (A — additive `/storage` adapter)** | Root: agnostic 3-method PgClient + mockPgClient (ADR-011 I-1/I-2 unchanged). `./storage` subpath: PgStorageProvider implements IStorageProvider per ADR-005 I-3 (additive, peer-optional storage-core+query-dsl) |
-| **1** | **`@gertsai/session`** | — | **Sprint 3.4 W-4A-2 (F fresh)** | Session class + AbstractDialog + 24-value OperatorType + dataAccessUuid scoping per ADR-005 |
+| **1** | **`@gertsai/session`** | errors (peer for `*Strict`) | **Sprint 3.4 W-4A-2 (F fresh)** + **Sprint 3.6 W-3-6-18..22 (E+ additive)** | Session class + AbstractDialog + 24-value OperatorType + dataAccessUuid (Sprint 3.4) + Sprint 3.6: additive scoping (`tenantId/projectId/spaceId` flat tags per ADR-006 I-17) + 3 strict helpers (`getTenantStrict` throws `UnauthorizedError`; `getProjectStrict`/`getSpaceStrict` throw `ValidationError` per ADR-006 I-16) |
 | **1** | **`@gertsai/entity-audit`** | session | **Sprint 3.4 W-4A-3 (F fresh)** | MutationMarks + UpdateActionMap + 4 builder funcs (set/update/delete/restore) — backend-agnostic Timestamp |
 | 2 | `@gertsai/di` | utils | **enhanced Sprint 3.4 W-4A-4 (E)** | DI container + new guards/destroy/inference helpers (Orchestra orchlab/di patterns) |
 | 2 | `@gertsai/flux` | collection | first wave | reactive streams |
@@ -110,8 +112,10 @@ pnpm-workspace.yaml       ← packages: ['packages/*']
 | 4 | `@gertsai/api-core` | core, auth-openfga | first wave | Moleculer SDK; subpaths /contracts /moleculer /runtime/node (Sprint 2 ADR-003) |
 | 5 | `@gertsai/api-rlr` | api-core | first wave | rate limiter / retry loop runtime (ADR-011) |
 
-**Strategy markers** (per ADR-004 + ADR-005 extensions):
+**Strategy markers** (per ADR-004 + ADR-005 + ADR-006 extensions):
 - **P** = Preserve git history; **F** = Fresh code; **S** = Shim/thin re-export; **P+F** = Preserve-history core + fresh boundary; **E** = Enhancement of existing package (additive only); **A** = Additive non-breaking adapter extension.
+- **F+** = Fix on existing — additive only, no breaking changes (Wave 5 ADR-006 §D §4; e.g. Sprint 3.6 polish batch).
+- **E+** = Enhancement of existing package, additive only (Wave 5 ADR-006 §D §5; e.g. Sprint 3.6 session scoping).
 
 **Что важно знать**:
 - All 14 first-wave + 5 Sprint 3.2 + 3 Sprint 3.4 + 3 Sprint 3.5 packages (25 physical directories; di-enhanced counted as 26th deliverable in Wave 4 logical roll-up): uniform tsup dual ESM+CJS (Sprint 3.0 §U-3..U-6).

@@ -56,8 +56,9 @@ interface CollectionListenerEntry<Meta extends StorageMetadata> {
  * Test-only storage provider. Stores data in a `Map<path, Map<id, doc>>`
  * structure; full listener / batch / transaction support.
  */
-export class InMemoryStorageProvider<Meta extends StorageMetadata>
-  implements IStorageProvider<Meta>
+export class InMemoryStorageProvider<
+  Meta extends StorageMetadata = StorageMetadata,
+> implements IStorageProvider<Meta>
 {
   /** Per audit fix F-A-1 + F-T-3 — `as const satisfies` narrows literally. */
   readonly capabilities = {

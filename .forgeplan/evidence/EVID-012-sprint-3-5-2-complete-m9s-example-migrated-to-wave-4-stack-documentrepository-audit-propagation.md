@@ -13,6 +13,12 @@ links:
   relation: informs
 - target: EVID-011
   relation: informs
+- target: PRD-003
+  relation: informs
+- target: ADR-006
+  relation: informs
+- target: SPEC-011
+  relation: informs
 status: active
 title: Sprint 3.5.2 complete — m9s-example migrated to Wave 4 stack (DocumentRepository + audit propagation)
 ---
@@ -196,6 +202,9 @@ Per /forge-cycle methodology + both reviewers explicit recommendation:
 | Plan file `/Users/explosovebit/.claude/plans/iterative-percolating-koala.md` | external | user-approved migration plan |
 
 > **Next step**: Activate EVID-012 + SPEC-010 → optional v0.2.0 publish gate (user explicit Y) → Wave 5 planning expansion (PRD-003 + ADR-006 для @gertsai/{errors, tenant-resolver, runtime-context, entity-vue/-react/-svelte/-solid}).
+
+
+
 
 
 

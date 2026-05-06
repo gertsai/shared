@@ -52,7 +52,10 @@ describe('DocumentRepository — Wave 4 audit propagation', () => {
 
     await repo.save({ id: 'd1', text: 'hello world.' });
 
-    const stored = await provider.getDoc('documents', 'd1');
+    const stored = (await provider.getDoc(
+      'documents',
+      'd1',
+    )) as DocumentMeta['read'] | null;
     expect(stored).not.toBeNull();
     expect(stored).toMatchObject({
       _uid: 'd1',
@@ -60,8 +63,8 @@ describe('DocumentRepository — Wave 4 audit propagation', () => {
       creator_uuid: 'alice',
       status: expect.any(String),
     });
-    expect((stored as any).created_at).toBeDefined();
-    expect((stored as any).updated_at).toBeDefined();
+    expect(stored?.created_at).toBeDefined();
+    expect(stored?.updated_at).toBeDefined();
   });
 
   it('preserves created_at on re-save (upsert via update)', async () => {
@@ -70,14 +73,20 @@ describe('DocumentRepository — Wave 4 audit propagation', () => {
     const repo = new DocumentRepository(provider, session);
 
     await repo.save({ id: 'd2', text: 'first version.' });
-    const after1 = (await provider.getDoc('documents', 'd2')) as any;
+    const after1 = (await provider.getDoc(
+      'documents',
+      'd2',
+    )) as DocumentMeta['read'];
     const createdAt1 = after1.created_at;
     const updatedAt1 = after1.updated_at;
 
     await new Promise((r) => setTimeout(r, 5));
 
     await repo.save({ id: 'd2', text: 'second version.' });
-    const after2 = (await provider.getDoc('documents', 'd2')) as any;
+    const after2 = (await provider.getDoc(
+      'documents',
+      'd2',
+    )) as DocumentMeta['read'];
 
     expect(after2.text).toBe('second version.');
     expect(after2.created_at).toEqual(createdAt1);

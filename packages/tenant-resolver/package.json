@@ -1,0 +1,89 @@
+{
+  "name": "@gertsai/tenant-resolver",
+  "version": "0.1.0",
+  "description": "Composable multi-strategy tenant resolution for @gertsai/* — TenantResolverStrategy interface + ChainTenantResolver + 3 hardened built-in strategies (header / subdomain / path) + /moleculer + /http subpaths",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./moleculer": {
+      "import": {
+        "types": "./dist/moleculer/index.d.ts",
+        "default": "./dist/moleculer/index.js"
+      },
+      "require": {
+        "types": "./dist/moleculer/index.d.cts",
+        "default": "./dist/moleculer/index.cjs"
+      }
+    },
+    "./http": {
+      "import": {
+        "types": "./dist/http/index.d.ts",
+        "default": "./dist/http/index.js"
+      },
+      "require": {
+        "types": "./dist/http/index.d.cts",
+        "default": "./dist/http/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "moleculer": ["./dist/moleculer/index.d.ts"],
+      "http": ["./dist/http/index.d.ts"]
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "clean": "rm -rf dist .tsbuildinfo *.tsbuildinfo",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0"
+  },
+  "peerDependencies": {
+    "@gertsai/errors": "workspace:^",
+    "moleculer": "^0.14.0"
+  },
+  "peerDependenciesMeta": {
+    "moleculer": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@gertsai/errors": "workspace:*",
+    "moleculer": "^0.14.35",
+    "vitest": "^3.0.0"
+  },
+  "keywords": [
+    "tenant",
+    "multi-tenant",
+    "tenant-resolver",
+    "moleculer",
+    "gerts",
+    "gertsai"
+  ],
+  "author": "gerts.ai"
+}

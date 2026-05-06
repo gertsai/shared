@@ -425,6 +425,38 @@ export abstract class BaseEntityStorageService<
     this.emit(STORAGE_EVENTS.ENTITY_RESTORED, payload);
   }
 
+  /**
+   * Upsert helper: if a row with `entity._uid` already exists, calls
+   * {@link update} (refreshes the `updated_*` audit triplet, preserves
+   * `created_*`); otherwise calls {@link set} (stamps a fresh `created_*`
+   * triplet, generates `_uid` only if absent — the caller-supplied `_uid`
+   * is honoured).
+   *
+   * Returns `{ id }` matching the existing or freshly-stamped uid so the
+   * caller does not need to branch.
+   *
+   * Per W-3-6-24 (P2 EG-2): consolidates the duplicated upsert pattern
+   * present in m9s-example DocumentRepository and any future repository
+   * adapter. Performs two RTTs (`get` + `set`/`update`); see KNOWN-ISSUES
+   * for the future single-RTT optimisation.
+   */
+  async upsert(
+    entity: SetEntityInput<Meta> & { readonly _uid: string },
+    opts: MutationRoutingOpts<Meta, UpdateActionTypes> = {},
+  ): Promise<{ id: string }> {
+    this._assertAlive();
+    const existing = await this.get(entity._uid);
+    if (existing) {
+      const { _uid, ...rest } = entity as { _uid: string } & Record<
+        string,
+        unknown
+      >;
+      await this.update(_uid, rest as Partial<Meta['write']>, opts);
+      return { id: _uid };
+    }
+    return this.set(entity, opts);
+  }
+
   /** Read a single document by id. Delegates to `provider.getDoc`. */
   async get(uid: string): Promise<Meta['read'] | null> {
     this._assertAlive();

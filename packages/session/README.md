@@ -132,6 +132,103 @@ session.$switchOperator({ _uid: 'x', type: 'web' }); // throws
 session.$setDataAccessUuid('y'); // throws
 ```
 
+## Tenant / project / space scoping
+
+Session optionally carries multi-tenant scope tags for downstream consumers
+(per Sprint 3.6 Wave 5 Phase 1, ADR-006 Decision C). Three optional fields —
+`tenantId`, `projectId`, `spaceId` — are flat tags with no enforced hierarchy
+(I-17). Hierarchy enforcement, if needed, lives in Sprint 3.7 RuntimeContext
+middleware as opt-in.
+
+```ts
+const session = new Session({
+  operatorUuid: 'user-123',
+  operatorType: 'web',
+  tokenGetter: async () => fetchAccessToken(),
+  dialog: myDialog,
+  clientPlatform: 'web',
+  clientVersion: '1.0.0',
+  // Sprint 3.6 additive scope fields — all optional:
+  tenantId: 'tenant-acme',
+  projectId: 'proj-42',
+  spaceId: 'space-q1',
+});
+
+// Read-only getters return string | undefined.
+session.tenantId; // 'tenant-acme'
+session.projectId; // 'proj-42'
+session.spaceId; // 'space-q1'
+```
+
+### Strict helpers — auth vs validation boundary
+
+Three `*Strict()` helpers throw appropriately-typed errors from
+`@gertsai/errors` when the corresponding scope is missing (ADR-006 I-16):
+
+- `session.getTenantStrict()` — throws `UnauthorizedError` when `tenantId`
+  is unset. Multi-tenancy is an **authentication boundary**.
+- `session.getProjectStrict()` — throws `ValidationError` when `projectId`
+  is unset. Project absence is **invalid input**, not unauthenticated.
+- `session.getSpaceStrict()` — throws `ValidationError` when `spaceId` is
+  unset. Same semantics as project.
+
+```ts
+import { UnauthorizedError, ValidationError } from '@gertsai/errors';
+
+try {
+  const tenant = session.getTenantStrict();
+  // ... multi-tenant database query scoped to `tenant`
+} catch (err) {
+  if (err instanceof UnauthorizedError) {
+    return res.status(401).json({ error: 'authentication required' });
+  }
+  throw err;
+}
+
+try {
+  const project = session.getProjectStrict();
+} catch (err) {
+  if (err instanceof ValidationError) {
+    return res.status(400).json({ error: 'projectId scope is required' });
+  }
+  throw err;
+}
+```
+
+### Flat tags, no enforced hierarchy
+
+The scope fields are intentionally **flat tags** — orphan-scope states are
+valid:
+
+```ts
+// ✅ tenantId without projectId — valid (cross-project tenant operation).
+new Session({ ...opts, tenantId: 'acme' });
+
+// ✅ spaceId without projectId or tenantId — valid (system spaces).
+new Session({ ...opts, spaceId: 'system-shared' });
+```
+
+For consumers that DO need `space ⊂ project ⊂ tenant` invariants, opt in via
+Sprint 3.7 RuntimeContext middleware (TBD) — Session itself stays neutral.
+
+### Peer dependency on `@gertsai/errors`
+
+`*Strict()` helpers throw error classes from `@gertsai/errors`. The package
+declares `@gertsai/errors` as a peer dependency:
+
+```jsonc
+// package.json
+{
+  "peerDependencies": {
+    "@gertsai/errors": "workspace:^"
+  }
+}
+```
+
+Consumers that never call `*Strict()` helpers technically don't need the
+peer at runtime, but it is recommended to install for ecosystem consistency
+(error taxonomy is a Shared Kernel per ADR-006 Amendment 1.1.3).
+
 ## Migrating from `OrchestraSession`
 
 Breaking deltas relative to Orchestra's `OrchestraSession`:
@@ -171,6 +268,12 @@ Breaking deltas relative to Orchestra's `OrchestraSession`:
   `operator-switched`.
 - `session.$setDataAccessUuid(uuid | undefined)` — override / clear scope.
 - `session.$destroy()` — idempotent teardown, emits `destroyed`.
+- `session.tenantId` / `projectId` / `spaceId` — optional flat scope tags
+  (`string | undefined`).
+- `session.getTenantStrict()` — returns `tenantId` or throws
+  `UnauthorizedError` (`@gertsai/errors`).
+- `session.getProjectStrict()` / `getSpaceStrict()` — return value or throw
+  `ValidationError`.
 
 ## Events
 

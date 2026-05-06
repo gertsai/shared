@@ -103,6 +103,14 @@ export interface SessionOpts {
   readonly clientVersion: string;
   readonly errorHandler?: ErrorHandler;
   readonly dataAccessUuid?: string;
+  /**
+   * Optional multi-tenant scope tags (Sprint 3.6 Wave 5 Phase 1, ADR-006
+   * Decision C / I-17). Flat tags — no enforced hierarchy. Hierarchy
+   * enforcement (if needed) lives in Sprint 3.7 RuntimeContext middleware.
+   */
+  readonly tenantId?: string;
+  readonly projectId?: string;
+  readonly spaceId?: string;
 }
 
 /**
