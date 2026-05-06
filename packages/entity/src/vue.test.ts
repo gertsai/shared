@@ -26,8 +26,10 @@ describe('vueReactiveAdapter', () => {
     try {
       vi.resetModules();
       const { vueReactiveAdapter } = await import('./vue');
+      // Sprint 3.8 (ADR-008 W-3-8-26): canonical home moved to @gertsai/entity-vue;
+      // error wording comes from new package.
       expect(() => vueReactiveAdapter.reactive({})).toThrow(
-        /missing peer dep '@vue\/runtime-core'/,
+        /requires "@vue\/runtime-core"/,
       );
     } finally {
       M._load = originalLoad;

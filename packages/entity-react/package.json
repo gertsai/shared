@@ -1,0 +1,65 @@
+{
+  "name": "@gertsai/entity-react",
+  "version": "0.1.0",
+  "description": "React framework adapter for @gertsai/entity — reactReactiveAdapter (Proxy + WeakMap subscribe + 3 traps + sync notify) and useEntity hook (useSyncExternalStore + version snapshot). Per ADR-008 Decision C + Amendment I-11..I-14.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "clean": "rm -rf dist .tsbuildinfo *.tsbuildinfo",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@gertsai/entity": "workspace:^",
+    "react": ">=18.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@gertsai/entity": "workspace:*",
+    "@gertsai/session": "workspace:*",
+    "@types/react": "^18.0.0",
+    "react": "^18.0.0",
+    "vitest": "^3.0.0"
+  },
+  "keywords": [
+    "entity",
+    "react",
+    "reactive",
+    "useSyncExternalStore",
+    "hook",
+    "gerts",
+    "gertsai"
+  ],
+  "author": "gerts.ai"
+}

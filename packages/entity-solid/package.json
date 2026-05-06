@@ -1,7 +1,7 @@
 {
-  "name": "@gertsai/entity",
-  "version": "0.0.0",
-  "description": "Backend-agnostic entity base classes (Model, Entity, EntityWithMetadata) with pluggable reactivity. Mirrors Orchestra entity patterns. Per PRD-002 + ADR-005.",
+  "name": "@gertsai/entity-solid",
+  "version": "0.1.0",
+  "description": "Solid reactivity adapter for @gertsai/entity — createStore-backed ReactiveAdapter + useEntity store accessor. Per ADR-008 Decision D.",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -18,22 +18,7 @@
         "default": "./dist/index.cjs"
       }
     },
-    "./vue": {
-      "import": {
-        "types": "./dist/vue.d.ts",
-        "default": "./dist/vue.js"
-      },
-      "require": {
-        "types": "./dist/vue.d.cts",
-        "default": "./dist/vue.cjs"
-      }
-    },
     "./package.json": "./package.json"
-  },
-  "typesVersions": {
-    "*": {
-      "vue": ["./dist/vue.d.ts"]
-    }
   },
   "files": [
     "dist",
@@ -52,31 +37,26 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings 0"
   },
-  "dependencies": {
-    "@gertsai/session": "workspace:*"
-  },
   "peerDependencies": {
-    "@gertsai/entity-vue": "workspace:^",
-    "@vue/runtime-core": "^3.0.0"
+    "@gertsai/entity": "workspace:^",
+    "solid-js": ">=1.0.0"
   },
   "peerDependenciesMeta": {
-    "@gertsai/entity-vue": {
-      "optional": true
-    },
-    "@vue/runtime-core": {
+    "solid-js": {
       "optional": true
     }
   },
   "devDependencies": {
-    "@vue/runtime-core": "^3.0.0",
+    "@gertsai/entity": "workspace:*",
+    "solid-js": "^1.8.0",
     "vitest": "^3.0.0"
   },
   "keywords": [
     "entity",
-    "model",
+    "solid",
+    "solid-js",
     "reactive",
-    "domain",
-    "ddd",
+    "adapter",
     "gerts",
     "gertsai"
   ],

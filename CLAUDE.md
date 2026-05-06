@@ -29,7 +29,7 @@ packages, extracted из `gertsai_codex` (RFC-extracted с preserved git history
 ## Что это за проект
 
 - **Тип**: TypeScript-only multi-package OSS monorepo (npm packages).
-- **Scope**: `@gertsai/*` — **31 packages** (14 first-wave v0.1.0 + 5 foundation libs Wave 1 v0.2.0 per ADR-004 + 4 entity/session/audit + di-enhanced Wave 4A per PRD-002 + ADR-005 + 2 Wave 5 Phase 1 errors/tenant-resolver per PRD-003 + ADR-006 + 3 Wave 5 Phase 2 runtime-context/session-guard/audit-primitives per ADR-007).
+- **Scope**: `@gertsai/*` — **35 packages** (14 first-wave v0.1.0 + 5 foundation libs Wave 1 v0.2.0 per ADR-004 + 4 entity/session/audit + di-enhanced Wave 4A per PRD-002 + ADR-005 + 2 Wave 5 Phase 1 errors/tenant-resolver per PRD-003 + ADR-006 + 3 Wave 5 Phase 2 runtime-context/session-guard/audit-primitives per ADR-007 + 4 Wave 5 Phase 3 entity-vue/react/solid/svelte framework adapters per ADR-008).
 - **Стек**: Node ≥22 LTS · pnpm 10.x · TypeScript 5.9 · Vitest · moonrepo · Changesets.
 - **Источник foundation-решений**: `~/Work/GertsHub/.forgeplan/{adrs,epics,evidence}/`
   (read-only, не править отсюда). Главные: ADR-005, ADR-006, ADR-009, EPIC-007, EVID-008.
@@ -78,9 +78,9 @@ pnpm-workspace.yaml       ← packages: ['packages/*']
 
 ---
 
-## 31 packages — tier таблица + build (post-Sprint 3.0/3.0.1/3.2/3.4/3.5/3.6/3.7 per ADR-004 + ADR-005 + ADR-006 + ADR-007)
+## 35 packages — tier таблица + build (post-Sprint 3.0/3.0.1/3.2/3.4/3.5/3.6/3.7/3.8 per ADR-004 + ADR-005 + ADR-006 + ADR-007 + ADR-008)
 
-Все 31 packages используют **uniform tsup dual ESM+CJS** (Sprint 3.0 §U-1..U-6) с фиксированными scripts (`build`, `clean`, `test`, `typecheck`, `lint` — Sprint 3.0.1 F-8).
+Все 35 packages используют **uniform tsup dual ESM+CJS** (Sprint 3.0 §U-1..U-6) с фиксированными scripts (`build`, `clean`, `test`, `typecheck`, `lint` — Sprint 3.0.1 F-8).
 
 | Tier | Package | Internal deps | Source | Notes |
 |---|---|---|---|---|
@@ -102,10 +102,14 @@ pnpm-workspace.yaml       ← packages: ['packages/*']
 | 2 | `@gertsai/di` | utils | **enhanced Sprint 3.4 W-4A-4 (E)** | DI container + new guards/destroy/inference helpers (Orchestra orchlab/di patterns) |
 | 2 | `@gertsai/flux` | collection | first wave | reactive streams |
 | **2** | **`@gertsai/queue`** | — | **Sprint 3.2 W-5 (P+F)** | BullMQ wrappers + `/standalone` runner; consumed BY api-core (Sprint 3.x migration) |
-| **2** | **`@gertsai/entity`** | session | **Sprint 3.4 W-4A-1 (F fresh)** | Model + Entity + EntityWithMetadata base classes; pluggable ReactiveAdapter; `/vue` subpath; multi-framework adapter snippets in README |
+| **2** | **`@gertsai/entity`** | session; entity-vue (peer; optional, only for /vue subpath) | **Sprint 3.4 W-4A-1 (F fresh)** + **Sprint 3.8 (E+ — /vue subpath becomes re-export shim per ADR-008 Decision B)** | Model + Entity + EntityWithMetadata base classes; pluggable ReactiveAdapter; `/vue` subpath delegates to `@gertsai/entity-vue` standalone; framework adapters live in `@gertsai/entity-{vue,react,solid,svelte}` per ADR-008 |
 | **2** | **`@gertsai/storage-core`** | di | **Sprint 3.5 W-4B-1 (F fresh)** | Backend-agnostic IStorageProvider<Meta> interface + StorageMetadata generic + IBatchRunner/ITransactionRunner + capabilities flag + storageProviderIdentifier DI token + ListenersNotSupportedError/TransactionConflictError per ADR-005 Decision A |
 | **2** | **`@gertsai/query-dsl`** | storage-core | **Sprint 3.5 W-4B-3 (F fresh)** | Type-safe query constraints (whereField/orderBy/limit/start*/end*) compile-validated against Meta['indexed']; `./sql` subpath = compileToSql reference Postgres compiler |
 | **2** | **`@gertsai/audit-primitives`** | — | **Sprint 3.7 W-3-7-18..23 (F fresh)** | Pure data layer (zero internal deps per ADR-007 I-7) — Timestamp + AuditMarks interfaces + TimestampProvider call-signature alias `() => Timestamp` (matches entity-audit shape per ADR-007 I-14) + 2 default providers (date / fixed) + 4 conversion helpers |
+| **2** | **`@gertsai/entity-vue`** | entity (peer) | **Sprint 3.8 W-3-8-1..6 (F+E+)** | vueReactiveAdapter standalone Vue ReactiveAdapter; lazy `createRequire('@vue/runtime-core')` per ADR-008 Amendment 1.2.9; entity/vue subpath becomes re-export shim per ADR-008 Decision B + I-3 |
+| **2** | **`@gertsai/entity-react`** | entity (peer) | **Sprint 3.8 W-3-8-7..11 (F)** | reactReactiveAdapter (Proxy + 3 traps + WeakMap subscribe + sync notify + re-entrancy guard per ADR-008 I-11..I-13) + useEntity hook (useSyncExternalStore + version snapshot per Amendment 1.2.10) |
+| **2** | **`@gertsai/entity-solid`** | entity (peer) | **Sprint 3.8 W-3-8-12..16 (F)** | solidReactiveAdapter (createStore + produce per R-3) + useEntity Store accessor; module-private Symbol per I-11 |
+| **2** | **`@gertsai/entity-svelte`** | entity (peer) | **Sprint 3.8 W-3-8-17..21 (F)** | svelteReactiveAdapter (Proxy + writable + 3 traps + WeakMap + re-entrancy guard) + entityStore Readable<Entity<Data>> per ADR-008 Amendment 1.1.1 |
 | **2** | **`@gertsai/session-guard`** | session, errors (peers) | **Sprint 3.7 W-3-7-11..17 (F fresh)** | External invariant guards over `@gertsai/session`: 4 predicates (`isAuthenticated/hasOperatorType/isInTenant/isImpersonating`) + 5 dedicated errors (incl. `AuthenticationRequiredError` per ADR-007 Amendment 1.1.2 split) + 5 assertion helpers + 3 result-shape `check*` variants. `isInTenant` returns false on undefined-tenant (I-18); `isImpersonating` throws on empty UUIDs (I-19) |
 | 3 | `@gertsai/core` | llm-costs | first wave | platform contracts (Workflow types, Sprint 3.1 W-1; Sprint 3.0.1 F-9 meta) |
 | 3 | `@gertsai/hsm` | — | first wave | hierarchical state machines |

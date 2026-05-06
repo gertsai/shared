@@ -1,7 +1,7 @@
 {
-  "name": "@gertsai/entity",
-  "version": "0.0.0",
-  "description": "Backend-agnostic entity base classes (Model, Entity, EntityWithMetadata) with pluggable reactivity. Mirrors Orchestra entity patterns. Per PRD-002 + ADR-005.",
+  "name": "@gertsai/entity-vue",
+  "version": "0.1.0",
+  "description": "Vue 3 ReactiveAdapter for @gertsai/entity — lazy-loads @vue/runtime-core (peer-optional). Per ADR-008 Decision B + Amendment 1.",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -18,22 +18,7 @@
         "default": "./dist/index.cjs"
       }
     },
-    "./vue": {
-      "import": {
-        "types": "./dist/vue.d.ts",
-        "default": "./dist/vue.js"
-      },
-      "require": {
-        "types": "./dist/vue.d.cts",
-        "default": "./dist/vue.cjs"
-      }
-    },
     "./package.json": "./package.json"
-  },
-  "typesVersions": {
-    "*": {
-      "vue": ["./dist/vue.d.ts"]
-    }
   },
   "files": [
     "dist",
@@ -52,31 +37,26 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings 0"
   },
-  "dependencies": {
-    "@gertsai/session": "workspace:*"
-  },
   "peerDependencies": {
-    "@gertsai/entity-vue": "workspace:^",
-    "@vue/runtime-core": "^3.0.0"
+    "@gertsai/entity": "workspace:^",
+    "@vue/runtime-core": ">=3.0.0"
   },
   "peerDependenciesMeta": {
-    "@gertsai/entity-vue": {
-      "optional": true
-    },
     "@vue/runtime-core": {
       "optional": true
     }
   },
   "devDependencies": {
+    "@gertsai/entity": "workspace:*",
     "@vue/runtime-core": "^3.0.0",
     "vitest": "^3.0.0"
   },
   "keywords": [
     "entity",
-    "model",
+    "vue",
     "reactive",
-    "domain",
-    "ddd",
+    "adapter",
+    "shallowReactive",
     "gerts",
     "gertsai"
   ],

@@ -11,6 +11,10 @@ links:
   relation: informs
 - target: SPEC-012
   relation: informs
+- target: ADR-008
+  relation: informs
+- target: SPEC-013
+  relation: informs
 status: active
 title: Sprint 3.7 shipped — Wave 5 Phase 2 (runtime-context + session-guard + audit-primitives + errors patch + entity-audit E+)
 ---
@@ -226,6 +230,8 @@ Per-package `pnpm lint` continues to fail per repo-wide ESLint flat-config gap (
 - Sprint 3.8 (Wave 5 Phase 3): 4 entity framework adapters (entity-vue, entity-react, entity-solid, entity-svelte) parallel.
 - Sprint 3.9 (Wave 5 Phase 4): 4 Orchestra HIGH candidates (rpc-proxy-builder, logger-factory, async-utils, rest-request-manager) parallel.
 - v0.2.0 publish gate: pending explicit user confirmation (per CLAUDE.md red lines).
+
+
 
 
 
