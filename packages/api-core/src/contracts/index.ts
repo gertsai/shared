@@ -18,3 +18,6 @@ export * from '../lib/apiResponse';
 export * from '../lib/envelope';
 export * from '../lib/common';
 export * from '../lib/diagnostics';
+// Sprint 3.9 ADR-009 Amendment 1.1: type-only RPC action contract
+// consumed by @gertsai/rpc-proxy-builder.
+export type { ActionDefinition } from './action-definition';

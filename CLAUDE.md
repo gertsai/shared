@@ -29,7 +29,7 @@ packages, extracted из `gertsai_codex` (RFC-extracted с preserved git history
 ## Что это за проект
 
 - **Тип**: TypeScript-only multi-package OSS monorepo (npm packages).
-- **Scope**: `@gertsai/*` — **35 packages** (14 first-wave v0.1.0 + 5 foundation libs Wave 1 v0.2.0 per ADR-004 + 4 entity/session/audit + di-enhanced Wave 4A per PRD-002 + ADR-005 + 2 Wave 5 Phase 1 errors/tenant-resolver per PRD-003 + ADR-006 + 3 Wave 5 Phase 2 runtime-context/session-guard/audit-primitives per ADR-007 + 4 Wave 5 Phase 3 entity-vue/react/solid/svelte framework adapters per ADR-008).
+- **Scope**: `@gertsai/*` — **39 packages** (14 first-wave v0.1.0 + 5 foundation libs Wave 1 v0.2.0 per ADR-004 + 4 entity/session/audit + di-enhanced Wave 4A per PRD-002 + ADR-005 + 13 Wave 5 packages per PRD-003 [2 Phase 1 errors/tenant-resolver per ADR-006 + 3 Phase 2 runtime-context/session-guard/audit-primitives per ADR-007 + 4 Phase 3 entity-vue/react/solid/svelte per ADR-008 + 4 Phase 4 async-utils/logger-factory/rpc-proxy-builder/rest-request-manager per ADR-009]). **Wave 5 complete.**
 - **Стек**: Node ≥22 LTS · pnpm 10.x · TypeScript 5.9 · Vitest · moonrepo · Changesets.
 - **Источник foundation-решений**: `~/Work/GertsHub/.forgeplan/{adrs,epics,evidence}/`
   (read-only, не править отсюда). Главные: ADR-005, ADR-006, ADR-009, EPIC-007, EVID-008.
@@ -78,9 +78,11 @@ pnpm-workspace.yaml       ← packages: ['packages/*']
 
 ---
 
-## 35 packages — tier таблица + build (post-Sprint 3.0/3.0.1/3.2/3.4/3.5/3.6/3.7/3.8 per ADR-004 + ADR-005 + ADR-006 + ADR-007 + ADR-008)
+## 39 packages — tier таблица + build (post-Sprint 3.0..3.9 per ADR-004 + ADR-005 + ADR-006 + ADR-007 + ADR-008 + ADR-009)
 
-Все 35 packages используют **uniform tsup dual ESM+CJS** (Sprint 3.0 §U-1..U-6) с фиксированными scripts (`build`, `clean`, `test`, `typecheck`, `lint` — Sprint 3.0.1 F-8).
+**Wave 5 fully complete** — 13 packages total (2 Phase 1 + 3 Phase 2 + 4 Phase 3 + 4 Phase 4).
+
+Все 39 packages используют **uniform tsup dual ESM+CJS** (Sprint 3.0 §U-1..U-6) с фиксированными scripts (`build`, `clean`, `test`, `typecheck`, `lint` — Sprint 3.0.1 F-8).
 
 | Tier | Package | Internal deps | Source | Notes |
 |---|---|---|---|---|
@@ -91,6 +93,8 @@ pnpm-workspace.yaml       ← packages: ['packages/*']
 | 1 | `@gertsai/utils` | — | first wave | generic utilities |
 | 1 | `@gertsai/m9s-cache` | — | first wave | Moleculer cache adapter |
 | 1 | `@gertsai/ws-rpc` | — | first wave | WebSocket RPC primitives |
+| **1** | **`@gertsai/async-utils`** | — | **Sprint 3.9 W-3-9-1..10 (F)** | Zero-peer-dep: sleep + withTimeout + defer + debounce + throttle + retry (default `'full'` jitter per ADR-009 Amendment 1.2.7, CWE-409 protection) + makeCancellable per ADR-009 I-1/I-2/I-16 |
+| **1** | **`@gertsai/logger-factory`** | errors (peer) | **Sprint 3.9 W-3-9-11..16 (F)** | createLogger + consoleBackend default; /pino + /winston peer-optional subpaths via createRequire; default-on REDACTION_KEYS redact per ADR-009 I-17; child frozen-copy + independent level state per Amendment 1.2.6 |
 | **1** | **`@gertsai/errors`** | — | **Sprint 3.6 W-3-6-1..8 (F fresh)** | Universal error taxonomy (10 ErrorKind `as const`) + AppError<D> + 10 typed subclasses + `/http` (RFC 9457 ProblemDetails + bucket types + redaction) + `/grpc` (canonical status codes vendored) + cycle/depth guard. **Shared Kernel** for `@gertsai/*` ecosystem per ADR-006 §D §6 |
 | **1** | **`@gertsai/tenant-resolver`** | errors (peer) | **Sprint 3.6 W-3-6-9..17 (F fresh)** | Composable strategy chain + 3 hardened built-in strategies (Header trustProxy, Subdomain strict-suffix, Path URL-normalised) + `/moleculer` + `/http` subpaths; **default `mode: 'strict'`** fail-closed per ADR-006 I-18 |
 | **1** | **`@gertsai/config`** | api-core | **Sprint 3.2 W-1 (S shim)** | re-exports api-core/runtime/node — ADR-004 |
@@ -110,10 +114,12 @@ pnpm-workspace.yaml       ← packages: ['packages/*']
 | **2** | **`@gertsai/entity-react`** | entity (peer) | **Sprint 3.8 W-3-8-7..11 (F)** | reactReactiveAdapter (Proxy + 3 traps + WeakMap subscribe + sync notify + re-entrancy guard per ADR-008 I-11..I-13) + useEntity hook (useSyncExternalStore + version snapshot per Amendment 1.2.10) |
 | **2** | **`@gertsai/entity-solid`** | entity (peer) | **Sprint 3.8 W-3-8-12..16 (F)** | solidReactiveAdapter (createStore + produce per R-3) + useEntity Store accessor; module-private Symbol per I-11 |
 | **2** | **`@gertsai/entity-svelte`** | entity (peer) | **Sprint 3.8 W-3-8-17..21 (F)** | svelteReactiveAdapter (Proxy + writable + 3 traps + WeakMap + re-entrancy guard) + entityStore Readable<Entity<Data>> per ADR-008 Amendment 1.1.1 |
+| **2** | **`@gertsai/rest-request-manager`** | fetch + errors + async-utils + logger-factory (optional) | **Sprint 3.9 W-3-9-22..28 (F)** | RestRequestManager: retry + token-bucket rate-limiter + LRU circuit-breaker (default `maxHosts: 1000` per ADR-009 Amendment 1.2.1, CWE-770 protection) + HTTP→AppError translation per I-8; AbortError→TimeoutError per Amendment 1.2.8; Node-only (engines.node ≥22) per Amendment 1.2.10 |
 | **2** | **`@gertsai/session-guard`** | session, errors (peers) | **Sprint 3.7 W-3-7-11..17 (F fresh)** | External invariant guards over `@gertsai/session`: 4 predicates (`isAuthenticated/hasOperatorType/isInTenant/isImpersonating`) + 5 dedicated errors (incl. `AuthenticationRequiredError` per ADR-007 Amendment 1.1.2 split) + 5 assertion helpers + 3 result-shape `check*` variants. `isInTenant` returns false on undefined-tenant (I-18); `isImpersonating` throws on empty UUIDs (I-19) |
 | 3 | `@gertsai/core` | llm-costs | first wave | platform contracts (Workflow types, Sprint 3.1 W-1; Sprint 3.0.1 F-9 meta) |
 | 3 | `@gertsai/hsm` | — | first wave | hierarchical state machines |
 | **3** | **`@gertsai/entity-storage`** | storage-core, entity, entity-audit, session, di | **Sprint 3.5 W-4B-2 (F fresh)** | abstract BaseEntityStorageService<Meta, UpdateActionTypes> session-aware audit-stamped CRUD + soft-delete + EventEmitter (STORAGE_EVENTS) + IDestroyable; class InMemoryStorageProvider<Meta> Map-backed test fixture full-listeners support |
+| **3** | **`@gertsai/rpc-proxy-builder`** | api-core (peer; type-only via /contracts) | **Sprint 3.9 W-3-9-17..21 (F)** | createRpcProxy<TActionMap> + RpcTransport interface; module-private `Symbol('rpc-proxy')` brand per I-7; **3 read-only Proxy traps** (get/set→false/deleteProperty→false) per I-15 (CWE-1188 protection); unknown action throws Error per I-14 (CWE-1230 fail-open prevention); WeakMap idempotent cache |
 | 4 | `@gertsai/auth-openfga` | core | first wave | OpenFGA ReBAC adapter |
 | 4 | `@gertsai/api-core` | core, auth-openfga | first wave | Moleculer SDK; subpaths /contracts /moleculer /runtime/node (Sprint 2 ADR-003) |
 | **4** | **`@gertsai/runtime-context`** | errors, session, tenant-resolver, di (peers); moleculer (peer-optional) | **Sprint 3.7 W-3-7-1..10 (F fresh)** | Per-request composition root — RequestContext (lazy private getters + `$freeze` invariant + `crypto.randomUUID` correlationId per ADR-007 I-20) + AuthContext (security projection w/ 2 factories) + FeatureContext (default-deny on flagProvider exception) + ProviderContext (symbol-only tokens per I-17) + 5 dedicated errors. `/moleculer` subpath: `sessionMiddleware` factory composing context + auto-`$freeze()` before downstream handler per I-16 (TOCTOU protection); attached to `ctx.locals.requestContext` per I-15 |
