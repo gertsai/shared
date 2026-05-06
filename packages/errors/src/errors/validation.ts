@@ -2,10 +2,12 @@
 import { AppError } from '../app-error.js';
 import { ErrorKind } from '../error-kind.js';
 
-export class ValidationError extends AppError<{
-  field: string;
-  constraint: string;
-  value?: unknown;
-}> {
+export class ValidationError<
+  D extends Record<string, unknown> = {
+    field: string;
+    constraint: string;
+    value?: unknown;
+  },
+> extends AppError<D> {
   readonly kind = ErrorKind.VALIDATION;
 }

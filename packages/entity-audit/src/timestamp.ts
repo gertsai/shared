@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // Originally inspired by Orchestra orchlab/core/src/timestamp.ts (Apache 2.0).
-// The Orchestra implementation pulls `Timestamp` from Firelord through a DI
-// container; this version exposes the same surface as a plain function so
-// consumers can inject their own clock without taking a Firestore dep.
+//
+// Sprint 3.7 Amendment 1.1.4 (ADR-007): Timestamp helpers moved upstream to
+// @gertsai/audit-primitives (Tier 2 pure data layer, zero internal deps).
+// This file re-exports from the upstream package for backward compat.
+// New code SHOULD import directly from @gertsai/audit-primitives.
 
 import type { Timestamp } from './types';
 
@@ -10,32 +12,36 @@ import type { Timestamp } from './types';
  * Pluggable clock. Builders accept this via `BuilderOpts.timestampProvider`
  * so tests can pin time deterministically and consumers can route through
  * Firestore's `serverTimestamp()` (or any other source) when desired.
+ *
+ * @see {@link "@gertsai/audit-primitives".TimestampProvider} (canonical home)
  */
-export type TimestampProvider = () => Timestamp;
+export { type TimestampProvider } from '@gertsai/audit-primitives';
 
 /**
  * Default provider — reads `Date.now()` and decomposes it into the
- * `{ seconds, nanoseconds }` shape. Wall-clock precision; for monotonic
- * needs inject your own.
+ * `{ seconds, nanoseconds }` shape. Wall-clock precision.
+ *
+ * @deprecated Sprint 3.7: prefer `dateTimestampProvider` from
+ * `@gertsai/audit-primitives`. This export is kept as a backward-compat alias.
  */
-export const defaultTimestampProvider: TimestampProvider = () => {
-  const now = Date.now();
-  return {
-    seconds: Math.floor(now / 1000),
-    nanoseconds: (now % 1000) * 1_000_000,
-  };
-};
+export { dateTimestampProvider as defaultTimestampProvider } from '@gertsai/audit-primitives';
 
-/** Convert a {@link Timestamp} back to an integer millis-since-epoch. */
-export function timestampToMillis(t: Timestamp): number {
-  return t.seconds * 1000 + Math.floor(t.nanoseconds / 1_000_000);
-}
+/**
+ * Convert a {@link Timestamp} back to an integer millis-since-epoch.
+ *
+ * @deprecated Sprint 3.7: prefer `timestampToMillis` from
+ * `@gertsai/audit-primitives`. Re-export retained for backward compat.
+ */
+export { timestampToMillis } from '@gertsai/audit-primitives';
 
-/** Build a {@link Timestamp} from a JS `Date`. */
-export function timestampFromDate(d: Date): Timestamp {
-  const ms = d.getTime();
-  return {
-    seconds: Math.floor(ms / 1000),
-    nanoseconds: (ms % 1000) * 1_000_000,
-  };
-}
+/**
+ * Build a {@link Timestamp} from a JS `Date`.
+ *
+ * @deprecated Sprint 3.7: prefer `timestampFromDate` from
+ * `@gertsai/audit-primitives`. Re-export retained for backward compat.
+ */
+export { timestampFromDate } from '@gertsai/audit-primitives';
+
+// Local alias preserves the symbol name expected by older imports.
+// The actual implementation lives in @gertsai/audit-primitives.
+export type { Timestamp };

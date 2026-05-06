@@ -11,6 +11,10 @@ links:
   relation: informs
 - target: SPEC-011
   relation: informs
+- target: ADR-007
+  relation: informs
+- target: SPEC-012
+  relation: informs
 status: active
 title: Sprint 3.6 shipped — Wave 5 Phase 1 (errors + tenant-resolver + session scoping + P2 polish)
 ---
@@ -222,6 +226,8 @@ Far exceeds Sprint target (+38 estimated).
 - Sprint 3.8 (Wave 5 Phase 3): 4 entity framework adapters parallel.
 - Sprint 3.9 (Wave 5 Phase 4): 4 Orchestra HIGH candidates parallel.
 - v0.2.0 publish gate: pending explicit user confirmation (per CLAUDE.md red lines).
+
+
 
 
 

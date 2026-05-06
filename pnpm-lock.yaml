@@ -318,6 +318,12 @@ importers:
         specifier: ^3.2.4
         version: 3.2.4(@types/node@22.19.17)(tsx@4.21.0)
 
+  packages/audit-primitives:
+    devDependencies:
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.4(@types/node@22.19.17)(tsx@4.21.0)
+
   packages/auth-openfga:
     dependencies:
       '@gertsai/core':
@@ -415,6 +421,9 @@ importers:
 
   packages/entity-audit:
     dependencies:
+      '@gertsai/audit-primitives':
+        specifier: workspace:^
+        version: link:../audit-primitives
       '@gertsai/session':
         specifier: workspace:*
         version: link:../session
@@ -599,12 +608,49 @@ importers:
         specifier: ^3.0.0
         version: 3.2.4(@types/node@22.19.17)(tsx@4.21.0)
 
+  packages/runtime-context:
+    dependencies:
+      '@gertsai/session-guard':
+        specifier: workspace:^
+        version: link:../session-guard
+    devDependencies:
+      '@gertsai/di':
+        specifier: workspace:*
+        version: link:../di
+      '@gertsai/errors':
+        specifier: workspace:*
+        version: link:../errors
+      '@gertsai/session':
+        specifier: workspace:*
+        version: link:../session
+      '@gertsai/tenant-resolver':
+        specifier: workspace:*
+        version: link:../tenant-resolver
+      moleculer:
+        specifier: ^0.14.35
+        version: 0.14.35(bunyan@1.8.15)(debug@4.4.3)(ioredis@5.10.1)(nats@2.29.3)(protobufjs@7.5.6)(redlock@5.0.0-beta.2)
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.4(@types/node@22.19.17)(tsx@4.21.0)
+
   packages/session:
     dependencies:
       '@gertsai/errors':
         specifier: workspace:^
         version: link:../errors
     devDependencies:
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.4(@types/node@22.19.17)(tsx@4.21.0)
+
+  packages/session-guard:
+    devDependencies:
+      '@gertsai/errors':
+        specifier: workspace:^
+        version: link:../errors
+      '@gertsai/session':
+        specifier: workspace:^
+        version: link:../session
       vitest:
         specifier: ^3.0.0
         version: 3.2.4(@types/node@22.19.17)(tsx@4.21.0)

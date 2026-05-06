@@ -38,6 +38,7 @@
     "lint": "eslint . --max-warnings 0"
   },
   "dependencies": {
+    "@gertsai/audit-primitives": "workspace:^",
     "@gertsai/session": "workspace:*"
   },
   "devDependencies": {

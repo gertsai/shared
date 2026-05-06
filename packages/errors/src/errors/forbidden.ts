@@ -2,6 +2,8 @@
 import { AppError } from '../app-error.js';
 import { ErrorKind } from '../error-kind.js';
 
-export class ForbiddenError extends AppError<{ resource?: string; action?: string }> {
+export class ForbiddenError<
+  D extends Record<string, unknown> = { resource?: string; action?: string },
+> extends AppError<D> {
   readonly kind = ErrorKind.FORBIDDEN;
 }

@@ -1,0 +1,85 @@
+{
+  "name": "@gertsai/runtime-context",
+  "version": "0.1.0",
+  "description": "Per-request composition root for @gertsai/* — RequestContext + AuthContext + FeatureContext + ProviderContext + 5 dedicated errors + /moleculer middleware",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./moleculer": {
+      "import": {
+        "types": "./dist/moleculer/index.d.ts",
+        "default": "./dist/moleculer/index.js"
+      },
+      "require": {
+        "types": "./dist/moleculer/index.d.cts",
+        "default": "./dist/moleculer/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "moleculer": ["./dist/moleculer/index.d.ts"]
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "clean": "rm -rf dist .tsbuildinfo *.tsbuildinfo",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@gertsai/di": "workspace:^",
+    "@gertsai/errors": "workspace:^",
+    "@gertsai/session": "workspace:^",
+    "@gertsai/session-guard": "workspace:^",
+    "@gertsai/tenant-resolver": "workspace:^",
+    "moleculer": "^0.14.0"
+  },
+  "peerDependenciesMeta": {
+    "moleculer": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@gertsai/di": "workspace:*",
+    "@gertsai/errors": "workspace:*",
+    "@gertsai/session": "workspace:*",
+    "@gertsai/tenant-resolver": "workspace:*",
+    "moleculer": "^0.14.35",
+    "vitest": "^3.0.0"
+  },
+  "keywords": [
+    "request-context",
+    "runtime",
+    "composition-root",
+    "moleculer",
+    "di",
+    "gerts",
+    "gertsai"
+  ],
+  "author": "gerts.ai"
+}

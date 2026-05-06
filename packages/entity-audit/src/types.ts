@@ -7,15 +7,11 @@
 
 import type { ClientPlatform } from '@gertsai/session';
 
-/**
- * Backend-agnostic timestamp. Mirrors the `{ seconds, nanoseconds }` shape
- * used by Firestore / protobuf / gRPC so on-the-wire round-trips remain
- * lossless, but carries no runtime dependency on any of those.
- */
-export interface Timestamp {
-  readonly seconds: number;
-  readonly nanoseconds: number;
-}
+// Sprint 3.7 Amendment 1.1.4 (ADR-007): canonical Timestamp moved to
+// @gertsai/audit-primitives. Re-export here preserves backward compat;
+// new code SHOULD import directly from @gertsai/audit-primitives.
+import type { Timestamp } from '@gertsai/audit-primitives';
+export type { Timestamp };
 
 /**
  * Audit-trail fields stamped on every entity that goes through the
