@@ -24,10 +24,23 @@
  * Adapter selection mirrors `apps/pipeline/src/composition/*` style:
  * factory functions read `project.config` and pick an implementation by env
  * (`EMBEDDER_PROVIDER` = `'mock' | 'ollama' | 'openai'`).
+ *
+ * Wave 4 wiring (Sprint 3.5.2 SPEC-010): the document store is now backed by
+ * `DocumentRepository extends BaseEntityStorageService<DocumentMeta>`, which
+ * stamps audit fields (creator_uuid, created_at, _uid, status) on every
+ * write via `@gertsai/entity-storage`. The repository requires a backing
+ * `IStorageProvider` (here: in-process `InMemoryStorageProvider`) and a
+ * `Session` that scopes who is performing the writes. This example uses
+ * one process-wide `system` session; a production deployment would scope
+ * sessions per-request — see follow-up notes in the README.
  */
 import config from '../../project.config';
 
-import { MemoryDocumentStore } from '../infrastructure/memory-document.store';
+import { InMemoryStorageProvider } from '@gertsai/entity-storage';
+import { Session } from '@gertsai/session';
+
+import { DocumentRepository } from '../infrastructure/document.repository';
+import type { DocumentMeta } from '../infrastructure/document.repository';
 import { MemoryVectorStore } from '../infrastructure/memory-vector.store';
 import { MockEmbedder } from '../infrastructure/mock-embedder';
 import { OllamaEmbedder } from '../infrastructure/ollama-embedder';
@@ -60,7 +73,9 @@ export interface SharedInfrastructure {
  * instance if they need to.
  */
 export function buildInfrastructure(): SharedInfrastructure {
-  const docStore = new MemoryDocumentStore();
+  const documentProvider = new InMemoryStorageProvider<DocumentMeta>();
+  const systemSession = createSystemSession();
+  const docStore = new DocumentRepository(documentProvider, systemSession);
   const chunkStore = new MemoryVectorStore();
   const embedder = pickEmbedder();
   const gate = new AllowAllPermissionGate(console);
@@ -97,6 +112,29 @@ function pickEmbedder(): IEmbedder {
     default:
       return new MockEmbedder(384);
   }
+}
+
+/**
+ * System-level session for the example's composition root.
+ *
+ * Sprint 3.5.2: m9s-example uses one session for ALL writes via the shared
+ * DocumentRepository singleton. Audit fields (creator_uuid, created_*) come
+ * from this session. A production deployment would scope sessions per-
+ * request — see Phase 5+ follow-up notes in the README.
+ */
+function createSystemSession(): Session {
+  return new Session({
+    operatorUuid: 'system',
+    operatorType: 'system',
+    tokenGetter: async () => '',
+    dialog: {
+      confirm: async () => true,
+      alert: () => {},
+      error: () => {},
+    },
+    clientPlatform: 'system',
+    clientVersion: config.APP_VERSION,
+  });
 }
 
 /**

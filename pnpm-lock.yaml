@@ -62,12 +62,24 @@ importers:
       '@gertsai/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@gertsai/entity-audit':
+        specifier: workspace:*
+        version: link:../../packages/entity-audit
+      '@gertsai/entity-storage':
+        specifier: workspace:*
+        version: link:../../packages/entity-storage
       '@gertsai/fetch':
         specifier: workspace:*
         version: link:../../packages/fetch
       '@gertsai/m9s-cache':
         specifier: workspace:*
         version: link:../../packages/m9s-cache
+      '@gertsai/session':
+        specifier: workspace:*
+        version: link:../../packages/session
+      '@gertsai/storage-core':
+        specifier: workspace:*
+        version: link:../../packages/storage-core
       '@moleculer/channels':
         specifier: ^0.1.8
         version: 0.1.8(moleculer@0.14.35(bunyan@1.8.15)(debug@4.4.3)(ioredis@5.10.1)(nats@2.29.3)(protobufjs@7.5.6))

@@ -30,7 +30,8 @@ need a single, runnable, dependency-free reference that demonstrates:
                 HTTP                    Moleculer ApiController                 Domain
    client ──▶ /api/v1/* ──▶ services/ingest ──▶ lifecycle ──▶ UseCase ──▶ Ports
                        └──▶ services/search                        │       │
-                                                                   │       ├─ MemoryDocumentStore
+                                                                   │       ├─ DocumentRepository (Wave 4)
+                                                                   │       │   └─ InMemoryStorageProvider + Session
                                                                    │       ├─ MemoryVectorStore
                                                                    │       ├─ MockEmbedder
                                                                    │       └─ AllowAllPermissionGate
@@ -83,8 +84,104 @@ src/
 tests/
 ├── ingest-use-case.test.ts
 ├── search-use-case.test.ts
+├── audit-propagation.test.ts # Wave 4 audit envelope through DocumentRepository
 └── e2e.test.ts              # full ApiController.Start; broker.call (skip by default)
 ```
+
+## Wave 4 stack reference
+
+m9s-example demonstrates the canonical `@gertsai/*` Wave 4 application
+pattern — domain-driven entity storage with audit propagation, session-aware
+mutations, and pluggable backend providers — while preserving its hexagonal
+architecture (`domain/` ports + `infrastructure/` adapters + `application/`
+use cases).
+
+The migration touched only the **infrastructure layer**:
+
+### Architecture map
+
+| Layer | Wave 4 plumbing | Files |
+|---|---|---|
+| Domain | UNCHANGED — `Document` port shape stable | `src/domain/document.ts`, `src/domain/ports/IDocumentStore.ts` |
+| Application | UNCHANGED — use cases depend on ports | `src/application/IngestDocumentUseCase.ts`, `src/application/SearchDocumentsUseCase.ts` |
+| Infrastructure | Wave 4 envelope (DocumentReadShape with MutationMarks) lives here | `src/infrastructure/document.repository.ts` (new) |
+| Composition | InMemoryStorageProvider + Session wired here | `src/composition/infrastructure.ts` |
+
+### Repository
+
+`DocumentRepository` extends `BaseEntityStorageService<DocumentMeta>` and
+implements the existing `IDocumentStore` port. Wave 4 envelope lives
+entirely as an internal storage type — never leaks to the domain layer:
+
+```typescript
+import { BaseEntityStorageService } from '@gertsai/entity-storage';
+import type { StorageMetadata } from '@gertsai/storage-core';
+import type { MutationMarks, EntityBasicStatus } from '@gertsai/entity-audit';
+
+interface DocumentWriteShape {
+  readonly text: string;
+  readonly metadata?: DocumentMetadata;
+}
+
+interface DocumentReadShape extends DocumentWriteShape, MutationMarks {
+  readonly _uid: string;
+  readonly status: EntityBasicStatus;
+}
+
+type DocumentMeta = StorageMetadata<DocumentReadShape, DocumentWriteShape, '_uid' | 'status'>;
+
+class DocumentRepository
+  extends BaseEntityStorageService<DocumentMeta>
+  implements IDocumentStore
+{ /* save/findById in domain shape */ }
+```
+
+### Provider wiring
+
+The composition root selects `InMemoryStorageProvider` for the example
+demo — it ships full capabilities (`listeners: true`, `transactions: true`,
+`batches: true`) so all repository methods work end-to-end.
+
+```typescript
+import { InMemoryStorageProvider } from '@gertsai/entity-storage';
+import { Session } from '@gertsai/session';
+
+const documentProvider = new InMemoryStorageProvider<DocumentMeta>();
+const session = new Session({ /* operatorUuid, operatorType, tokenGetter, dialog, ... */ });
+const docStore = new DocumentRepository(documentProvider, session);
+```
+
+For production deployments, swap `InMemoryStorageProvider` for
+`PgStorageProvider` from `@gertsai/pg-client/storage` (requires a
+`CREATE TABLE documents (id text PK, data jsonb)` schema). The repository
+implementation is unchanged; only the composition wiring switches.
+
+### Audit propagation
+
+Every `repository.save(doc)` automatically stamps:
+
+- `_uid` — caller-supplied `doc.id` (mapped at the Wave 4 boundary)
+- `created_at`, `creator_uuid`, `created_by_platform` — from `Session` on first write
+- `updated_at`, `updated_by_uuid`, `updated_by_platform` — refreshed every write
+- `status` — `'created'` initially; flips to `'deleted'` on soft-delete
+
+Audit fields never reach the domain layer — `findById` strips them back to
+the plain `Document` shape.
+
+### What stays unchanged
+
+`Chunk` storage (`MemoryVectorStore`) and the `IChunkStore` port keep their
+ad-hoc cosine-similarity implementation for v1. Vector queries are
+domain-specific and Wave 4's `@gertsai/query-dsl` does not yet compile
+vector ops; that integration is a future follow-up (Sprint 3.x).
+
+### Cross-package references
+
+- [@gertsai/entity-storage](../../packages/entity-storage/README.md) — Repository base class + InMemoryStorageProvider
+- [@gertsai/storage-core](../../packages/storage-core/README.md) — IStorageProvider abstraction + capabilities flag
+- [@gertsai/entity-audit](../../packages/entity-audit/README.md) — MutationMarks + audit builders
+- [@gertsai/session](../../packages/session/README.md) — Session class + identity scoping
+- [@gertsai/pg-client](../../packages/pg-client/README.md) — `/storage` subpath for production Postgres adapter
 
 ## Run
 
@@ -269,8 +366,14 @@ pnpm --filter @gertsai-examples/m9s-example run test
 ```
 
 Unit tests mock all four ports and assert use-case orchestration. The
-e2e test that boots a real broker is `it.skip`-ed by default — flip it
-on locally once you have run `pnpm run build`.
+Wave 4 audit-propagation test (`tests/audit-propagation.test.ts`) wires
+a real `InMemoryStorageProvider` + `Session` and verifies that
+`DocumentRepository.save` stamps `creator_uuid` / `created_at` on first
+write, refreshes `updated_*` on re-save (upsert), emits
+`STORAGE_EVENTS.ENTITY_CREATED`, and that `findById` strips the audit
+envelope back to the plain `Document` shape. The e2e test that boots a
+real broker is `it.skip`-ed by default — flip it on locally once you
+have run `pnpm run build`.
 
 ## Package usage map
 
@@ -395,9 +498,13 @@ const gate = new OpenFgaPermissionGate({
 });
 ```
 
-Likewise, swap `MemoryDocumentStore` and `MemoryVectorStore` for SQL /
-Milvus adapters when ready — domain and application layers remain
-untouched.
+Likewise, the document store is already Wave 4 (`DocumentRepository`
+extending `BaseEntityStorageService`) — swap `InMemoryStorageProvider`
+for `PgStorageProvider` from `@gertsai/pg-client/storage` to land on
+Postgres without touching the repository class. `MemoryVectorStore`
+remains the only ad-hoc adapter; replace it with a real vector backend
+(Milvus / pgvector / Qdrant) when ready. Domain and application layers
+remain untouched.
 
 ## License
 
