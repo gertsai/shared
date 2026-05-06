@@ -238,3 +238,5 @@ Pattern proven: Wave 4 split на 4A (abstractions) + 4B (storage layer) — cle
 
 
 
+
+
