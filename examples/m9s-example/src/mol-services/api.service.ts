@@ -4,10 +4,13 @@ import IORedis from 'ioredis';
 
 import config from '../../project.config';
 
-// `package.json` is read at build-time and embedded into the response
-// envelope by createApiService. We import it as JSON.
+// `package.json` is loaded at runtime and embedded into the response envelope
+// by createApiService. Resolved relative to `process.cwd()` (set by `pnpm start`
+// to the package directory) so the lookup works identically from `src/` (dev,
+// ts-node-dev) and `dist/src/` (compiled, `node dist/src/index.js`) — earlier
+// fixed-`require('../../package.json')` shifted by one level after compile.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const pkg = require('../../package.json') as Record<string, unknown>;
+const pkg = require(`${process.cwd()}/package.json`) as Record<string, unknown>;
 
 // =============================================================================
 // Rate limiter (@gertsai/api-rlr) — pipeline pattern

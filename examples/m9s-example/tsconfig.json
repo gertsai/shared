@@ -12,8 +12,8 @@
     "baseUrl": ".",
     "outDir": "./dist",
     "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
+    "module": "CommonJS",
+    "moduleResolution": "node",
     "esModuleInterop": true,
     "skipLibCheck": true,
     "plugins": [
