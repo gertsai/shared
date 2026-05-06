@@ -1,7 +1,7 @@
 {
-  "name": "@gertsai/pg-client",
-  "version": "0.0.0",
-  "description": "Agnostic PostgreSQL client interface (3 methods) + mock fixture + optional ./storage adapter (PgStorageProvider implements @gertsai/storage-core IStorageProvider). Per ADR-004 + ADR-005 + ADR-011: NO Prisma/Drizzle/pg deps in core; adapter additive.",
+  "name": "@gertsai/entity-storage",
+  "version": "0.1.0",
+  "description": "Session-aware audit-stamped CRUD wrapper around IStorageProvider + InMemoryStorageProvider test fixture. Backend-agnostic. Per PRD-002 + ADR-005 + SPEC-008.",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -18,22 +18,7 @@
         "default": "./dist/index.cjs"
       }
     },
-    "./storage": {
-      "import": {
-        "types": "./dist/storage.d.ts",
-        "default": "./dist/storage.js"
-      },
-      "require": {
-        "types": "./dist/storage.d.cts",
-        "default": "./dist/storage.cjs"
-      }
-    },
     "./package.json": "./package.json"
-  },
-  "typesVersions": {
-    "*": {
-      "storage": ["./dist/storage.d.ts"]
-    }
   },
   "files": [
     "dist",
@@ -53,30 +38,32 @@
     "lint": "eslint . --max-warnings 0"
   },
   "peerDependencies": {
-    "@gertsai/storage-core": "workspace:^",
-    "@gertsai/query-dsl": "workspace:^"
+    "@gertsai/di": "workspace:^",
+    "@gertsai/entity": "workspace:^",
+    "@gertsai/entity-audit": "workspace:^",
+    "@gertsai/session": "workspace:^",
+    "@gertsai/storage-core": "workspace:^"
   },
   "peerDependenciesMeta": {
     "@gertsai/storage-core": {
       "optional": true
-    },
-    "@gertsai/query-dsl": {
-      "optional": true
     }
   },
   "devDependencies": {
-    "@gertsai/entity-storage": "workspace:*",
-    "@gertsai/query-dsl": "workspace:*",
-    "@gertsai/storage-core": "workspace:*",
+    "@gertsai/di": "workspace:*",
+    "@gertsai/entity": "workspace:*",
+    "@gertsai/entity-audit": "workspace:*",
+    "@gertsai/session": "workspace:*",
     "vitest": "^3.0.0"
   },
   "keywords": [
-    "postgres",
-    "postgresql",
-    "agnostic",
-    "interface",
     "storage",
-    "adapter",
+    "entity",
+    "crud",
+    "soft-delete",
+    "audit",
+    "in-memory",
+    "ddd",
     "gerts",
     "gertsai"
   ],

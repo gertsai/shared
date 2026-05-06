@@ -78,9 +78,9 @@ pnpm-workspace.yaml       ← packages: ['packages/*']
 
 ---
 
-## 19 packages — tier таблица + build (post-Sprint 3.0/3.0.1/3.2 per ADR-004)
+## 26 packages — tier таблица + build (post-Sprint 3.0/3.0.1/3.2/3.4/3.5 per ADR-004 + ADR-005)
 
-Все 19 packages используют **uniform tsup dual ESM+CJS** (Sprint 3.0 §U-1..U-6) с фиксированными scripts (`build`, `clean`, `test`, `typecheck`, `lint` — Sprint 3.0.1 F-8).
+Все 26 packages используют **uniform tsup dual ESM+CJS** (Sprint 3.0 §U-1..U-6) с фиксированными scripts (`build`, `clean`, `test`, `typecheck`, `lint` — Sprint 3.0.1 F-8).
 
 | Tier | Package | Internal deps | Source | Notes |
 |---|---|---|---|---|
@@ -94,15 +94,18 @@ pnpm-workspace.yaml       ← packages: ['packages/*']
 | **1** | **`@gertsai/config`** | api-core | **Sprint 3.2 W-1 (S shim)** | re-exports api-core/runtime/node — ADR-004 |
 | **1** | **`@gertsai/tenant`** | — | **Sprint 3.2 W-2 (F fresh)** | TenantId brand + getTenantIdStrict/Optional + `/moleculer` adapter |
 | **1** | **`@gertsai/otel`** | — | **Sprint 3.2 W-3 (F fresh)** | OTel SDK setup + `/moleculer` tracing; lazy peer-deps |
-| **1** | **`@gertsai/pg-client`** | — | **Sprint 3.2 W-4 (F fresh)** | agnostic 3-method PgClient interface + mockPgClient (ADR-011 I-1/I-2) |
+| **1** | **`@gertsai/pg-client`** | — (root); storage-core, query-dsl peer (`/storage`) | **Sprint 3.2 W-4 (F)** + **Sprint 3.5 W-4B-4 (A — additive `/storage` adapter)** | Root: agnostic 3-method PgClient + mockPgClient (ADR-011 I-1/I-2 unchanged). `./storage` subpath: PgStorageProvider implements IStorageProvider per ADR-005 I-3 (additive, peer-optional storage-core+query-dsl) |
 | **1** | **`@gertsai/session`** | — | **Sprint 3.4 W-4A-2 (F fresh)** | Session class + AbstractDialog + 24-value OperatorType + dataAccessUuid scoping per ADR-005 |
 | **1** | **`@gertsai/entity-audit`** | session | **Sprint 3.4 W-4A-3 (F fresh)** | MutationMarks + UpdateActionMap + 4 builder funcs (set/update/delete/restore) — backend-agnostic Timestamp |
 | 2 | `@gertsai/di` | utils | **enhanced Sprint 3.4 W-4A-4 (E)** | DI container + new guards/destroy/inference helpers (Orchestra orchlab/di patterns) |
 | 2 | `@gertsai/flux` | collection | first wave | reactive streams |
 | **2** | **`@gertsai/queue`** | — | **Sprint 3.2 W-5 (P+F)** | BullMQ wrappers + `/standalone` runner; consumed BY api-core (Sprint 3.x migration) |
 | **2** | **`@gertsai/entity`** | session | **Sprint 3.4 W-4A-1 (F fresh)** | Model + Entity + EntityWithMetadata base classes; pluggable ReactiveAdapter; `/vue` subpath; multi-framework adapter snippets in README |
+| **2** | **`@gertsai/storage-core`** | di | **Sprint 3.5 W-4B-1 (F fresh)** | Backend-agnostic IStorageProvider<Meta> interface + StorageMetadata generic + IBatchRunner/ITransactionRunner + capabilities flag + storageProviderIdentifier DI token + ListenersNotSupportedError/TransactionConflictError per ADR-005 Decision A |
+| **2** | **`@gertsai/query-dsl`** | storage-core | **Sprint 3.5 W-4B-3 (F fresh)** | Type-safe query constraints (whereField/orderBy/limit/start*/end*) compile-validated against Meta['indexed']; `./sql` subpath = compileToSql reference Postgres compiler |
 | 3 | `@gertsai/core` | llm-costs | first wave | platform contracts (Workflow types, Sprint 3.1 W-1; Sprint 3.0.1 F-9 meta) |
 | 3 | `@gertsai/hsm` | — | first wave | hierarchical state machines |
+| **3** | **`@gertsai/entity-storage`** | storage-core, entity, entity-audit, session, di | **Sprint 3.5 W-4B-2 (F fresh)** | abstract BaseEntityStorageService<Meta, UpdateActionTypes> session-aware audit-stamped CRUD + soft-delete + EventEmitter (STORAGE_EVENTS) + IDestroyable; class InMemoryStorageProvider<Meta> Map-backed test fixture full-listeners support |
 | 4 | `@gertsai/auth-openfga` | core | first wave | OpenFGA ReBAC adapter |
 | 4 | `@gertsai/api-core` | core, auth-openfga | first wave | Moleculer SDK; subpaths /contracts /moleculer /runtime/node (Sprint 2 ADR-003) |
 | 5 | `@gertsai/api-rlr` | api-core | first wave | rate limiter / retry loop runtime (ADR-011) |
@@ -111,12 +114,13 @@ pnpm-workspace.yaml       ← packages: ['packages/*']
 - **P** = Preserve git history; **F** = Fresh code; **S** = Shim/thin re-export; **P+F** = Preserve-history core + fresh boundary; **E** = Enhancement of existing package (additive only); **A** = Additive non-breaking adapter extension.
 
 **Что важно знать**:
-- All 14 first-wave + 5 Sprint 3.2 packages: uniform tsup dual ESM+CJS (Sprint 3.0 §U-3..U-6).
+- All 14 first-wave + 5 Sprint 3.2 + 3 Sprint 3.4 + 3 Sprint 3.5 packages (25 physical directories; di-enhanced counted as 26th deliverable in Wave 4 logical roll-up): uniform tsup dual ESM+CJS (Sprint 3.0 §U-3..U-6).
 - `tspc` only used in m9s-example (typia transformer). Production packages migrated off ts-patch.
 - `core` + `api-core` имеют subpath exports + typesVersions для Node10 fallback (Sprint 3.0.1 F-4).
-- `tenant`, `otel`, `queue` имеют `/moleculer`, `/moleculer`, `/standalone` subpaths соответственно — typesVersions добавлен per Sprint 3.0.1 F-4 pattern.
+- `tenant`, `otel`, `queue`, `entity`, `query-dsl`, `pg-client` имеют `/moleculer`, `/moleculer`, `/standalone`, `/vue`, `/sql`, `/storage` subpaths соответственно — typesVersions добавлен per Sprint 3.0.1 F-4 pattern.
 - ApiController workflow internal hook keyed by `Symbol.for('@gertsai/api-core:registerWorkflow')` — never surfaces в emitted `.d.ts` (Sprint 3.0.1 F-1).
 - `core/src/connectors/identity-resolver.ts` — закомментирован экспорт. См. `KNOWN-ISSUES.md` пункт 1.
+- **PgStorageProvider** (Sprint 3.5 `@gertsai/pg-client/storage`) wraps existing 3-method PgClient via raw SQL (compileToSql). capabilities { listeners: false, transactions: true, batches: true }. SQLSTATE 40001/40P01 → TransactionConflictError. ADR-005 I-3 + ADR-011 I-1/I-2 preserved (root surface unchanged).
 
 **Cross-references**:
 - ADR-004 (Foundation libs naming + extraction strategy) — обоснование rename `observe→otel`, `database→pg-client`, drop `auth-moleculer`.

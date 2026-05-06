@@ -411,6 +411,28 @@ importers:
         specifier: ^3.0.0
         version: 3.2.4(@types/node@22.19.17)(tsx@4.21.0)
 
+  packages/entity-storage:
+    dependencies:
+      '@gertsai/storage-core':
+        specifier: workspace:^
+        version: link:../storage-core
+    devDependencies:
+      '@gertsai/di':
+        specifier: workspace:*
+        version: link:../di
+      '@gertsai/entity':
+        specifier: workspace:*
+        version: link:../entity
+      '@gertsai/entity-audit':
+        specifier: workspace:*
+        version: link:../entity-audit
+      '@gertsai/session':
+        specifier: workspace:*
+        version: link:../session
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.4(@types/node@22.19.17)(tsx@4.21.0)
+
   packages/fetch:
     dependencies:
       undici:
@@ -525,6 +547,24 @@ importers:
 
   packages/pg-client:
     devDependencies:
+      '@gertsai/entity-storage':
+        specifier: workspace:*
+        version: link:../entity-storage
+      '@gertsai/query-dsl':
+        specifier: workspace:*
+        version: link:../query-dsl
+      '@gertsai/storage-core':
+        specifier: workspace:*
+        version: link:../storage-core
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.4(@types/node@22.19.17)(tsx@4.21.0)
+
+  packages/query-dsl:
+    devDependencies:
+      '@gertsai/storage-core':
+        specifier: workspace:*
+        version: link:../storage-core
       vitest:
         specifier: ^3.0.0
         version: 3.2.4(@types/node@22.19.17)(tsx@4.21.0)
@@ -543,6 +583,15 @@ importers:
 
   packages/session:
     devDependencies:
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.4(@types/node@22.19.17)(tsx@4.21.0)
+
+  packages/storage-core:
+    devDependencies:
+      '@gertsai/di':
+        specifier: workspace:*
+        version: link:../di
       vitest:
         specifier: ^3.0.0
         version: 3.2.4(@types/node@22.19.17)(tsx@4.21.0)

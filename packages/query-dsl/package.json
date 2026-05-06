@@ -1,7 +1,7 @@
 {
-  "name": "@gertsai/pg-client",
-  "version": "0.0.0",
-  "description": "Agnostic PostgreSQL client interface (3 methods) + mock fixture + optional ./storage adapter (PgStorageProvider implements @gertsai/storage-core IStorageProvider). Per ADR-004 + ADR-005 + ADR-011: NO Prisma/Drizzle/pg deps in core; adapter additive.",
+  "name": "@gertsai/query-dsl",
+  "version": "0.1.0",
+  "description": "Type-safe query DSL — constraint factories (whereField/orderBy/limit/startAt/startAfter/endAt/endBefore) compile-validated against Meta['indexed'] + reference Postgres compileToSql at /sql subpath. Per PRD-002 + ADR-005.",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -18,21 +18,21 @@
         "default": "./dist/index.cjs"
       }
     },
-    "./storage": {
+    "./sql": {
       "import": {
-        "types": "./dist/storage.d.ts",
-        "default": "./dist/storage.js"
+        "types": "./dist/sql.d.ts",
+        "default": "./dist/sql.js"
       },
       "require": {
-        "types": "./dist/storage.d.cts",
-        "default": "./dist/storage.cjs"
+        "types": "./dist/sql.d.cts",
+        "default": "./dist/sql.cjs"
       }
     },
     "./package.json": "./package.json"
   },
   "typesVersions": {
     "*": {
-      "storage": ["./dist/storage.d.ts"]
+      "sql": ["./dist/sql.d.ts"]
     }
   },
   "files": [
@@ -53,30 +53,19 @@
     "lint": "eslint . --max-warnings 0"
   },
   "peerDependencies": {
-    "@gertsai/storage-core": "workspace:^",
-    "@gertsai/query-dsl": "workspace:^"
-  },
-  "peerDependenciesMeta": {
-    "@gertsai/storage-core": {
-      "optional": true
-    },
-    "@gertsai/query-dsl": {
-      "optional": true
-    }
+    "@gertsai/storage-core": "workspace:^"
   },
   "devDependencies": {
-    "@gertsai/entity-storage": "workspace:*",
-    "@gertsai/query-dsl": "workspace:*",
     "@gertsai/storage-core": "workspace:*",
     "vitest": "^3.0.0"
   },
   "keywords": [
+    "query",
+    "dsl",
+    "type-safe",
+    "sql",
     "postgres",
-    "postgresql",
-    "agnostic",
-    "interface",
     "storage",
-    "adapter",
     "gerts",
     "gertsai"
   ],
