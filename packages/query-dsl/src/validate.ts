@@ -104,7 +104,9 @@ function validateConstraint<Meta extends StorageMetadata>(
       }
       return;
     }
-    case 'limit': {
+    case 'limit':
+    case 'limitToLast':
+    case 'offset': {
       if (
         typeof c.value !== 'number' ||
         !Number.isFinite(c.value) ||
@@ -112,7 +114,7 @@ function validateConstraint<Meta extends StorageMetadata>(
         c.value < 0
       ) {
         throw new TypeError(
-          `validateQuery[${i}]: limit.value must be a finite non-negative integer`,
+          `validateQuery[${i}]: ${c.kind}.value must be a finite non-negative integer`,
         );
       }
       return;

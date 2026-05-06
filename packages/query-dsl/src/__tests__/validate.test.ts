@@ -83,4 +83,24 @@ describe('validateQuery rejection', () => {
     const q = [{ kind: 'startAt', values: [] }] as unknown as Query<OrderMeta>;
     expect(() => validateQuery(q)).toThrow(/non-empty array/);
   });
+
+  it('rejects a negative limitToLast value', () => {
+    const q = [
+      { kind: 'limitToLast', value: -3 },
+    ] as unknown as Query<OrderMeta>;
+    expect(() => validateQuery(q)).toThrow(/limitToLast.*non-negative integer/);
+  });
+
+  it('rejects a negative offset value', () => {
+    const q = [{ kind: 'offset', value: -1 }] as unknown as Query<OrderMeta>;
+    expect(() => validateQuery(q)).toThrow(/offset.*non-negative integer/);
+  });
+
+  it('accepts valid limitToLast and offset constraints', () => {
+    const q = [
+      { kind: 'limitToLast', value: 5 },
+      { kind: 'offset', value: 10 },
+    ] as unknown as Query<OrderMeta>;
+    expect(() => validateQuery(q)).not.toThrow();
+  });
 });

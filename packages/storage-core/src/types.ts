@@ -90,7 +90,7 @@ export interface StorageMetadata<
  * Curried helper that produces a `StorageMetadata` shape while preserving
  * literal narrowing of the `indexed` field tuple.
  *
- * Usage:
+ * Symmetric usage (`Write` defaults to `Read`):
  *
  * ```ts
  * type UserRead = { id: string; email: string; age: number };
@@ -102,40 +102,65 @@ export interface StorageMetadata<
  * // → StorageMetadata<UserRead, UserRead, 'id' | 'email'>
  * ```
  *
+ * Asymmetric usage — read shape includes audit marks, write shape doesn't.
+ * This is the dominant pattern when wrapping a `BaseEntityStorageService`,
+ * because `entity-audit` stamps the `MutationMarks` triplet on the way in
+ * and reads return the full audit-enriched record:
+ *
+ * ```ts
+ * import type { MutationMarks } from '@gertsai/entity-audit';
+ *
+ * type UserData = { name: string; email: string };
+ * type UserRead = UserData & MutationMarks;
+ *
+ * const userMeta = defineStorageMetadata<UserRead, UserData>()({
+ *   indexed: ['email'] as const,
+ * });
+ * type UserMeta = typeof userMeta;
+ * // → StorageMetadata<UserRead, UserData, 'email'>
+ * ```
+ *
  * Why curried: TypeScript cannot partially infer generics. The first call
- * fixes `Read` from a type argument, the second call infers `T` from the
- * literal tuple. The `as const` (or readonly tuple) on `indexed` keeps
- * the literal types intact through the inference.
+ * fixes `Read` (and optionally `Write`) from type arguments, the second
+ * call infers `T` from the literal tuple. The `as const` (or readonly
+ * tuple) on `indexed` keeps the literal types intact through the inference.
  *
  * The returned object is a phantom — every property has type-only meaning,
  * the runtime fields are placeholder values. Do not depend on runtime
  * shape; only `typeof` the return.
  *
  * @template Read - The read shape; passed at the first call site.
+ * @template Write - The write shape; defaults to `Read`. Per SPEC-008.1
+ *   audit fix F4, supplying `Write` separately is the dominant pattern for
+ *   audit-stamped entities (Read = data + MutationMarks; Write = data).
  * @returns A function accepting `{ indexed: readonly string[] }` whose
  *   return type is the corresponding {@link StorageMetadata}.
  *
  * @public
  */
-export function defineStorageMetadata<Read>(): <
+export function defineStorageMetadata<Read, Write = Read>(): <
   const T extends { readonly indexed: readonly string[] },
 >(
   input: T,
-) => StorageMetadata<Read, Read, T['indexed'][number]> {
+) => StorageMetadata<Read, Write, T['indexed'][number]> {
   return <const T extends { readonly indexed: readonly string[] }>(
     input: T,
-  ): StorageMetadata<Read, Read, T['indexed'][number]> => {
+  ): StorageMetadata<Read, Write, T['indexed'][number]> => {
     // Preserve the literal tuple at runtime for downstream introspection
     // (e.g., adapters that want to enumerate indexed columns at startup).
     // The phantom typed slots (`read`, `write`, `indexed`) carry no
     // runtime value — only the static type matters.
     const out = {
       read: undefined as unknown as Read,
-      write: undefined as unknown as Read,
+      write: undefined as unknown as Write,
       indexed: undefined as unknown as T['indexed'][number],
       _runtimeIndexed: input.indexed,
     };
-    return out as unknown as StorageMetadata<Read, Read, T['indexed'][number]>;
+    return out as unknown as StorageMetadata<
+      Read,
+      Write,
+      T['indexed'][number]
+    >;
   };
 }
 
@@ -237,6 +262,47 @@ export interface ITransactionRunner<Meta extends StorageMetadata> {
   /** Queue a delete to commit when the transaction resolves. */
   delete(path: string, id: string): void;
 }
+
+/**
+ * Pluggable structured-logging facade consumed by upstream services
+ * (`@gertsai/entity-storage`'s `BaseEntityStorageService`, future adapters).
+ *
+ * The four methods mirror the standard severity ladder. Each accepts an
+ * optional structured `ctx` payload — adapters typically forward it as a
+ * JSON-serialisable child record. Loggers SHOULD treat `ctx` as best-effort
+ * metadata and never throw on unrecognised keys.
+ *
+ * Per SPEC-008 audit fix F-9: services accept a `StorageLogger` via
+ * constructor opts and default to {@link noopStorageLogger} when omitted, so
+ * production code remains pay-per-use while tests can plug a `vi.fn()`-backed
+ * collector.
+ *
+ * @public
+ */
+export interface StorageLogger {
+  /** Verbose tracing — entry/exit of internal methods, queued operations. */
+  debug(msg: string, ctx?: Record<string, unknown>): void;
+  /** Notable lifecycle events — service start, shutdown, replays. */
+  info(msg: string, ctx?: Record<string, unknown>): void;
+  /** Recoverable anomalies — listener failures during teardown, retries. */
+  warn(msg: string, ctx?: Record<string, unknown>): void;
+  /** Errors propagating to the caller — failed writes, transaction conflicts. */
+  error(msg: string, ctx?: Record<string, unknown>): void;
+}
+
+/**
+ * No-op {@link StorageLogger} used as the default when callers do not supply
+ * a logger. Each method is `() => {}` so production hot paths pay only the
+ * cost of a vtable dispatch — no allocation, no string formatting.
+ *
+ * @public
+ */
+export const noopStorageLogger: StorageLogger = {
+  debug: () => {},
+  info: () => {},
+  warn: () => {},
+  error: () => {},
+};
 
 /**
  * The backend-agnostic storage abstraction.

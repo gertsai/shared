@@ -152,6 +152,64 @@ describe('InMemoryStorageProvider — runBatch', () => {
   });
 });
 
+describe('InMemoryStorageProvider — getDocs/count apply Query<Meta>', () => {
+  it('getDocs applies WhereOp filter (parity with PgStorageProvider/compileToSql)', async () => {
+    const p = new InMemoryStorageProvider<UserMeta>();
+    await p.set('users', 'u1', { name: 'A', age: 1 });
+    await p.set('users', 'u2', { name: 'B', age: 5 });
+    await p.set('users', 'u3', { name: 'C', age: 9 });
+    const out = await p.getDocs(
+      'users',
+      [{ kind: 'where', field: 'age', op: '>=', value: 5 }] as never,
+    );
+    expect(out.map((u) => u.name).sort()).toEqual(['B', 'C']);
+  });
+
+  it('count applies the same filter as getDocs', async () => {
+    const p = new InMemoryStorageProvider<UserMeta>();
+    await p.set('users', 'u1', { name: 'A', age: 1 });
+    await p.set('users', 'u2', { name: 'B', age: 5 });
+    await p.set('users', 'u3', { name: 'C', age: 9 });
+    const n = await p.count(
+      'users',
+      [{ kind: 'where', field: 'age', op: '<', value: 5 }] as never,
+    );
+    expect(n).toBe(1);
+  });
+
+  it('getDocs orders + limits per query (parity with compileToSql ORDER BY/LIMIT)', async () => {
+    const p = new InMemoryStorageProvider<UserMeta>();
+    await p.set('users', 'u1', { name: 'A', age: 1 });
+    await p.set('users', 'u2', { name: 'B', age: 5 });
+    await p.set('users', 'u3', { name: 'C', age: 9 });
+    const out = await p.getDocs(
+      'users',
+      [
+        { kind: 'orderBy', field: 'age', direction: 'desc' },
+        { kind: 'limit', value: 2 },
+      ] as never,
+    );
+    expect(out.map((u) => u.age)).toEqual([9, 5]);
+  });
+
+  it('onCollectionSnapshot fires only docs matching the listener query', async () => {
+    const p = new InMemoryStorageProvider<UserMeta>();
+    const cb = vi.fn();
+    const off = p.onCollectionSnapshot(
+      'users',
+      [{ kind: 'where', field: 'age', op: '>=', value: 5 }] as never,
+      cb,
+    );
+    await p.set('users', 'u1', { name: 'A', age: 1 });
+    await p.set('users', 'u2', { name: 'B', age: 5 });
+    const last = cb.mock.calls[cb.mock.calls.length - 1]?.[0] as Array<{
+      readonly name: string;
+    }>;
+    expect(last.map((u) => u.name)).toEqual(['B']);
+    off();
+  });
+});
+
 describe('InMemoryStorageProvider — runTransaction', () => {
   it('applies writes when no concurrent mutation observed', async () => {
     const p = new InMemoryStorageProvider<UserMeta>();

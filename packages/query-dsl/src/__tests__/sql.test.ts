@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest';
 import type { StorageMetadata } from '@gertsai/storage-core';
 import {
   limit,
+  limitToLast,
+  offset,
   orderBy,
   whereField,
 } from '../constraints';
@@ -107,6 +109,44 @@ describe('compileToSql multi-constraint composition', () => {
       'SELECT * FROM invoices WHERE status = $1 AND total > $2 ORDER BY total ASC, uid ASC LIMIT $3',
     );
     expect(params).toEqual(['paid', 0, 10]);
+  });
+});
+
+describe('compileToSql offset / limitToLast', () => {
+  it('appends OFFSET $N parameter for offset(n)', () => {
+    const q: Query<InvoiceMeta> = [
+      whereField<InvoiceMeta, 'status'>('status', '==', 'paid'),
+      orderBy<InvoiceMeta, 'total'>('total', 'asc'),
+      offset<InvoiceMeta>(20),
+    ];
+    const { sql, params } = compileToSql(q, 'invoices');
+    expect(sql).toBe(
+      'SELECT * FROM invoices WHERE status = $1 ORDER BY total ASC OFFSET $2',
+    );
+    expect(params).toEqual(['paid', 20]);
+  });
+
+  it('emits LIMIT before OFFSET in SQL output', () => {
+    const q: Query<InvoiceMeta> = [
+      orderBy<InvoiceMeta, 'total'>('total', 'asc'),
+      limit<InvoiceMeta>(10),
+      offset<InvoiceMeta>(5),
+    ];
+    const { sql, params } = compileToSql(q, 'invoices');
+    expect(sql).toBe(
+      'SELECT * FROM invoices ORDER BY total ASC LIMIT $1 OFFSET $2',
+    );
+    expect(params).toEqual([10, 5]);
+  });
+
+  it('rejects limitToLast — caller must reverse orderBy + use limit', () => {
+    const q: Query<InvoiceMeta> = [
+      orderBy<InvoiceMeta, 'total'>('total', 'asc'),
+      limitToLast<InvoiceMeta>(5),
+    ];
+    expect(() => compileToSql(q, 'invoices')).toThrow(
+      /limitToLast is not supported/,
+    );
   });
 });
 

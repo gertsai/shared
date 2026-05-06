@@ -227,6 +227,34 @@ The package itself has no DOM or browser dependency — it is pure types
 plus two error classes plus a DI token. Bundles fine for browser
 adapters (e.g., a future Firestore Web SDK adapter).
 
+## Migration from Orchestra `orchlab/storage`
+
+| Orchestra | `@gertsai/storage-core` | Notes |
+| --- | --- | --- |
+| Firelord `MetaType<R, W, KeyofR>` | `StorageMetadata<Read, Write, Indexed>` | Pure TypeScript envelope — no Firelord / Firestore types. |
+| `IStorageProvider` (Firestore-tied) | `IStorageProvider<Meta>` | Adds a `capabilities` flag so adapters declare listener / transaction / batch support. |
+| `runTransaction(fn)` returns Firestore `Transaction` | `runTransaction(fn)` returns the user value | Conflicts surface as `TransactionConflictError` instead of raw Firestore errors. |
+| Listener returns `Promise<() => void>` | Returns `() => void` (sync) | Cleaner DX — no awaiting an unsubscribe. |
+| `IStorageDocumentSnapshot { _uid, path, data, metadata }` | `Meta['read']` directly | Caller already knows path / id; the surrogate `_uid` lives inside `data` if needed. |
+| `IStorageCollectionSnapshot { added, modified, removed }` | `Meta['read'][]` flat | Documented limitation; downstream diffing belongs to the consumer. |
+
+## Troubleshooting / FAQ
+
+- **"`onDocumentSnapshot` throws `ListenersNotSupportedError`."** The
+  adapter declared `capabilities.listeners = false` — branch on
+  `provider.capabilities.listeners` before subscribing, or fall back to
+  polling. SQL-backed adapters (`@gertsai/pg-client/storage`) currently
+  ship with listeners disabled.
+- **"`runTransaction` keeps throwing `TransactionConflictError`."** The
+  abstraction does not retry — wrap your transaction in a bounded retry
+  loop (the README's `withRetry` helper is one option). Postgres
+  `SQLSTATE 40001` and `40P01` both map to this error.
+- **"My adapter accidentally imported `firebase-admin`."** That defeats
+  the abstraction — vendor SDK dependencies must live in adapter
+  packages (e.g. `@gertsai/pg-client/storage`), not in the consumer of
+  `IStorageProvider<Meta>`. See the "Extending: writing a new adapter"
+  section.
+
 ## License
 
-Apache 2.0
+[Apache-2.0](./LICENSE) — see [LICENSE](./LICENSE).

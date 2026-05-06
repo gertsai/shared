@@ -12,7 +12,7 @@
 import { describe, expectTypeOf, it } from 'vitest';
 
 import type { StorageMetadata } from '@gertsai/storage-core';
-import { limit, orderBy, whereField } from '../constraints';
+import { defineQueryConstraints, limit, orderBy, whereField } from '../constraints';
 import type {
   LimitConstraint,
   OrderByConstraint,
@@ -60,5 +60,34 @@ describe('orderBy / limit type-level constraints', () => {
   it('limit returns LimitConstraint<Meta>', () => {
     const c = limit<ProductMeta>(10);
     expectTypeOf(c).toEqualTypeOf<LimitConstraint<ProductMeta>>();
+  });
+});
+
+describe('defineQueryConstraints curried Meta narrowing (F3)', () => {
+  it('captures Meta so .where infers F from the field literal alone', () => {
+    const q = defineQueryConstraints<ProductMeta>();
+    const c = q.where('name', '==', 'widget');
+    // The bound `where` returns the same shape as the standalone factory.
+    expectTypeOf(c).toEqualTypeOf<WhereConstraint<ProductMeta, 'name'>>();
+  });
+
+  it('rejects fields not in Meta["indexed"] without an explicit generic', () => {
+    const q = defineQueryConstraints<ProductMeta>();
+    // @ts-expect-error - 'description' is not in Meta['indexed'].
+    q.where('description', '==', 'x');
+  });
+
+  it('orderBy / limit inherit the captured Meta', () => {
+    const q = defineQueryConstraints<ProductMeta>();
+    const o = q.orderBy('price', 'desc');
+    expectTypeOf(o).toEqualTypeOf<OrderByConstraint<ProductMeta, 'price'>>();
+    const l = q.limit(10);
+    expectTypeOf(l).toEqualTypeOf<LimitConstraint<ProductMeta>>();
+  });
+
+  it('the array-op overload still requires an array value through the curry', () => {
+    const q = defineQueryConstraints<ProductMeta>();
+    // @ts-expect-error - `in` requires ReadonlyArray<unknown>, not a scalar.
+    q.where('name', 'in', 'oops');
   });
 });

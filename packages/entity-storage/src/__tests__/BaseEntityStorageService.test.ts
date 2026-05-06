@@ -11,6 +11,7 @@ import {
   ListenersNotSupportedError,
   type IStorageProvider,
   type StorageCapabilities,
+  type StorageLogger,
   type StorageMetadata,
 } from '@gertsai/storage-core';
 
@@ -321,5 +322,228 @@ describe('BaseEntityStorageService — set / update / delete / restore round-tri
     expect(svc.capabilities.listeners).toBe(true);
     expect(svc.capabilities.transactions).toBe(true);
     expect(svc.capabilities.batches).toBe(true);
+  });
+});
+
+describe('BaseEntityStorageService — destroy() hard-delete (F-7)', () => {
+  it('destroy() removes the row + emits ENTITY_DESTROYED', async () => {
+    const provider = new InMemoryStorageProvider<UserMeta>();
+    const svc = new UsersStorage(provider, makeSession());
+    const { id } = await svc.set({ name: 'Z', email: 'z@x.com' } as UserData);
+    const handler = vi.fn();
+    svc.on(STORAGE_EVENTS.ENTITY_DESTROYED, handler);
+
+    await svc.destroy(id);
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler.mock.calls[0]?.[0]).toMatchObject({
+      event: 'entity-destroyed',
+      path: 'users',
+      id,
+    });
+    // Hard-delete: row physically gone (distinct from soft-delete).
+    expect(await provider.getDoc('users', id)).toBeNull();
+    expect(await svc.get(id)).toBeNull();
+  });
+
+  it('destroy() of an already-destroyed id is silent (idempotent at InMemory provider)', async () => {
+    const provider = new InMemoryStorageProvider<UserMeta>();
+    const svc = new UsersStorage(provider, makeSession());
+    const { id } = await svc.set({ name: 'Z', email: 'z@x.com' } as UserData);
+    await svc.destroy(id);
+    // Second call must not throw at the InMemory provider — the underlying
+    // Map.delete returns false silently. Concrete adapters MAY throw their
+    // own backend-level errors; behaviour is provider-defined.
+    await expect(svc.destroy(id)).resolves.toBeUndefined();
+  });
+
+  it('destroy() rejects when service has been $destroyed', async () => {
+    const provider = new InMemoryStorageProvider<UserMeta>();
+    const svc = new UsersStorage(provider, makeSession());
+    svc.$destroy();
+    await expect(svc.destroy('any-id')).rejects.toThrow(/destroyed/);
+  });
+
+  it('destroy() with batch/transaction routing throws — drop down to provider runner', async () => {
+    const provider = new InMemoryStorageProvider<UserMeta>();
+    const svc = new UsersStorage(provider, makeSession());
+    await provider.runBatch(async (b) => {
+      // We pass `b` cast as AuditedBatchRunner shape just to trigger the
+      // routed branch — the cast is fine because the routed branch throws
+      // before touching the runner's surface.
+      await expect(
+        svc.destroy('id', { batch: b as unknown as never }),
+      ).rejects.toThrow(/destroy via batch\/transaction not supported/);
+    });
+  });
+});
+
+describe('BaseEntityStorageService — per-method batch/transaction routing (F-8)', () => {
+  it('set({ batch }) queues onto batch + skips immediate emit', async () => {
+    const provider = new InMemoryStorageProvider<UserMeta>();
+    const svc = new UsersStorage(provider, makeSession());
+    const created = vi.fn();
+    svc.on(STORAGE_EVENTS.ENTITY_CREATED, created);
+
+    const result = await svc.runBatch(async (batch) => {
+      const r = await svc.set(
+        { _uid: 'b-1', name: 'B', email: 'b@x.com' } as UserData & {
+          _uid: string;
+        },
+        { batch },
+      );
+      // Inside the batch, no commit yet → row not visible to direct provider.get.
+      expect(r.id).toBe('b-1');
+      expect(created).not.toHaveBeenCalled();
+      return r.id;
+    });
+    expect(result).toBe('b-1');
+    // After batch flush, row exists.
+    expect(await provider.getDoc('users', 'b-1')).not.toBeNull();
+    // Per F-8 contract: routed mutations skip the per-call emit on the
+    // service. The batch user is responsible for any commit-time emits.
+    expect(created).not.toHaveBeenCalled();
+  });
+
+  it('update({ transaction }) queues onto tx + applies on commit', async () => {
+    const provider = new InMemoryStorageProvider<UserMeta>();
+    const svc = new UsersStorage(provider, makeSession());
+    const { id } = await svc.set({ name: 'A', email: 'a@x.com' } as UserData);
+
+    const updated = vi.fn();
+    svc.on(STORAGE_EVENTS.ENTITY_UPDATED, updated);
+
+    await svc.runTransaction(async (tx) => {
+      await svc.update(id, { name: 'A2' } as Partial<UserData>, {
+        transaction: tx,
+      });
+    });
+    expect(updated).not.toHaveBeenCalled(); // routed → no per-call emit
+    const stored = (await provider.getDoc('users', id)) as
+      | (UserData & Record<string, unknown>)
+      | null;
+    expect(stored?.name).toBe('A2');
+  });
+
+  it('delete({ batch }) queues a soft-delete onto batch', async () => {
+    const provider = new InMemoryStorageProvider<UserMeta>();
+    const svc = new UsersStorage(provider, makeSession());
+    const { id } = await svc.set({ name: 'A', email: 'a@x.com' } as UserData);
+
+    await svc.runBatch(async (batch) => {
+      await svc.delete(id, { batch });
+    });
+    const stored = (await provider.getDoc('users', id)) as {
+      status: string;
+    } | null;
+    expect(stored?.status).toBe('deleted');
+  });
+
+  it('restore({ transaction }) queues a restore onto tx', async () => {
+    const provider = new InMemoryStorageProvider<UserMeta>();
+    const svc = new UsersStorage(provider, makeSession());
+    const { id } = await svc.set({ name: 'A', email: 'a@x.com' } as UserData);
+    await svc.delete(id);
+
+    await svc.runTransaction(async (tx) => {
+      await svc.restore(id, { transaction: tx });
+    });
+    const stored = (await provider.getDoc('users', id)) as {
+      status: string;
+    } | null;
+    expect(stored?.status).toBe('created');
+  });
+});
+
+describe('BaseEntityStorageService — pluggable logger (F-9)', () => {
+  const makeRecordingLogger = (): StorageLogger & {
+    debug: ReturnType<typeof vi.fn>;
+    info: ReturnType<typeof vi.fn>;
+    warn: ReturnType<typeof vi.fn>;
+    error: ReturnType<typeof vi.fn>;
+  } => ({
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  });
+
+  class LoggedUsersStorage extends BaseEntityStorageService<UserMeta> {
+    constructor(
+      provider: IStorageProvider<UserMeta>,
+      session: Session,
+      logger: StorageLogger,
+    ) {
+      super({ provider, session, path: 'users', logger });
+    }
+  }
+
+  it('default opts use noopStorageLogger — service constructs without crashing', async () => {
+    // Coverage for the noop default path. No assertion on calls.
+    const provider = new InMemoryStorageProvider<UserMeta>();
+    const svc = new UsersStorage(provider, makeSession());
+    await expect(
+      svc.set({ name: 'A', email: 'a@x.com' } as UserData),
+    ).resolves.toMatchObject({ id: expect.any(String) });
+  });
+
+  it('custom logger receives debug entries on set/update/delete/restore/destroy', async () => {
+    const provider = new InMemoryStorageProvider<UserMeta>();
+    const logger = makeRecordingLogger();
+    const svc = new LoggedUsersStorage(provider, makeSession(), logger);
+
+    const { id } = await svc.set({ name: 'A', email: 'a@x.com' } as UserData);
+    await svc.update(id, { name: 'A2' } as Partial<UserData>);
+    await svc.delete(id);
+    await svc.restore(id);
+    await svc.destroy(id);
+
+    const calls = logger.debug.mock.calls.map((c) => c[0]);
+    expect(calls).toEqual(
+      expect.arrayContaining(['set', 'update', 'delete', 'restore', 'destroy']),
+    );
+  });
+
+  it('logger.debug fires on runTransaction enter+exit', async () => {
+    const provider = new InMemoryStorageProvider<UserMeta>();
+    const logger = makeRecordingLogger();
+    const svc = new LoggedUsersStorage(provider, makeSession(), logger);
+
+    await svc.runTransaction(async () => undefined);
+    const calls = logger.debug.mock.calls.map((c) => c[0]);
+    expect(calls).toEqual(
+      expect.arrayContaining(['runTransaction:enter', 'runTransaction:exit']),
+    );
+  });
+
+  it('logger.error fires when runBatch callback throws', async () => {
+    const provider = new InMemoryStorageProvider<UserMeta>();
+    const logger = makeRecordingLogger();
+    const svc = new LoggedUsersStorage(provider, makeSession(), logger);
+
+    await expect(
+      svc.runBatch(async () => {
+        throw new Error('boom');
+      }),
+    ).rejects.toThrow(/boom/);
+    expect(logger.error).toHaveBeenCalledWith(
+      'runBatch:fail',
+      expect.objectContaining({ error: 'boom' }),
+    );
+  });
+
+  it('routed paths log debug suffix (set:batch, update:tx, etc.)', async () => {
+    const provider = new InMemoryStorageProvider<UserMeta>();
+    const logger = makeRecordingLogger();
+    const svc = new LoggedUsersStorage(provider, makeSession(), logger);
+
+    await svc.runBatch(async (batch) => {
+      await svc.set(
+        { name: 'B', email: 'b@x.com' } as UserData,
+        { batch },
+      );
+    });
+    const debugMsgs = logger.debug.mock.calls.map((c) => c[0]);
+    expect(debugMsgs).toContain('set:batch');
   });
 });

@@ -13,8 +13,9 @@ export type {
   IStorageProvider,
   IBatchRunner,
   ITransactionRunner,
+  StorageLogger,
 } from './types';
-export { defineStorageMetadata } from './types';
+export { defineStorageMetadata, noopStorageLogger } from './types';
 
 export { ListenersNotSupportedError, TransactionConflictError } from './errors';
 

@@ -30,6 +30,7 @@ import {
   BaseEntityStorageService,
   InMemoryStorageProvider,
   STORAGE_EVENTS,
+  type IStorageProvider,
   type StorageMetadata,
 } from '@gertsai/entity-storage';
 
@@ -70,7 +71,9 @@ await users.restore(id);  // un-delete
 |---|---|---|
 | `BaseEntityStorageService<Meta, UpdateActionTypes>` | abstract class | `EventEmitter` + `IDestroyable`. Wraps `IStorageProvider<Meta>` with audit-stamped CRUD + soft-delete + listener wrappers. |
 | `InMemoryStorageProvider<Meta>` | class | Map-backed test fixture. Full listener / batch / transaction support. |
-| `STORAGE_EVENTS` | const | `entity-created`, `entity-updated`, `entity-deleted`, `entity-restored`, `destroyed`. |
+| `STORAGE_EVENTS` | const | `entity-created`, `entity-updated`, `entity-deleted`, `entity-restored`, `entity-destroyed`, `destroyed`. |
+| `StorageLogger` (re-export) | interface | Pluggable logger (`debug`/`info`/`warn`/`error`) accepted via `BaseEntityStorageServiceOpts.logger`. Default `noopStorageLogger`. |
+| `MutationRoutingOpts<Meta>` | interface | Per-method `{ batch?, transaction? }` knob — route a mutation onto a caller-supplied audited runner instead of committing immediately. |
 | `ListenersNotSupportedError` | class | Thrown by listener wrappers when provider reports `capabilities.listeners === false`. |
 | `TransactionConflictError` | class | Thrown by `runTransaction` on optimistic-concurrency violation. |
 
@@ -85,8 +88,9 @@ from a local stub. The public surface is unchanged.)
 | `entity-created` | `{ path, id, data }` | Emitted after `set(...)` succeeds. |
 | `entity-updated` | `{ path, id, data }` | Emitted after `update(...)` succeeds. The payload `data` is the partial **with audit triplet** that was forwarded to the provider. |
 | `entity-deleted` | `{ path, id, data }` | Emitted after a soft-`delete(...)` succeeds. The record is **not removed** from storage — `status` flips to `'deleted'` and the `deleted_*` triplet is stamped. |
-| `entity-restored` | `{ path, id, data }` | Emitted after `restore(...)` reverses a soft-delete. |
-| `destroyed` | — | Emitted once on first `$destroy()` call (idempotent). |
+| `entity-restored` | `{ path, id }` | Emitted after `restore(...)` reverses a soft-delete. |
+| `entity-destroyed` | `{ path, id }` | Emitted after `destroy(...)` hard-deletes the row via `provider.delete(...)`. Distinct from `entity-deleted` (soft). |
+| `destroyed` | — | Emitted once on first `$destroy()` call (idempotent). Service-lifecycle event, not entity. |
 
 ## Capabilities + listener wrappers
 
@@ -100,16 +104,25 @@ before subscribing.
 `{ listeners: true, transactions: true, batches: true }` so it covers
 every test path.
 
-## Soft-delete semantics
+## Soft-delete vs. hard-delete
 
-`delete(uid)` calls `provider.update(...)` (NOT `provider.delete`) with
-the `buildDataForDelete()` audit fields. The record stays on disk,
-`status` becomes `'deleted'`, and `deleted_*` is stamped. `restore(uid)`
-clears the triplet and flips `status` back to `'created'`.
+Two distinct mutation methods, audit semantics differ:
 
-To **hard-delete** at the storage layer, call `provider.delete(...)`
-directly — `BaseEntityStorageService` intentionally does not expose this
-to keep audit-trail invariants intact.
+| Method | Provider call | Audit | Event | Reversible |
+|---|---|---|---|---|
+| `delete(uid)` | `provider.update(...)` | `deleted_*` triplet + `status='deleted'` | `entity-deleted` | yes — via `restore(uid)` |
+| `destroy(uid)` | `provider.delete(...)` | none — row is gone | `entity-destroyed` | no |
+
+```ts
+await users.delete(id);   // soft-delete: row stays, status flips
+await users.restore(id);  // un-delete works
+await users.destroy(id);  // hard-delete: row physically removed, no audit trail
+```
+
+`destroy(uid)` after `destroy(uid)` (or any provider that already
+removed the row) silently no-ops at the InMemory provider — concrete
+adapters MAY raise their own backend-level "row not found" errors;
+behaviour is provider-defined.
 
 ## Transactions
 
@@ -139,6 +152,31 @@ implicit commit, `runTransaction` throws.
 | `@gertsai/storage-core` | `workspace:^` (peer, optional during Wave 4B Phase A) | Real package lands in Phase B; types are stubbed locally until then. |
 | `@gertsai/di` | `workspace:^` | `IDestroyable` contract. |
 
+## Migration from Orchestra `orchlab/storage`
+
+| Orchestra | `@gertsai/entity-storage` | Notes |
+| --- | --- | --- |
+| `BaseEntityStorageService<Meta>` | `BaseEntityStorageService<Meta, UpdateActionTypes?>` | Constructor takes `provider` + `session` explicitly — no DI lookup. |
+| Nested-collection tuple path | Single-string `path` | Subclass sets `path = 'users'` once; nested collections expressed in the path itself. |
+| `diContainer.$sd.get(storageProviderIdentifier)` | `constructor.provider` | Explicit dependency-passing per ADR-005 Decision B. |
+| `serverTimestamp()` | Generic `Timestamp` interface | `TimestampProvider` is injectable so the package stays backend-agnostic. |
+| `EventEmitter` declared but never emits | Real `STORAGE_EVENTS` emit on every CRUD | Five domain events plus the lifecycle `destroyed` event. |
+| `destroy(uid)` hard-deleted by default | Soft-delete is the default via `delete()`; `destroy(uid)` is the explicit hard-delete | Audit semantics differ — see "Soft-delete vs. hard-delete". |
+
+## Troubleshooting / FAQ
+
+- **"`update(uid, ...)` throws `Cannot update an already-deleted row`."**
+  Soft-deleted rows refuse audit-stamped `update` to keep the audit trail
+  consistent — call `restore(uid)` first, or use `destroy(uid)` if the row
+  should be gone for good.
+- **"Snapshot listener never fires."** Check
+  `service.capabilities.listeners` — SQL-backed providers report
+  `false` and the listener wrappers throw `ListenersNotSupportedError`.
+  Use `InMemoryStorageProvider` for tests that need real-time events.
+- **"`runTransaction` keeps retrying without progress."** The wrapper
+  does not retry by default — wrap your call in a bounded `withRetry`
+  helper and surface non-conflict errors so they don't get masked.
+
 ## License
 
-Apache 2.0
+[Apache-2.0](./LICENSE) — see [LICENSE](./LICENSE).

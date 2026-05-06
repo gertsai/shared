@@ -33,6 +33,7 @@ import type {
   StorageMetadata,
 } from '@gertsai/storage-core';
 import { TransactionConflictError } from '@gertsai/storage-core';
+import { applyQueryFilter } from './applyQueryFilter';
 
 interface VersionedDoc {
   readonly version: number;
@@ -105,10 +106,12 @@ export class InMemoryStorageProvider<Meta extends StorageMetadata>
   private _emitColl(path: string): void {
     const set = this._collListeners.get(path);
     if (!set || set.size === 0) return;
-    const docs = Array.from(this._coll(path).values()).map(
+    const allDocs = Array.from(this._coll(path).values()).map(
       (d) => d.data,
     ) as Meta['read'][];
-    for (const { cb } of set) {
+    for (const { query, cb } of set) {
+      const docs =
+        query.length === 0 ? allDocs : applyQueryFilter<Meta>(allDocs, query);
       try {
         cb(docs);
       } catch {
@@ -186,15 +189,22 @@ export class InMemoryStorageProvider<Meta extends StorageMetadata>
 
   async getDocs(
     path: string,
-    _query?: Query<Meta>,
+    query?: Query<Meta>,
   ): Promise<Meta['read'][]> {
-    return Array.from(this._coll(path).values()).map(
+    const docs = Array.from(this._coll(path).values()).map(
       (d) => d.data,
     ) as Meta['read'][];
+    return applyQueryFilter<Meta>(docs, query);
   }
 
-  async count(path: string, _query?: Query<Meta>): Promise<number> {
-    return this._coll(path).size;
+  async count(path: string, query?: Query<Meta>): Promise<number> {
+    if (!query || query.length === 0) {
+      return this._coll(path).size;
+    }
+    const docs = Array.from(this._coll(path).values()).map(
+      (d) => d.data,
+    ) as Meta['read'][];
+    return applyQueryFilter<Meta>(docs, query).length;
   }
 
   // ─────────────────── IStorageProvider — Listeners ───────────────────
@@ -241,9 +251,11 @@ export class InMemoryStorageProvider<Meta extends StorageMetadata>
     }
     const entry: CollectionListenerEntry<Meta> = { query, cb };
     set.add(entry);
-    const docs = Array.from(this._coll(path).values()).map(
+    const allDocs = Array.from(this._coll(path).values()).map(
       (d) => d.data,
     ) as Meta['read'][];
+    const docs =
+      query.length === 0 ? allDocs : applyQueryFilter<Meta>(allDocs, query);
     cb(docs);
     return () => {
       this._collListeners.get(path)?.delete(entry);

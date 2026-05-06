@@ -73,11 +73,21 @@ export function compileToSql<Meta extends StorageMetadata>(
   const whereClauses: string[] = [];
   const orderClauses: string[] = [];
   let limitClause: string | null = null;
+  let offsetClause: string | null = null;
 
   for (const constraint of query) {
-    compileConstraint(constraint, params, whereClauses, orderClauses, (l) => {
-      limitClause = l;
-    });
+    compileConstraint(
+      constraint,
+      params,
+      whereClauses,
+      orderClauses,
+      (l) => {
+        limitClause = l;
+      },
+      (o) => {
+        offsetClause = o;
+      },
+    );
   }
 
   let sql = `SELECT * FROM ${table}`;
@@ -90,6 +100,9 @@ export function compileToSql<Meta extends StorageMetadata>(
   if (limitClause !== null) {
     sql += ` ${limitClause}`;
   }
+  if (offsetClause !== null) {
+    sql += ` ${offsetClause}`;
+  }
   return { sql, params };
 }
 
@@ -99,6 +112,7 @@ function compileConstraint<Meta extends StorageMetadata>(
   whereClauses: string[],
   orderClauses: string[],
   setLimit: (clause: string) => void,
+  setOffset: (clause: string) => void,
 ): void {
   switch (c.kind) {
     case 'where': {
@@ -115,6 +129,21 @@ function compileConstraint<Meta extends StorageMetadata>(
       const idx = pushParam(params, c.value);
       setLimit(`LIMIT $${idx}`);
       return;
+    }
+    case 'offset': {
+      const idx = pushParam(params, c.value);
+      setOffset(`OFFSET $${idx}`);
+      return;
+    }
+    case 'limitToLast': {
+      // `limitToLast` cannot be expressed in standard SQL without
+      // materialising the full result and reversing client-side. The
+      // reference compiler refuses rather than silently emitting a
+      // `LIMIT` that would return the wrong rows. Callers should
+      // reverse the leading `orderBy` direction and use `limit(n)`.
+      throw new Error(
+        'compileToSql: limitToLast is not supported by the reference Postgres compiler — reverse the leading orderBy direction and use limit(n) instead',
+      );
     }
     case 'startAt':
     case 'startAfter':

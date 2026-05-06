@@ -69,6 +69,30 @@ export interface LimitConstraint<_Meta extends StorageMetadata> {
   readonly value: number;
 }
 
+/**
+ * Cap the number of rows returned to the *last* `n` of the ordered set.
+ *
+ * Semantically requires at least one preceding `orderBy` clause; the
+ * runtime validator does not enforce that pairing (matching `limit`
+ * which also relies on caller discipline). The reference Postgres
+ * `compileToSql` rejects this constraint — callers can express the
+ * same intent by reversing the leading `orderBy` direction and using
+ * `limit(n)`. See `compileToSql` JSDoc for the exact error.
+ */
+export interface LimitToLastConstraint<_Meta extends StorageMetadata> {
+  readonly kind: 'limitToLast';
+  readonly value: number;
+}
+
+/**
+ * Skip the first `n` rows of the ordered result set. Mirrors SQL
+ * `OFFSET n` and is supported by the reference Postgres compiler.
+ */
+export interface OffsetConstraint<_Meta extends StorageMetadata> {
+  readonly kind: 'offset';
+  readonly value: number;
+}
+
 /** Inclusive lower-bound cursor — `values` line up with prior `orderBy` clauses. */
 export interface StartAtConstraint<_Meta extends StorageMetadata> {
   readonly kind: 'startAt';
@@ -105,6 +129,8 @@ export type QueryConstraint<Meta extends StorageMetadata> =
   | WhereConstraint<Meta, Meta['indexed']>
   | OrderByConstraint<Meta, Meta['indexed']>
   | LimitConstraint<Meta>
+  | LimitToLastConstraint<Meta>
+  | OffsetConstraint<Meta>
   | StartAtConstraint<Meta>
   | StartAfterConstraint<Meta>
   | EndAtConstraint<Meta>

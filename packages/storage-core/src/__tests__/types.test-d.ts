@@ -57,6 +57,35 @@ describe('defineStorageMetadata literal narrowing (F-T-1)', () => {
   });
 });
 
+describe('defineStorageMetadata asymmetric Read/Write (F4)', () => {
+  it('honours an explicit Write generic — Read != Write', () => {
+    interface UserAuditMarks {
+      readonly created_at: number;
+      readonly updated_at: number;
+    }
+    type ReadShape = UserRead & UserAuditMarks;
+    type WriteShape = UserRead;
+
+    const meta = defineStorageMetadata<ReadShape, WriteShape>()({
+      indexed: ['email'] as const,
+    });
+    type Meta = typeof meta;
+    expectTypeOf<Meta['read']>().toEqualTypeOf<ReadShape>();
+    expectTypeOf<Meta['write']>().toEqualTypeOf<WriteShape>();
+    expectTypeOf<Meta['indexed']>().toEqualTypeOf<'email'>();
+    // Sanity: read and write are distinct types.
+    expectTypeOf<Meta['read']>().not.toEqualTypeOf<Meta['write']>();
+  });
+
+  it('defaults Write to Read when only one type argument is supplied', () => {
+    const meta = defineStorageMetadata<UserRead>()({
+      indexed: ['id'] as const,
+    });
+    type Meta = typeof meta;
+    expectTypeOf<Meta['read']>().toEqualTypeOf<Meta['write']>();
+  });
+});
+
 describe('IStorageProvider method signatures (non-optional listeners F-T-3)', () => {
   type UserMeta = StorageMetadata<UserRead, UserRead, 'id' | 'email'>;
 

@@ -7,6 +7,8 @@ import {
   endAt,
   endBefore,
   limit,
+  limitToLast,
+  offset,
   orderBy,
   startAfter,
   startAt,
@@ -76,6 +78,44 @@ describe('limit factory', () => {
   it('wraps an integer count', () => {
     const c = limit<UserMeta>(25);
     expect(c).toEqual({ kind: 'limit', value: 25 });
+  });
+
+  it('rejects a negative value', () => {
+    expect(() => limit<UserMeta>(-1)).toThrow(/non-negative integer/);
+  });
+
+  it('rejects a non-integer value', () => {
+    expect(() => limit<UserMeta>(1.5)).toThrow(/non-negative integer/);
+  });
+});
+
+describe('limitToLast factory', () => {
+  it('wraps an integer count', () => {
+    const c = limitToLast<UserMeta>(10);
+    expect(c).toEqual({ kind: 'limitToLast', value: 10 });
+  });
+
+  it('rejects a negative value', () => {
+    expect(() => limitToLast<UserMeta>(-1)).toThrow(/non-negative integer/);
+  });
+
+  it('rejects a non-integer value', () => {
+    expect(() => limitToLast<UserMeta>(2.5)).toThrow(/non-negative integer/);
+  });
+});
+
+describe('offset factory', () => {
+  it('wraps an integer count', () => {
+    const c = offset<UserMeta>(50);
+    expect(c).toEqual({ kind: 'offset', value: 50 });
+  });
+
+  it('rejects a negative value', () => {
+    expect(() => offset<UserMeta>(-5)).toThrow(/non-negative integer/);
+  });
+
+  it('rejects a non-integer value', () => {
+    expect(() => offset<UserMeta>(0.7)).toThrow(/non-negative integer/);
   });
 });
 

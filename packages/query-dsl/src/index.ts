@@ -5,6 +5,8 @@ export type {
   EndAtConstraint,
   EndBeforeConstraint,
   LimitConstraint,
+  LimitToLastConstraint,
+  OffsetConstraint,
   OrderByConstraint,
   Query,
   QueryConstraint,
@@ -15,13 +17,18 @@ export type {
 } from './types';
 
 export {
+  defineQueryConstraints,
   endAt,
   endBefore,
   limit,
+  limitToLast,
+  offset,
   orderBy,
   startAfter,
   startAt,
   whereField,
 } from './constraints';
+
+export type { BoundQueryConstraints } from './constraints';
 
 export { validateQuery } from './validate';

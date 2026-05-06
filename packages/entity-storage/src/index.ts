@@ -15,9 +15,15 @@
 export { BaseEntityStorageService } from './BaseEntityStorageService';
 export type {
   BaseEntityStorageServiceOpts,
+  MutationRoutingOpts,
   SetEntityInput,
   StorageEventPayload,
 } from './BaseEntityStorageService';
+
+export type {
+  AuditedBatchRunner,
+  AuditedTxRunner,
+} from './AuditedRunners';
 
 export { InMemoryStorageProvider } from './InMemoryStorageProvider';
 
@@ -33,9 +39,11 @@ export type {
   ITransactionRunner,
   Query,
   StorageCapabilities,
+  StorageLogger,
   StorageMetadata,
 } from '@gertsai/storage-core';
 export {
   ListenersNotSupportedError,
+  noopStorageLogger,
   TransactionConflictError,
 } from '@gertsai/storage-core';

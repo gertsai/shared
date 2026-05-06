@@ -20,6 +20,13 @@ export const STORAGE_EVENTS = {
   ENTITY_DELETED: 'entity-deleted',
   /** Emitted after a successful `restore(...)` (reverses soft-delete). */
   ENTITY_RESTORED: 'entity-restored',
+  /**
+   * Emitted after a successful hard-`destroy(...)` call — the underlying
+   * row was physically removed via `provider.delete`. Distinct from
+   * `ENTITY_DELETED`, which is the soft-delete signal (the row is still
+   * on disk, just flagged).
+   */
+  ENTITY_DESTROYED: 'entity-destroyed',
   /** Emitted once when `$destroy()` is first called (idempotent). */
   DESTROYED: 'destroyed',
 } as const;
