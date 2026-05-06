@@ -123,6 +123,46 @@ All gates green. ADR-005 invariants verified post-Sprint 3.5.2:
 - **Worker self-coordination**: T2 added `export type { DocumentMeta }` independently when discovering generic-inference fallback needed; T3 used the export when it appeared. No team-lead intervention required.
 - **Validate gate over-fit для example migration sprints** — same pattern observed Sprint 3.4.1 + 3.5.1. SPEC-010 stays valid через `## Data Models` block (Repository skeleton). Force-activation NOT needed here.
 
+## Post-Build fidelity audit (per Group 28/31 pattern, run 2026-05-06 post-Sprint-3.5.2)
+
+Per /forge-cycle Evidence phase methodology — original commit-message claim "0 audit findings emerged" was assumption, not measured fact. Audit run via TeamCreate `audit-3-5-2` с 2 architect-reviewers:
+
+### migration-fidelity-reviewer verdict: **GO**
+
+- 0 P0, 0 P1, 3 P2:
+  - **ID-MF-1**: README L9 stale "13 OSS packages" (actual 26). Pre-existing, not introduced 3.5.2.
+  - **ID-MF-2**: 4 unnecessary `as any` casts в audit-propagation.test.ts. Test author defaulted; not API limitation.
+  - **ID-MF-3**: `save()` = 2 RTT (`get + set/update`) vs legacy 1-op Map.set. Negligible against InMemory; non-trivial under PgStorageProvider. Idiomatic Wave 4 path.
+- Hex boundary preserved (Document UNCHANGED, IDocumentStore UNCHANGED, use case + tests UNCHANGED). DDD invariants verified end-to-end.
+
+### wave4-regression-reviewer verdict: **GO**
+
+- 0 P0, 0 P1, 4 P2 (API ergonomics):
+  - **EG-1**: `InMemoryStorageProvider<Meta>` no default generic → forced `DocumentMeta` export. Fix proposal: add `Meta = StorageMetadata` default. Non-breaking.
+  - **EG-2**: `BaseEntityStorageService.upsert(entity)` missing → consumer reinvented via get-then-set/update. **Wave 5 input** — proper additive method.
+  - **EG-3**: Same as ID-MF-2 (cross-confirmed `as any` cleanup needed).
+  - **EG-4**: `entity-storage/package.json` peer-deps mark `storage-core` as `optional: true` — stale Phase A leftover; README Phase A/B language similarly stale.
+- All 8 Wave 4 packages preserved (storage-core 48, entity-storage 94, query-dsl 53, pg-client 35, entity 46, session 16, entity-audit 30, di 114). 0 regressions.
+
+### E2E status (honest assessment)
+
+- **Vitest integration suite**: ✅ 16 passed / 1 skipped (audit-propagation 4 + ingest 7 + search 5 + e2e skip).
+- **Vitest e2e via broker.call**: ❌ blocked — typia transformer requires `tspc` precompile (vitest doesn't run tspc — known limitation, NOT 3.5.2 regression).
+- **`node dist/src/index.js` boot**: ❌ FAILS — pre-existing `ERR_UNSUPPORTED_DIR_IMPORT` ESM issue (legacy m9s-example config; `import './services'` без явного `/index.js`).
+- **`ts-node-dev` boot**: same issue.
+- **smoke.sh**: blocked by broker boot.
+
+**Functional verification preserved через integration test** (audit-propagation.test.ts exercises full Wave 4 stack: Repository → InMemoryStorageProvider → audit builders → Session). NOT identical к broker.call e2e but **functionally equivalent for Wave 4 verification**. Pre-existing broker boot issue documented as Wave 5+ candidate (low priority, doesn't block correctness validation).
+
+### Sprint 3.5.2.1 fix sprint decision: **NOT warranted**
+
+Per /forge-cycle methodology + both reviewers explicit recommendation:
+- 0 P0/P1 → no urgent fix sprint required.
+- 7 P2 polish items batched into **Wave 5 Sprint 3.6** opportunistically (~30 min total work):
+  - EG-1 + ID-MF-2/EG-3 + EG-4 + ID-MF-1 → trivial cleanups.
+  - EG-2 (`upsert()` method) → proper additive Wave 5 feature.
+- Pre-existing m9s-example broker boot ESM issue (not 3.5.2-introduced) → Wave 5+ candidate.
+
 ## Sprint 3.5.2 commits
 
 ```
