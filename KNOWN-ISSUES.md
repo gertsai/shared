@@ -208,3 +208,89 @@ cleanup is discoverable when working in those modules:
 - `__tests__/scoping.test.ts:13-17` carries a 5-line stub comment that
   references the deleted Phase B fallback. Compress to one line.
 - `Session.ts:19-22` post-swap history comment is verbose; can be reduced.
+
+## 12. Resolved in Sprint 3.11 — m9s-example mock-vs-real
+
+**Status:** RESOLVED (Sprint 3.11, ADR-011 + SPEC-016 + EVID-019)
+
+The following m9s-example "mock by default" issues — surfaced across earlier
+sprints as gaps between the example and a credible production reference —
+are closed by Sprint 3.11. The example now defaults to real infrastructure
+(Postgres+pgvector, OpenFGA ReBAC, BullMQ+Redis async, Ollama embeddings,
+docker-compose orchestration) per ADR-011. Mock fallbacks are preserved
+opt-in via env override (per ADR-011 I-1), so prior mock-mode test
+fixtures continue to pass unchanged.
+
+- **`InMemoryStorageProvider` + `MemoryDocumentRepository` as default**
+  (was: per-process `Map`, no persistence, no cross-process visibility)
+  → resolved: `STORAGE_PROVIDER=postgres` is the default; the document store
+  is `PgDocumentStore implements IDocumentStore` backed by `@gertsai/pg-client`
+  via the new `pg-client.adapter.ts` thin wrapper around `pg@^8.13`. Mock
+  mode preserved via `STORAGE_PROVIDER=memory`. (W-3-11-4..7)
+- **`MemoryVectorStore` as default vector backend**
+  (was: ad-hoc cosine-similarity over an in-memory `Array<{vector, ...}>`)
+  → resolved: `PgVectorStore implements IChunkStore` backed by pgvector with
+  an HNSW index on `chunks.vector vector_cosine_ops`. Every chunks SQL
+  includes `WHERE tenant_id = $1` per ADR-011 I-13 (defence-in-depth tenant
+  isolation). (W-3-11-1, W-3-11-5)
+- **`AllowAllPermissionGate` as default authorization gate**
+  (was: every `check()` returned `true`; no real ReBAC; no production guard)
+  → resolved: `AUTH_GATE=openfga` is the default; the existing
+  `openfga-permission.gate.ts` was MODIFIED (E+ marker per Amendment 2
+  §A2.13) to use canonical `FgaResourceType` + `FGA_RELATIONS` from
+  `@gertsai/auth-openfga`, with a B2 Tenant-hierarchy authorization model
+  and per-document tuples written at ingest time. AllowAll gate now refuses
+  construction when `NODE_ENV='production'` per I-12. (W-3-11-9..15)
+- **Synchronous-only ingest fallback**
+  (was: `if (config.REDIS_URL)` gated; default unset → in-process
+  synchronous chunk processing; no observable async semantics)
+  → resolved: `REDIS_URL=redis://localhost:6379` is the default in
+  `.env.example`; BullMQ async ingest is on by default with explicit
+  eventual consistency contract test (Amendment 2 §A2.9 — `mode='queued'`
+  immediately, polling search returns `[]` until worker completes).
+  Inline fallback preserved when `REDIS_URL` is unset. (W-3-11-16..19)
+- **No production-grade onboarding path for new contributors**
+  (was: README documented mock mode + Ollama opt-in; no docker-compose for
+  the full stack; no migration tooling)
+  → resolved: single-command `docker compose up -d` brings up 5 services
+  (NATS, Redis, Postgres+pgvector, OpenFGA, Ollama) with healthcheck-gated
+  startup; raw-SQL migration runner with advisory lock + idempotency
+  guarantee (per ADR-011 §Decision E LOCKED E1 + I-15); README §Production
+  Setup self-contained ≤ 5 min onboarding (per NFR-2, EVID-019). (W-3-11-24..33)
+
+The `@gertsai/api-rlr` mock `PgClient` instances cited in §5 above are
+**unrelated** — those are unit-test scaffolding that mocks the 3-method
+PgClient interface to verify the rate-limiter algorithms without a live
+DB. They remain by design (per ADR-011 I-2 of `api-rlr` — database
+agnostic; integration coverage via Redis adapter path).
+
+The `BaseEntityStorageService.upsert` 2-RTT issue cited in §10 is
+**also unrelated** to Sprint 3.11 — it tracks a future single-RTT
+optimisation on the `IStorageProvider` contract (Wave 6+). m9s-example
+uses `PgClient` directly via `pg-document.repository.ts` per Amendment 2
+§A2.5, NOT `PgStorageProvider`, so the upsert path is independent.
+
+### Open follow-ups from Sprint 3.11 Post-Build review (deferred to Wave 6+)
+
+- **§FGA_API_TOKEN-plumbing** — `@gertsai/auth-openfga` does NOT currently
+  forward a bearer token to the underlying `@openfga/sdk` client. As a
+  defensive measure, `OpenFgaPermissionGate` THROWS on construction when
+  `client.apiToken` is supplied, so an authenticated production deployment
+  cannot fail silently on an anonymised request (Sprint 3.11 Post-Build
+  Track 2 §P1-1 fix). Plumbing the bearer token end-to-end is a follow-up
+  ADR against `@gertsai/auth-openfga`.
+- **§OpenFGA-model-drift-CI** — `scripts/openfga-bootstrap.ts` carries an
+  inline JSON authorization model that is kept in sync **manually** with
+  the canonical `openfga/model.fga` DSL file. There is no CI check that
+  the two stay equivalent. Drift would silently bootstrap a different
+  authorization graph than the DSL documents. Either add
+  `@openfga/syntax-transformer` as a devDep and parse `model.fga` at
+  runtime, or add a snapshot equivalence test in CI (Sprint 3.11
+  Post-Build Track 2 §P1-3).
+- **§FGA-singleton-multi-store** — `@gertsai/auth-openfga` exposes a
+  process-wide `getFgaClient()` singleton + `getPermissionCache()`. The
+  `OpenFgaPermissionGate` JSDoc now warns that production deployments
+  needing multiple distinct OpenFGA stores in one process MUST use
+  `resetFgaClient() + resetPermissionCache()` between configs (Sprint
+  3.11 Post-Build Track 2 §P1-2 documentation fix). A proper multi-tenant
+  isolation API is follow-up work.

@@ -625,6 +625,225 @@ for the matching constraints.
   - `tests/wave5-integration.test.ts` — exercises the four packages end to
     end (resolver + RequestContext + Session + assertions).
 
+## Production Setup
+
+Sprint 3.11 elevates this example from "mock-by-default" demo to a **real-infra
+reference**: the default profile spins up Postgres+pgvector, OpenFGA, Redis,
+Ollama, and NATS via a single `docker compose up`, applies migrations, and
+boots the broker against live backends. Mock fallbacks remain available via
+env override (per ADR-011 I-1) — see `.env.example` for the toggle matrix.
+
+Architectural decisions are captured in **ADR-011** (with Amendment 1 ADI on
+contested decisions and Amendment 2 reconciling the pre-Build audit). The
+W-item map lives in **SPEC-016**. Both are read-only inputs to the Sprint 3.11
+Build phase.
+
+### Prerequisites
+
+| Tool | Min version | Notes |
+|---|---|---|
+| Docker | 24+ | Compose v2 spec required (`docker compose`, not `docker-compose`) |
+| Node.js | 22 LTS | matches `engines.node` in root `package.json` |
+| pnpm | 10.x | matches the workspace lockfile generator |
+| RAM | ≈ 3 GB free | full 5-service stack — Ollama is the heaviest (~1.5 GB resident) |
+
+Free local ports: **5432** (Postgres), **6379** (Redis), **8080** (OpenFGA HTTP),
+**4222** (NATS client) + **8222** (NATS monitoring), **11434** (Ollama).
+`docker-compose.yml` binds each to `127.0.0.1` only — nothing leaks onto the
+LAN by default.
+
+### One-command bring-up
+
+```bash
+# from repo root
+cd examples/m9s-example
+cp .env.example .env             # placeholder credentials — edit before non-local use
+docker compose up -d
+docker compose ps                # wait for "healthy" on all 5 services (≈ 20-40 s)
+```
+
+> **First run takes longer** (≈ 1-2 min) — Docker pulls `pgvector/pgvector:pg16`
+> + `openfga/openfga:v1.5` + `ollama/ollama:0.5.0` images (~3 GB total). Subsequent
+> runs reuse the cached images and the named volumes (`postgres-data`,
+> `ollama-data`, `m9s-redis-data`).
+
+### Apply migrations
+
+The Postgres container starts empty. Apply the schema migration before booting
+the broker (or set `MIGRATIONS_AUTO_APPLY=true` to let the broker apply on
+boot — convenient for the demo, **not** recommended for production).
+
+```bash
+pnpm --filter @gertsai-examples/m9s-example install      # if not already installed
+pnpm --filter @gertsai-examples/m9s-example migrate:status   # → "0 applied / 1 pending"
+pnpm --filter @gertsai-examples/m9s-example migrate:up
+pnpm --filter @gertsai-examples/m9s-example migrate:status   # → "1 applied / 0 pending"
+```
+
+Migration tooling is documented in [`migrations/README.md`](./migrations/README.md)
+— file naming, `pg_migrations` tracking, rollback semantics, idempotency
+contract (ADR-011 I-3, I-15).
+
+### Bootstrap OpenFGA
+
+OpenFGA starts with an empty catalog. The bootstrap script is **idempotent** —
+it (a) creates the store if missing, (b) writes/updates the authorization
+model from `openfga/model.fga`, (c) seeds tenant-membership tuples from
+`openfga/bootstrap-tuples.yaml`, (d) prints the `FGA_STORE_ID` to paste back
+into `.env`.
+
+```bash
+pnpm --filter @gertsai-examples/m9s-example openfga:bootstrap
+# → FGA_STORE_ID=01HXXX...     copy this into .env
+```
+
+The ReBAC model + tuple shape are explained in
+[`openfga/README.md`](./openfga/README.md) — DSL walkthrough, 2-hop check
+resolution, how to add a new tenant + user, the adversarial cross-tenant
+DENY test from W-3-11-8a.
+
+### Boot the broker
+
+```bash
+pnpm --filter @gertsai-examples/m9s-example start
+```
+
+The broker reads `.env`, connects to Postgres + Redis + OpenFGA + Ollama,
+registers the canonical Wave 5 middleware chain (`tenantMiddleware →
+sessionMiddleware`), and exposes `/api/v1/ingest/document` and
+`/api/v1/search/query` on `WEB_SERVER_PORT` (default `3000`).
+
+### Smoke verification
+
+In a second terminal — ingest a document, wait for the queue worker to chunk
++ embed + persist, then search:
+
+```bash
+# 1. Ingest — returns immediately with mode='queued' (async eventual consistency)
+curl -s -X POST http://localhost:3000/api/v1/ingest/document \
+  -H 'content-type: application/json' \
+  -H 'x-tenant-id: tenant-acme' \
+  -d '{"docId":"d1","text":"Hexagonal architecture isolates the core from transport and persistence."}' | jq
+# → {"success":true,"data":{"docId":"d1","jobId":"...","mode":"queued","chunkCount":null}}
+
+# 2. Wait for the worker to embed + persist (1-5 s window — see §Async caveats)
+sleep 5
+
+# 3. Search — returns top-K chunks ranked by cosine similarity in pgvector
+curl -s -X POST http://localhost:3000/api/v1/search/query \
+  -H 'content-type: application/json' \
+  -H 'x-tenant-id: tenant-acme' \
+  -d '{"query":"core isolation","topK":3}' | jq
+# → {"success":true,"data":{"hits":[{"docId":"d1","ordinal":0,"score":0.78, ...}]}}
+```
+
+If search returns `hits: []` immediately after ingest, the worker hasn't
+caught up — wait another second and retry. This is **not a bug**; see below.
+
+### Async caveats — eventual consistency
+
+Sprint 3.11 turns BullMQ async ingest **on by default** (`REDIS_URL` populated
+in `.env.example`, per ADR-011 Decision C). The flow is:
+
+```
+HTTP /ingest  ──▶  documents.INSERT (sync)  ──▶  job enqueued (sync)  ──▶  HTTP 200 mode='queued'
+                                                                            │
+                                                                            ▼
+                                                         BullMQ worker  ──▶  embed + chunks.INSERT
+                                                                            │
+                                                                            ▼
+                                                         search hits become visible (eventually)
+```
+
+**Observable contract** (codified in `tests/real-infra/bullmq.test.ts` per
+Amendment 2 §A2.9):
+
+- `POST /ingest/document` returns `mode='queued'` **immediately**, before any
+  chunks are persisted.
+- `POST /search/query` for the just-ingested doc returns `[]` until the worker
+  completes — typically **1-5 s** end-to-end (embed call dominates the window).
+- After the worker completes, the document is searchable on the next query.
+
+If you need synchronous semantics for a one-shot demo or a debugging session,
+unset `REDIS_URL` in `.env` and restart — the broker falls back to inline
+ingest (`mode='inline'`, `chunkCount` populated synchronously). Mock fallback
+preserved per ADR-011 I-1.
+
+### ⚠️ SECURITY (read before deploying)
+
+1. **`AUTH_GATE=allow-all` is BANNED in production.** Per ADR-011 I-12, the
+   `AllowAllPermissionGate` constructor throws `ConfigurationError` when
+   `process.env.NODE_ENV === 'production'`. A `WARN` log is emitted on every
+   construction regardless of NODE_ENV — visible at boot. Production deploys
+   with `AUTH_GATE=allow-all` env **cannot** succeed.
+2. **`FGA_API_TOKEN` is required for production OpenFGA.** Per ADR-011 I-16,
+   the gate uses preshared bearer auth (`Authorization: Bearer ${token}`).
+   The local docker-compose runs OpenFGA without auth — the empty token is
+   acceptable for development only. Production deployments MUST terminate
+   TLS in front of the OpenFGA service and rotate the token.
+3. **`.env` is gitignored.** The committed `.env.example` carries placeholder
+   credentials only (`change-me-on-deploy`). Never commit a real `.env`.
+4. **Cross-tenant data isolation is defence-in-depth.** Every `chunks` SQL
+   issued by `pg-vector.store.ts` includes a mandatory `WHERE tenant_id = $1`
+   clause (ADR-011 I-13). This is the **last line of defence** if the
+   OpenFGA gate is misconfigured. Adversarial test in
+   `tests/real-infra/pg-vector.test.ts` verifies the constraint.
+5. **`HeaderStrategy({ trustProxy: true })`** in `composition/wave5-middlewares.ts`
+   reads `X-Tenant-ID` from inbound HTTP. Production deployments MUST front
+   the broker with a reverse proxy that **strips client-supplied
+   `X-Tenant-ID` and re-sets it from authenticated context** — without that
+   guarantee any client can spoof the header. See §Wave 5 stack reference
+   above for the full deployment contract (ADR-010 I-14).
+
+### OpenFGA glossary (DSL → domain UL)
+
+| OpenFGA DSL | Domain Ubiquitous Language | Example |
+|---|---|---|
+| `type user` | identity principal performing the request | `user:default`, `user:alice` |
+| `type tenant` | top-level isolation boundary (per ADR-006 ACL) | `tenant:tenant-acme` |
+| `type document` | per-tenant document resource (FK by tenant) | `document:01HXXX...` |
+| `member` (relation on tenant) | "user U is a member of tenant T" | tuple seeded by `openfga-bootstrap.ts` |
+| `tenant` (relation on document) | "document D belongs to tenant T" | tuple written post-INSERT in `pg-document.repository.ts` |
+| `can_view` / `can_edit` (relation on document) | derived: `member from tenant` (B2 hierarchy) | resolved at gate check time |
+
+Full canonical reference: `@gertsai/auth-openfga` package
+(`FgaResourceType` + `FGA_RELATIONS` constants, per Amendment 2 §A2.2).
+
+### Tear-down
+
+```bash
+docker compose down              # stops + removes containers, keeps volumes
+docker compose down -v           # also drops postgres-data, ollama-data, m9s-redis-data
+```
+
+Drop the volumes (`-v`) when you want a clean Postgres / Ollama / Redis state
+for the next `docker compose up`. Otherwise the migrations stay applied and
+the seeded tuples persist — which is usually what you want during dev.
+
+### Common errors
+
+| Error message | Likely cause | Fix |
+|---|---|---|
+| `ECONNREFUSED 127.0.0.1:5432` | Postgres still booting (no health yet) | `docker compose ps` — wait for `(healthy)`; first run pulls + initialises (~30 s) |
+| `OpenFGA store not found` | bootstrap script not run, or store dropped | re-run `pnpm openfga:bootstrap`; paste the printed `FGA_STORE_ID` into `.env` |
+| `Ollama: model 'nomic-embed-text' not found` | model not pulled into the volume | `docker exec m9s-example-ollama ollama pull nomic-embed-text` |
+| `pg_migrations relation does not exist` | migration runner failed mid-init | re-run `pnpm migrate:up`; the `IF NOT EXISTS` guards make it safe to retry |
+| Search returns `[]` 5+ s after ingest | HNSW index slow on first query (<10 rows) | retry once — pgvector caches the build; or seed more docs to amortise |
+| `redis-cli: connection refused` | Redis container restarting under load | `docker compose logs redis`; confirm `redis-server: ready` line |
+| `ConfigurationError: AllowAll refuses NODE_ENV=production` | env propagation accident (per I-12) | unset `NODE_ENV=production` for local dev, OR set `AUTH_GATE=openfga` |
+
+### Cross-references
+
+- [`migrations/README.md`](./migrations/README.md) — migration tooling docs
+  (ADR-011 §Decision E LOCKED E1 + Amendment 2 §A2.6 + I-15).
+- [`openfga/README.md`](./openfga/README.md) — ReBAC model + tuple management
+  (ADR-011 §Decision B LOCKED B2 + Amendment 2 §A2.1-A2.4).
+- ADR-011 — production-grade m9s-example architectural decisions
+  (with Amendment 1 ADI + Amendment 2 pre-Build audit synthesis).
+- SPEC-016 — Sprint 3.11 W-item map.
+- RFC-002 — cross-package strategy.
+- EVID-019 — Sprint 3.11 evidence pack (post-Build).
+
 ## License
 
 Apache-2.0. Same as the rest of the `gertsai/shared` monorepo.

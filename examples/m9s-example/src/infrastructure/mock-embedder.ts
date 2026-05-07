@@ -40,7 +40,7 @@ export class MockEmbedder implements IEmbedder {
 
   private embedOne(text: string): number[] {
     const dim = this.dimensions;
-    const vec = new Array<number>(dim).fill(0);
+    const vec: number[] = Array.from({ length: dim }, () => 0);
 
     // Token-level + char-level mixing — keeps similar texts close while
     // letting different texts diverge enough for a reasonable demo.

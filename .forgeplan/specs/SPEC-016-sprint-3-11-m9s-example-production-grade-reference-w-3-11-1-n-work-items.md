@@ -345,3 +345,4 @@ T2 openfga: F+ → **E+** (existing gate MODIFY). T6 docker-compose: F+ → **E+
 
 > **Net effect of Amendment 1**: Sprint 3.11 SPEC reconciled with reality. EVID-016 §5 lesson regression averted through inline templates. Build can proceed.
 
+

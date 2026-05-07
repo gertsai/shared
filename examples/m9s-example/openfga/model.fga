@@ -1,0 +1,32 @@
+model
+  schema 1.1
+
+# OpenFGA authorization model — Sprint 3.11 m9s-example.
+#
+# Decision B2 (Tenant-hierarchy) per ADR-011 + Amendment 1 §A1.4 (locked via
+# `forgeplan_reason`). Reconciled with `@gertsai/auth-openfga` canonical
+# FgaResourceType taxonomy per Amendment 2 §A2.2 — `tenant` + `document` types,
+# `can_view`/`can_edit` relations from FGA_RELATIONS.
+#
+# Permission flows through tenant membership:
+#   user:U  --member-->        tenant:T
+#   document:D  --tenant-->    tenant:T          (per-document tuple at ingest)
+#   ⇒ user:U has can_view on document:D iff user:U is member of tenant:T.
+#
+# This shape was verified against `openfga/openfga:v1.5` in pre-Build live-spike
+# W-3-11-8a (5/5 checks correct: own-tenant ALLOW, cross-tenant DENY, missing
+# tuple DENY).
+#
+# DSL conforms to OpenFGA schema 1.1 — see https://openfga.dev/docs/concepts.
+
+type user
+
+type tenant
+  relations
+    define member: [user]
+
+type document
+  relations
+    define tenant: [tenant]
+    define can_view: member from tenant
+    define can_edit: member from tenant

@@ -1,4 +1,4 @@
-# NATS + Redis infra for m9s-example.
+# NATS + Redis + Postgres + OpenFGA + Ollama infra for m9s-example.
 #
 # Spin up with:   pnpm run infra:up
 # Tear down with: pnpm run infra:down
@@ -8,14 +8,14 @@
 #   pnpm run dev:cluster
 #
 # Layout:
-#   - NATS  (port 4222) → Moleculer transporter for inter-service pub/sub
-#   - Redis (port 6379) → BullMQ queue backend (jobs + workers)
-#
-# These are two independent concerns:
-#   - NATS  = synchronous service calls fan out across nodes
-#   - Redis = asynchronous background jobs (ingest worker)
+#   - NATS     (port 4222) → Moleculer transporter for inter-service pub/sub
+#   - Redis    (port 6379) → BullMQ queue backend (jobs + workers)
+#   - Postgres (port 5432) → pgvector storage for documents + chunks
+#   - OpenFGA  (port 8080) → ReBAC authorization service
+#   - Ollama   (port 11434) → LLM embeddings service
 
 services:
+  # === Existing (preserved) ===
   nats:
     image: nats:2.10-alpine
     container_name: m9s-example-nats
@@ -45,5 +45,58 @@ services:
       retries: 10
     restart: unless-stopped
 
+  # === NEW Sprint 3.11 ===
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: m9s-example-postgres
+    environment:
+      POSTGRES_USER: m9s
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-on-deploy}
+      POSTGRES_DB: m9s
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/postgres-init.sql:ro
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'm9s']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  openfga:
+    image: openfga/openfga:v1.5
+    container_name: m9s-example-openfga
+    command: ['run']
+    environment:
+      OPENFGA_LOG_LEVEL: warn
+    ports:
+      - '127.0.0.1:8080:8080'
+      - '127.0.0.1:8081:8081'
+      - '127.0.0.1:3000:3000'
+    # NOTE: the openfga/openfga:v1.5 image is scratch-based (no shell,
+    # no wget/curl/nc), so a Docker-internal healthcheck command is
+    # impractical. The /healthz HTTP endpoint is exposed on :8080 and
+    # `scripts/openfga-bootstrap.ts` waits for it. Container shows as
+    # "no healthcheck"; that is intentional.
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:0.5.0
+    container_name: m9s-example-ollama
+    ports:
+      - '127.0.0.1:11434:11434'
+    volumes:
+      - ollama-data:/root/.ollama
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:11434/api/tags > /dev/null || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
 volumes:
   m9s-redis-data:
+  postgres-data:
+  ollama-data:

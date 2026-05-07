@@ -29,7 +29,9 @@
  */
 import type { BrokerOptions, Cacher } from 'moleculer';
 import { Errors } from 'moleculer';
-import { M9sCacheCacher, MemoryCacheDriver } from '@gertsai/m9s-cache';
+import { M9sCacheCacher, MemoryCacheDriver, RedisCacheDriver } from '@gertsai/m9s-cache';
+import type { RedisLike } from '@gertsai/m9s-cache';
+import IORedis from 'ioredis';
 import { Middleware as ChannelsMiddleware } from '@moleculer/channels';
 import { Middleware as WorkflowsMiddleware } from '@moleculer/workflows';
 
@@ -76,16 +78,37 @@ import { buildWave5Middlewares } from './src/composition/wave5-middlewares';
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// Cacher: M9sCacheCacher + MemoryCacheDriver
-//   The cast is required because Moleculer's `Cacher` type and our class
-//   are structurally compatible but not nominal — same pattern as pipeline.
+// Cacher: M9sCacheCacher with env-driven driver (Sprint 3.11 W-3-11-19).
+//
+// CACHE_DRIVER='redis' switches to `RedisCacheDriver` over a single ioredis
+// client; requires REDIS_URL. CACHE_DRIVER='memory' (default) keeps the
+// dependency-light in-process driver — same code-path used by tests.
+//
+// The cast on the cacher is required because Moleculer's `Cacher` type and
+// our class are structurally compatible but not nominal.
 // ---------------------------------------------------------------------------
-const cacher: Cacher = new M9sCacheCacher({
-  driver: new MemoryCacheDriver({
+function buildCacheDriver() {
+  if (config.CACHE_DRIVER === 'redis') {
+    if (!config.REDIS_URL || config.REDIS_URL.trim().length === 0) {
+      throw new Error("CACHE_DRIVER='redis' requires REDIS_URL to be set.");
+    }
+    // ioredis Redis client is structurally compatible with RedisLike but
+    // the parameter overloads diverge — same pattern as the M9sCacheCacher
+    // cast below (Cacher).
+    const ioredis = new IORedis(config.REDIS_URL, { maxRetriesPerRequest: null });
+    return new RedisCacheDriver({
+      client: ioredis as unknown as RedisLike,
+    });
+  }
+  return new MemoryCacheDriver({
     enableCleanup: true,
     cleanupIntervalMs: 60_000,
     maxEntries: config.CACHE_MAX_ENTRIES,
-  }),
+  });
+}
+
+const cacher: Cacher = new M9sCacheCacher({
+  driver: buildCacheDriver(),
   prefix: config.APP_NAME,
   ttl: config.CACHE_TTL,
   tagPrefix: 'TAG-',
@@ -180,18 +203,49 @@ if (config.REDIS_URL) {
   // that requires AMQP-specific fields (exchangeName, exchangeOptions...).
   // For Redis Streams those fields are unused. The runtime accepts the
   // simpler { enabled, queueName } shape — same idiom api-core uses.
+  // Sprint 3.11 Post-Build Track 3 §P1-2: parse REDIS_URL with `new URL()`
+  // so password, db index, and `rediss://` (TLS) are honoured — the previous
+  // regex parser silently dropped credentials and downgraded TLS to plaintext.
+  // We pass the full options object expected by ioredis (mirrors Workflows
+  // adapter `url:` symmetry — see comment block above).
+  const redisAdapterOptions = parseRedisUrlForChannels(config.REDIS_URL);
+
+  // Sprint 3.11 Post-Build Track 3 §P1-1: structurally type the Redis
+  // adapter options object as a single named local so the cast is
+  // visible + auditable in one place. `@moleculer/channels` declares its
+  // adapter options as an intersection skewed toward AMQP fields
+  // (`exchangeName`, `exchangeOptions`, `queueOptions`, no `redis` key);
+  // the Redis adapter accepts the shape below at runtime. The cast is
+  // narrow to this object — surrounding broker config stays type-checked.
+  interface RedisChannelsOptions {
+    type: 'Redis';
+    options: {
+      redis: typeof redisAdapterOptions;
+      maxRetries: number;
+      deadLettering: { enabled: boolean; queueName: string };
+    };
+  }
+  const channelsRedisAdapter: RedisChannelsOptions = {
+    type: 'Redis',
+    options: {
+      redis: redisAdapterOptions,
+      maxRetries: 3,
+      deadLettering: { enabled: true, queueName: 'm9s-example:dlq' },
+    },
+  };
+
   middlewares.push(
-    ChannelsMiddleware({
-      adapter: {
-        type: 'Redis',
-        options: {
-          redis: { host: extractRedisHost(config.REDIS_URL), port: extractRedisPort(config.REDIS_URL) },
-          maxRetries: 3,
-          deadLettering: { enabled: true, queueName: 'm9s-example:dlq' },
-        },
-      },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any) as unknown as BrokerMiddleware,
+    // The full `MiddlewareOptions` of `@moleculer/channels` ships ~5 fields
+    // we are happy to leave at their library defaults (schemaProperty,
+    // sendMethodName, adapterPropertyName, channelHandlerTrigger, context).
+    // Casting through `unknown` opts the call out of those required-field
+    // checks without disabling the inner adapter shape (which is type-checked
+    // through `channelsRedisAdapter`).
+    ChannelsMiddleware(
+      { adapter: channelsRedisAdapter } as unknown as Parameters<
+        typeof ChannelsMiddleware
+      >[0],
+    ) as unknown as BrokerMiddleware,
   );
 
   middlewares.push(
@@ -208,14 +262,46 @@ if (config.REDIS_URL) {
   );
 }
 
-// Tiny URL parser — avoids pulling a full URL lib for two integers.
-function extractRedisHost(url: string): string {
-  const m = url.match(/^redis:\/\/(?:[^@]+@)?([^:/]+)/);
-  return m?.[1] ?? '127.0.0.1';
-}
-function extractRedisPort(url: string): number {
-  const m = url.match(/^redis:\/\/(?:[^@]+@)?[^:/]+:(\d+)/);
-  return m ? Number(m[1]) : 6379;
+/**
+ * Convert a Redis URL into the ioredis-shaped options object that
+ * `@moleculer/channels` Redis adapter accepts via `redis:` config.
+ *
+ * Honours:
+ *   - `redis://` and `rediss://` (TLS) schemes
+ *   - `user:password@` userinfo (password forwarded; user defaults to 'default')
+ *   - `/<db>` path component (numeric db index)
+ *
+ * Falls back to `127.0.0.1:6379` only when parsing fails entirely — that's
+ * the correct local-dev shape for the docker-compose redis service.
+ */
+function parseRedisUrlForChannels(url: string): {
+  host: string;
+  port: number;
+  username?: string;
+  password?: string;
+  db?: number;
+  tls?: Record<string, never>;
+} {
+  try {
+    const u = new URL(url);
+    const host = u.hostname || '127.0.0.1';
+    const port = u.port ? Number(u.port) : 6379;
+    const password = u.password ? decodeURIComponent(u.password) : undefined;
+    const username = u.username ? decodeURIComponent(u.username) : undefined;
+    const db =
+      u.pathname && u.pathname !== '/' ? Number(u.pathname.slice(1)) || 0 : undefined;
+    const tls = u.protocol === 'rediss:' ? {} : undefined;
+    return {
+      host,
+      port,
+      ...(username !== undefined && username !== '' ? { username } : {}),
+      ...(password !== undefined && password !== '' ? { password } : {}),
+      ...(db !== undefined ? { db } : {}),
+      ...(tls !== undefined ? { tls } : {}),
+    };
+  } catch {
+    return { host: '127.0.0.1', port: 6379 };
+  }
 }
 
 const brokerConfig: BrokerOptions = {

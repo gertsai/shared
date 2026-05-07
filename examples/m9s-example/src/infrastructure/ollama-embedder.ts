@@ -103,6 +103,7 @@ export class OllamaEmbedder implements IEmbedder {
       throw new Error(
         `OllamaEmbedder: request to ${url} failed — is the Ollama daemon ` +
           `running and reachable? (model='${this.opts.model}'). Underlying error: ${cause}`,
+        { cause: err },
       );
     }
 

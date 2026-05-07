@@ -139,7 +139,7 @@ controller.registerWorker(INGEST_QUEUE_NAME, [
         // Pipeline-style: the action layer maps to APIError; the worker
         // layer just throws and lets BullMQ's retry policy handle it.
         if (err instanceof PermissionDeniedError) {
-          throw new Error(`[permission-denied] ${err.message}`);
+          throw new Error(`[permission-denied] ${err.message}`, { cause: err });
         }
         throw err;
       }

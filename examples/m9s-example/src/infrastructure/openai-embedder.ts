@@ -74,7 +74,9 @@ export class OpenAIEmbedder implements IEmbedder {
       });
     } catch (err) {
       const cause = err instanceof Error ? err.message : String(err);
-      throw new Error(`OpenAIEmbedder: request to ${url} failed: ${cause}`);
+      throw new Error(`OpenAIEmbedder: request to ${url} failed: ${cause}`, {
+        cause: err,
+      });
     }
 
     if (!res.ok) {

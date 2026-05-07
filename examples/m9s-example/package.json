@@ -17,9 +17,14 @@
     "infra:logs": "docker compose -f docker-compose.yml logs -f",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:real-infra": "VITEST_REAL_INFRA=1 vitest run",
+    "test:all": "pnpm test && pnpm test:real-infra",
     "typecheck": "tspc --noEmit",
     "postinstall": "ts-patch install -s",
-    "smoke": "bash scripts/smoke.sh"
+    "smoke": "bash scripts/smoke.sh",
+    "migrate:up": "ts-node scripts/migrate.ts --up",
+    "migrate:down": "ts-node scripts/migrate.ts --down",
+    "migrate:status": "ts-node scripts/migrate.ts --status"
   },
   "dependencies": {
     "@gertsai/api-core": "workspace:*",
@@ -31,6 +36,7 @@
     "@gertsai/errors": "workspace:*",
     "@gertsai/fetch": "workspace:*",
     "@gertsai/m9s-cache": "workspace:*",
+    "@gertsai/pg-client": "workspace:*",
     "@gertsai/runtime-context": "workspace:*",
     "@gertsai/session": "workspace:*",
     "@gertsai/session-guard": "workspace:*",
@@ -38,15 +44,18 @@
     "@gertsai/tenant-resolver": "workspace:*",
     "@moleculer/channels": "^0.1.8",
     "@moleculer/workflows": "^0.1.2",
+    "@openfga/sdk": "^0.8.1",
     "ioredis": "^5.8.0",
     "moleculer": "^0.14.35",
     "moleculer-web": "^0.10.6",
     "nats": "^2.29.3",
+    "pg": "^8.13.1",
     "typia": "^9.7.0"
   },
   "devDependencies": {
     "@standard-schema/spec": "^1.1.0",
     "@types/node": "^22.10.0",
+    "@types/pg": "^8.11.10",
     "bullmq": "^5.34.8",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",

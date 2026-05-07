@@ -1,0 +1,28 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oxc-project/oxc/main/npm/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "pedantic": "off"
+  },
+  "rules": {
+    "no-console": "off",
+    "no-empty-pattern": "off"
+  },
+  "overrides": [
+    {
+      "files": ["**/*.test.ts", "**/*.test-d.ts", "**/__tests__/**", "**/tests/**", "**/fixtures/**"],
+      "rules": {
+        "no-unused-expressions": "off",
+        "max-classes-per-file": "off"
+      }
+    }
+  ],
+  "ignorePatterns": [
+    "**/dist/**",
+    "**/node_modules/**",
+    "**/.forgeplan/**",
+    "**/coverage/**",
+    "**/build/**"
+  ]
+}

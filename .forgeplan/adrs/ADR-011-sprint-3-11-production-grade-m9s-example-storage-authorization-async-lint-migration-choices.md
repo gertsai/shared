@@ -497,3 +497,4 @@ Net Amendment 2 count: **10 cross-cutting decisions** (A2.1-A2.10), **5 new inva
 
 > **Net effect of Amendment 2**: SPEC-016 + RFC-002 reconciled with reality (existing gate, docker-compose, env naming, package surface). Critical security invariants codified. EVID-016 §5 lesson regression averted through inline templates per docs-reviewer P1.1-P1.4. ~6-8h Build rework saved through pre-Build catch.
 
+
