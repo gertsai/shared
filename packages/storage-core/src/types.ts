@@ -202,6 +202,19 @@ export interface StorageCapabilities {
    * `false`, adapters SHOULD throw on `runBatch`.
    */
   readonly batches: boolean;
+  /**
+   * Wave 6.5 / PRD-007: whether `upsertDoc` is implemented as a SINGLE
+   * round-trip (typically `INSERT ... ON CONFLICT DO UPDATE` for SQL
+   * backends, `Map.set` for in-memory). When `true`,
+   * `BaseEntityStorageService.upsert` delegates directly; when `false`
+   * (the default for adapters that don't implement it), the service
+   * falls back to the Sprint 3.5 `getDoc → set/update` 2-RTT path.
+   *
+   * Optional with default `false` so existing providers stay
+   * back-compat; new providers SHOULD opt in if their backend supports
+   * native upsert semantics.
+   */
+  readonly upsert?: boolean;
 }
 
 /**
@@ -375,6 +388,28 @@ export interface IStorageProvider<Meta extends StorageMetadata> {
    * than overwriting the whole document.
    */
   update(path: string, id: string, partial: Partial<Meta['write']>): Promise<void>;
+
+  /**
+   * Wave 6.5 / PRD-007: native upsert primitive.
+   *
+   * Optional. When implemented (and `capabilities.upsert === true`),
+   * `BaseEntityStorageService.upsert()` delegates directly for ONE
+   * round-trip — typically `INSERT ... ON CONFLICT (id) DO UPDATE` for
+   * SQL backends or `Map.set` for in-memory.
+   *
+   * When omitted (or `capabilities.upsert === false`), the service
+   * falls back to the Sprint 3.5 `getDoc → set/update` 2-RTT path
+   * (NFR-1 backwards-compat).
+   *
+   * Adapter contract: receive a fully-stamped entity (audit fields
+   * already populated by the service); upsert atomically; return the
+   * resolved id.
+   */
+  upsertDoc?(
+    path: string,
+    id: string,
+    data: Meta['write'],
+  ): Promise<{ id: string }>;
 
   /**
    * Delete the document at `(path, id)`. This is a hard-delete at the

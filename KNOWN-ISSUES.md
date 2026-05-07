@@ -160,6 +160,29 @@ extraction (Sprint 3.x or Wave 3).
 
 ## 10. `BaseEntityStorageService.upsert` performs 2 RTTs vs 1
 
+**Status (Wave 6.5):** PARTIALLY RESOLVED via PRD-007.
+
+Wave 6.5 added the optional `IStorageProvider.upsertDoc?` primitive +
+`StorageCapabilities.upsert?: boolean` flag. When a provider opts in
+(`capabilities.upsert === true`), `BaseEntityStorageService.upsert()`
+now bypasses the 2-RTT `getDoc → set/update` path and delegates
+directly to `provider.upsertDoc()` for ONE round-trip.
+
+Both shipped providers (`InMemoryStorageProvider` and
+`PgStorageProvider`) currently report `upsert: false` because their
+naive 1-RTT path would overwrite create-time audit fields
+(`creator_uuid`, `created_at`) on conflict. A correct audit-aware
+upsert needs to enumerate audit columns separately and exclude
+create-time fields from the UPDATE SET-list. Per-provider follow-up
+work.
+
+The interface is in place so a future audit-aware provider can opt in
+without a breaking change. v0.1.0 callers see no behaviour change —
+the 2-RTT path is the back-compat default.
+
+### Original entry (preserved for reference)
+
+
 **Status:** acceptable; tracked for Wave 6+
 
 `upsert(...)` consolidated from m9s-example DocumentRepository (Sprint 3.6

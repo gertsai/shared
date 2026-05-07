@@ -262,10 +262,21 @@ export interface PgStorageProviderOpts {
 export class PgStorageProvider<Meta extends StorageMetadata>
   implements IStorageProvider<Meta>
 {
+  /**
+   * Wave 6.5 / PRD-007: `upsert: false` because the current `set()`
+   * statement does `INSERT ... ON CONFLICT (id) DO UPDATE SET data =
+   * EXCLUDED.data` — this overwrites the WHOLE jsonb payload on
+   * conflict, INCLUDING `creator_uuid`/`created_at`. A correct
+   * audit-aware fast path needs to enumerate audit columns separately
+   * and exclude create-time fields from the UPDATE SET-list. Per-provider
+   * follow-up work; interface is in place so a future iteration can opt in
+   * without breaking the package surface.
+   */
   readonly capabilities = {
     listeners: false,
     transactions: true,
     batches: true,
+    upsert: false,
   } as const satisfies StorageCapabilities;
 
   private readonly _client: PgClient;
@@ -293,6 +304,28 @@ export class PgStorageProvider<Meta extends StorageMetadata>
       `INSERT INTO ${this._table(path)} (id, data) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data`,
       [id, data],
     );
+  }
+
+  /**
+   * Wave 6.5 / PRD-007 native 1-RTT upsert.
+   *
+   * The Postgres `set()` above is already an `INSERT ... ON CONFLICT
+   * DO UPDATE` — `upsertDoc()` reuses the same statement and returns
+   * the resolved id. This collapses the Sprint 3.5
+   * `BaseEntityStorageService.upsert()` 2-RTT path
+   * (`getDoc → set/update`) to a single SQL statement.
+   */
+  async upsertDoc(
+    path: string,
+    id: string,
+    data: Meta['write'],
+  ): Promise<{ id: string }> {
+    await rawExecute(
+      this._client,
+      `INSERT INTO ${this._table(path)} (id, data) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data`,
+      [id, data],
+    );
+    return { id };
   }
 
   async getDoc(path: string, id: string): Promise<Meta['read'] | null> {
