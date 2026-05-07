@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ColorTag } from './colors';
 import {
   colors,
   colorsMap,

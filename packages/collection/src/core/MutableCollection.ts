@@ -295,7 +295,7 @@ class MutableCollectionBase<K, V>
    * ```
    */
   reverse(): MutableCollectionBase<K, V> {
-    const entries = [...this.entries()].reverse();
+    const entries = [...this.entries()].toReversed();
     this.data.clear();
     for (const [key, value] of entries) {
       this.data.set(key, value);
@@ -660,15 +660,17 @@ class MutableCollectionBase<K, V>
   // Removed equals - will be provided by CommonOperations mixin
 
   toSorted(compareFunction?: (a: V, b: V) => number): MutableCollectionBase<K, V> {
-    if (compareFunction) {
-      const compareFn = (a: [K, V], b: [K, V]) => compareFunction(a[1], b[1]);
-      return this.clone().sort(compareFn);
-    }
-    return this.clone().sort();
+    // Sort the entries array (the underlying [K, V] tuples) — not via recursion,
+    // which would loop on the same `(V, V) => number` signature.
+    const entries = [...this.entries()];
+    const sorted = compareFunction
+      ? entries.toSorted((a, b) => compareFunction(a[1], b[1]))
+      : entries.toSorted();
+    return new MutableCollectionBase(sorted);
   }
 
   toReversed(): MutableCollectionBase<K, V> {
-    const entries = [...this.entries()].reverse();
+    const entries = [...this.entries()].toReversed();
     return new MutableCollectionBase(entries);
   }
 

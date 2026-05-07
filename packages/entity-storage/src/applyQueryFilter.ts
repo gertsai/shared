@@ -207,7 +207,7 @@ export function applyQueryFilter<Meta extends StorageMetadata>(
   // 2. ORDER BY (collect all in declaration order)
   const orders = constraints.filter((c): c is OrderByC => c.kind === 'orderBy');
   if (orders.length > 0) {
-    result = [...result].sort(makeOrderComparator(orders));
+    result = [...result].toSorted(makeOrderComparator(orders));
   }
 
   // 3. Cursors (require orderBy to be meaningful — degrade to no-op otherwise,

@@ -149,7 +149,7 @@ describe('AIActuator', () => {
         return { status: 'success', output: undefined, duration: 0 };
       },
 
-      async supplyComponent(context): Promise<EmbeddingProvider> {
+      async supplyComponent(_context): Promise<EmbeddingProvider> {
         return {
           async embed(texts: string[]) {
             return texts.map(() => [0.1, 0.2, 0.3]);

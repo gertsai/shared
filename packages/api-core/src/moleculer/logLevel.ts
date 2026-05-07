@@ -21,7 +21,7 @@ const logLevel: Record<string, string> = Object.entries(process.env)
       .join('.');
     return [finalKey, value ?? ''];
   })
-  .sort(([aKey], [bKey]) => {
+  .toSorted(([aKey], [bKey]) => {
     if ((aKey === '*' || aKey === '@') && bKey !== '*' && bKey !== '@') {
       return 1;
     }

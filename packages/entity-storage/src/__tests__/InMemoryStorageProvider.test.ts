@@ -104,9 +104,9 @@ describe('InMemoryStorageProvider — listeners', () => {
     // Initial fires sync with [].
     expect(cb).toHaveBeenLastCalledWith([]);
     await p.set('users', 'u1', { name: 'A', age: 1 });
-    expect((cb.mock.calls[cb.mock.calls.length - 1]?.[0] as unknown[]).length).toBe(1);
+    expect((cb.mock.calls.at(-1)![0] as unknown[]).length).toBe(1);
     await p.set('users', 'u2', { name: 'B', age: 2 });
-    expect((cb.mock.calls[cb.mock.calls.length - 1]?.[0] as unknown[]).length).toBe(2);
+    expect((cb.mock.calls.at(-1)![0] as unknown[]).length).toBe(2);
     off();
   });
 });
@@ -162,7 +162,7 @@ describe('InMemoryStorageProvider — getDocs/count apply Query<Meta>', () => {
       'users',
       [{ kind: 'where', field: 'age', op: '>=', value: 5 }] as never,
     );
-    expect(out.map((u) => u.name).sort()).toEqual(['B', 'C']);
+    expect(out.map((u) => u.name).toSorted()).toEqual(['B', 'C']);
   });
 
   it('count applies the same filter as getDocs', async () => {

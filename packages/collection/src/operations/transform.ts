@@ -165,7 +165,7 @@ export function* chunk<K, V>(iterable: Iterable<[K, V]>, size: number): Generato
  * Reverses the order of entries
  */
 export function reverse<K, V>(iterable: Iterable<[K, V]>): Array<[K, V]> {
-  return Array.from(iterable).reverse();
+  return Array.from(iterable).toReversed();
 }
 
 /**
@@ -175,7 +175,7 @@ export function sort<K, V>(
   iterable: Iterable<[K, V]>,
   compareFn?: (a: [K, V], b: [K, V]) => number,
 ): Array<[K, V]> {
-  return Array.from(iterable).sort(compareFn);
+  return Array.from(iterable).toSorted(compareFn);
 }
 
 /**

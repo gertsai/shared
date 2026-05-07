@@ -25,7 +25,6 @@ import {
 // Executor
 import {
   BaseQueryExecutor,
-  createExecutorMetadata,
   executorSupportsType,
   getAllSupportedTypes,
   findExecutorByName,
@@ -47,9 +46,6 @@ import {
   createRAGQuery,
   type NLQuery,
   type GraphQuery,
-  type VectorQuery,
-  type RAGQuery,
-  type QueryType,
 } from './registry.js';
 
 // Router

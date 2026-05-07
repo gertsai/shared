@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   getModel,
   findModel,
-  getAllModels,
   getModelsByProvider,
   getModelsByMode,
   getModelsByCapability,

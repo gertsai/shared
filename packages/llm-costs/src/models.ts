@@ -203,12 +203,12 @@ export function filterModels(filter: ModelFilter): ModelInfo[] {
 
 /** Get unique providers from model data */
 export function getUniqueProviders(): string[] {
-  return Array.from(modelsByProvider.keys()).sort();
+  return Array.from(modelsByProvider.keys()).toSorted();
 }
 
 /** Get unique modes from model data */
 export function getUniqueModes(): ModelMode[] {
-  return Array.from(modelsByMode.keys()).sort() as ModelMode[];
+  return Array.from(modelsByMode.keys()).toSorted() as ModelMode[];
 }
 
 /** Get model counts by provider */
@@ -236,7 +236,7 @@ export function getModelCountByMode(): Record<string, number> {
 export function getCheapestChatModels(limit = 10): ModelInfo[] {
   return data.models
     .filter((m) => m.mode === 'chat' && m.tokenPricing.input > 0)
-    .sort((a, b) => a.tokenPricing.input - b.tokenPricing.input)
+    .toSorted((a, b) => a.tokenPricing.input - b.tokenPricing.input)
     .slice(0, limit);
 }
 
@@ -249,7 +249,7 @@ export function getCheapestChatModels(limit = 10): ModelInfo[] {
 export function getCheapestEmbeddingModels(limit = 10): ModelInfo[] {
   return data.models
     .filter((m) => m.mode === 'embedding' && m.tokenPricing.input > 0)
-    .sort((a, b) => a.tokenPricing.input - b.tokenPricing.input)
+    .toSorted((a, b) => a.tokenPricing.input - b.tokenPricing.input)
     .slice(0, limit);
 }
 
@@ -262,6 +262,6 @@ export function getCheapestEmbeddingModels(limit = 10): ModelInfo[] {
 export function getLargestContextModels(limit = 10): ModelInfo[] {
   return data.models
     .filter((m) => m.maxInputTokens != null && m.maxInputTokens > 0)
-    .sort((a, b) => (b.maxInputTokens ?? 0) - (a.maxInputTokens ?? 0))
+    .toSorted((a, b) => (b.maxInputTokens ?? 0) - (a.maxInputTokens ?? 0))
     .slice(0, limit);
 }

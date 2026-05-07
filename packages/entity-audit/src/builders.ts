@@ -128,11 +128,11 @@ export function buildDataForSet<Data extends object>(
     },
   };
   return {
-    ...(opts.base ?? {}),
+    ...opts.base,
     ...data,
     ...marks,
     ...audit,
-    ...(opts.overrides ?? {}),
+    ...opts.overrides,
   } as EntityDataCreate<Data> & {
     readonly _uid: string;
     readonly status: EntityBasicStatus;

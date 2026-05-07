@@ -10,7 +10,7 @@
  * - Decorators
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   // Types
   CheckTrigger,
@@ -24,11 +24,9 @@ import {
   type BeforeLLMHook,
   type AfterLLMHook,
   type BeforeToolHook,
-  type AfterToolHook,
   type RunInput,
   type RunContext,
   type RunOutput,
-  type FunctionCall,
 
   // Context
   LLMCallContext,
@@ -41,7 +39,6 @@ import {
 
   // Executor
   HookExecutor,
-  hookExecutor,
   getHookMetadata,
   setHookMetadata,
   shouldRunInBackground,
@@ -59,7 +56,6 @@ import {
   blockingHook,
   backgroundHook,
   priorityHook,
-  Hook,
 } from './index';
 
 // ============================================================================
@@ -899,7 +895,7 @@ describe('Hook Decorators', () => {
 
   describe('beforeLLMCall decorator', () => {
     it('should set metadata and auto-register', () => {
-      const myHook = beforeLLMCall({ agents: ['Agent1'] })(
+      const _myHook = beforeLLMCall({ agents: ['Agent1'] })(
         function myHook() { return null; }
       );
 

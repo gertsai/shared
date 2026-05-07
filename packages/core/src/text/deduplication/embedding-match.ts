@@ -194,7 +194,7 @@ export class EmbeddingDeduplication implements IDeduplicationStrategy {
     if (embeddings.length === 1) return embeddings[0];
 
     const dimension = embeddings[0].length;
-    const result = new Array(dimension).fill(0);
+    const result = Array.from({ length: dimension }, () => 0);
 
     // Sum all embeddings
     for (const embedding of embeddings) {

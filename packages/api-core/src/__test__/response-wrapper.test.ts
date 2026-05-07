@@ -4,7 +4,7 @@
  * Tests for RFC-030 response transformation in envelope/response-wrapper.ts.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import type { Context } from 'moleculer';
 import {
   detectObjectType,

@@ -6,7 +6,7 @@ describe('MultiMap', () => {
     const mm = new MultiMap<string, number>();
     mm.add('a', 1).add('a', 2).add('b', 3);
 
-    expect(mm.getAll('a').sort()).toEqual([1, 2]);
+    expect(mm.getAll('a').toSorted()).toEqual([1, 2]);
     expect(mm.getFirst('a')).toBe(1);
     expect(mm.totalValues).toBe(3);
   });

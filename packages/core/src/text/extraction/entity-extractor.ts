@@ -7,7 +7,7 @@
  */
 
 import type { TextNode } from '../nodes/text-node';
-import type { ExtractionResult, Entity, Triplet } from './types';
+import type { ExtractionResult } from './types';
 import type { EntityType } from './schemas';
 
 /**

@@ -8,7 +8,7 @@
  * `[store, setStore]` where `store` is the original target and `setStore`
  * accepts a producer-style updater.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('solid-js/store', () => {
   const produce =

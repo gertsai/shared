@@ -37,7 +37,7 @@ describe('applyQueryFilter — WhereOp parity', () => {
       users,
       q([{ kind: 'where', field: 'age', op: '==', value: 25 }]),
     );
-    expect(out.map((u) => u.name).sort()).toEqual(['Bob', 'Dave']);
+    expect(out.map((u) => u.name).toSorted()).toEqual(['Bob', 'Dave']);
   });
 
   it("'!=' excludes the operand value", () => {
@@ -45,7 +45,7 @@ describe('applyQueryFilter — WhereOp parity', () => {
       users,
       q([{ kind: 'where', field: 'age', op: '!=', value: 25 }]),
     );
-    expect(out.map((u) => u.name).sort()).toEqual(['Alice', 'Carol', 'Eve']);
+    expect(out.map((u) => u.name).toSorted()).toEqual(['Alice', 'Carol', 'Eve']);
   });
 
   it("'<' filters by strict less-than", () => {
@@ -53,7 +53,7 @@ describe('applyQueryFilter — WhereOp parity', () => {
       users,
       q([{ kind: 'where', field: 'age', op: '<', value: 30 }]),
     );
-    expect(out.map((u) => u.name).sort()).toEqual(['Bob', 'Dave']);
+    expect(out.map((u) => u.name).toSorted()).toEqual(['Bob', 'Dave']);
   });
 
   it("'<=' filters by less-than-or-equal", () => {
@@ -61,7 +61,7 @@ describe('applyQueryFilter — WhereOp parity', () => {
       users,
       q([{ kind: 'where', field: 'age', op: '<=', value: 30 }]),
     );
-    expect(out.map((u) => u.name).sort()).toEqual(['Alice', 'Bob', 'Dave']);
+    expect(out.map((u) => u.name).toSorted()).toEqual(['Alice', 'Bob', 'Dave']);
   });
 
   it("'>' filters by strict greater-than", () => {
@@ -69,7 +69,7 @@ describe('applyQueryFilter — WhereOp parity', () => {
       users,
       q([{ kind: 'where', field: 'age', op: '>', value: 30 }]),
     );
-    expect(out.map((u) => u.name).sort()).toEqual(['Carol', 'Eve']);
+    expect(out.map((u) => u.name).toSorted()).toEqual(['Carol', 'Eve']);
   });
 
   it("'>=' filters by greater-than-or-equal", () => {
@@ -77,7 +77,7 @@ describe('applyQueryFilter — WhereOp parity', () => {
       users,
       q([{ kind: 'where', field: 'age', op: '>=', value: 30 }]),
     );
-    expect(out.map((u) => u.name).sort()).toEqual(['Alice', 'Carol', 'Eve']);
+    expect(out.map((u) => u.name).toSorted()).toEqual(['Alice', 'Carol', 'Eve']);
   });
 
   it("'in' matches set membership", () => {
@@ -85,7 +85,7 @@ describe('applyQueryFilter — WhereOp parity', () => {
       users,
       q([{ kind: 'where', field: 'name', op: 'in', value: ['Alice', 'Eve'] }]),
     );
-    expect(out.map((u) => u.name).sort()).toEqual(['Alice', 'Eve']);
+    expect(out.map((u) => u.name).toSorted()).toEqual(['Alice', 'Eve']);
   });
 
   it("'not-in' excludes set members", () => {
@@ -100,7 +100,7 @@ describe('applyQueryFilter — WhereOp parity', () => {
         },
       ]),
     );
-    expect(out.map((u) => u.name).sort()).toEqual(['Bob', 'Carol', 'Dave']);
+    expect(out.map((u) => u.name).toSorted()).toEqual(['Bob', 'Carol', 'Dave']);
   });
 
   it("'array-contains' matches when field-array contains scalar", () => {
@@ -110,7 +110,7 @@ describe('applyQueryFilter — WhereOp parity', () => {
         { kind: 'where', field: 'tags', op: 'array-contains', value: 'admin' },
       ]),
     );
-    expect(out.map((u) => u.name).sort()).toEqual(['Alice', 'Carol']);
+    expect(out.map((u) => u.name).toSorted()).toEqual(['Alice', 'Carol']);
   });
 
   it("'array-contains-any' matches when field-array intersects operand-array", () => {
@@ -125,7 +125,7 @@ describe('applyQueryFilter — WhereOp parity', () => {
         },
       ]),
     );
-    expect(out.map((u) => u.name).sort()).toEqual(['Alice', 'Bob', 'Carol']);
+    expect(out.map((u) => u.name).toSorted()).toEqual(['Alice', 'Bob', 'Carol']);
   });
 });
 

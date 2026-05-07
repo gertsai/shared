@@ -631,10 +631,10 @@ describe('CacheStore', () => {
 
       const driver = new MemoryCacheDriver();
       const store = new CacheStore({ driver });
-      let loadCount = 0;
+      let _loadCount = 0;
 
       const loader = async () => {
-        loadCount++;
+        _loadCount++;
         await new Promise((resolve) => setTimeout(resolve, 10));
         return 'result';
       };

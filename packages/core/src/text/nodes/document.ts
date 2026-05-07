@@ -38,7 +38,7 @@ export function createDocument(text: string, metadata?: Partial<DocumentMetadata
   return {
     id: createId('doc'),
     text,
-    metadata: { ...(metadata ?? {}) },
+    metadata: { ...metadata },
   };
 }
 

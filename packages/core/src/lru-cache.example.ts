@@ -4,8 +4,8 @@
  * Demonstrates usage patterns for high-performance O(1) LRU cache
  */
 
-import { LRUCache, TenantCache, toCacheKey, type CacheStats } from './lru-cache';
-import { createTenantId, type TenantId } from './ids';
+import { LRUCache, TenantCache, toCacheKey } from './lru-cache';
+import { createTenantId } from './ids';
 
 // =============================================================================
 // Example 1: Basic LRU Cache Usage
@@ -74,6 +74,7 @@ function lruEvictionExample() {
 // Example 3: TTL (Time-To-Live) Cache
 // =============================================================================
 
+// eslint-disable-next-line no-unused-vars -- example referenced via commented-out runExamples() call (line ~399); kept as live documentation
 async function ttlExample() {
   console.log('\n=== TTL Cache Example ===\n');
 

@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { EmbeddingDeduplication, EmbeddingMatchConfig } from './embedding-match';
 import { Entity } from '../extraction/schemas';
-import type { DuplicateGroup } from './strategy';
 
 describe('EmbeddingDeduplication', () => {
   let mockEmbedFn: ReturnType<typeof vi.fn>;

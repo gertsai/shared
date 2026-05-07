@@ -4,7 +4,7 @@ import { ErrorKind } from '../error-kind.js';
 
 describe('ErrorKind', () => {
   it('exposes exactly 10 closed values', () => {
-    const keys = Object.keys(ErrorKind).sort();
+    const keys = Object.keys(ErrorKind).toSorted();
     expect(keys).toEqual([
       'BAD_GATEWAY',
       'CONFLICT',

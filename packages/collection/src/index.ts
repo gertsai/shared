@@ -97,7 +97,6 @@
 // Core types and interfaces
 import { ImmutableCollection as ImmutableCol } from './core/ImmutableCollection';
 import { MutableCollection as MutableCol } from './core/MutableCollection';
-import { PersistentCollection as PersistentCol } from './core/PersistentCollection';
 export * from './types/interfaces';
 
 // Core collection classes

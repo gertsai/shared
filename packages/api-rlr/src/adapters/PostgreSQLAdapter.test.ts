@@ -106,8 +106,11 @@ describe('PostgreSQLAdapter (unit)', () => {
 // integration tests for the Redis adapter path.
 describe.skip('PostgreSQLAdapter (integration)', () => {
   // Definite assignment via `!` — block is skipped at runtime; TypeScript
-  // satisfaction only.
-  let prisma!: PgClient;
+  // satisfaction only. `_prisma` prefixed to signal intentionally-unused
+  // (suite is skipped, identifiers preserved for re-enable docs).
+  // oxlint-disable-next-line no-unused-vars,no-unassigned-vars
+  let _prisma!: PgClient;
+  // oxlint-disable-next-line no-unassigned-vars
   let adapter!: PostgreSQLAdapter;
 
   beforeAll(async () => {

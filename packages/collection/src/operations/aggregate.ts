@@ -412,7 +412,7 @@ export function last<K, V>(iterable: Iterable<[K, V]>): [K, V] | undefined {
 export function median<K>(iterable: Iterable<[K, number]>): number {
   const values = Array.from(iterable)
     .map(([, v]) => v)
-    .sort((a, b) => a - b);
+    .toSorted((a, b) => a - b);
   if (values.length === 0) {
     return NaN;
   }

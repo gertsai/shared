@@ -10,11 +10,10 @@
 import type {
   QueryRequest,
   QueryResult,
-  QueryMetadata,
   SourceReference,
   QueryFailure,
 } from './types.js';
-import { querySuccess, queryFailure, QueryError } from './types.js';
+import { queryFailure, QueryError } from './types.js';
 
 // ============================================================================
 // Executor Metadata

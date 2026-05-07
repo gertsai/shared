@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   formatFileSize,
   formatFileSizeParts,
-  getFileSizeUnit,
 } from './fileSize';
 
 describe('formatFileSize', () => {

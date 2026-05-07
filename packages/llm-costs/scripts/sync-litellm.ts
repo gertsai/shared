@@ -307,7 +307,7 @@ function main() {
   console.log(`   Models: ${models.length} (skipped: ${stats.skipped})`);
   console.log(`   Providers: ${stats.byProvider.size}`);
   console.log(`   By mode:`);
-  for (const [mode, count] of Object.entries(stats.byMode).sort((a, b) => b[1] - a[1])) {
+  for (const [mode, count] of Object.entries(stats.byMode).toSorted((a, b) => b[1] - a[1])) {
     console.log(`     ${mode}: ${count}`);
   }
 }

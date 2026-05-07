@@ -322,7 +322,7 @@ describe('MemoryCacheDriver', () => {
       await driver.set('session:1', 'c');
 
       const keys = await driver.keys('user:*');
-      expect(keys.sort()).toEqual(['user:1', 'user:2']);
+      expect(keys.toSorted()).toEqual(['user:1', 'user:2']);
     });
 
     it('matches with ? wildcard', async () => {
@@ -333,7 +333,7 @@ describe('MemoryCacheDriver', () => {
       await driver.set('user:10', 'c');
 
       const keys = await driver.keys('user:?');
-      expect(keys.sort()).toEqual(['user:1', 'user:2']);
+      expect(keys.toSorted()).toEqual(['user:1', 'user:2']);
     });
 
     it('matches all with *', async () => {
@@ -344,7 +344,7 @@ describe('MemoryCacheDriver', () => {
       await driver.hset('c', { x: '3' });
 
       const keys = await driver.keys('*');
-      expect(keys.sort()).toEqual(['a', 'b', 'c']);
+      expect(keys.toSorted()).toEqual(['a', 'b', 'c']);
     });
 
     it('normalizes ** to *', async () => {
@@ -354,7 +354,7 @@ describe('MemoryCacheDriver', () => {
       await driver.set('a:x:y', '2');
 
       const keys = await driver.keys('a:**');
-      expect(keys.sort()).toEqual(['a:b:c', 'a:x:y']);
+      expect(keys.toSorted()).toEqual(['a:b:c', 'a:x:y']);
     });
 
     it('excludes expired keys', async () => {
@@ -376,7 +376,7 @@ describe('MemoryCacheDriver', () => {
       await driver.hset('hash', { a: '1' });
 
       const keys = await driver.keys('*');
-      expect(keys.sort()).toEqual(['hash', 'key']);
+      expect(keys.toSorted()).toEqual(['hash', 'key']);
     });
   });
 
@@ -538,7 +538,7 @@ describe('MemoryCacheDriver', () => {
 
       // Pattern should be cached (no way to verify directly, but no errors)
       const keys = await driver.keys('key*');
-      expect(keys.sort()).toEqual(['key1', 'key2']);
+      expect(keys.toSorted()).toEqual(['key1', 'key2']);
     });
   });
 

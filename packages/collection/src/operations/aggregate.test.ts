@@ -289,7 +289,7 @@ describe('aggregate operations', () => {
     });
 
     it('should handle empty iterable', () => {
-      const grouped = aggregate.groupBy(new Map(), (val) => 'group');
+      const grouped = aggregate.groupBy(new Map(), (_val) => 'group');
       expect(grouped.size).toBe(0);
     });
 

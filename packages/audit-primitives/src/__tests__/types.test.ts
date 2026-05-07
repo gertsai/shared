@@ -11,7 +11,7 @@ describe('Timestamp shape', () => {
 
   it('treats fields as readonly at runtime via plain object semantics', () => {
     const ts: Timestamp = { seconds: 1, nanoseconds: 2 };
-    expect(Object.keys(ts).sort()).toEqual(['nanoseconds', 'seconds']);
+    expect(Object.keys(ts).toSorted()).toEqual(['nanoseconds', 'seconds']);
   });
 });
 

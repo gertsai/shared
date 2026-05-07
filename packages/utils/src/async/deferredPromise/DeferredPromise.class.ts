@@ -28,6 +28,7 @@ export class DeferredPromise<T = undefined> implements PromiseLike<T> {
     this._reject(err);
   }
 
+  // eslint-disable-next-line unicorn/no-thenable -- intentional: DeferredPromise is a thenable wrapper around Promise
   then(func: (value: T) => any) {
     return this._promise.then(func);
   }

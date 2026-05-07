@@ -200,7 +200,7 @@ export class CommonOpsMixin<K, V, T extends ReadableCollection<K, V>> {
    * @returns The last matching value or undefined
    */
   findLast(predicate: (value: V, key: K) => boolean): V | undefined {
-    const entries = [...this.data.entries()].reverse();
+    const entries = [...this.data.entries()].toReversed();
     for (const [key, val] of entries) {
       if (predicate(val, key)) {
         return val;
@@ -216,7 +216,7 @@ export class CommonOpsMixin<K, V, T extends ReadableCollection<K, V>> {
    * @returns The last matching key or undefined
    */
   findLastKey(predicate: (value: V, key: K) => boolean): K | undefined {
-    const entries = [...this.data.entries()].reverse();
+    const entries = [...this.data.entries()].toReversed();
     for (const [key, val] of entries) {
       if (predicate(val, key)) {
         return key;

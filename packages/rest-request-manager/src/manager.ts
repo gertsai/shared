@@ -213,7 +213,7 @@ export class RestRequestManager {
   }
 
   private async invoke<TBody>(url: string, request: RestRequest<TBody>): Promise<ResponseLike> {
-    const headers: Record<string, string> = { ...(request.headers ?? {}) };
+    const headers: Record<string, string> = { ...request.headers };
     let bodyInit: string | undefined;
     if (request.body !== undefined && request.method !== 'GET' && request.method !== 'DELETE') {
       if (typeof request.body === 'string') {

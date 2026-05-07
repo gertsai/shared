@@ -18,7 +18,6 @@ import {
   type Citation,
   type Entity,
   type Relationship,
-  type RAGCapabilities,
   type RAGResponse,
   hasGrounding,
   hasObservability,
@@ -38,7 +37,6 @@ import {
   isGroundingEvent,
   isGraphEvent,
   isErrorEvent,
-  isCompleteEvent,
   createStartEvent,
   createFinishEvent,
   createTextDelta,
@@ -60,7 +58,6 @@ import {
   safeValidateRAGRequest,
   formatValidationErrors,
   SourceSchema,
-  RAGResponseFullSchema,
   RAGErrorSchema,
 } from './index';
 

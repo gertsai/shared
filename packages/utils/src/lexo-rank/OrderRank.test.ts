@@ -228,10 +228,10 @@ describe('OrderRank', () => {
       const orderRank = new OrderRank({ order_rank: originalRank });
 
       // Access next and prev getters multiple times
-      let x = orderRank.next;
-      x = orderRank.prev;
-      x = orderRank.next;
-      x = orderRank.prev;
+      let _x = orderRank.next;
+      _x = orderRank.prev;
+      _x = orderRank.next;
+      _x = orderRank.prev;
 
       // Original rank should remain unchanged
       expect(orderRank.order_rank).toBe(originalRank);

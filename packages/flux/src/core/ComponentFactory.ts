@@ -4,7 +4,7 @@
  * @packageDocumentation
  */
 
-import type { FluxilisKey, IEventEmitter, CollectionEventMap } from '../types';
+import type { FluxilisKey, IEventEmitter } from '../types';
 import type { IBackend } from '../lib/types/backend.interface';
 import type { ISerializer } from '../lib/types/serializer.interface';
 
@@ -230,7 +230,7 @@ export class ComponentFactory {
       return instance as IBackend<K, V>;
     } catch (error) {
       throw new Error(
-        `ComponentFactory: Failed to instantiate backend '${backendName}': ${(error as Error).message}`,
+        `ComponentFactory: Failed to instantiate backend '${backendName}': ${(error as Error).message}`, { cause: error },
       );
     }
   }
@@ -282,7 +282,7 @@ export class ComponentFactory {
       return new SerializerCtor(options) as ISerializer<T>;
     } catch (error) {
       throw new Error(
-        `ComponentFactory: Failed to instantiate serializer '${serializerName}': ${(error as Error).message}`,
+        `ComponentFactory: Failed to instantiate serializer '${serializerName}': ${(error as Error).message}`, { cause: error },
       );
     }
   }
@@ -343,7 +343,7 @@ export class ComponentFactory {
       return new Constructor(options);
     } catch (error) {
       throw new Error(
-        `ComponentFactory: Failed to instantiate EventEmitter '${emitterName}': ${(error as Error).message}`,
+        `ComponentFactory: Failed to instantiate EventEmitter '${emitterName}': ${(error as Error).message}`, { cause: error },
       );
     }
   }

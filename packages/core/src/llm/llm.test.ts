@@ -8,9 +8,9 @@
  * - OpenAI and Anthropic providers (mocked)
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi, type MockedFunction } from 'vitest';
-import { BaseLLM, LLMCapabilities, LLMContextLengthExceededError, LLMCallError } from './base';
-import { ModelRouter, createLLM, getDefaultRouter } from './routing';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { BaseLLM, LLMContextLengthExceededError, LLMCallError } from './base';
+import { ModelRouter, createLLM } from './routing';
 import { OpenAIProvider } from './providers/openai';
 import { AnthropicProvider } from './providers/anthropic';
 import { GeminiProvider } from './providers/gemini';
@@ -121,7 +121,7 @@ describe('BaseLLM', () => {
   class TestLLM extends BaseLLM {
     callCount = 0;
 
-    async call(messages: LLMMessage[], options?: LLMCallOptions): Promise<LLMResponse> {
+    async call(_messages: LLMMessage[], _options?: LLMCallOptions): Promise<LLMResponse> {
       this.callCount++;
       return {
         content: 'Test response',

@@ -13,8 +13,8 @@ import { types } from 'node:util';
 import { Headers, FormData as UndiciFormData, request } from 'undici';
 import type { RequestInit } from 'undici';
 
-import type { ResponseLike, RequestOptions, FetchSecurityConfig } from '../lib/types';
-import { validateUrl, type UrlValidatorConfig } from '../lib/url-validator';
+import type { ResponseLike, RequestOptions } from '../lib/types';
+import { validateUrl } from '../lib/url-validator';
 
 /** Default maximum body size: 50MB */
 const DEFAULT_MAX_BODY_SIZE = 50 * 1024 * 1024;

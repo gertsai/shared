@@ -322,6 +322,7 @@ export class DirectoryReader implements IDocumentReader {
       // Replace ? with single char
       .replace(/\?/g, '.')
       // Replace temp placeholder with .*
+      // eslint-disable-next-line no-control-regex -- NUL byte used as internal placeholder for ** glob token (see lines above), guaranteed not to appear in user input
       .replace(/\0/g, '.*');
 
     // Anchor pattern to start and end

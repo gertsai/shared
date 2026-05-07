@@ -35,7 +35,6 @@ import {
 import { TiktokenTokenizer } from './tokenizers/tiktoken.js';
 import { EstimationTokenizer } from './tokenizers/estimation.js';
 import { CachedTokenizer } from './tokenizers/cached.js';
-import { inferProvider } from '../llm/model-registry.js';
 
 /**
  * TokenizerFactory - create tokenizers for any model.
@@ -244,7 +243,6 @@ export class TokenizerFactory {
     }
 
     // Infer provider and create estimation tokenizer
-    const provider = inferProvider(model);
     return new EstimationTokenizer({ model });
   }
 }

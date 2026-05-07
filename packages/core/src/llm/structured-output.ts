@@ -136,7 +136,7 @@ export function zodToResponseFormat(
   });
 
   // Extract the schema object (remove $schema and other metadata)
-  const { $schema, definitions, ...schemaBody } = jsonSchema as Record<string, unknown>;
+  const { $schema: _$schema, definitions: _definitions, ...schemaBody } = jsonSchema as Record<string, unknown>;
 
   // Strip additionalProperties for Gemini compatibility (P1-012)
   const sanitizedSchema = stripAdditionalProperties(schemaBody);
@@ -187,7 +187,7 @@ export function zodToLLMResponseFormat(
   });
 
   // Remove metadata and get clean schema
-  const { $schema, definitions, ...schemaBody } = jsonSchema as Record<string, unknown>;
+  const { $schema: _$schema, definitions: _definitions, ...schemaBody } = jsonSchema as Record<string, unknown>;
 
   // Strip additionalProperties for Gemini compatibility (P1-012)
   const sanitizedSchema = stripAdditionalProperties(schemaBody);
@@ -220,7 +220,7 @@ export function zodToJsonSchemaLiteLLM(schema: ZodType, name: string): LiteLLMJs
     $refStrategy: 'none',
   });
 
-  const { $schema, definitions, ...schemaBody } = jsonSchema as Record<string, unknown>;
+  const { $schema: _$schema, definitions: _definitions, ...schemaBody } = jsonSchema as Record<string, unknown>;
 
   // Strip additionalProperties for Gemini compatibility (P1-012)
   const sanitizedSchema = stripAdditionalProperties(schemaBody);
