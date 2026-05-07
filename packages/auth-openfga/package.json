@@ -39,6 +39,12 @@
     },
     "./package.json": "./package.json"
   },
+  "typesVersions": {
+    "*": {
+      "queries": ["./dist/queries/index.d.ts"],
+      "mutations": ["./dist/mutations/index.d.ts"]
+    }
+  },
   "files": [
     "dist",
     "README.md",

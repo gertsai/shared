@@ -3,7 +3,7 @@ import {
   createImmutableCollection,
   createMutableCollection,
 } from '../core/createCollection';
-import { Seq } from '../seq';
+import { Seq } from '../Seq';
 import type { ReadableCollection } from '../types/interfaces';
 
 describe('BatchOps', () => {

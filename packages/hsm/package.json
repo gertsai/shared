@@ -30,6 +30,11 @@
     },
     "./package.json": "./package.json"
   },
+  "typesVersions": {
+    "*": {
+      "providers": ["./dist/providers/index.d.ts"]
+    }
+  },
   "files": [
     "dist",
     "README.md",
