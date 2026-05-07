@@ -45,7 +45,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node scripts/emit-vue-shim-dts.mjs",
     "clean": "rm -rf dist tsconfig.tsbuildinfo *.tsbuildinfo",
     "test": "vitest run",
     "test:watch": "vitest",
