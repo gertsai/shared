@@ -121,6 +121,19 @@ export class OpenFgaPermissionGate implements IPermissionGate {
   private readonly actionToRelation: Readonly<Record<string, string>>;
   private readonly logger: NonNullable<OpenFgaPermissionGateOptions['logger']>;
   private readonly clientConfig: OpenFgaPermissionGateOptions['client'];
+  /**
+   * Wave 6.3 Pre-Build ARCH-P1-1 — memoised cache scope.
+   *
+   * Lazily filled on the first `can()` call (`@gertsai/auth-openfga` is
+   * lazy-imported so we cannot compute fingerprint in the constructor
+   * without breaking the eager-failure discipline). Once computed, all
+   * subsequent `can()` calls reuse the same string — avoids one
+   * SHA-256 hash + canonical-JSON serialisation per request on the
+   * hot path.
+   *
+   * `null` = never computed; `string` = computed and frozen.
+   */
+  private cacheScope: string | null = null;
 
   constructor(options: OpenFgaPermissionGateOptions = {}) {
     this.defaultResourceType = options.defaultResourceType ?? 'tenant';
@@ -156,23 +169,29 @@ export class OpenFgaPermissionGate implements IPermissionGate {
       // a store this throws and the catch below fails-closed.
       const mod = await import('@gertsai/auth-openfga');
 
-      // If composition supplied a pre-resolved client config, use a scoped
-      // client so this gate doesn't share singleton state with other adapters.
-      // Wave 6.2 (RFC-003 Edge 2): forward `apiToken` to `getFgaClient`
-      // so the SDK is constructed with bearer credentials.
-      if (
+      // Wave 6.3 (RFC-004 Edge 2): each gate instance with a distinct
+      // `apiUrl`/`storeId`/`apiToken` automatically gets its own SDK
+      // client AND its own permission cache via fingerprint scope. The
+      // Sprint 3.11 §P1-2 multi-store JSDoc warning is no longer
+      // applicable to gates with explicit configs — different configs
+      // resolve to different fingerprints, so the upstream cache Map
+      // returns distinct cached entries.
+      const gateConfig =
         this.clientConfig?.apiUrl !== undefined ||
         this.clientConfig?.storeId !== undefined ||
         this.clientConfig?.apiToken !== undefined
-      ) {
-        // Touching the singleton here is fine: it caches across `can()` calls
-        // and getFgaClient is idempotent on identical config.
-        mod.getFgaClient({
-          apiUrl: this.clientConfig?.apiUrl,
-          storeId: this.clientConfig?.storeId,
-          apiToken: this.clientConfig?.apiToken,
-        });
-      }
+          ? {
+              apiUrl: this.clientConfig?.apiUrl,
+              storeId: this.clientConfig?.storeId,
+              apiToken: this.clientConfig?.apiToken,
+            }
+          : undefined;
+
+      // Wave 6.3 (RFC-004 Edge 2): resolve the per-fingerprint client
+      // instance and pass it explicitly to `checkPermission` so the
+      // SDK call uses THIS gate's config (storeId, apiToken, ...)
+      // instead of the upstream default singleton.
+      const scopedClient = gateConfig !== undefined ? mod.getFgaClient(gateConfig) : undefined;
 
       const checkRequest: FgaCheckRequest = {
         userId,
@@ -180,7 +199,18 @@ export class OpenFgaPermissionGate implements IPermissionGate {
         resourceType,
         resourceId,
       };
-      const result = await mod.checkPermission(checkRequest);
+      // cacheScope ties the permission cache to this gate's config
+      // fingerprint, so two gates with different storeIds (or tokens)
+      // see fully independent cached results. ARCH-P1-1 memoises the
+      // SHA-256 + canonical-JSON cost — first `can()` computes,
+      // subsequent calls reuse.
+      if (this.cacheScope === null) {
+        this.cacheScope = mod.fingerprint(gateConfig);
+      }
+      const result = await mod.checkPermission(checkRequest, {
+        client: scopedClient,
+        cacheScope: this.cacheScope,
+      });
       return result.allowed;
     } catch (err) {
       // Fail-closed (ADR-011 I-4 + Amendment 2 §A2.4): never rethrow, log

@@ -261,33 +261,79 @@ export class PermissionCache {
 }
 
 // =============================================================================
-// Singleton Instance
+// Multi-Scope Cache Map (Wave 6.3 / ADR-012)
 // =============================================================================
 
-let cacheInstance: PermissionCache | null = null;
+/**
+ * Stable scope key for callers that omit `scope` — preserves the
+ * pre-Wave-6.3 single-cache singleton contract.
+ */
+const DEFAULT_SCOPE = '__default__';
 
 /**
- * Gets or creates the permission cache instance.
+ * Map of `PermissionCache` instances keyed by scope. Distinct scopes
+ * (e.g. one per OpenFGA store / tenant) maintain independent
+ * permission TTL state.
+ *
+ * Backwards compat: existing callers passing no scope share the
+ * `__default__` slot — observe identical behaviour to the pre-Wave-
+ * 6.3 single global.
  */
-export function getPermissionCache(config?: PermissionCacheConfig): PermissionCache {
-  if (!cacheInstance) {
-    cacheInstance = new PermissionCache(config);
+const permissionCaches = new Map<string, PermissionCache>();
+
+/**
+ * Get-or-create the `PermissionCache` for the given scope.
+ *
+ * Wave 6.3 (ADR-012): replaces the global `let cacheInstance` with
+ * a per-scope Map. Callers that need cross-tenant isolation pass a
+ * stable `scope` (the m9s gate uses
+ * `fingerprint({apiUrl, storeId, ...})` for symmetry with the
+ * client cache).
+ *
+ * @param config — cache config; only consulted on first construction
+ *                 of a given scope.
+ * @param scope  — scope key. Defaults to `__default__` for back-compat.
+ */
+export function getPermissionCache(
+  config?: PermissionCacheConfig,
+  scope: string = DEFAULT_SCOPE,
+): PermissionCache {
+  let cache = permissionCaches.get(scope);
+  if (!cache) {
+    cache = new PermissionCache(config);
+    permissionCaches.set(scope, cache);
   }
-  return cacheInstance;
+  return cache;
 }
 
 /**
- * Sets a custom permission cache instance.
+ * Replace the cache instance for a given scope.
+ *
+ * Wave 6.3: scope arg added; back-compat via `__default__` default.
  */
-export function setPermissionCache(cache: PermissionCache): void {
-  cacheInstance = cache;
+export function setPermissionCache(
+  cache: PermissionCache,
+  scope: string = DEFAULT_SCOPE,
+): void {
+  permissionCaches.set(scope, cache);
 }
 
 /**
- * Resets the permission cache (for testing).
+ * Reset cache(s).
+ *
+ * Wave 6.3 (ADR-012 invariant I-5): selective by scope when arg
+ * given; clears all when no arg. The no-arg path matches the
+ * legacy "clear singleton" contract.
+ *
+ * @param scope — when supplied, evict only the entry for that scope.
+ *                When omitted, clear all cached scopes.
  */
-export function resetPermissionCache(): void {
-  cacheInstance = null;
+export function resetPermissionCache(scope?: string): void {
+  if (scope === undefined) {
+    permissionCaches.clear();
+    return;
+  }
+  permissionCaches.delete(scope);
 }
 
 // =============================================================================

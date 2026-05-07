@@ -22,6 +22,7 @@ import type {
   FgaExpandNode,
 } from './types.js';
 import { FGA_DEFAULT_CONFIG, userString, objectString } from './constants.js';
+import { fingerprint } from './util/fingerprint.js';
 
 /**
  * SDK constructor options shape, exposed as a local alias so the
@@ -41,26 +42,76 @@ type SdkClientOptions = {
 };
 
 // =============================================================================
-// Singleton Instance
+// Multi-Instance Cache (Wave 6.3 / ADR-012)
 // =============================================================================
 
-let clientInstance: GertsFgaClient | null = null;
+/**
+ * Map of cached `GertsFgaClient` instances keyed by fingerprint of
+ * their `FgaClientConfig`. Replaces the pre-Wave-6.3
+ * `let clientInstance: GertsFgaClient | null` global so distinct
+ * configs (e.g. multiple OpenFGA stores in a multi-tenant SaaS) can
+ * coexist without aliasing.
+ *
+ * Backwards compat: callers passing the same config (or no config) in
+ * a single-config workload observe identical behaviour to the pre-
+ * Wave-6.3 singleton — same fingerprint → same cached instance.
+ *
+ * NEVER store apiToken as plaintext in keys: `fingerprint()` SHA-256
+ * hashes the canonical JSON before keying. See ADR-012 invariant I-2.
+ */
+const clientInstances = new Map<string, GertsFgaClient>();
 
 /**
- * Gets or creates the singleton OpenFGA client.
+ * Get-or-create a `GertsFgaClient` for the given config. Same config
+ * (any property order) returns the same cached instance.
+ *
+ * Wave 6.3 (ADR-012): cache is now keyed by fingerprint instead of
+ * being a single global. Backward-compat: `getFgaClient()` no-arg
+ * uses a stable `__default__` key; one-config workloads behave
+ * identically to before.
  */
 export function getFgaClient(config?: FgaClientConfig): GertsFgaClient {
-  if (!clientInstance) {
-    clientInstance = new GertsFgaClient(config);
+  const key = fingerprint(config);
+  let inst = clientInstances.get(key);
+  if (!inst) {
+    inst = new GertsFgaClient(config);
+    clientInstances.set(key, inst);
   }
-  return clientInstance;
+  return inst;
 }
 
 /**
- * Resets the singleton client (for testing).
+ * Always-fresh factory — never consults the cache, never inserts
+ * into it. Use for per-request clients with deliberately ephemeral
+ * scope, or when you want to opt out of fingerprint caching entirely.
+ *
+ * Wave 6.3 (ADR-012 §Decision): explicit escape hatch for the
+ * non-cached path. Caller is responsible for retaining the
+ * reference; `resetFgaClient` does not affect instances created
+ * via this factory.
  */
-export function resetFgaClient(): void {
-  clientInstance = null;
+export function createFgaClient(config?: FgaClientConfig): GertsFgaClient {
+  return new GertsFgaClient(config);
+}
+
+/**
+ * Reset the cache.
+ *
+ * Wave 6.3 (ADR-012 invariant I-5): selective by config when arg
+ * given; clears all when no arg. The no-arg path matches the legacy
+ * "clear singleton" contract — existing tests that call
+ * `resetFgaClient()` between scenarios continue to work unchanged.
+ *
+ * @param config — when supplied, evict only the entry whose
+ *                 fingerprint matches `config`. When omitted, clear
+ *                 all cached clients (back-compat).
+ */
+export function resetFgaClient(config?: FgaClientConfig): void {
+  if (config === undefined) {
+    clientInstances.clear();
+    return;
+  }
+  clientInstances.delete(fingerprint(config));
 }
 
 // =============================================================================
