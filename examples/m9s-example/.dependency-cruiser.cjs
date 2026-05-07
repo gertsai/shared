@@ -32,8 +32,12 @@ module.exports = {
           // classes per ADR-006 §D §6 (errors as @gertsai/* Shared Kernel) +
           // ADR-010 Amendment 1 §A1.1. Sprint 3.10 m9s integration uses
           // ValidationError in domain/document.ts for invariant guards.
-          // Patterns cover both node_modules symlink and resolved workspace
-          // path (pnpm resolves @gertsai/errors → ../../packages/errors).
+          // Patterns cover (a) the bare specifier as recorded in the
+          // import (CI matches `@gertsai/errors` literally before resolution),
+          // (b) the node_modules symlink, and (c) the resolved pnpm workspace
+          // path (`../../packages/errors`). All three forms are seen across
+          // local + CI environments.
+          '^@gertsai/errors',
           'node_modules/@gertsai/errors',
           'packages/errors/',
         ],
