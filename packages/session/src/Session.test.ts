@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import { SessionDestroyedError } from '@gertsai/errors';
 import { describe, expect, it, vi } from 'vitest';
 
 import { Session } from './Session';
@@ -125,12 +126,20 @@ describe('Session — dataAccessUuid scoping', () => {
     expect(listener).not.toHaveBeenCalled();
   });
 
-  it('$setDataAccessUuid throws on a destroyed session', () => {
+  it('$setDataAccessUuid throws SessionDestroyedError on a destroyed session', () => {
     const session = new Session(makeOpts());
     session.$destroy();
-    expect(() => session.$setDataAccessUuid('x')).toThrow(
-      /destroyed session/,
-    );
+    let caught: unknown;
+    try {
+      session.$setDataAccessUuid('x');
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(SessionDestroyedError);
+    expect(caught).toBeInstanceOf(Error);
+    const err = caught as SessionDestroyedError;
+    expect(err.message).toBe('Cannot $setDataAccessUuid on destroyed session');
+    expect(err.details).toEqual({ contextField: 'session' });
   });
 });
 
@@ -155,12 +164,20 @@ describe('Session — $switchOperator', () => {
     });
   });
 
-  it('throws on a destroyed session', () => {
+  it('throws SessionDestroyedError on a destroyed session', () => {
     const session = new Session(makeOpts());
     session.$destroy();
-    expect(() =>
-      session.$switchOperator({ _uid: 'x', type: 'web' }),
-    ).toThrow(/destroyed session/);
+    let caught: unknown;
+    try {
+      session.$switchOperator({ _uid: 'x', type: 'web' });
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(SessionDestroyedError);
+    expect(caught).toBeInstanceOf(Error);
+    const err = caught as SessionDestroyedError;
+    expect(err.message).toBe('Cannot $switchOperator on destroyed session');
+    expect(err.details).toEqual({ contextField: 'session' });
   });
 });
 
@@ -182,13 +199,15 @@ describe('Session — $destroy', () => {
     expect(session.listenerCount(SESSION_EVENTS.OPERATOR_SWITCHED)).toBe(0);
   });
 
-  it('subsequent $switchOperator and $setDataAccessUuid throw after destroy', () => {
+  it('subsequent $switchOperator and $setDataAccessUuid throw SessionDestroyedError after destroy', () => {
     const session = new Session(makeOpts());
     session.$destroy();
     expect(() =>
       session.$switchOperator({ _uid: 'x', type: 'web' }),
-    ).toThrow();
-    expect(() => session.$setDataAccessUuid('x')).toThrow();
+    ).toThrow(SessionDestroyedError);
+    expect(() => session.$setDataAccessUuid('x')).toThrow(
+      SessionDestroyedError,
+    );
   });
 });
 

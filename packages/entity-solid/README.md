@@ -101,9 +101,9 @@ JSX when `Entity._data.field` changes through the adapter.
 
 ## Cross-references
 
-- [ADR-008](../../.forgeplan/adrs/ADR-008-framework-adapters-policy-reactiveadapter-contract-wave-5-phase-3.md)
+- [ADR-008](https://github.com/gertsai/shared/blob/main/.forgeplan/adrs/ADR-008-framework-adapters-policy-reactiveadapter-contract-wave-5-phase-3.md)
   — framework adapter policy + invariants I-11..I-14.
-- [SPEC-013](../../.forgeplan/specs/SPEC-013-sprint-3-8-wave-5-phase-3-4-entity-framework-adapters-vue-react-solid-svelte.md)
+- [SPEC-013](https://github.com/gertsai/shared/blob/main/.forgeplan/specs/SPEC-013-sprint-3-8-wave-5-phase-3-4-entity-framework-adapters-vue-react-solid-svelte.md)
   — Sprint 3.8 deliverable scope.
 - [`@gertsai/entity`](../entity) — base classes (`Model` / `Entity` /
   `EntityWithMetadata`) and the `ReactiveAdapter` contract.

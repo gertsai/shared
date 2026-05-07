@@ -22,6 +22,12 @@ export {
 } from './provider-context.js';
 
 export {
+  defineToken,
+  isTypedToken,
+  type TypedToken,
+} from './typed-token.js';
+
+export {
   ContextFrozenError,
   FeatureNotEnabledError,
   ProviderNotFoundError,

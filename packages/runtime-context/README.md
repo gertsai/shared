@@ -1,7 +1,7 @@
 # @gertsai/runtime-context
 
 Per-request composition root for the `@gertsai/*` ecosystem — Tier 4 per
-[ADR-007](../../.forgeplan/adrs/ADR-007-runtimecontext-design-wave-5-phase-2-extraction-policy-session-guard-audit-primitives-placement.md).
+[ADR-007](https://github.com/gertsai/shared/blob/main/.forgeplan/adrs/ADR-007-runtimecontext-design-wave-5-phase-2-extraction-policy-session-guard-audit-primitives-placement.md).
 A `RequestContext` combines `@gertsai/session` identity, `@gertsai/tenant-resolver`
 output, correlation tracking, locale, feature-flag access and DI-aware
 provider lookup behind a single value carried for the lifetime of a request.
@@ -155,10 +155,75 @@ upstream system has already minted one.
 - **Crypto-strength correlation ids** (I-20). `correlationId` is generated
   with `crypto.randomUUID()`; `Math.random()` is never used.
 
+## TypedToken<T>
+
+Type-narrowing wrapper for DI tokens — eliminates `unknown` returns from
+`ProviderContext.get<T>(token)` and lets the compiler enforce the value
+type registered against a token. Added in Sprint 3.10 per
+[ADR-010](https://github.com/gertsai/shared/blob/main/.forgeplan/adrs/ADR-010-sprint-3-10-wave-5-polish-closure-m9s-example-wave-5-integration.md)
+§D + Amendment 1 §I-12, §I-13.
+
+### Quickstart
+
+```ts
+import { defineToken, DefaultProviderContext } from '@gertsai/runtime-context';
+
+interface UserService {
+  findById(id: string): Promise<User>;
+}
+
+const USER_TOKEN = defineToken<UserService>('UserService');
+
+// Registration uses `.symbol` — same key as the existing symbol-only API.
+const providers = new DefaultProviderContext({
+  bindings: new Map([[USER_TOKEN.symbol, userServiceImpl]]),
+});
+
+// Lookup is narrowed at compile time — no `unknown`, no cast.
+const userSvc = providers.get(USER_TOKEN); // UserService
+```
+
+### API
+
+| Export | Purpose |
+|---|---|
+| `defineToken<T>(name)` | Mints a `TypedToken<T>` carrying a module-private `Symbol(...)`. The returned object is `Object.freeze`-wrapped. |
+| `isTypedToken(value)` | Brand-check predicate (`value is TypedToken<unknown>`). |
+| `TypedToken<T>` | `{ readonly symbol; readonly name; readonly [BRAND]: true }` — `T` is phantom (inferred from declaration site). |
+| `ProviderContext.get<T>(token: TypedToken<T>): T` | Typed getter overload. |
+| `ProviderContext.getOptional<T>(token: TypedToken<T>): T \| undefined` | Typed optional getter overload. |
+
+### Compatibility
+
+The `TypedToken<T>` overloads are purely additive — existing callers that
+pass a bare `symbol` continue to compile and run unchanged. Overload order
+is: bare `symbol` FIRST, `TypedToken<T>` SECOND. TypeScript resolves
+overloads by declaration order, and a `TypedToken` value is structurally
+an `object` (not assignable to bare `symbol`), so the typed overload wins
+for any `TypedToken` argument.
+
+### Security
+
+- Brand uses a **module-private** `Symbol(...)` (NOT `Symbol.for`) per
+  Sprint 3.8 I-11 — external code cannot mint a value carrying the brand
+  because the symbol is unreachable through the global registry
+  (CWE-1321 prevention).
+- `isTypedToken` uses `Object.prototype.hasOwnProperty.call` rather than
+  prototype-walking property access — `Object.prototype` pollution cannot
+  bypass the check.
+- The runtime extracts `.symbol` from a `TypedToken` BEFORE delegating to
+  `assertSymbolToken`, so the existing CWE-843 guard against non-symbol
+  tokens stays effective for both call shapes.
+
+### Cross-references
+
+- [ADR-010 §D + Amendment 1 §I-12, §I-13](https://github.com/gertsai/shared/blob/main/.forgeplan/adrs/ADR-010-sprint-3-10-wave-5-polish-closure-m9s-example-wave-5-integration.md) — design + invariants.
+- Sprint 3.8 I-11 — module-private `Symbol(...)` brand pattern.
+
 ## Cross-references
 
-- [ADR-007 — Wave 5 Phase 2 placement](../../.forgeplan/adrs/ADR-007-runtimecontext-design-wave-5-phase-2-extraction-policy-session-guard-audit-primitives-placement.md)
-- [PRD-003 — Wave 5 foundation](../../.forgeplan/prds/PRD-003-wave-5-errors-runtime-context-framework-adapters-developer-experience-foundation.md)
+- [ADR-007 — Wave 5 Phase 2 placement](https://github.com/gertsai/shared/blob/main/.forgeplan/adrs/ADR-007-runtimecontext-design-wave-5-phase-2-extraction-policy-session-guard-audit-primitives-placement.md)
+- [PRD-003 — Wave 5 foundation](https://github.com/gertsai/shared/blob/main/.forgeplan/prds/PRD-003-wave-5-errors-runtime-context-framework-adapters-developer-experience-foundation.md)
 
 ## License
 

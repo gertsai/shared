@@ -10,6 +10,7 @@ export { NotFoundError } from './errors/not-found.js';
 export { UnauthorizedError } from './errors/unauthorized.js';
 export { ForbiddenError } from './errors/forbidden.js';
 export { ConflictError } from './errors/conflict.js';
+export { SessionDestroyedError } from './session.js';
 export { RateLimitedError } from './errors/rate-limited.js';
 export { InternalError } from './errors/internal.js';
 export { UpstreamFailureError } from './errors/upstream-failure.js';

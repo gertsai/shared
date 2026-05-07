@@ -34,6 +34,7 @@ import { Middleware as ChannelsMiddleware } from '@moleculer/channels';
 import { Middleware as WorkflowsMiddleware } from '@moleculer/workflows';
 
 import config from './project.config';
+import { buildWave5Middlewares } from './src/composition/wave5-middlewares';
 
 // ---------------------------------------------------------------------------
 // Sprint 3.0.1 audit F-P-6 — design note on the WorkflowsMiddleware import
@@ -140,6 +141,26 @@ const transporter: BrokerOptions['transporter'] =
 // ---------------------------------------------------------------------------
 type BrokerMiddleware = NonNullable<BrokerOptions['middlewares']>[number];
 const middlewares: BrokerMiddleware[] = [];
+
+// ---------------------------------------------------------------------------
+// Wave 5 middleware stack (Sprint 3.10) — tenantMiddleware → sessionMiddleware.
+//
+// Canonical order per ADR-010 Decision B + I-14:
+//   1. `tenantMiddleware` resolves `X-Tenant-ID` (HeaderStrategy) onto
+//      `ctx.meta.tenantId`.
+//   2. `sessionMiddleware` composes a `RequestContext` per action call,
+//      attaches it to `ctx.locals.requestContext`, and `$freeze()`s before
+//      the downstream handler runs (TOCTOU protection per ADR-007 I-16).
+//
+// SECURITY: HeaderStrategy is constructed with `trustProxy: true` —
+// see `src/composition/wave5-middlewares.ts` and the §Wave 5 stack
+// reference section of `README.md` for the deployment contract
+// (CWE-639 mitigation).
+// ---------------------------------------------------------------------------
+for (const m of buildWave5Middlewares()) {
+  middlewares.push(m as BrokerMiddleware);
+}
+
 if (config.REDIS_URL) {
   // ---------------------------------------------------------------------------
   // @moleculer/channels — reliable cross-service messaging (Redis Streams).

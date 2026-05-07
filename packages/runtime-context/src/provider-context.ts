@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { ProviderNotFoundError } from './errors.js';
+import { isTypedToken, type TypedToken } from './typed-token.js';
 
 /**
  * Initialiser for {@link DefaultProviderContext}. Bindings take precedence
@@ -17,10 +18,20 @@ export interface ProviderContextInit {
  * runtime to mitigate type confusion (CWE-843). Consumers that need a
  * named token MUST wrap via `Symbol.for('<package>:<name>')` at the call
  * site so the surface area for accidental collisions is compile-time-known.
+ *
+ * For typed lookups without `unknown` casts, prefer the {@link TypedToken}
+ * overloads (Sprint 3.10 / ADR-010 §D). Overload order: bare `symbol`
+ * FIRST, `TypedToken<T>` SECOND — TypeScript resolves overloads by
+ * declaration order, and a `TypedToken` value is structurally an `object`
+ * (not assignable to bare `symbol`), so the typed overload wins for any
+ * `TypedToken` argument while raw `symbol` callers continue to match the
+ * first overload (returning `T = unknown` unless caller annotates).
  */
 export interface ProviderContext {
   get<T>(token: symbol): T;
+  get<T>(token: TypedToken<T>): T;
   getOptional<T>(token: symbol): T | undefined;
+  getOptional<T>(token: TypedToken<T>): T | undefined;
 }
 
 /**
@@ -57,21 +68,30 @@ export class DefaultProviderContext implements ProviderContext {
     }
   }
 
-  get<T>(token: symbol): T {
-    assertSymbolToken(token);
-    const found = this._lookup<T>(token);
+  get<T>(token: symbol): T;
+  get<T>(token: TypedToken<T>): T;
+  get<T>(token: symbol | TypedToken<T>): T {
+    // Extract `.symbol` from TypedToken BEFORE assertSymbolToken (per
+    // ADR-010 I-13 — without this branch the existing TypeError guard
+    // rejects every TypedToken caller).
+    const sym = isTypedToken(token) ? token.symbol : token;
+    assertSymbolToken(sym);
+    const found = this._lookup<T>(sym);
     if (found === undefined) {
       throw new ProviderNotFoundError({
-        message: `Provider not bound for token ${this._tokenLabel(token)}`,
-        details: { token: this._tokenLabel(token) },
+        message: `Provider not bound for token ${this._tokenLabel(sym)}`,
+        details: { token: this._tokenLabel(sym) },
       });
     }
     return found;
   }
 
-  getOptional<T>(token: symbol): T | undefined {
-    assertSymbolToken(token);
-    return this._lookup<T>(token);
+  getOptional<T>(token: symbol): T | undefined;
+  getOptional<T>(token: TypedToken<T>): T | undefined;
+  getOptional<T>(token: symbol | TypedToken<T>): T | undefined {
+    const sym = isTypedToken(token) ? token.symbol : token;
+    assertSymbolToken(sym);
+    return this._lookup<T>(sym);
   }
 
   private _lookup<T>(token: symbol): T | undefined {

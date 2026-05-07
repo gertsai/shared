@@ -5,7 +5,7 @@ limiting, and per-host LRU circuit breaker over `@gertsai/fetch`. HTTP
 status codes are translated into typed `@gertsai/errors` `AppError`
 subclasses.
 
-Per [ADR-009 Decision D](../../.forgeplan/adrs/ADR-009-wave-5-phase-4-orchestra-high-candidates-extraction-async-utils-logger-factory-rpc-proxy-builder-rest-request-manager.md)
+Per [ADR-009 Decision D](https://github.com/gertsai/shared/blob/main/.forgeplan/adrs/ADR-009-wave-5-phase-4-orchestra-high-candidates-extraction-async-utils-logger-factory-rpc-proxy-builder-rest-request-manager.md)
 + invariants I-8, I-9, I-13, I-14 and Amendment 1
 (LRU `maxHosts`, AbortError translation, Node-only, TLS).
 
@@ -114,9 +114,9 @@ try {
 
 ## Cross-references
 
-- [ADR-009](../../.forgeplan/adrs/ADR-009-wave-5-phase-4-orchestra-high-candidates-extraction-async-utils-logger-factory-rpc-proxy-builder-rest-request-manager.md) — Wave 5 Phase 4 extraction policy and invariants.
-- [PRD-003](../../.forgeplan/prds/PRD-003-wave-5-errors-runtime-context-framework-adapters-developer-experience-foundation.md) — Wave 5 vision and roadmap.
-- [ADR-006](../../.forgeplan/adrs/ADR-006-errors-tenant-resolver-placement-session-additive-scoping-wave-5-extraction-policy.md) — `@gertsai/errors` Shared Kernel.
+- [ADR-009](https://github.com/gertsai/shared/blob/main/.forgeplan/adrs/ADR-009-wave-5-phase-4-orchestra-high-candidates-extraction-async-utils-logger-factory-rpc-proxy-builder-rest-request-manager.md) — Wave 5 Phase 4 extraction policy and invariants.
+- [PRD-003](https://github.com/gertsai/shared/blob/main/.forgeplan/prds/PRD-003-wave-5-errors-runtime-context-framework-adapters-developer-experience-foundation.md) — Wave 5 vision and roadmap.
+- [ADR-006](https://github.com/gertsai/shared/blob/main/.forgeplan/adrs/ADR-006-errors-tenant-resolver-placement-session-additive-scoping-wave-5-extraction-policy.md) — `@gertsai/errors` Shared Kernel.
 
 ## License
 

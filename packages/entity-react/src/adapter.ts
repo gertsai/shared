@@ -107,6 +107,22 @@ export const reactReactiveAdapter: ReactiveAdapter = {
     return proxy as T;
   },
 
+  /**
+   * Mark `value` as **permanently** opted out of reactive wrapping.
+   *
+   * The `RAW` brand is installed via `Object.defineProperty` with
+   * `configurable: false`, `writable: false` (Sprint 3.10 W-3-10-13
+   * clarification). This is INTENTIONAL — once a value is marked raw,
+   * the brand cannot be deleted or overwritten by downstream code. The
+   * effect is one-way: there is no `unmarkRaw` escape hatch.
+   *
+   * Rationale: a reversible brand would let an attacker (or a buggy
+   * library composing the entity tree) re-enable reactivity on a value
+   * the application explicitly excluded — silently breaking the
+   * invariant that raw refs never trigger updates. If a consumer needs
+   * a fresh, unbranded copy of the same data they should clone the
+   * value (e.g. `structuredClone(value)`) and brand the copy instead.
+   */
   markRaw<T>(value: T): T {
     if (value !== null && typeof value === 'object') {
       Object.defineProperty(value as object, RAW, {

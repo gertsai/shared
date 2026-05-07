@@ -28,10 +28,18 @@ module.exports = {
           '^src/domain/',
           'node_modules/typescript',
           'node_modules/@gertsai/core',
+          // Shared Kernel exception — domain MAY depend on error taxonomy
+          // classes per ADR-006 §D §6 (errors as @gertsai/* Shared Kernel) +
+          // ADR-010 Amendment 1 §A1.1. Sprint 3.10 m9s integration uses
+          // ValidationError in domain/document.ts for invariant guards.
+          // Patterns cover both node_modules symlink and resolved workspace
+          // path (pnpm resolves @gertsai/errors → ../../packages/errors).
+          'node_modules/@gertsai/errors',
+          'packages/errors/',
         ],
       },
       comment:
-        'Domain layer depends only on stdlib + @gertsai/core types. ADR-002.',
+        'Domain layer depends only on stdlib + @gertsai/core types + @gertsai/errors Shared Kernel. ADR-002 + ADR-006 §D §6.',
     },
     {
       name: 'no-application-to-infrastructure',

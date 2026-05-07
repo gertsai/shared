@@ -58,8 +58,47 @@ describe('wrapUnknownError', () => {
   });
 
   it('attaches correlationId when provided', () => {
-    const wrapped = wrapUnknownError(new Error('boom'), undefined, 'corr-1');
+    const wrapped = wrapUnknownError(new Error('boom'), 'INTERNAL', 'corr-1');
     expect(wrapped.correlationId).toBe('corr-1');
+  });
+
+  it('default kind is INTERNAL — wrap returns InternalError', () => {
+    const wrapped = wrapUnknownError(new Error('default'));
+    expect(wrapped).toBeInstanceOf(InternalError);
+    expect(wrapped.kind).toBe(ErrorKind.INTERNAL);
+  });
+
+  it('explicit kind=EXTERNAL still resolves to InternalError (placeholder until dedicated subclass)', () => {
+    const wrapped = wrapUnknownError(new Error('ext'), 'EXTERNAL');
+    expect(wrapped).toBeInstanceOf(InternalError);
+    expect(wrapped.kind).toBe(ErrorKind.INTERNAL);
+  });
+
+  it('adversarial: kind override on already-typed AppError is ignored (ADR-010 I-11)', () => {
+    const original = new InternalError({
+      message: 'pre-classified',
+      details: { reason: 'x' },
+    });
+    const result = wrapUnknownError(original, 'EXTERNAL');
+    expect(result).toBe(original);
+    expect(result).toBeInstanceOf(InternalError);
+    expect(result.kind).toBe(ErrorKind.INTERNAL);
+    expect(result.message).toBe('pre-classified');
+  });
+
+  it('adversarial: non-INTERNAL/EXTERNAL kind rejected at compile time', () => {
+    // The following lines, if uncommented, MUST fail TS strict compilation
+    // (closed allow-list per ADR-010 I-11):
+    //   wrapUnknownError(new Error('x'), 'NOT_FOUND');
+    //   wrapUnknownError(new Error('x'), 'FORBIDDEN');
+    //   wrapUnknownError(new Error('x'), 'VALIDATION');
+    //   wrapUnknownError(new Error('x'), 'CONFLICT');
+    // Runtime sanity: the type-level guard is the primary defence; this
+    // test asserts the allow-list values themselves still work.
+    const internal = wrapUnknownError(new Error('a'), 'INTERNAL');
+    const external = wrapUnknownError(new Error('b'), 'EXTERNAL');
+    expect(internal.kind).toBe(ErrorKind.INTERNAL);
+    expect(external.kind).toBe(ErrorKind.INTERNAL);
   });
 });
 

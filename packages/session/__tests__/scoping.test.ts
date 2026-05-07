@@ -10,11 +10,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { Session } from '../src/Session';
 import type { AbstractDialog, SessionOpts } from '../src/types';
-// Local stub fallback per Amendment 1.4. Session.ts throws instances of these
-// stubs until Phase B replaces with `@gertsai/errors` package imports. Tests
-// MUST `instanceof`-check the same module Session.ts imports — otherwise the
-// brand-check would fail post-swap. Importing from the same path resolves
-// that constraint.
+// Tests `instanceof`-check the same module Session.ts imports (workspace symlink resolves identity).
 import { UnauthorizedError, ValidationError } from '@gertsai/errors';
 
 const makeDialog = (): AbstractDialog => ({

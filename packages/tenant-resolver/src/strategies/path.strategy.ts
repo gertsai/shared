@@ -8,8 +8,15 @@ export interface PathStrategyOptions {
   /**
    * Path pattern with `:tenantId` placeholder, e.g. `/t/:tenantId/...`.
    * The pattern matches against the URL path (no query string) after
-   * URL-normalisation (decode + `..` collapse). Trailing `...` is treated
-   * as a wildcard that matches anything after the captured tenant.
+   * URL-normalisation (decode + `..` collapse).
+   *
+   * Wildcard semantics (Sprint 3.10 W-3-10-7):
+   *   The literal `...` token is treated as `.*` ONLY when used as a
+   *   trailing token. Mid-pattern `...` (e.g. `/t/:tenantId/.../foo`)
+   *   compiles but matches only literally — `compilePattern` does not
+   *   anchor a non-trailing wildcard against the rest of the URL, so
+   *   such patterns are nearly always a configuration mistake. Prefer
+   *   discrete `:param` segments for non-tail captures.
    */
   readonly pathPattern: string;
 }

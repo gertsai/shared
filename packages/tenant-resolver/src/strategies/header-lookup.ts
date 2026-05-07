@@ -10,6 +10,17 @@ import type { HttpRequestLike } from '../strategy.js';
  *     raw object — `nodeHttpAdapter` and friends materialise the latter.
  *   - Test fixtures often use mixed-case keys verbatim.
  *
+ * Precedence (Sprint 3.10 W-3-10-8):
+ *   1. EXACT-CASE match short-circuits — `headers[name]` is checked
+ *      first and returned immediately when defined. This is the hot
+ *      path for already-lowercased headers (Node `http.IncomingMessage`)
+ *      and avoids the per-call `Object.keys` scan.
+ *   2. Case-INSENSITIVE fallback iterates `Object.keys(headers)` and
+ *      returns the FIRST matching key (object-iteration order). When
+ *      consumers populate the headers map with both `X-Foo` and `x-foo`
+ *      keys, only the exact-case match wins; the lowercase scan never
+ *      runs.
+ *
  * Returns the first defined value for an exact-case match, then for any
  * case-insensitive match. If multiple values are present (`string[]`),
  * returns the first element. Returns `undefined` if nothing matches.

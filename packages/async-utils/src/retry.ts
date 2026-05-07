@@ -15,10 +15,25 @@ export interface RetryOpts {
 /**
  * Retry an async action with exponential backoff + jitter.
  *
- * Default `jitter: 'full'` per ADR-009 Amendment 1.2.7 — randomizes delay in
- * [0, computedDelay] for thundering-herd protection (CWE-409).
+ * Jitter modes:
+ *   - `'full'` (DEFAULT, recommended): delay ∈ [0, computedDelay].
+ *     Maximises de-correlation of retrying clients — see Sprint 3.9
+ *     ADR-009 Amendment 1.2.7 (thundering-herd protection, CWE-409).
+ *     Selected as default after the audit determined that workloads
+ *     calling `retry()` without explicit jitter config were the most
+ *     likely to suffer from synchronised retry storms.
+ *   - `'equal'`: delay ∈ [computedDelay/2, computedDelay]. Lower
+ *     variance, useful when callers depend on a soft minimum wait
+ *     (e.g. polling a backend that returns 429 too eagerly).
+ *   - `'none'`: deterministic exponential backoff (testing only —
+ *     production callers must NOT use this against shared upstreams).
  *
- * Honors `signal: AbortSignal` if provided — throws if signal aborts before next attempt.
+ * Sprint 3.10 W-3-10-15: cross-reference confirmed; default value
+ * unchanged. Consumers wanting backwards-compatible deterministic
+ * sleeps must opt in via `jitter: 'none'`.
+ *
+ * Honors `signal: AbortSignal` if provided — throws if signal aborts
+ * before next attempt.
  *
  * @param action — async function to invoke.
  * @param opts — retry configuration.

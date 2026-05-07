@@ -1,0 +1,17 @@
+artifact_id: SPEC-015
+workflow_type: greenfield
+current_phase: done
+advanced_at: 2026-05-06T22:00:47.239243Z
+history:
+- to: shape
+  at: 2026-05-06T21:59:02.315198Z
+  reason: 'auto: forgeplan_new'
+- from: shape
+  to: validate
+  at: 2026-05-06T22:00:42.442045Z
+  reason: 'auto: forgeplan_validate PASS'
+- from: validate
+  to: done
+  at: 2026-05-06T22:00:47.239243Z
+  reason: 'auto: forgeplan_activate'
+schema_version: 1

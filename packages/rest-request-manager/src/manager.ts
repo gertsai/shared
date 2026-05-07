@@ -91,10 +91,16 @@ export class RestRequestManager {
     } catch (e) {
       const translated = translateTransportError(e, timeoutMs);
       this.breaker.recordFailure(host);
+      // Sprint 3.10 W-3-10-14: surface the full `Error.cause` chain so
+      // operators can correlate the translated AppError with the original
+      // transport-layer cause (e.g. `TimeoutError → AbortError →
+      // FetchError`). Without this, only the topmost message reaches the
+      // logger and root-cause analysis requires reproducing the failure.
       this.logger?.error('rest-request-manager: transport failure', {
         method: request.method,
         url,
         error: translated instanceof Error ? translated.message : String(translated),
+        causeChain: walkCauseChain(translated),
       });
       throw translated;
     }
@@ -269,3 +275,29 @@ export class RestRequestManager {
   }
 }
 
+/**
+ * Walk an `Error.cause` chain and return a flat array of messages
+ * (closest cause first). Bounded at 5 levels and uses a `WeakSet`
+ * anti-cycle guard mirroring the Sprint 3.6 I-13 cause-cycle pattern,
+ * so a self-referential or mutual-causation chain cannot stall logging.
+ * Sprint 3.10 W-3-10-14.
+ */
+function walkCauseChain(err: unknown): readonly string[] {
+  const out: string[] = [];
+  const seen = new WeakSet<object>();
+  let current: unknown = err instanceof Error ? err.cause : undefined;
+  let depth = 0;
+  while (current !== undefined && current !== null && depth < 5) {
+    if (typeof current === 'object') {
+      if (seen.has(current as object)) {
+        out.push('[cause-cycle]');
+        break;
+      }
+      seen.add(current as object);
+    }
+    out.push(current instanceof Error ? current.message : String(current));
+    current = current instanceof Error ? current.cause : undefined;
+    depth += 1;
+  }
+  return out;
+}

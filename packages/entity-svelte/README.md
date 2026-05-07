@@ -118,8 +118,8 @@ and CJS builds (ADR-008 Amendment 1.2.9).
 
 ## Cross-references
 
-- [ADR-008 — Framework adapters policy + ReactiveAdapter contract](../../.forgeplan/adrs/ADR-008-framework-adapters-policy-reactiveadapter-contract-wave-5-phase-3.md)
-- [PRD-003 — Wave 5 Errors / Runtime Context / Framework Adapters DX foundation](../../.forgeplan/prds/PRD-003-wave-5-errors-runtime-context-framework-adapters-developer-experience-foundation.md)
+- [ADR-008 — Framework adapters policy + ReactiveAdapter contract](https://github.com/gertsai/shared/blob/main/.forgeplan/adrs/ADR-008-framework-adapters-policy-reactiveadapter-contract-wave-5-phase-3.md)
+- [PRD-003 — Wave 5 Errors / Runtime Context / Framework Adapters DX foundation](https://github.com/gertsai/shared/blob/main/.forgeplan/prds/PRD-003-wave-5-errors-runtime-context-framework-adapters-developer-experience-foundation.md)
 - [`packages/entity/src/types.ts` — `ReactiveAdapter` SPI](../entity/src/types.ts)
 
 ## License

@@ -130,8 +130,8 @@ setTimeout(() => cancel('user navigated away'), 5000);
 
 ## Cross-references
 
-- [ADR-009 — Wave 5 Phase 4 extraction](../../.forgeplan/adrs/ADR-009-wave-5-phase-4-orchestra-high-candidates-extraction-async-utils-logger-factory-rpc-proxy-builder-rest-request-manager.md)
-- [PRD-003 — Wave 5 errors / runtime-context / framework adapters](../../.forgeplan/prds/PRD-003-wave-5-errors-runtime-context-framework-adapters-developer-experience-foundation.md)
+- [ADR-009 — Wave 5 Phase 4 extraction](https://github.com/gertsai/shared/blob/main/.forgeplan/adrs/ADR-009-wave-5-phase-4-orchestra-high-candidates-extraction-async-utils-logger-factory-rpc-proxy-builder-rest-request-manager.md)
+- [PRD-003 — Wave 5 errors / runtime-context / framework adapters](https://github.com/gertsai/shared/blob/main/.forgeplan/prds/PRD-003-wave-5-errors-runtime-context-framework-adapters-developer-experience-foundation.md)
 
 ## License
 

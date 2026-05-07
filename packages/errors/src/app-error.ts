@@ -28,6 +28,16 @@ export abstract class AppError<
   readonly correlationId?: string;
   declare readonly cause?: unknown;
 
+  /**
+   * NOTE: `details` is sealed via a SHALLOW `Object.freeze` — top-level
+   * keys cannot be reassigned, but nested objects/arrays remain mutable
+   * by reference. Deep-freeze is intentionally deferred (target v0.2)
+   * to avoid breaking the existing `Readonly<D>` shape for consumers
+   * who pass non-plain values (Date, Buffer, custom classes) inside
+   * `details`. For wire-format scrubbing of nested credentials, callers
+   * MUST go through `/http` or `/grpc` exporters which deep-redact via
+   * `redactDetails()` (Sprint 3.10 W-3-10-3 + ADR-006 I-14).
+   */
   constructor(opts: AppErrorOpts<D>) {
     super(opts.message);
     this.name = new.target.name;

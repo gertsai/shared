@@ -174,8 +174,8 @@ should call `assertNotDestroyed(session)` before invoking the mutator.
 
 ## Cross-references
 
-- [ADR-007 — RuntimeContext design + Wave 5 Phase 2 placement (session-guard, audit-primitives)](../../.forgeplan/adrs/ADR-007-runtimecontext-design-wave-5-phase-2-extraction-policy-session-guard-audit-primitives-placement.md)
-- [PRD-003 — Wave 5 errors / runtime-context / framework adapters](../../.forgeplan/prds/PRD-003-wave-5-errors-runtime-context-framework-adapters-developer-experience-foundation.md)
+- [ADR-007 — RuntimeContext design + Wave 5 Phase 2 placement (session-guard, audit-primitives)](https://github.com/gertsai/shared/blob/main/.forgeplan/adrs/ADR-007-runtimecontext-design-wave-5-phase-2-extraction-policy-session-guard-audit-primitives-placement.md)
+- [PRD-003 — Wave 5 errors / runtime-context / framework adapters](https://github.com/gertsai/shared/blob/main/.forgeplan/prds/PRD-003-wave-5-errors-runtime-context-framework-adapters-developer-experience-foundation.md)
 
 ## License
 

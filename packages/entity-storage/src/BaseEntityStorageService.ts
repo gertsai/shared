@@ -435,10 +435,18 @@ export abstract class BaseEntityStorageService<
    * Returns `{ id }` matching the existing or freshly-stamped uid so the
    * caller does not need to branch.
    *
-   * Per W-3-6-24 (P2 EG-2): consolidates the duplicated upsert pattern
-   * present in m9s-example DocumentRepository and any future repository
-   * adapter. Performs two RTTs (`get` + `set`/`update`); see KNOWN-ISSUES
-   * for the future single-RTT optimisation.
+   * **Cost model** (Sprint 3.10 W-3-10-12 clarification, see KNOWN-ISSUES
+   * §10): this implementation issues **two storage round-trips** —
+   * `provider.getDoc` for the existence check, followed by either
+   * `provider.setDoc` or the update path. Backends that natively support
+   * `INSERT ... ON CONFLICT DO UPDATE` (Postgres) or `UPSERT` (CockroachDB,
+   * SQLite) can collapse this to one RTT, but doing so requires the
+   * provider to expose a dedicated upsert primitive (not present on
+   * {@link IStorageProvider} as of v0.2.x). For high-throughput hot paths
+   * prefer running this method **inside a `runInTransaction`** to amortise
+   * connection acquisition overhead, OR sidestep it by calling `set` /
+   * `update` directly when the caller already knows the row's existence
+   * status.
    */
   async upsert(
     entity: SetEntityInput<Meta> & { readonly _uid: string },

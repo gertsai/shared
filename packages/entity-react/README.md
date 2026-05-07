@@ -3,7 +3,7 @@
 React framework adapter for [`@gertsai/entity`](../entity/README.md) — `reactReactiveAdapter`
 (Proxy-based reactivity) and `useEntity` (a React hook on top of
 `React.useSyncExternalStore`). Per
-[ADR-008](../../.forgeplan/adrs/ADR-008-framework-adapters-policy-reactiveadapter-contract-wave-5-phase-3.md)
+[ADR-008](https://github.com/gertsai/shared/blob/main/.forgeplan/adrs/ADR-008-framework-adapters-policy-reactiveadapter-contract-wave-5-phase-3.md)
 Decision C + Amendment 1 invariants I-11..I-14.
 
 ## Install
@@ -92,8 +92,8 @@ const user = new UserEntity({
 
 ## Cross-references
 
-- [ADR-008 — Framework adapters policy + ReactiveAdapter contract](../../.forgeplan/adrs/ADR-008-framework-adapters-policy-reactiveadapter-contract-wave-5-phase-3.md)
-- [PRD-003 — Wave 5 foundation](../../.forgeplan/prds/PRD-003-wave-5-errors-runtime-context-framework-adapters-developer-experience-foundation.md)
+- [ADR-008 — Framework adapters policy + ReactiveAdapter contract](https://github.com/gertsai/shared/blob/main/.forgeplan/adrs/ADR-008-framework-adapters-policy-reactiveadapter-contract-wave-5-phase-3.md)
+- [PRD-003 — Wave 5 foundation](https://github.com/gertsai/shared/blob/main/.forgeplan/prds/PRD-003-wave-5-errors-runtime-context-framework-adapters-developer-experience-foundation.md)
 - [`@gertsai/entity` `ReactiveAdapter` contract](../entity/src/types.ts)
 
 ## License

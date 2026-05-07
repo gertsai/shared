@@ -23,6 +23,20 @@ packages, extracted из `gertsai_codex` (RFC-extracted с preserved git history
   отдельный scope (Phase 2 миграция = отдельная сессия).
 - **Не трогать packages/*/dist/, *.tsbuildinfo, packages/*/reports/junit/** —
   это build artifacts. Если видишь tracked → `git rm --cached` + `.gitignore`.
+- **🔴 STRICT: Forgeplan artifacts мутировать ТОЛЬКО через MCP/CLI** —
+  файлы в `.forgeplan/{prds,adrs,specs,rfcs,evidence,notes}/*.md` нельзя
+  редактировать через `Edit`/`Write`/`sed` напрямую. Все изменения тела/статуса
+  идут через `mcp__forgeplan__forgeplan_update`, `forgeplan_new`,
+  `forgeplan_link`, `forgeplan_activate`, `forgeplan_deprecate` (или
+  эквивалентный CLI `forgeplan update|new|link|activate|...`). Прямой Edit
+  десинхронизирует LanceDB index, state machine (`.forgeplan/state/<ID>.yaml`)
+  и canonical body — `forgeplan_get` начнёт возвращать stale данные,
+  semantic search промахнётся. Если случайно отредактирован — recover через
+  `forgeplan_update id=<ID> body=<full new body>` (читаешь файл, формируешь
+  полное новое body без YAML frontmatter, пушишь через MCP). Last-resort
+  fallback: `forgeplan scan-import` пересоберёт LanceDB из markdown.
+  Direct Edit OK ТОЛЬКО для не-forgeplan markdown (READMEs, CLAUDE.md,
+  KNOWN-ISSUES, src code, .changeset/*.md).
 
 ---
 
@@ -78,9 +92,304 @@ pnpm-workspace.yaml       ← packages: ['packages/*']
 
 ---
 
+
+## Forgeplan — единый источник правды для решений
+
+`.forgeplan/` — **single source of truth** для «что было решено, зачем, с какими доказательствами» и (через lifecycle артефактов `draft → active → superseded/deprecated/stale`) «над чем сейчас работаем». CLI: `forgeplan` (v0.27+). MCP: `.mcp.json` → server `forgeplan` (28 tools).
+
+### Методология
+
+```
+OBSERVE → ROUTE → SHAPE → BUILD → PROVE → SHIP
+```
+
+| Phase | Action | Команда |
+|---|---|---|
+| Observe | restore context, find blind spots | `forgeplan health` |
+| Route | decide depth | `forgeplan route "<task>"` |
+| Shape | create + validate artifacts | `forgeplan new <kind>` ; `forgeplan validate <id>` |
+| Reason | ADI hypotheses (Standard+, mandatory Deep+) | `forgeplan reason <id>` |
+| Build | code + tests | (стек workspace'а) |
+| Prove | evidence + R_eff | `forgeplan new evidence` ; `forgeplan link` ; `forgeplan score` |
+| Ship | activate + PR + merge | `forgeplan activate` ; `gh pr create` |
+
+Depth маппится на наш Routing/Depth: **Tactical** (без артефакта) / **Standard** (PRD+RFC) / **Deep** (PRD+Spec+RFC+ADR) / **Critical** (Epic+stack + adversarial review).
+
+### Когда артефакт обязателен (Standard+)
+
+- Новая фича, видимая пользователю (любого `apps/*`).
+- Кросс-workspace изменения, новые публичные API в `packages/{design-system,backend-sdk,analytics}`.
+- Изменения схемы / миграций, контракта `backend-sdk` (orval).
+- Изменения `.claude/rules/`, `.claude/agents/`, `.claude/commands/`, оркестраторов.
+- Архитектурные решения — оформляются ADR в `.forgeplan/adrs/` + (опционально) дублируются в `docs/` через `project-docs-writer`.
+
+Tactical (без артефакта): однострочные фиксы, форматирование, переименование 1 файла, правка опечаток в md/комментах, bump зависимости без API impact.
+
+### Hint protocol — выполнять verbatim
+
+Каждый вывод `forgeplan` (CLI и MCP) заканчивается одним из маркеров:
+
+| Marker | Действие |
+|---|---|
+| `Next: <full command>` | run as-is |
+| `Or: <full command>` | только если `Next:` блокирует |
+| `Wait: <condition>` | retry после condition |
+| `Done.` | terminal — переходим к следующей задаче |
+| `Fix: <full command>` | error remediation, paired с `Error:` |
+
+JSON / MCP кладут то же значение в `_next_action`. **Не парафразировать, не подставлять placeholder'ы.**
+
+### R_eff (математика, которую ОБЯЗАН знать)
+
+```
+R_eff = min(evidence_scores)        # weakest link, НИКОГДА не average
+evidence_score = max(0, verdict_score - CL_penalty)
+```
+
+| Verdict | Score |   | CL | Penalty | Контекст |
+|---|---|---|---|---|---|
+| `supports` | 1.0 |   | CL3 | 0.0 | same — internal test on target system |
+| `weakens` | 0.5 |   | CL2 | 0.1 | similar — related project, same stack |
+| `refutes` | 0.0 |   | CL1 | 0.4 | different — article, external docs |
+|  |  |   | CL0 | 0.9 | opposed |
+
+| R_eff | Status |
+|---|---|
+| ≥ 0.5 | Adequate — activate ok |
+| < 0.5 | Needs review — add evidence |
+| < 0.3 | At risk — reassess |
+
+EvidencePack body **ОБЯЗАН** содержать секцию `## Structured Fields` с `verdict`, `congruence_level`, `evidence_type`. Без них парсер тихо ставит CL0 → R_eff схлопывается до 0.1.
+
+### Standard flow для фичи (Standard+)
+
+```bash
+forgeplan health                                         # observe
+forgeplan route "implement ad-account dashboard tile"
+forgeplan new prd "Ad-account dashboard tile"            # shape
+$EDITOR .forgeplan/prds/PRD-NNN-*.md                     # заполнить MUST sections
+forgeplan validate PRD-NNN                               # 0 MUST errors
+forgeplan reason PRD-NNN                                 # ADI (Standard+)
+# write code + tests (через subagent / orchestrator)
+forgeplan new evidence "PRD-NNN: vitest 14 pass, p95 180ms на staging"
+$EDITOR .forgeplan/evidence/EVID-MMM-*.md                # ## Structured Fields!
+forgeplan link EVID-MMM PRD-NNN --relation informs
+forgeplan score PRD-NNN                                  # R_eff > 0?
+forgeplan activate PRD-NNN                               # draft → active
+# gh pr create --base develop  (PR body: "Refs: PRD-NNN")
+```
+
+### Multi-agent (`dispatch → claim → spawn → release`)
+
+```bash
+forgeplan dispatch --agents 3 --json    # планер conflict-free buckets (НЕ спавнер!)
+forgeplan claim PRD-NNN --agent <subagent-name> --ttl-minutes 60
+# … работа …
+forgeplan release PRD-NNN
+```
+
+`dispatch` возвращает план, **спавнит main thread / orchestrator** через `Agent({subagent_type, prompt})` (несколько `Agent`-блоков в одном сообщении = параллель). `SendMessage` — НЕ спавнер; адресует только уже запущенные процессы.
+
+### Команды-однострочники (на каждый день)
+
+```bash
+forgeplan health              # session-start sanity check
+forgeplan list                # все артефакты
+forgeplan graph               # mermaid-граф связей
+forgeplan stale               # артефакты с истёкшим valid_until
+forgeplan blindspots          # решения без evidence
+forgeplan claims              # кто что захватил
+```
+
+### Bootstrap после `git clone`
+
+```bash
+forgeplan init -y             # idempotent, создаст .forgeplan/config.yaml
+forgeplan scan-import         # пересобрать LanceDB из markdown
+forgeplan health
+```
+
+`config.yaml` коммитится; `.forgeplan/{lance,logs,memory,trash,claims,state,session.yaml}` — нет (см. `.gitignore`).
+
+### LLM-токены: что бесплатно, что платно
+
+В `.forgeplan/config.yaml` секция `llm:` **закомментирована** — это намеренно. Большая часть Forgeplan работает локально/детерминированно, без API:
+
+- **Бесплатно (local)**: `init`, `new`, `validate`, `score`, `link`, `activate`, `health`, `list`, `status`, `graph`, `tree`, `order`, `stale`, `blindspots`, `claim`/`release`/`claims`, `dispatch`, `route` (эвристика), `calibrate`, `journal`, `coverage`, `drift`, `gaps`, `fgr`, `decay`, `phase`, `tag`/`untag`, `update`/`delete`, `restore`/`undo-last`, `import`/`export`, `scan-import`, `migrate`, `reindex`, `capture` (regex-based), `search` и `embed` (на **локальной** `bge-m3` через fastembed, без API).
+- **Использует LLM-API (платно отдельно)**: `reason` (ADI), `generate` (создание артефакта по описанию), `decompose` (PRD → RFC tasks), `context` (single-call reasoning).
+
+Подписка Claude Code НЕ покрывает Anthropic API — это разные billing'и. Поэтому дефолтная политика:
+
+**Не подключать `llm:`** для повседневной работы. Базовый цикл `route → new → validate → link → score → activate` бесплатный — он покрывает 80% пользы Forgeplan.
+
+Когда нужен `reason` / `generate` (Deep+ задачи), есть варианты по приоритету:
+
+1. **Через Claude Code в чате** (используем твою подписку, не отдельный API):
+   - попросить «сделай ADI-reasoning по PRD-NNN: 5 гипотез + deduction predictions»;
+   - сохранить вывод: `forgeplan update PRD-NNN --body @/tmp/reasoning.md` или вручную в `.forgeplan/notes/`.
+2. **Gemini Free Tier** — `gemini-2.0-flash` через Google AI Studio (большая бесплатная квота на день). В `config.yaml`:
+   ```yaml
+   llm:
+     provider: gemini
+     model: gemini-2.0-flash
+     api_key_env: GEMINI_API_KEY
+   ```
+3. **Ollama локально** — бесплатно, но качество ADI ощутимо хуже Sonnet/Opus:
+   ```yaml
+   llm:
+     provider: ollama
+     model: llama3.1:8b
+     base_url: http://localhost:11434
+   ```
+4. **Платный Anthropic API** — отдельный billing на console.anthropic.com (≈$0.05–0.10 за `reason` PRD среднего размера на Sonnet 4.6). Включать только если делаешь reason регулярно и качество критично.
+
+Embedding-модель `bge-m3` (для `search`/`embed`) подгружается в `.forgeplan/.fastembed_cache/` при первом запуске — локально, без API. Не путать с LLM-провайдером.
+
+### Per-workspace CLAUDE.md
+
+Для каждого `apps/*` и `packages/*` есть свой `CLAUDE.md` со scope-специфичными правилами и Forgeplan-нюансами (depth defaults, артефакты, evidence-источники). Корневой файл — общий контракт; per-workspace — локальные специфики. Читать оба.
+
+### Anti-patterns
+
+- Создать PRD-stub и забить → либо заполняй, либо не создавай.
+- Activate без evidence → R_eff = 0, валидатор не пропустит.
+- EvidencePack без `## Structured Fields` → silent CL0 → R_eff = 0.1.
+- Назвать конкретную либу/фреймворк в `## Functional Requirements` PRD (implementation leakage — это в RFC/Spec).
+- Reactivate `superseded` артефакт — terminal state. Создавай новый, который supersedes текущий.
+- Игнорить `Next:` hint и запускать ad-hoc команду.
+- Считать LanceDB authoritative — markdown wins (`scan-import` пересоберёт).
+- `forgeplan dispatch` как спавнер — он только планер. Спавнят `Agent`-блоки.
+- `tech-lead.SendMessage(<specialist>, ...)` для делегирования кода — silent no-op, если specialist не запущен через `Agent`.
+
+---
+
+## Code-review-graph MCP — ИСПОЛЬЗОВАТЬ FIRST
+
+**Проект имеет knowledge-граф.** Всегда пробуй `code-review-graph` MCP-инструменты **до** Grep/Glob/Read — быстрее, дешевле по токенам, даёт structural context (callers, dependents, test coverage).
+
+| Tool | Когда |
+|---|---|
+| `semantic_search_nodes` | Найти функцию/класс по имени/keyword |
+| `query_graph` | callers_of / callees_of / imports_of / tests_for / dependencies |
+| `get_impact_radius` | Blast radius изменения |
+| `detect_changes` | Risk-scored обзор правок (для review) |
+| `get_review_context` | Token-efficient snippets для review |
+| `get_affected_flows` | Какие execution paths затронуты |
+| `get_architecture_overview` + `list_communities` | Архитектура высокого уровня |
+| `refactor_tool` | Renames, поиск dead code |
+
+Граф **авто-обновляется через хуки**. Fall back на Grep/Glob/Read только когда граф не покрывает.
+
+---
+
+## ForgePlan marketplace — Claude Code plugins
+
+Регистрация маркетплейса и список включённых плагинов лежит в `.claude/settings.json` (`extraKnownMarketplaces.forgeplan` + `enabledPlugins`). Источник: `github:ForgePlan/marketplace`. Маркетплейс не вендорится в репо — это ссылка; Claude Code сам клонирует в `~/.claude/plugins/cache` при первом старте.
+
+### Trust handshake (один раз на машину)
+
+При первом открытии репо в Claude Code появится prompt:
+1. **Trust folder** → `extraKnownMarketplaces` активируется.
+2. Claude Code предлагает поставить `forgeplan` marketplace → **Yes**.
+3. Затем по очереди предлагает поставить каждый из 11 включённых плагинов → **Yes to all**.
+4. После — `/reload-plugins` (или рестарт). Все команды/агенты появятся в `/help` и `/agents`.
+
+### Установлено (11 плагинов)
+
+| Plugin | Что даёт | Namespace команд |
+|---|---|---|
+| `dev-toolkit` | `/audit` (4-агентский ревью), `/sprint`, `/recall`, `/report`, dev-advisor agent, safety hook | `/dev-toolkit:audit` etc. |
+| `forgeplan-workflow` | `/forge-cycle`, `/forge-audit`, forge-advisor, methodology KB | `/forgeplan-workflow:forge-cycle` |
+| `forgeplan-orchestra` | `/sync`, `/session` (требует Orchestra MCP `orch` — у нас не подключён, плагин активен но `/sync` не сработает) | `/forgeplan-orchestra:session` |
+| `forgeplan-brownfield-pack` | C4/DDD/MADR ingest mappings + playbooks (alpha) | — (mappings, не команды) |
+| `fpf` | `/fpf`, `/fpf-decompose`, `/fpf-evaluate`, `/fpf-reason` + 224-section FPF KB | `/fpf:fpf` etc. |
+| `laws-of-ux` | `/ux-review`, `/ux-law`, UX-reviewer agent, auto-hint hook на `.html/.css/.jsx/.tsx/.vue` | `/laws-of-ux:ux-review` |
+| `agents-core` | 11 агентов: debugger, code-reviewer, error-detective, performance-engineer, production-validator, coder, planner, researcher, reviewer, tester, tdd-london | — |
+| `agents-domain` | 11 framework-специалистов: typescript-pro, frontend-developer, nextjs-developer, golang-pro, mobile-app-developer и т.д. | — |
+| `agents-pro` | 21 агент: security-expert, adr-architect, ddd-domain-expert, ml-developer, ui-designer и т.д. | — |
+| `agents-github` | 7 агентов: pr-manager, issue-manager, release-manager, repo-architect и т.д. | — |
+| `agents-sparc` | SPARC: specification → pseudocode → architecture → refinement + sparc-orchestrator (experimental) | — |
+
+### Известные конфликты и приоритеты
+
+- **`code-reviewer`** существует и у нас (`.claude/agents/code-reviewer.md`) и в `agents-core`. Local agents имеют приоритет — `Agent({subagent_type: "code-reviewer"})` возьмёт наш. Если нужен plugin-вариант — обращаться по плагин-имени через `/agents` UI.
+- **`forge-safety-hook.sh`**: и наш `.claude/hooks/forge-safety-hook.sh`, и `forgeplan-workflow/hooks/scripts/forge-safety-hook.sh` подписываются на `PreToolUse:Bash`. Хуки запускаются последовательно; дубль не критичен (оба только проверяют, не мутируют state). Если потом окажется тяжёлым — отключить наш локальный.
+- **Safety hooks**: dev-toolkit + forgeplan-workflow + наш локальный = тройной слой проверок на `git push --force` / `rm -rf /` / `DROP TABLE`. Это features-not-bugs.
+- **Slash-команды** не конфликтуют — все плагин-команды namespaced (`/<plugin>:<cmd>`). Наши `/orchestrate-*`, `/code-review`, `/quality-gate` остаются основным workflow.
+- **`/audit` (dev-toolkit) vs `/code-review` (наш)**: разные роли. `/dev-toolkit:audit` — quick parallel review (logic/architecture/security/tests); наш `/code-review` — local diff или GitHub PR с привязкой к workspace conventions. Использовать оба по контексту.
+- **`forgeplan-orchestra`** включён, но `/sync` не работает без Orchestra MCP server (`orch`). Плагин не ломается — просто молчит. Подключить `orch` отдельно если понадобится.
+
+### Когда что использовать
+
+- Forgeplan-цикл (Standard+) — `/forgeplan-workflow:forge-cycle "<task>"` как conversational обёртка над `forgeplan route → new → validate → score → activate`. Альтернатива ручному CLI/MCP.
+- Архитектурные решения / разложение системы — `/fpf:fpf-decompose` или `/fpf:fpf-reason` (3+ гипотезы → ADI). Полезно для Deep+ задач без подключения LLM-провайдера в forgeplan config.
+- Frontend-ревью UX-практик — `/laws-of-ux:ux-review` после landing/admin изменений (дополняет наш `landing-next-dev-reviewer` / `react-dev-reviewer`).
+- Параллельный код-ревью — `/dev-toolkit:audit` как быстрый smoke (≠ замена `/code-review` или orchestrator review-цикла).
+- SPARC-методология — `agents-sparc` помечен experimental; не использовать для production без явной просьбы юзера.
+
+### Update / отключение
+
+```bash
+# Внутри Claude Code:
+/plugin marketplace update forgeplan       # подтянуть новые версии плагинов
+/plugin disable <name>@forgeplan           # отключить отдельный плагин
+/plugin uninstall <name>@forgeplan         # совсем удалить
+```
+
+Для отключения плагина для всей команды — поставить `false` в `enabledPlugins` в `.claude/settings.json`.
+
+---
+
+## Session start — прогрев контекста
+
+Что грузится автоматически:
+- `~/.claude/projects/-Users-nikitafedorov-.../memory/MEMORY.md` (auto-memory с feedback rules) — **уже в контексте**, читать руками не надо.
+- `CLAUDE.md` (этот файл).
+- `apps/<app>/CLAUDE.md` и `packages/<pkg>/CLAUDE.md` — Claude Code их подхватывает по контексту запроса.
+- `session-start-forgeplan.sh` хук — инжектит `forgeplan health` + Forgeplan-rules как additionalContext.
+- `AGENTS.md` (полный справочник по хукам/орчестраторам).
+
+| Источник | Команда | Что даёт |
+|---|---|---|
+| Граф (структура) | `get_architecture_overview` | Карта пакетов, communities |
+| Git status | `git status` / `git diff` | Что меняется сейчас |
+| Активные задачи | `tasks-manifest.json` (root) | Текущие тикеты |
+
+**НЕ читать на старте**: `pnpm-lock.yaml`, `.code-review-graph/`, generated `styled-system/`, `**/dist`, `**/storybook-static`, `node_modules`. Только по релевантному вопросу.
+
+«Достаточно контекста» = можешь назвать какой workspace тронут, какой стек у этого workspace, какие subagent/orchestrator подходят.
+
+---
+
+## Полный цикл (единственный источник истины)
+
+```
+ 1. Observe:  forgeplan health                       (artifacts, blind spots)
+ 2. Route:    forgeplan route "<task>" → workspace + orchestrator/subagent
+ 3. Graph:    code-review-graph MCP first — caller/callees/tests/impact
+ 4. Shape:    (Standard+) forgeplan new <kind> + validate; для Deep+ — reason
+ 5. Branch:   git checkout develop && git pull && git checkout -b <type>/<short>
+ 6. Claim:    (multi-agent) forgeplan claim <ID> --ttl-minutes <N>
+ 7. Code:     Edit/Write — post-edit-format.js сам прогонит Biome
+ 8. Test:     pnpm --filter <pkg> test               (если задет тестируемый код)
+ 9. Type:     pnpm --filter <pkg> typecheck          (ОДИН раз — см. memory)
+10. Lint:     pnpm --filter <pkg> lint               (обычно уже зелёный)
+11. Review:   reviewer subagent после developer batch (ВНУТРИ orchestrator)
+12. Prove:    (Standard+) forgeplan new evidence + ## Structured Fields + link + score
+13. Gate:     /quality-gate --scope=<workspace>      (Biome + tsc + опц. build + knip)
+14. Verify:   verification-loop skill (build/type/lint/security/diff)
+15. Activate: (Standard+) forgeplan activate <ID>    (R_eff > 0 обязателен)
+16. Commit:   conventional commits, body на русском, без --amend опубликованного
+17. PR:       gh pr create --base develop            (body: "Refs: <ID>")
+18. Release:  (multi-agent, после merge) forgeplan release <ID>
+19. Sync:     обновить tasks-manifest.json / TODO если есть
+```
+
+**Tactical** (тривиально, обратимо, 1 файл): Observe → Route → Branch → Code → Commit. Без artifact, orchestrator, review, /quality-gate.
+
 ## 39 packages — tier таблица + build (post-Sprint 3.0..3.9 per ADR-004 + ADR-005 + ADR-006 + ADR-007 + ADR-008 + ADR-009)
 
-**Wave 5 fully complete** — 13 packages total (2 Phase 1 + 3 Phase 2 + 4 Phase 3 + 4 Phase 4).
+**Wave 5 fully complete** — 13 packages total (2 Phase 1 + 3 Phase 2 + 4 Phase 3 + 4 Phase 4). **Sprint 3.10 closes Wave 5 polish backlog** + m9s-example Wave 5 integration (canonical reference) + SessionDestroyedError relocation to `@gertsai/errors` Shared Kernel + TypedToken<T> wrapper for ProviderContext per ADR-010 + Amendment 1.
 
 Все 39 packages используют **uniform tsup dual ESM+CJS** (Sprint 3.0 §U-1..U-6) с фиксированными scripts (`build`, `clean`, `test`, `typecheck`, `lint` — Sprint 3.0.1 F-8).
 
@@ -101,7 +410,7 @@ pnpm-workspace.yaml       ← packages: ['packages/*']
 | **1** | **`@gertsai/tenant`** | — | **Sprint 3.2 W-2 (F fresh)** | TenantId brand + getTenantIdStrict/Optional + `/moleculer` adapter |
 | **1** | **`@gertsai/otel`** | — | **Sprint 3.2 W-3 (F fresh)** | OTel SDK setup + `/moleculer` tracing; lazy peer-deps |
 | **1** | **`@gertsai/pg-client`** | — (root); storage-core, query-dsl peer (`/storage`) | **Sprint 3.2 W-4 (F)** + **Sprint 3.5 W-4B-4 (A — additive `/storage` adapter)** | Root: agnostic 3-method PgClient + mockPgClient (ADR-011 I-1/I-2 unchanged). `./storage` subpath: PgStorageProvider implements IStorageProvider per ADR-005 I-3 (additive, peer-optional storage-core+query-dsl) |
-| **1** | **`@gertsai/session`** | errors (peer for `*Strict`) | **Sprint 3.4 W-4A-2 (F fresh)** + **Sprint 3.6 W-3-6-18..22 (E+ additive)** | Session class + AbstractDialog + 24-value OperatorType + dataAccessUuid (Sprint 3.4) + Sprint 3.6: additive scoping (`tenantId/projectId/spaceId` flat tags per ADR-006 I-17) + 3 strict helpers (`getTenantStrict` throws `UnauthorizedError`; `getProjectStrict`/`getSpaceStrict` throw `ValidationError` per ADR-006 I-16) |
+| **1** | **`@gertsai/session`** | errors (peer for `*Strict` + Sprint 3.10 SessionDestroyedError) | **Sprint 3.4 W-4A-2 (F fresh)** + **Sprint 3.6 W-3-6-18..22 (E+ additive)** + **Sprint 3.10 (E+ — $-mutator throws SessionDestroyedError from `@gertsai/errors`)** | Session class + AbstractDialog + 24-value OperatorType + dataAccessUuid (Sprint 3.4) + Sprint 3.6 scoping (`tenantId/projectId/spaceId` flat tags per ADR-006 I-17) + 3 strict helpers (`getTenantStrict`/`getProjectStrict`/`getSpaceStrict` per ADR-006 I-16); Sprint 3.10: `$switchOperator`/`$setDataAccessUuid` throw `SessionDestroyedError` (Shared Kernel from `@gertsai/errors` per ADR-010 Amendment 1 §A1.1; tier discipline preserved — no peer-dep on session-guard added). |
 | **1** | **`@gertsai/entity-audit`** | session, audit-primitives | **Sprint 3.4 W-4A-3 (F fresh)** + **Sprint 3.7 (E+ — re-export from audit-primitives)** | MutationMarks + UpdateActionMap + 4 builder funcs (set/update/delete/restore) — backend-agnostic Timestamp; Sprint 3.7: Timestamp/TimestampProvider/timestampToMillis/timestampFromDate re-exported from `@gertsai/audit-primitives` (deprecated own copies kept for backward compat) |
 | 2 | `@gertsai/di` | utils | **enhanced Sprint 3.4 W-4A-4 (E)** | DI container + new guards/destroy/inference helpers (Orchestra orchlab/di patterns) |
 | 2 | `@gertsai/flux` | collection | first wave | reactive streams |
@@ -122,7 +431,7 @@ pnpm-workspace.yaml       ← packages: ['packages/*']
 | **3** | **`@gertsai/rpc-proxy-builder`** | api-core (peer; type-only via /contracts) | **Sprint 3.9 W-3-9-17..21 (F)** | createRpcProxy<TActionMap> + RpcTransport interface; module-private `Symbol('rpc-proxy')` brand per I-7; **3 read-only Proxy traps** (get/set→false/deleteProperty→false) per I-15 (CWE-1188 protection); unknown action throws Error per I-14 (CWE-1230 fail-open prevention); WeakMap idempotent cache |
 | 4 | `@gertsai/auth-openfga` | core | first wave | OpenFGA ReBAC adapter |
 | 4 | `@gertsai/api-core` | core, auth-openfga | first wave | Moleculer SDK; subpaths /contracts /moleculer /runtime/node (Sprint 2 ADR-003) |
-| **4** | **`@gertsai/runtime-context`** | errors, session, tenant-resolver, di (peers); moleculer (peer-optional) | **Sprint 3.7 W-3-7-1..10 (F fresh)** | Per-request composition root — RequestContext (lazy private getters + `$freeze` invariant + `crypto.randomUUID` correlationId per ADR-007 I-20) + AuthContext (security projection w/ 2 factories) + FeatureContext (default-deny on flagProvider exception) + ProviderContext (symbol-only tokens per I-17) + 5 dedicated errors. `/moleculer` subpath: `sessionMiddleware` factory composing context + auto-`$freeze()` before downstream handler per I-16 (TOCTOU protection); attached to `ctx.locals.requestContext` per I-15 |
+| **4** | **`@gertsai/runtime-context`** | errors, session, tenant-resolver, di (peers); moleculer (peer-optional) | **Sprint 3.7 W-3-7-1..10 (F fresh)** + **Sprint 3.10 W-3-10-26..29a (F+ — TypedToken<T> overload)** | Per-request composition root — RequestContext + AuthContext + FeatureContext + ProviderContext + 5 dedicated errors (Sprint 3.7 per ADR-007). Sprint 3.10: `defineToken<T>` + `isTypedToken` + `TypedToken<T>` interface (required brand `[TYPED_TOKEN_BRAND]` discriminator, NO phantom field per ADR-010 Amendment 1 §I-12); ProviderContext gains overloads accepting both `symbol` and `TypedToken<T>` (declaration order: symbol first, TypedToken second); `DefaultProviderContext` extracts `.symbol` from TypedToken before `assertSymbolToken` per I-13. Module-private `Symbol(...)` brand per Sprint 3.8 I-11 reuse (CWE-1321 prevention). `/moleculer` subpath unchanged. |
 | 5 | `@gertsai/api-rlr` | api-core | first wave | rate limiter / retry loop runtime (ADR-011) |
 
 **Strategy markers** (per ADR-004 + ADR-005 + ADR-006 extensions):

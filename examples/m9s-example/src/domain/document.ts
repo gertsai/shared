@@ -1,8 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+import { ValidationError } from '@gertsai/errors';
+
 /**
  * Document — domain entity.
  *
  * Pure domain type. No transport, no infra concerns.
- * Imports nothing except (optionally) shared primitives from @gertsai/core.
+ * Imports `@gertsai/errors` only for the canonical taxonomy used to signal
+ * invariant violations from the domain factory (Sprint 3.10 W-3-10-17).
  */
 export interface DocumentMetadata {
   /** Optional source URL or filesystem origin */
@@ -34,10 +38,16 @@ export interface Document {
  */
 export const createDocument = (input: Document): Document => {
   if (!input.id || input.id.trim().length === 0) {
-    throw new Error('Document.id must be non-empty');
+    throw new ValidationError({
+      message: 'Document.id must be non-empty',
+      details: { field: 'id', constraint: 'non-empty' },
+    });
   }
   if (!input.text || input.text.trim().length === 0) {
-    throw new Error('Document.text must be non-empty');
+    throw new ValidationError({
+      message: 'Document.text must be non-empty',
+      details: { field: 'text', constraint: 'non-empty' },
+    });
   }
   return {
     id: input.id,

@@ -1,7 +1,7 @@
 # @gertsai/audit-primitives
 
 Pure backend-agnostic audit primitives for the `@gertsai/*` ecosystem —
-[ADR-007](../../.forgeplan/adrs/ADR-007-runtime-context-session-guard-audit-primitives-extraction-policy.md)
+[ADR-007](https://github.com/gertsai/shared/blob/main/.forgeplan/adrs/ADR-007-runtime-context-session-guard-audit-primitives-extraction-policy.md)
 Decision C + invariants I-7 (zero internal deps), I-14 (TimestampProvider
 shape parity with `entity-audit`). The package exposes the canonical
 `Timestamp` shape, generic `AuditMarks`, the `TimestampProvider`
@@ -87,9 +87,9 @@ const fromMs: Timestamp = timestampFromMillis(Date.now());
 ## Cross-references
 
 - [ADR-007 — runtime-context / session-guard / audit-primitives extraction
-  policy](../../.forgeplan/adrs/ADR-007-runtime-context-session-guard-audit-primitives-extraction-policy.md)
+  policy](https://github.com/gertsai/shared/blob/main/.forgeplan/adrs/ADR-007-runtime-context-session-guard-audit-primitives-extraction-policy.md)
   (Decision C, invariants I-7 / I-14, Amendment 1.1.3)
-- [PRD-003 — Wave 5 foundation](../../.forgeplan/prds/PRD-003-wave-5-errors-runtime-context-framework-adapters-developer-experience-foundation.md)
+- [PRD-003 — Wave 5 foundation](https://github.com/gertsai/shared/blob/main/.forgeplan/prds/PRD-003-wave-5-errors-runtime-context-framework-adapters-developer-experience-foundation.md)
 - For session-bound audit (creator_uuid, `*_by_platform`, lifecycle
   builders `buildDataForSet` / `buildDataForUpdate` /
   `buildDataForDelete` / `buildDataForRestore`), see

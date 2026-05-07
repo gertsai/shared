@@ -172,8 +172,8 @@ new SubdomainStrategy({
 
 ## Cross-references
 
-- [ADR-006 — Errors + Tenant Resolver placement / Wave 5 extraction policy](../../.forgeplan/adrs/ADR-006-errors-tenant-resolver-placement-session-additive-scoping-wave-5-extraction-policy.md)
-- [PRD-003 — Wave 5: Errors + Runtime Context + Framework Adapters foundation](../../.forgeplan/prds/PRD-003-wave-5-errors-runtime-context-framework-adapters-developer-experience-foundation.md)
+- [ADR-006 — Errors + Tenant Resolver placement / Wave 5 extraction policy](https://github.com/gertsai/shared/blob/main/.forgeplan/adrs/ADR-006-errors-tenant-resolver-placement-session-additive-scoping-wave-5-extraction-policy.md)
+- [PRD-003 — Wave 5: Errors + Runtime Context + Framework Adapters foundation](https://github.com/gertsai/shared/blob/main/.forgeplan/prds/PRD-003-wave-5-errors-runtime-context-framework-adapters-developer-experience-foundation.md)
 - Invariants: I-4 / I-5 (no Moleculer in core), I-11 (null-on-no-match),
   I-15 (`HeaderStrategy.trustProxy` opt-in), I-18 (default strict mode).
 

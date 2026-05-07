@@ -3,7 +3,7 @@
 Vue 3 `ReactiveAdapter` for [`@gertsai/entity`](../entity) — opt-in
 reactivity bridge that delegates to `@vue/runtime-core`'s
 `shallowReactive` / `markRaw` / `isReactive`. Per
-[ADR-008](../../.forgeplan/adrs/ADR-008-framework-adapters-policy-reactiveadapter-contract-wave-5-phase-3.md)
+[ADR-008](https://github.com/gertsai/shared/blob/main/.forgeplan/adrs/ADR-008-framework-adapters-policy-reactiveadapter-contract-wave-5-phase-3.md)
 Decision B + Amendment 1.
 
 The adapter loads `@vue/runtime-core` lazily via `createRequire(import.meta.url)`
@@ -112,8 +112,8 @@ The `/vue` subpath shim will be removed in v1.0. Migrate at your convenience.
 
 ## Cross-references
 
-- [ADR-008 — Framework adapters policy + ReactiveAdapter contract (Wave 5 Phase 3)](../../.forgeplan/adrs/ADR-008-framework-adapters-policy-reactiveadapter-contract-wave-5-phase-3.md)
-- [PRD-003 — Wave 5 errors / runtime-context / framework adapters / DX foundation](../../.forgeplan/prds/PRD-003-wave-5-errors-runtime-context-framework-adapters-developer-experience-foundation.md)
+- [ADR-008 — Framework adapters policy + ReactiveAdapter contract (Wave 5 Phase 3)](https://github.com/gertsai/shared/blob/main/.forgeplan/adrs/ADR-008-framework-adapters-policy-reactiveadapter-contract-wave-5-phase-3.md)
+- [PRD-003 — Wave 5 errors / runtime-context / framework adapters / DX foundation](https://github.com/gertsai/shared/blob/main/.forgeplan/prds/PRD-003-wave-5-errors-runtime-context-framework-adapters-developer-experience-foundation.md)
 - [`@gertsai/entity` — `ReactiveAdapter` contract](../entity/src/types.ts)
 
 ## License

@@ -1,7 +1,7 @@
 # @gertsai/errors
 
 Universal error taxonomy for the `@gertsai/*` ecosystem — Shared Kernel per
-[ADR-006](../../.forgeplan/adrs/ADR-006-errors-tenant-resolver-placement-session-additive-scoping-wave-5-extraction-policy.md).
+[ADR-006](https://github.com/gertsai/shared/blob/main/.forgeplan/adrs/ADR-006-errors-tenant-resolver-placement-session-additive-scoping-wave-5-extraction-policy.md).
 Ten closed `ErrorKind` values map cleanly onto RFC 9457 ProblemDetails (HTTP)
 and canonical gRPC status codes, so every `@gertsai/*` consumer can throw a
 single typed error and let the transport layer pick the right wire format.
@@ -121,8 +121,8 @@ const { code, message, details } = appErrorToGrpcStatus(err);
 
 ## Cross-references
 
-- [ADR-006 — Wave 5 errors / tenant-resolver placement](../../.forgeplan/adrs/ADR-006-errors-tenant-resolver-placement-session-additive-scoping-wave-5-extraction-policy.md)
-- [PRD-003 — Wave 5 foundation](../../.forgeplan/prds/PRD-003-wave-5-errors-runtime-context-framework-adapters-developer-experience-foundation.md)
+- [ADR-006 — Wave 5 errors / tenant-resolver placement](https://github.com/gertsai/shared/blob/main/.forgeplan/adrs/ADR-006-errors-tenant-resolver-placement-session-additive-scoping-wave-5-extraction-policy.md)
+- [PRD-003 — Wave 5 foundation](https://github.com/gertsai/shared/blob/main/.forgeplan/prds/PRD-003-wave-5-errors-runtime-context-framework-adapters-developer-experience-foundation.md)
 
 ## License
 

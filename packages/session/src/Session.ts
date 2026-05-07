@@ -16,11 +16,12 @@ import type {
   TokenGetter,
 } from './types';
 import { SESSION_EVENTS } from './types';
-// Phase B (Sprint 3.6 team-lead): swapped from `_errors-stub` to `@gertsai/errors` after pnpm install resolved workspace symlink. Stub deleted.
-// Original Amendment 1.4 fallback note (preserved for context):
-// workspace symlink resolves and the package re-exports these classes.
-// See SPEC-011 Amendment 1.4 / ADR-006.
-import { UnauthorizedError, ValidationError } from '@gertsai/errors';
+// Sprint 3.6 (W-3-6-21) wired errors via workspace symlink; see SPEC-011 §1.4 / ADR-006.
+import {
+  SessionDestroyedError,
+  UnauthorizedError,
+  ValidationError,
+} from '@gertsai/errors';
 
 /**
  * Backend-agnostic session bound to a single operator identity.
@@ -226,7 +227,10 @@ export class Session extends EventEmitter {
    */
   $switchOperator(operator: OperatorRef): void {
     if (this._destroyed) {
-      throw new Error('Cannot $switchOperator on destroyed session');
+      throw new SessionDestroyedError({
+        message: 'Cannot $switchOperator on destroyed session',
+        details: { contextField: 'session' },
+      });
     }
     const prev: OperatorRef = {
       _uid: this._operatorUuid,
@@ -245,7 +249,10 @@ export class Session extends EventEmitter {
    */
   $setDataAccessUuid(uuid: string | undefined): void {
     if (this._destroyed) {
-      throw new Error('Cannot $setDataAccessUuid on destroyed session');
+      throw new SessionDestroyedError({
+        message: 'Cannot $setDataAccessUuid on destroyed session',
+        details: { contextField: 'session' },
+      });
     }
     this._dataAccessUuid = uuid;
   }

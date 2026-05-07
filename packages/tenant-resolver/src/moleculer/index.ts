@@ -2,7 +2,26 @@
 import type { Context, ServiceBroker } from 'moleculer';
 import type { TenantResolution, TenantResolverStrategy } from '../strategy.js';
 
-const MOLECULER_INSTALL_HINT =
+/**
+ * Thrown when `MoleculerCtxStrategy.resolve` receives a value that does
+ * not conform to the Moleculer `Context` shape (lacks a `meta` field).
+ * Distinct from `MOLECULER_PEER_DEP_ERROR` — this is a *call-site* bug
+ * (wrong source argument) rather than a peer-dependency installation
+ * issue. Sprint 3.10 W-3-10-6 (ADR-010 §A).
+ */
+const NON_MOLECULER_CTX_ERROR =
+  '@gertsai/tenant-resolver/moleculer: argument is not a Moleculer Context (missing `meta`). ' +
+  'This usually means a non-Moleculer source was passed to MoleculerCtxStrategy.resolve.';
+
+/**
+ * Reserved for runtime peer-dep guards. Currently unused — the
+ * `moleculer` import in this subpath is type-only, so the package
+ * stays peer-optional and bundlers do not require `moleculer` to
+ * resolve. If a future change introduces a runtime require/import,
+ * surface this hint to differentiate "missing install" from the
+ * call-site shape error above. Sprint 3.10 W-3-10-6.
+ */
+export const MOLECULER_PEER_DEP_ERROR =
   '@gertsai/tenant-resolver/moleculer requires `moleculer` to be installed as a peer dependency.';
 
 function assertMoleculerCtx(ctx: unknown): asserts ctx is Context {
@@ -11,7 +30,7 @@ function assertMoleculerCtx(ctx: unknown): asserts ctx is Context {
     typeof ctx !== 'object' ||
     !('meta' in (ctx as Record<string, unknown>))
   ) {
-    throw new Error(MOLECULER_INSTALL_HINT);
+    throw new Error(NON_MOLECULER_CTX_ERROR);
   }
 }
 

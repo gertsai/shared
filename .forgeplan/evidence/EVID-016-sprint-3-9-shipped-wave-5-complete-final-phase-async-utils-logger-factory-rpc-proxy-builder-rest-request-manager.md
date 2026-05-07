@@ -11,6 +11,10 @@ links:
   relation: informs
 - target: SPEC-014
   relation: informs
+- target: ADR-010
+  relation: informs
+- target: SPEC-015
+  relation: informs
 status: active
 title: Sprint 3.9 shipped + Wave 5 COMPLETE — final phase (async-utils + logger-factory + rpc-proxy-builder + rest-request-manager)
 ---
@@ -299,6 +303,9 @@ All Amendment 1 fixes applied to ADR-009 + SPEC-014 BEFORE Build started — inc
   - More framework adapters (Astro? Qwik? Lit?).
 
 **Wave 5 closes here. 🎉**
+
+
+
 
 
 

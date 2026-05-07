@@ -506,6 +506,125 @@ remains the only ad-hoc adapter; replace it with a real vector backend
 (Milvus / pgvector / Qdrant) when ready. Domain and application layers
 remain untouched.
 
+## Wave 5 stack reference
+
+Sprint 3.10 wires the canonical `@gertsai/*` Wave 5 stack into this example
+so it doubles as a copy-paste reference for the four packages added in
+Wave 5.
+
+### Errors taxonomy (`@gertsai/errors`)
+
+Domain factories and use cases throw the canonical `AppError` subclasses
+instead of bare `Error`:
+
+```ts
+// src/domain/document.ts
+throw new ValidationError({
+  message: 'Document.id must be non-empty',
+  details: { field: 'id', constraint: 'non-empty' },
+});
+
+// src/application/IngestDocumentUseCase.ts
+throw new InternalError({
+  message: `Embedder returned ${vectors.length} vectors for ${chunkTexts.length} chunks`,
+  details: { expectedChunks: chunkTexts.length, actualVectors: vectors.length },
+});
+```
+
+Transport-level adapters (the embedder HTTP clients in `infrastructure/`)
+remain on bare `Error` for now — wrap with `wrapUnknownError(e, 'INTERNAL')`
+at the use-case boundary if you want a uniform serialisation surface.
+HTTP / RPC translation lives in `@gertsai/errors/http` and
+`@gertsai/errors/grpc` (RFC 9457 ProblemDetails + canonical gRPC status
+codes); plug it into the inbound action's `try / catch` once your transport
+layer is ready.
+
+### Tenant resolution (`@gertsai/tenant-resolver`)
+
+`src/composition/wave5-middlewares.ts` constructs
+`HeaderStrategy({ trustProxy: true })` wrapped into a
+`ChainTenantResolver` and registered as a Moleculer middleware via
+`tenantMiddleware(...)` from `@gertsai/tenant-resolver/moleculer`. The
+resolver writes `ctx.meta.tenantId` so downstream middlewares and action
+handlers see the resolution.
+
+The chain runs in `mode: 'optional'` for the example so the curl onboarding
+flow (no proxy, no `X-Tenant-ID`) keeps working. Production deployments
+SHOULD switch to `mode: 'strict'` (the library default per ADR-006 I-18)
+to fail-closed on missing tenant.
+
+### RequestContext composition (`@gertsai/runtime-context`)
+
+`sessionMiddleware(...)` from `@gertsai/runtime-context/moleculer` follows
+`tenantMiddleware` in the broker pipeline and:
+
+  - reads `ctx.meta.tenantId` (set by the tenant middleware);
+  - reads `ctx.meta.correlationId` / `ctx.meta.locale` if present;
+  - constructs a `RequestContext` and attaches it to
+    `ctx.locals.requestContext`;
+  - calls `requestContext.$freeze()` BEFORE the downstream handler runs
+    (per ADR-007 I-16 — TOCTOU protection between init mutators and the
+    request-handler closure).
+
+Action handlers can then call `getRequestContext(ctx)` to read the frozen
+context. `ctx.meta` is reserved for cross-broker serialisation — use
+`ctx.locals` for per-request, per-process state.
+
+### Session-guard assertions (`@gertsai/session-guard`)
+
+`IngestDocumentUseCase` and `SearchDocumentsUseCase` accept additive
+optional `session` and `expectedTenantId` inputs. When `session` is
+supplied, the use case asserts authentication via `assertAuthenticated`
+(throws `AuthenticationRequiredError` on missing / destroyed sessions);
+when both `session` AND `expectedTenantId` are supplied, the use case
+additionally asserts tenant scoping via `assertSessionInTenant` (throws
+`TenantScopeViolationError` on cross-tenant attempts, including the
+"both undefined" trap per ADR-007 I-18).
+
+The fields are OPTIONAL — pre-Wave-5 callers that pass only `userId`
+continue to work unchanged (per ADR-010 I-2 / I-3 regression invariant).
+
+### Composition order (canonical)
+
+Per ADR-010 §B and the broker config:
+
+```
+tenantMiddleware → sessionMiddleware → action handler / use case
+```
+
+`tenantMiddleware` MUST precede `sessionMiddleware` so that `tenantId` is
+resolved before `RequestContext` is composed and frozen.
+
+### ⚠️ SECURITY (CWE-639 cross-tenant data access)
+
+`HeaderStrategy({ trustProxy: true })` reads `X-Tenant-ID` from the
+inbound HTTP request. This header is ONLY trustworthy if a reverse proxy
+(nginx, Envoy, ALB, Cloud Run ingress, ...) **strips any client-supplied
+`X-Tenant-ID` and re-sets it from authenticated context**. Without that
+guarantee any client can spoof the header and cross tenant boundaries.
+
+**Deployment contract**: a proxy in front of the broker (or the inbound
+api-core REST adapter) MUST clear inbound `X-Tenant-ID` and inject the
+authenticated tenant. The example construction site
+(`src/composition/wave5-middlewares.ts`) carries an inline
+`// SECURITY:` comment adjacent to `trustProxy: true` per ADR-010 I-14
+to surface this contract at code-review time.
+
+If you need a different transport, replace `HeaderStrategy` with one of
+the other built-ins (`SubdomainStrategy`, `PathStrategy`, or a
+`MoleculerCtxStrategy`) — see `@gertsai/tenant-resolver` README §Security
+for the matching constraints.
+
+### Cross-references
+
+  - ADR-006 — `@gertsai/errors` taxonomy + `@gertsai/tenant-resolver` ACL.
+  - ADR-007 — `@gertsai/runtime-context` Application Service +
+    `@gertsai/session-guard` Domain Service.
+  - ADR-010 — Sprint 3.10 integration rationale (Decisions A/B + Amendment 1
+    SECURITY warnings).
+  - `tests/wave5-integration.test.ts` — exercises the four packages end to
+    end (resolver + RequestContext + Session + assertions).
+
 ## License
 
 Apache-2.0. Same as the rest of the `gertsai/shared` monorepo.

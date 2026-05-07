@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
-import {
-  ConflictError,
-  ForbiddenError,
-  UnauthorizedError,
-} from '@gertsai/errors';
+import { ForbiddenError, UnauthorizedError } from '@gertsai/errors';
+
+/**
+ * Re-exported from `@gertsai/errors` per ADR-010 Amendment 1 §A1.1
+ * (Shared Kernel relocation). Single class identity is preserved across
+ * both import paths so `instanceof` works regardless of which surface a
+ * consumer imported from.
+ */
+export { SessionDestroyedError } from '@gertsai/errors';
 
 /**
  * Thrown when a guarded operation requires an authenticated session but none
@@ -47,13 +51,4 @@ export class OperatorTypeMismatchError extends ForbiddenError<{
 export class TenantScopeViolationError extends ForbiddenError<{
   requested: string;
   sessionTenant: string;
-}> {}
-
-/**
- * Thrown when an operation is attempted on a destroyed session. Reuses
- * {@link ConflictError} taxonomy — the session lifecycle precondition has
- * been violated.
- */
-export class SessionDestroyedError extends ConflictError<{
-  contextField: 'session';
 }> {}

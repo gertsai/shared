@@ -5,6 +5,11 @@ import {
   requestContextIdentifier,
 } from '../provider-context.js';
 import { ProviderNotFoundError } from '../errors.js';
+import { defineToken } from '../typed-token.js';
+
+interface UserService {
+  findById(id: string): Promise<{ id: string }>;
+}
 
 const TOKEN_A = Symbol.for('test:a');
 const TOKEN_B = Symbol.for('test:b');
@@ -71,5 +76,74 @@ describe('DefaultProviderContext', () => {
     expect(requestContextIdentifier.toString()).toContain(
       '@gertsai/runtime-context:RequestContext',
     );
+  });
+
+  describe('TypedToken<T> overloads (Sprint 3.10 / ADR-010 §D)', () => {
+    it('get(TypedToken<T>) resolves binding via token.symbol', () => {
+      const USER_TOKEN = defineToken<UserService>('UserService');
+      const stub: UserService = {
+        findById: async (id: string) => ({ id }),
+      };
+      const ctx = new DefaultProviderContext({
+        bindings: new Map<symbol, unknown>([[USER_TOKEN.symbol, stub]]),
+      });
+      expect(ctx.get(USER_TOKEN)).toBe(stub);
+    });
+
+    it('get(TypedToken<T>) does NOT throw TypeError (assertSymbolToken extraction path)', () => {
+      const USER_TOKEN = defineToken<UserService>('UserService');
+      const stub: UserService = {
+        findById: async (id: string) => ({ id }),
+      };
+      const ctx = new DefaultProviderContext({
+        bindings: new Map<symbol, unknown>([[USER_TOKEN.symbol, stub]]),
+      });
+      expect(() => ctx.get(USER_TOKEN)).not.toThrow(TypeError);
+    });
+
+    it('getOptional(TypedToken<T>) returns undefined on miss', () => {
+      const USER_TOKEN = defineToken<UserService>('UserService');
+      const ctx = new DefaultProviderContext({});
+      expect(ctx.getOptional(USER_TOKEN)).toBeUndefined();
+    });
+
+    it('getOptional(TypedToken<T>) returns the bound value', () => {
+      const USER_TOKEN = defineToken<UserService>('UserService');
+      const stub: UserService = {
+        findById: async (id: string) => ({ id }),
+      };
+      const ctx = new DefaultProviderContext({
+        bindings: new Map<symbol, unknown>([[USER_TOKEN.symbol, stub]]),
+      });
+      expect(ctx.getOptional(USER_TOKEN)).toBe(stub);
+    });
+
+    it('get(TypedToken<T>) throws ProviderNotFoundError when unbound', () => {
+      const USER_TOKEN = defineToken<UserService>('UserService');
+      const ctx = new DefaultProviderContext({});
+      expect(() => ctx.get(USER_TOKEN)).toThrow(ProviderNotFoundError);
+    });
+
+    it('raw symbol callers continue to work (backward compat)', () => {
+      const RAW = Symbol.for('test:raw');
+      const ctx = new DefaultProviderContext({
+        bindings: new Map<symbol, unknown>([[RAW, 'raw-value']]),
+      });
+      expect(ctx.get<string>(RAW)).toBe('raw-value');
+    });
+
+    it('falls back to resolver via token.symbol', () => {
+      const USER_TOKEN = defineToken<UserService>('UserService');
+      const stub: UserService = {
+        findById: async (id: string) => ({ id }),
+      };
+      const ctx = new DefaultProviderContext({
+        resolver: <T>(token: symbol): T | undefined => {
+          if (token === USER_TOKEN.symbol) return stub as unknown as T;
+          return undefined;
+        },
+      });
+      expect(ctx.get(USER_TOKEN)).toBe(stub);
+    });
   });
 });
