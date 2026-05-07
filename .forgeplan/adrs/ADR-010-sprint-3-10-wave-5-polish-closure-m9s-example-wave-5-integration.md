@@ -400,3 +400,4 @@ R-3 reformulation, R-5, R-6 codified into the §Risks block above (avoiding dupl
 Net Amendment count: **6 new invariants (I-10..I-16)**, **2 new risks (R-5, R-6)**, **1 risk reformulated (R-3)**, **1 Decision revised (C)**, **3 Decisions extended (A/B/D)**, **2 alternatives added (C2/C3, D2)**. Build proceeds after SPEC-015 Amendment 1 applied.
 
 
+

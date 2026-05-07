@@ -216,3 +216,4 @@ After the atomic Sprint 3.10 commit `782a3e0`, user requested closing the long-s
 
 R_eff impact: addendum strengthens this evidence's congruence (CL3 — internal test on target system, broker boots and serves real requests). EVID-017 verdict remains `supports`.
 
+

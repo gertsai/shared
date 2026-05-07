@@ -11,6 +11,14 @@ links:
   relation: informs
 - target: EVID-017
   relation: informs
+- target: PRD-004
+  relation: informs
+- target: ADR-011
+  relation: informs
+- target: SPEC-016
+  relation: informs
+- target: RFC-002
+  relation: informs
 status: active
 title: Sprint 3.10 Addendum 2 — action handler wiring + broker rejection e2e + real Ollama infra
 ---
@@ -142,6 +150,10 @@ After action handler wiring, the 16 pre-Wave-5 regression tests (`ingest-use-cas
 3. ✅ Hindsight retain Group 43 (Addendum 2 lessons).
 4. → Sprint 3.11 (Standard+ scope) — full real infra + oxlint via separate `/forge-cycle`. Forgeplan PRD-004 + ADR-011 + SPEC-016. Multi-day work, separate sessions.
 5. → v0.2.0 publish gate (after Sprint 3.11) — 13 Wave 5 packages + Sprint 3.10 patches. Irreversible, requires explicit user `Y` per CLAUDE.md red lines.
+
+
+
+
 
 
 
