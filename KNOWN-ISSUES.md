@@ -272,13 +272,17 @@ uses `PgClient` directly via `pg-document.repository.ts` per Amendment 2
 
 ### Open follow-ups from Sprint 3.11 Post-Build review (deferred to Wave 6+)
 
-- **§FGA_API_TOKEN-plumbing** — `@gertsai/auth-openfga` does NOT currently
-  forward a bearer token to the underlying `@openfga/sdk` client. As a
-  defensive measure, `OpenFgaPermissionGate` THROWS on construction when
-  `client.apiToken` is supplied, so an authenticated production deployment
-  cannot fail silently on an anonymised request (Sprint 3.11 Post-Build
-  Track 2 §P1-1 fix). Plumbing the bearer token end-to-end is a follow-up
-  ADR against `@gertsai/auth-openfga`.
+- ~~**§FGA_API_TOKEN-plumbing**~~ **RESOLVED in Wave 6.2** (PRD-005 +
+  RFC-003 + EVID-020). `@gertsai/auth-openfga.FgaClientConfig` gained an
+  optional `apiToken: string` field; when set, `GertsFgaClient` plumbs it
+  to every internal `new OpenFgaClient(...)` as
+  `credentials: { method: ApiToken, config: { token } }`. The Sprint 3.11
+  §P1-1 throw-on-apiToken defensive guard in
+  `OpenFgaPermissionGate` has been removed — tokens now reach the SDK
+  end-to-end. m9s-example composition forwards `FGA_API_TOKEN` env var.
+  Verified by 4-test unit suite mocking the SDK constructor and a 4-test
+  gate-acceptance suite. OAuth2 `clientCredentials` remains future work
+  (separate ADR if needed).
 - ~~**§OpenFGA-model-drift-CI**~~ **RESOLVED in Wave 6** (PR/commit
   `chore/wave6-openfga-model-drift-ci`). Added `@openfga/syntax-transformer`
   as a devDependency in `examples/m9s-example` and a CI test
