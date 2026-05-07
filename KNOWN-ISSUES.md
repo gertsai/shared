@@ -279,14 +279,16 @@ uses `PgClient` directly via `pg-document.repository.ts` per Amendment 2
   cannot fail silently on an anonymised request (Sprint 3.11 Post-Build
   Track 2 §P1-1 fix). Plumbing the bearer token end-to-end is a follow-up
   ADR against `@gertsai/auth-openfga`.
-- **§OpenFGA-model-drift-CI** — `scripts/openfga-bootstrap.ts` carries an
-  inline JSON authorization model that is kept in sync **manually** with
-  the canonical `openfga/model.fga` DSL file. There is no CI check that
-  the two stay equivalent. Drift would silently bootstrap a different
-  authorization graph than the DSL documents. Either add
-  `@openfga/syntax-transformer` as a devDep and parse `model.fga` at
-  runtime, or add a snapshot equivalence test in CI (Sprint 3.11
-  Post-Build Track 2 §P1-3).
+- ~~**§OpenFGA-model-drift-CI**~~ **RESOLVED in Wave 6** (PR/commit
+  `chore/wave6-openfga-model-drift-ci`). Added `@openfga/syntax-transformer`
+  as a devDependency in `examples/m9s-example` and a CI test
+  (`tests/openfga-model.test.ts`) that parses `openfga/model.fga` and
+  asserts deep-equal with the inline `AUTHORIZATION_MODEL` constant in
+  `scripts/openfga-bootstrap.ts`. The transformer is dev-only — bootstrap
+  runtime stays parser-free so a future ANTLR-parser regression cannot
+  break production rollout. The DSL is canonical to humans; the inline
+  JSON is canonical to OpenFGA at write time; the test enforces
+  equivalence. Drift now fails CI on every PR.
 - **§FGA-singleton-multi-store** — `@gertsai/auth-openfga` exposes a
   process-wide `getFgaClient()` singleton + `getPermissionCache()`. The
   `OpenFgaPermissionGate` JSDoc now warns that production deployments

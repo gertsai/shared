@@ -53,6 +53,7 @@
     "typia": "^9.7.0"
   },
   "devDependencies": {
+    "@openfga/syntax-transformer": "^0.2.0",
     "@standard-schema/spec": "^1.1.0",
     "@types/node": "^22.10.0",
     "@types/pg": "^8.11.10",
