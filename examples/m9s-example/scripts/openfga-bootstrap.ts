@@ -17,10 +17,13 @@
  *   pnpm --filter @gertsai-examples/m9s-example exec tsx scripts/openfga-bootstrap.ts
  *   FGA_API_URL=http://localhost:8080 node dist/scripts/openfga-bootstrap.js
  *
- * NOTE: `@openfga/syntax-transformer` is not installed in this workspace, so
- * the authorization model is provided in JSON form (the DSL in `model.fga`
- * exists for human review and CI lint, not runtime parsing). Both forms MUST
- * be kept in sync — see Sprint 3.11 §A2.2.
+ * Wave 6 §OpenFGA-model-drift-CI:
+ *   `AUTHORIZATION_MODEL` below is exported and asserted by
+ *   `tests/openfga-model.test.ts` to deep-equal the parsed `openfga/model.fga`
+ *   via `@openfga/syntax-transformer`. The transformer is a devDependency
+ *   used ONLY by the test — bootstrap runtime stays parser-free, so a future
+ *   transformer regression cannot break production rollout. Drift between
+ *   the inline JSON and the DSL fails the test in CI.
  */
 
 import { promises as fs } from 'node:fs';
@@ -46,15 +49,35 @@ interface BootstrapTupleFile {
 
 const STORE_NAME = 'm9s-example';
 
-// JSON form of openfga/model.fga (kept in sync manually — see file header).
-// Conforms to OpenFGA schema 1.1.
-const AUTHORIZATION_MODEL = {
+/**
+ * JSON form of `openfga/model.fga` — kept in sync with the DSL by the
+ * `tests/openfga-model.test.ts` drift guard (Wave 6 §OpenFGA-model-drift-CI).
+ * Exported so the test can deep-equal it against the parsed DSL.
+ *
+ * The shape exactly matches the canonical output of
+ * `@openfga/syntax-transformer.transformer.transformDSLToJSONObject` on
+ * the current `model.fga` — including parser-default fields like
+ * `metadata: null` for typeless types and `directly_related_user_types: []`
+ * for derived (tupleToUserset) relations. To regenerate after editing the
+ * DSL: re-run the drift-guard test, copy the parser output into this
+ * constant, and re-run the test until green. The DSL is canonical to
+ * humans; this constant is canonical to OpenFGA at write time.
+ *
+ * Conforms to OpenFGA schema 1.1.
+ */
+export const AUTHORIZATION_MODEL = {
   schema_version: '1.1',
   type_definitions: [
-    { type: 'user' },
+    {
+      type: 'user',
+      relations: {},
+      metadata: null,
+    },
     {
       type: 'tenant',
-      relations: { member: { this: {} } },
+      relations: {
+        member: { this: {} },
+      },
       metadata: {
         relations: {
           member: { directly_related_user_types: [{ type: 'user' }] },
@@ -67,20 +90,22 @@ const AUTHORIZATION_MODEL = {
         tenant: { this: {} },
         can_view: {
           tupleToUserset: {
-            tupleset: { object: '', relation: 'tenant' },
-            computedUserset: { object: '', relation: 'member' },
+            computedUserset: { relation: 'member' },
+            tupleset: { relation: 'tenant' },
           },
         },
         can_edit: {
           tupleToUserset: {
-            tupleset: { object: '', relation: 'tenant' },
-            computedUserset: { object: '', relation: 'member' },
+            computedUserset: { relation: 'member' },
+            tupleset: { relation: 'tenant' },
           },
         },
       },
       metadata: {
         relations: {
           tenant: { directly_related_user_types: [{ type: 'tenant' }] },
+          can_view: { directly_related_user_types: [] },
+          can_edit: { directly_related_user_types: [] },
         },
       },
     },
