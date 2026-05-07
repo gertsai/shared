@@ -2,7 +2,7 @@
 depth: standard
 id: SPEC-016
 kind: spec
-last_modified_at: 2026-05-07T12:54:20.078913+00:00
+last_modified_at: 2026-05-07T13:34:50.716915+00:00
 last_modified_by: claude-code/2.1.132
 links:
 - target: PRD-004
@@ -17,116 +17,110 @@ title: Sprint 3.11 — m9s-example production-grade reference (W-3-11-1..N work 
 
 ## Summary
 
-Sprint 3.11 = production-grade m9s-example per PRD-004 + ADR-011. 6 disjoint tracks executed by 4-6∥ AgentTeams workers. Strictly **m9s-example only** (per ADR-011 I-2 — no `@gertsai/*` source changes). Branch `feat/sprint-3-11-production-grade-m9s-example` off `feat/sprint-3-10-wave-5-polish`.
+Sprint 3.11 = production-grade m9s-example per PRD-004 + ADR-011 (with Amendment 1 ADI + Amendment 2 Pre-Build audit synthesis). 6 disjoint tracks executed by 4-6∥ AgentTeams workers. Strictly **m9s-example only** (per ADR-011 I-2). Branch `feat/sprint-3-11-production-grade-m9s-example` off `feat/sprint-3-10-wave-5-polish`.
 
-Estimated 16-18h ≈ 1 working week. **Pre-Build ADI mandatory** on contested Decisions B (OpenFGA model) + E (migration tooling) per ADR-011 I-11.
+Estimated 16-18h ≈ 1 working week. Pre-Build audit complete (5∥ reviewers, 24 findings). Decisions B (B2 Tenant-hierarchy) + E (E1 Raw SQL) LOCKED via ADI.
 
-## Scope
+## Scope (W-items — see Amendment 1 for revisions)
 
 ### Track 1: Postgres + pgvector storage (T1, F+ marker)
 
-Per ADR-011 Decision A (settled — leverages `@gertsai/pg-client/storage` Sprint 3.5 W-4B-4).
+- **W-3-11-1**: NEW `migrations/001_init_documents_chunks.up.sql` — normalized schema + HNSW index + `pg_migrations` tracking table. All `IF NOT EXISTS` per I-3.
+- **W-3-11-2**: NEW `migrations/001_init_documents_chunks.down.sql` — rollback pair.
+- **W-3-11-3**: NEW `scripts/migrate.ts` — E1 raw SQL runner per Amendment 1 §A1.4 LOCKED. Per Amendment 2 §A2.6: `pg_advisory_xact_lock` + hard-coded path + `typia.assert<MigrateCommand>` argv (I-15).
+- **W-3-11-4**: NEW `infrastructure/pg-document.repository.ts` — `PgDocumentStore implements IDocumentStore` (per Amendment 2 §A2.5: NOT IDocumentRepository). Uses `PgClient` raw via `pg-client.adapter.ts`. Post-INSERT writes per-document OpenFGA tuple.
+- **W-3-11-5**: NEW `infrastructure/pg-vector.store.ts` — `PgVectorStore implements IChunkStore`. Every SQL `WHERE tenant_id = $1` (I-13).
+- **W-3-11-6**: MODIFY `composition/infrastructure.ts` — env-driven backend selection via `oneOf` helper + exhaustive `assertNever`.
+- **W-3-11-7**: MODIFY `project.config.ts` — env vars `STORAGE_PROVIDER`, `POSTGRES_URL`, `MIGRATIONS_AUTO_APPLY` via `oneOf`/`bool` helpers.
+- **W-3-11-8**: NEW `tests/real-infra/pg-vector.test.ts` — env-gated. ≥3 tests + tenant isolation adversarial test (I-13).
 
-- **W-3-11-1**: NEW `examples/m9s-example/migrations/001_init_documents_chunks.up.sql` — `documents` table + `chunks` table + indexes (incl. HNSW vector index). All `IF NOT EXISTS` per ADR-011 I-3.
-- **W-3-11-2**: NEW `examples/m9s-example/migrations/001_init_documents_chunks.down.sql` — rollback pair (`DROP TABLE IF EXISTS chunks; DROP TABLE IF EXISTS documents; DROP EXTENSION IF EXISTS vector;`).
-- **W-3-11-3**: NEW `examples/m9s-example/scripts/migrate.ts` — migration runner CLI per Decision E (W-items 21-23 will revise after ADI). Default approach: raw SQL files + `pg_migrations` tracking table + ts-node entrypoint.
-- **W-3-11-4**: NEW `examples/m9s-example/src/infrastructure/pg-document.repository.ts` — `IDocumentRepository` impl using `PgStorageProvider` from `@gertsai/pg-client/storage`. Wraps existing `MemoryDocumentRepository` shape — drop-in replacement.
-- **W-3-11-5**: NEW `examples/m9s-example/src/infrastructure/pg-vector.store.ts` — `IChunkStore` impl with pgvector queries. `INSERT ... vector(768)` + `SELECT ... ORDER BY vector <=> $query LIMIT $topK` cosine similarity.
-- **W-3-11-6**: MODIFY `examples/m9s-example/src/composition/infrastructure.ts` — env-driven backend selection: `STORAGE_PROVIDER=postgres|memory` switches between `Pg*` and `Memory*` impls. Default `postgres`. Boot fails fast with helpful error if Postgres unreachable when `postgres` selected.
-- **W-3-11-7**: MODIFY `examples/m9s-example/project.config.ts` — add env vars `STORAGE_PROVIDER`, `POSTGRES_URL`, `MIGRATIONS_AUTO_APPLY`.
-- **W-3-11-8**: NEW `examples/m9s-example/tests/real-infra/pg-vector.test.ts` — env-gated (`PGVECTOR_E2E=1` or auto-detect Postgres). 3+ tests: ingest persists row in Postgres, search returns row via cosine sim, cross-tenant filter correctness.
+### Track 2: OpenFGA real authorization gate (T2, **E+** marker per Amendment 2 §A2.13)
 
-### Track 2: OpenFGA real authorization gate (T2, F+ marker, **CONTESTED — ADI on Decision B**)
+Per ADR-011 Decision B (LOCKED B2 Tenant-hierarchy via Amendment 1 ADI). Decision B revised by Amendment 2 §A2.1-A2.4.
 
-Per ADR-011 Decision B. **Build BLOCKED** until ADI runs and chooses tuple model (B1 per-document / B2 tenant-hierarchy / B3 hybrid). W-items below assume **B2 tenant-hierarchy** as initial preference; ADI may revise.
+- **NEW W-3-11-8a** (per Amendment 2 §A2.3, BEFORE openfga-worker commits): Pre-Build OpenFGA wildcard live-spike. Docker run `openfga/openfga`, write per-document tuple, verify check semantics. ~15 min.
+- **W-3-11-9**: NEW `openfga/model.fga` — canonical FgaResourceType (`tenant`/`document`) + `can_view`/`can_edit` relations from `FGA_RELATIONS`. NO custom `reader`/`writer`.
+- **W-3-11-10**: NEW `openfga/bootstrap-tuples.yaml` — seed `(user:default, member, tenant:tenant-acme)` only. NO `document:*` wildcard. Per-document tuples written at ingest by W-3-11-4.
+- **W-3-11-11**: NEW `scripts/openfga-bootstrap.ts` — idempotent store/model/tuple seeding.
+- **W-3-11-12**: **MODIFY** existing `infrastructure/openfga-permission.gate.ts` (per Amendment 2 §A2.1: file already exists 88 LOC). Extend action→relation map. Use canonical `FgaResourceType` enum. Wire `FGA_API_URL`/`FGA_STORE_ID`/`FGA_API_TOKEN`. Catch + log cause + return false (no rethrow per A2.4). Stateless (I-14).
+- **W-3-11-13**: MODIFY `composition/infrastructure.ts` — env-driven gate selection. AllowAll refuses NODE_ENV='production' (I-12).
+- **W-3-11-14**: MODIFY `project.config.ts` — env vars **`FGA_API_URL`/`FGA_STORE_ID`/`FGA_API_TOKEN`** (NOT OPENFGA_* per Amendment 2 §A2.7). `AUTH_GATE` ('openfga' | 'allow-all').
+- **W-3-11-15**: NEW `tests/real-infra/openfga.test.ts` — env-gated. ≥4 tests: same-tenant ALLOW, cross-tenant DENY, missing tuple DENIED, OpenFGA unreachable DENIED. + I-12 production guard test. + p50 latency benchmark (Amendment 1 §A1.3 H1, NFR-1 < 100ms).
 
-- **W-3-11-9**: NEW `examples/m9s-example/openfga/model.fga` — authorization model (TBD ADI outcome). Initial draft = B2 tenant-hierarchy.
-- **W-3-11-10**: NEW `examples/m9s-example/openfga/bootstrap-tuples.yaml` — demo seed: `(user:default, member, tenant:tenant-acme)` + `(tenant:tenant-acme, tenant, document:*)` wildcard.
-- **W-3-11-11**: NEW `examples/m9s-example/scripts/openfga-bootstrap.ts` — runs at docker-compose first start: creates store, loads model, seeds tuples. Idempotent (skips if store exists).
-- **W-3-11-12**: NEW `examples/m9s-example/src/infrastructure/openfga-permission.gate.ts` — `IPermissionGate` impl using OpenFGA HTTP API. Default-deny on errors per ADR-011 I-4.
-- **W-3-11-13**: MODIFY `examples/m9s-example/src/composition/infrastructure.ts` — env-driven gate selection: `AUTH_GATE=openfga|allow-all`. Default `openfga`.
-- **W-3-11-14**: MODIFY `examples/m9s-example/project.config.ts` — add env vars `AUTH_GATE`, `OPENFGA_API_URL`, `OPENFGA_STORE_ID`.
-- **W-3-11-15**: NEW `examples/m9s-example/tests/real-infra/openfga.test.ts` — env-gated (`OPENFGA_E2E=1` or auto-detect). 4+ tests: same-tenant access allowed, cross-tenant access denied (CRITICAL — verifies gate correctness, not application-layer rejection), missing tuple = denied, OpenFGA unreachable = denied.
+### Track 3: BullMQ async + Redis cacher activation (T3, E+ marker)
 
-### Track 3: BullMQ async + Redis cacher activation (T3, E+ marker, settled)
+- **W-3-11-16**: MODIFY `.env.example` — `REDIS_URL=redis://localhost:6379` default.
+- **W-3-11-17**: MODIFY `composition/infrastructure.ts` — env-driven `RedisCacheDriver`/`MemoryCacheDriver` swap. Named import `RedisCacheDriver` from `@gertsai/m9s-cache` (per RFC-002 §Edge 4 verification).
+- **W-3-11-18**: VERIFY existing `if (config.REDIS_URL)` paths fire correctly under default env. No code changes.
+- **W-3-11-19**: NEW `tests/real-infra/bullmq.test.ts` — env-gated. ≥3 tests + **eventual consistency contract test** (per Amendment 2 §A2.9): `mode='queued'` IMMEDIATELY → polling search returns `[]` → worker completes → search returns docId. NO race-condition error.
 
-Per ADR-011 Decision C — mostly env config flip.
+### Track 4: oxlint workspace integration (T4, F+ marker)
 
-- **W-3-11-16**: MODIFY `examples/m9s-example/.env.example` — set `REDIS_URL=redis://localhost:6379` as default for dev. Documents that empty value reverts to synchronous + memory cache.
-- **W-3-11-17**: MODIFY `examples/m9s-example/src/composition/infrastructure.ts` — when `REDIS_URL` set, swap `MemoryCacheDriver` to Redis driver from `@gertsai/m9s-cache`. Existing code path validates this is gate; just confirms.
-- **W-3-11-18**: VERIFY existing `if (config.REDIS_URL)` paths in `services/index.ts` (BullMQ worker registration), `moleculer.config.ts` (channels + workflows middleware) fire correctly under default env. No code changes — verification only.
-- **W-3-11-19**: NEW `examples/m9s-example/tests/real-infra/bullmq.test.ts` — env-gated (`BULLMQ_E2E=1` or auto-detect Redis). 3+ tests: ingest enqueues with `mode='queued'` + jobId, worker dequeues + processes, status polled via api-core BullMQ helpers.
+- **W-3-11-20**: NEW workspace root `.oxlintrc.json` — `correctness` + `suspicious` + `pedantic` rules.
+- **W-3-11-21**: MODIFY root `package.json` — add `lint:fast` script.
+- **W-3-11-22**: VERIFY full repo `pnpm lint:fast` ≤ 2s wall clock (NFR-1).
+- **W-3-11-23**: MODIFY CI workflow — add `lint:fast` step alongside existing `lint`.
 
-### Track 4: oxlint workspace integration (T4, F+ marker, settled)
+### Track 5: Migration tooling (T5, F+ marker, LOCKED E1 per Amendment 1)
 
-Per ADR-011 Decision D + I-7.
+- **W-3-11-24**: Implement E1 raw SQL custom runner per Amendment 2 §A2.6 + I-15 (advisory lock, hard-coded path, typia argv, `pg_migrations` tracking table). NO drizzle-kit/Prisma.
+- **W-3-11-25**: ADD `pnpm migrate:up` + `migrate:down` + `migrate:status` scripts to `package.json`.
+- **W-3-11-26**: VERIFY idempotency per I-3 — `migrate:up` twice = no-op second time.
 
-- **W-3-11-20**: NEW workspace root `.oxlintrc.json` — opt-in `correctness` + `suspicious` + `pedantic` rules. Per-file overrides via `overrides` for tests + fixtures.
-- **W-3-11-21**: MODIFY root `package.json` — add `lint:fast` script: `oxlint . --report-unused-disable-directives`. Existing `lint` script unchanged.
-- **W-3-11-22**: VERIFY full repo `pnpm lint:fast` ≤ 2s wall clock (NFR-1). If exceeds, drop `pedantic` rules. Captured in EVID-019.
-- **W-3-11-23**: MODIFY CI workflow (if applicable in repo) — add `lint:fast` step alongside existing `lint`.
+### Track 6: docker-compose orchestration (T6, **E+** marker per Amendment 2 §A2.13)
 
-### Track 5: Migration tooling — runner implementation (T5, F+ marker, **CONTESTED — ADI on Decision E**)
+Per Amendment 2 §A2.8: existing docker-compose.yml MODIFY (NOT NEW).
 
-Per ADR-011 Decision E. **Build BLOCKED** until ADI runs and chooses E1 raw SQL / E2 drizzle-kit / E3 prisma. W-items below assume **E1 raw SQL + custom runner** as initial preference.
-
-- **W-3-11-24**: REVISE W-3-11-3 per ADI outcome. If E1: implement custom runner. If E2: replace with drizzle-kit setup. If E3: replace with prisma setup.
-- **W-3-11-25**: ADD `pnpm migrate:up` + `pnpm migrate:down` + `pnpm migrate:status` scripts to `examples/m9s-example/package.json`.
-- **W-3-11-26**: VERIFY idempotency per ADR-011 I-3 — `migrate:up` twice = no-op second time.
-
-### Track 6: docker-compose orchestration + README + initial smoke (T6, F+ marker, settled)
-
-- **W-3-11-27**: NEW `examples/m9s-example/docker-compose.yml` — services: `postgres` (pgvector/pgvector:pg16), `redis` (redis:7-alpine), `openfga` (openfga/openfga:v1.x), `ollama` (ollama/ollama:latest). Healthchecks per ADR-011 I-8. Volumes for state persistence.
-- **W-3-11-28**: NEW `examples/m9s-example/docker/postgres-init.sql` — pgvector extension creation (auto-runs on container init).
-- **W-3-11-29**: NEW `examples/m9s-example/docker/openfga-init.sh` — Ollama model pull + OpenFGA store/model bootstrap (delegates to W-3-11-11 script).
-- **W-3-11-30**: NEW `examples/m9s-example/docker/ollama-pull-model.sh` — pulls `nomic-embed-text` on first start (idempotent).
-- **W-3-11-31**: MODIFY `examples/m9s-example/.env.example` — comprehensive env list mapping to docker-compose service names.
-- **W-3-11-32**: MAJOR ADDITION `examples/m9s-example/README.md` — `## Production Setup` section: prerequisites (Docker v24+, Node 22+), `docker-compose up -d`, `pnpm install`, `pnpm migrate:up` (or auto-apply via env), `pnpm start`, smoke test (`curl ingest` + `curl search`). Step-by-step copy-pasteable. Per ADR-011 I-10 must be testable end-to-end.
+- **W-3-11-27**: **MODIFY** existing `docker-compose.yml`. Preserve NATS + Redis. ADD `postgres` (pgvector/pgvector:pg16), `openfga` (openfga/openfga:v1.x), `ollama` (ollama/ollama:latest). Healthchecks gate broker start (I-8). Pin image versions (NFR-4).
+- **W-3-11-28**: NEW `docker/postgres-init.sql` — pgvector extension creation.
+- **W-3-11-29**: NEW `docker/openfga-init.sh` — Ollama model pull + OpenFGA bootstrap.
+- **W-3-11-30**: NEW `docker/ollama-pull-model.sh` — pulls `nomic-embed-text` idempotently.
+- **W-3-11-31**: MODIFY `.env.example` — comprehensive env list (skeleton inlined per Amendment 1 §A1.4).
+- **W-3-11-32**: MAJOR ADDITION `examples/m9s-example/README.md` — `## Production Setup` section per Sprint 3.6 §template (outline inlined per Amendment 1 §A1.2).
+- **NEW W-3-11-32a** (per Amendment 1 §A1.1 docs P1): NEW `openfga/README.md` — ReBAC vs RBAC, tuple shape walkthrough, add-tenant procedure, adversarial test cmd.
+- **NEW W-3-11-32b** (per Amendment 1 §A1.1 docs P1): NEW `migrations/README.md` — file naming, pg_migrations tracking, rollback semantics, idempotency contract.
 - **W-3-11-33**: VERIFY clean-machine onboarding ≤ 5 min (NFR-2 + G-2). Captured in EVID-019.
 
 ### Track 7: Phase B Integration (T7, team-lead solo)
 
-- **W-3-11-34**: `pnpm install` (after package.json deps additions for migration tooling per ADI outcome).
-- **W-3-11-35**: `pnpm build` sequential (`--workspace-concurrency=1` per Sprint 3.10 Addendum 2 lesson — DTS race at concurrency=4).
-- **W-3-11-36**: `pnpm test` mock-mode default — verify all 24 m9s tests + 8 e2e tests + Sprint 3.10 Addendum 2 (4 broker rejection + 3 real-infra Ollama if env-set) PASS unchanged.
-- **W-3-11-37**: `docker-compose up -d` then `pnpm test:real-infra` — full real-infra suite PASS (4 backend test files: pg-vector, openfga, bullmq, ollama).
-- **W-3-11-38**: `pnpm typecheck` + `pnpm depcruise` + `pnpm lint` + `pnpm lint:fast` + `pnpm publint` — all green.
-- **W-3-11-39**: 5 changesets per Sprint convention (one per track + summary):
-  - `.changeset/sprint-3-11-pg-storage.md` (patch m9s-example — but this introduces new Postgres dep — defer bump strategy decision to changeset writing time).
-  - `.changeset/sprint-3-11-openfga.md` (patch m9s-example).
-  - `.changeset/sprint-3-11-async-redis.md` (patch m9s-example).
-  - `.changeset/sprint-3-11-oxlint.md` (no published packages — workspace dev tool addition).
-  - `.changeset/sprint-3-11-docker-compose.md` (patch m9s-example).
-- **W-3-11-40**: MODIFY `CLAUDE.md` — m9s-example tier-table row update: "production-grade reference with real Postgres+pgvector / OpenFGA / BullMQ+Redis / Ollama / docker-compose / oxlint per ADR-011".
+- **W-3-11-34**: `pnpm install`.
+- **W-3-11-35**: `pnpm build` sequential (`--workspace-concurrency=1`).
+- **W-3-11-36**: `pnpm test` mock-mode default — verify all 24 m9s tests + 8 e2e + Sprint 3.10 Addendum 2 PASS unchanged.
+- **W-3-11-37**: `docker-compose up -d` then `pnpm test:real-infra` — full real-infra suite PASS (4 backend test files).
+- **W-3-11-38**: `pnpm typecheck` + `depcruise` + `lint` + `lint:fast` + `publint` — all green.
+- **W-3-11-39**: 5 changesets per Amendment 1 §A1.3 inline bodies.
+- **W-3-11-40**: MODIFY `CLAUDE.md` per Amendment 1 §A1.5 inline diff.
 
 ### Track 8: Phase D Audit + Evidence (T8, team-lead solo)
 
-- **W-3-11-41**: Post-Build fidelity audit — 4-6∥ reviewers per Track (pg-storage / openfga / queue+cache / oxlint / docker-compose+readme / docs).
-- **W-3-11-42**: Address P0/P1 findings if any.
-- **W-3-11-43**: Create EVID-019 (CL3, supports) via `forgeplan_new`. Linked informs PRD-004 + ADR-011 + SPEC-016 + EVID-018. Structured Fields §.
+- **W-3-11-41**: Post-Build fidelity audit — 4-6∥ reviewers per Track.
+- **W-3-11-42**: Address P0/P1 findings.
+- **W-3-11-43**: Create EVID-019 (CL3, supports). Linked informs PRD-004 + ADR-011 + SPEC-016 + EVID-018.
 - **W-3-11-44**: Activate SPEC-016 (final).
-- **W-3-11-45**: Single atomic commit `feat(monorepo): Sprint 3.11 — m9s-example production-grade reference (Postgres+pgvector+OpenFGA+BullMQ+oxlint+docker-compose)`.
+- **W-3-11-45**: Single atomic commit.
 - **W-3-11-46**: Hindsight retain Group 44.
+- **NEW W-3-11-46a** (per Amendment 1 §A1.1 docs P2): KNOWN-ISSUES.md cleanup — close mock PgClient entry + other m9s mock-vs-real entries.
+- **NEW W-3-11-46b** (per Amendment 1 §A1.1 typescript / Amendment 2 §A2.10): NEW `infrastructure/document.meta.ts` with `defineStorageMetadata<DocumentRow, DocumentWrite>()`.
 
 ## Out of scope
 
-- `@gertsai/*` package source changes (ADR-011 I-2 — bug fixes go through separate ADR/SPEC).
-- Multi-region / multi-tenant deployment patterns (single-node sufficient for example).
-- Observability stack (`@gertsai/otel` wiring) — Wave 6+ Sprint 3.12.
-- `apps/pipeline` migration — m9s-example only.
-- v0.2.0 publish gate — separate user `Y` decision per CLAUDE.md red lines.
-- runtime-context tsup class duplication fix (EVID-018 P2 finding) — separate Wave 6+ ADR.
+- `@gertsai/*` package source changes (ADR-011 I-2).
+- Multi-region patterns.
+- `@gertsai/otel` wiring — Wave 6+.
+- `apps/pipeline` migration.
+- v0.2.0 publish gate — separate user `Y`.
+- runtime-context tsup class duplication fix (EVID-018 P2) — Wave 6+ ADR.
 
-## Strategy markers
+## Strategy markers (per Amendment 2 §A2.13)
 
 | Track | Marker |
 |---|---|
-| T1 pg-storage | F+ (additive — new infrastructure impls + env-driven swap; mock fallback preserved) |
-| T2 openfga | F+ (additive — gate factory + env-driven swap) |
-| T3 async-redis | E+ (enhancement — env config flip activates existing gated paths) |
-| T4 oxlint | F+ (additive — supplementary linter + new script; eslint preserved) |
-| T5 migrations | F+ (additive — new tooling + scripts) |
-| T6 docker-compose | F+ (additive — new orchestration files + README section) |
+| T1 pg-storage | F+ (new files) |
+| T2 openfga | **E+** (revised — extends existing gate) |
+| T3 async-redis | E+ |
+| T4 oxlint | F+ |
+| T5 migrations | F+ (new tooling) |
+| T6 docker-compose | **E+** (revised — extends existing compose.yml) |
 
 ## Data Models
 
@@ -159,17 +153,10 @@ CREATE TABLE IF NOT EXISTS chunks (
   created_at   timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_chunks_document
-  ON chunks (document_id);
+CREATE INDEX IF NOT EXISTS idx_chunks_document ON chunks (document_id);
+CREATE INDEX IF NOT EXISTS idx_chunks_tenant ON chunks (tenant_id);
+CREATE INDEX IF NOT EXISTS idx_chunks_vector_hnsw ON chunks USING hnsw (vector vector_cosine_ops);
 
-CREATE INDEX IF NOT EXISTS idx_chunks_tenant
-  ON chunks (tenant_id);
-
--- HNSW vector index (per ADR-011 Decision A R-3)
-CREATE INDEX IF NOT EXISTS idx_chunks_vector_hnsw
-  ON chunks USING hnsw (vector vector_cosine_ops);
-
--- Tracking table for migration runner (Decision E TBD ADI)
 CREATE TABLE IF NOT EXISTS pg_migrations (
   version      int         PRIMARY KEY,
   name         text        NOT NULL,
@@ -177,135 +164,184 @@ CREATE TABLE IF NOT EXISTS pg_migrations (
 );
 ```
 
-### OpenFGA model.fga (Track 2, W-3-11-9, **TBD per ADI Decision B**)
-
-Initial draft (B2 tenant-hierarchy):
+### OpenFGA model.fga (per Amendment 2 §A2.2 — canonical FgaResourceType)
 
 ```dsl
 model
   schema 1.1
-
 type user
-
 type tenant
   relations
     define member: [user]
-
 type document
   relations
     define tenant: [tenant]
-    define reader: member from tenant
-    define writer: member from tenant
+    define can_view: member from tenant
+    define can_edit: member from tenant
 ```
 
-Bootstrap tuples (W-3-11-10):
-
+Bootstrap tuples (per Amendment 2 §A2.3):
 ```yaml
 - user: user:default
   relation: member
   object: tenant:tenant-acme
-- user: tenant:tenant-acme
-  relation: tenant
-  object: document:*  # wildcard — all documents owned by tenant
+# NO wildcard. Per-document tuples written at ingest by pg-document.repository.ts.
 ```
-
-(Note: wildcards in tuples may require OpenFGA conditional types — to be verified during ADI + Build.)
 
 ## Acceptance Checklist
 
-- [ ] T1 (W-3-11-1..8): Postgres+pgvector schema + adapters + tests; cross-tenant query filter verified.
-- [ ] T2 (W-3-11-9..15): OpenFGA gate + model + bootstrap; cross-tenant DENY verified at gate (not application).
-- [ ] T3 (W-3-11-16..19): BullMQ + Redis cacher activated by default; existing gated paths verified.
-- [ ] T4 (W-3-11-20..23): oxlint workspace integration; full repo `lint:fast` ≤ 2s.
-- [ ] T5 (W-3-11-24..26): migration tooling per Decision E (post-ADI); idempotency verified.
-- [ ] T6 (W-3-11-27..33): docker-compose orchestration + README Production Setup; clean-machine onboarding ≤ 5 min.
-- [ ] T7 (W-3-11-34..40): full repo verify both modes (mock-default + real-infra); 5 changesets; CLAUDE.md updated.
-- [ ] T8 (W-3-11-41..46): post-Build audit + EVID-019 + commit + Hindsight Group 44.
+- [ ] T1 (W-3-11-1..8): Postgres+pgvector schema + adapters + tests; cross-tenant filter verified (I-13).
+- [ ] T2 (W-3-11-8a..15): OpenFGA gate MODIFIED + canonical model + bootstrap; cross-tenant DENY at gate; pre-Build live-spike completed.
+- [ ] T3 (W-3-11-16..19): BullMQ + Redis activated; eventual consistency contract test passes.
+- [ ] T4 (W-3-11-20..23): oxlint workspace; full repo `lint:fast` ≤ 2s.
+- [ ] T5 (W-3-11-24..26): E1 migration tooling; idempotency verified.
+- [ ] T6 (W-3-11-27..33 + 32a/32b): docker-compose extended; README Production Setup; ≤ 5 min onboarding.
+- [ ] T7 (W-3-11-34..40): full repo verify both modes; 5 changesets; CLAUDE.md.
+- [ ] T8 (W-3-11-41..46 + 46a/46b): post-Build audit; EVID-019; commit; Hindsight Group 44.
 
-## Risks (delta vs ADR-011 Risks)
+## Risks (delta vs ADR-011 §Risks)
 
 | ID | Risk | Mitigation |
 |---|---|---|
-| R-S1 | Migration runner CLI bug → corrupt state (E1 raw SQL approach) | Idempotency per ADR-011 I-3 + adversarial test (apply twice in CI) |
-| R-S2 | OpenFGA wildcards-in-tuples don't match library version (B2 model) | Pre-Build security reviewer attests model + ADI verifies before Build commits |
-| R-S3 | docker-compose healthcheck timing race | Use `depends_on: condition: service_healthy`; document min Docker version |
-| R-S4 | oxlint adds incompatible rule that breaks existing files | Mitigation: per-file `// oxlint-disable` comments; supplementary mode (eslint catch-all preserves CI) |
-| R-S5 | pgvector HNSW index creation slow on first run (>30s) | Defer to migration script log message — "first run may take ~30s for index build"; precompute fixture seed on docker-compose init for tests |
+| R-S1 | Migration runner CLI bug → corrupt state | I-3 + I-15 (advisory lock + adversarial test apply twice) |
+| R-S2 | OpenFGA wildcards-in-tuples invalid syntax | Pre-Build live-spike W-3-11-8a (per Amendment 2 §A2.3); per-document tuple fallback documented |
+| R-S3 | docker-compose healthcheck timing race | `depends_on: condition: service_healthy`; Docker Compose v2; min v24+ |
+| R-S4 | oxlint rule incompatibilities | Supplementary mode (I-7); per-file `// oxlint-disable` |
+| R-S5 | pgvector HNSW index slow first run >30s | Migration script log message; precompute fixture seed for tests |
 
-## File ownership matrix
+## File ownership matrix (revised per Amendment 1 §A1.7)
 
 | Worker | Owns |
 |---|---|
-| **pg-storage-worker** (T1) | `examples/m9s-example/migrations/001_*.sql`; `examples/m9s-example/scripts/migrate.ts`; `examples/m9s-example/src/infrastructure/{pg-document.repository.ts,pg-vector.store.ts}`; `examples/m9s-example/tests/real-infra/pg-vector.test.ts`; partial `src/composition/infrastructure.ts` (Pg* selection branch only); partial `project.config.ts` (PG-related env). |
-| **openfga-worker** (T2) | `examples/m9s-example/openfga/{model.fga,bootstrap-tuples.yaml}`; `examples/m9s-example/scripts/openfga-bootstrap.ts`; `examples/m9s-example/src/infrastructure/openfga-permission.gate.ts`; `examples/m9s-example/tests/real-infra/openfga.test.ts`; partial `src/composition/infrastructure.ts` (gate selection branch); partial `project.config.ts` (auth env). |
-| **queue-worker** (T3) | `examples/m9s-example/.env.example` (REDIS_URL section); partial `src/composition/infrastructure.ts` (cache driver selection); `examples/m9s-example/tests/real-infra/bullmq.test.ts`. |
-| **oxlint-worker** (T4) | `.oxlintrc.json` (workspace root, NEW); root `package.json` (`lint:fast` script — but this is also team-lead Phase B scope — **resolution**: oxlint-worker drafts script, team-lead Phase B finalizes); per-package `.oxlintrc.json` overrides if needed. |
-| **docker-compose-worker** (T6) | `examples/m9s-example/docker-compose.yml`; `examples/m9s-example/docker/{postgres-init.sql,openfga-init.sh,ollama-pull-model.sh}`; partial `.env.example` (orchestration env). |
-| **docs-worker** | `examples/m9s-example/README.md` Production Setup section; `KNOWN-ISSUES.md` (close m9s mock entries). |
-| **team-lead Phase B** | `pnpm-lock.yaml`; `.changeset/sprint-3-11-*.md` (5 NEW); `CLAUDE.md` tier-table row; root `package.json` finalize lint:fast script if oxlint-worker drafted. |
+| **pg-storage-worker** (T1) | `migrations/001_*.sql`; `scripts/migrate.ts`; `infrastructure/{pg-document.repository,pg-vector.store,pg-client.adapter,document.meta}.ts` (NEW × 4); `tests/real-infra/pg-vector.test.ts`; FULL ownership `composition/infrastructure.ts` (with TODO markers for openfga + queue patches); partial `project.config.ts` (PG-related env). |
+| **openfga-worker** (T2 — E+) | `openfga/{model.fga,bootstrap-tuples.yaml}`; `scripts/openfga-bootstrap.ts`; **MODIFY** `infrastructure/openfga-permission.gate.ts`; `tests/real-infra/openfga.test.ts`; partial `project.config.ts` (FGA env). Submits branch patch to pg-storage-worker for `composition/infrastructure.ts` gate selection branch. **MUST run W-3-11-8a live-spike BEFORE committing model.fga.** |
+| **queue-worker** (T3) | `tests/real-infra/bullmq.test.ts`; submits branch patch for `composition/infrastructure.ts` cache-driver branch + `.env.example` REDIS_URL section. |
+| **oxlint-worker** (T4) | `.oxlintrc.json` (workspace root); root `package.json` `lint:fast` script (handed to team-lead Phase B for finalization). |
+| **docker-compose-worker** (T6 — E+) | **MODIFY** `docker-compose.yml`; `docker/{postgres-init.sql,openfga-init.sh,ollama-pull-model.sh}` (NEW × 3); FULL ownership `.env.example`. |
+| **docs-worker** | `examples/m9s-example/README.md` Production Setup; `examples/m9s-example/openfga/README.md` (NEW); `examples/m9s-example/migrations/README.md` (NEW); `KNOWN-ISSUES.md`. |
+| **team-lead Phase B** | `pnpm-lock.yaml`; `.changeset/sprint-3-11-*.md` (NEW × 5); `CLAUDE.md`; root `package.json` finalize. |
 
-**Conflict-free guarantee**:
-- `src/composition/infrastructure.ts` touched by 3 workers (pg-storage, openfga, queue) but each owns disjoint code branches (storage vs gate vs cache). Coordinate via clear method-level boundaries OR have ONE worker (pg-storage as senior, owns full file post-rebase) take ownership; others provide branch patches. **Resolution**: pg-storage-worker takes full ownership of `infrastructure.ts`; openfga-worker + queue-worker submit branch patches as **comments in their reports** for pg-storage-worker to integrate during Phase B handoff.
-- `project.config.ts` touched by 2 workers (pg-storage, openfga). Same resolution as above.
-- `.env.example` touched by queue-worker + docker-compose-worker. **Resolution**: docker-compose-worker takes full ownership; queue-worker comments REDIS_URL section.
-- All other paths disjoint.
+**Conflict-free guarantee**: pg-storage-worker takes full `composition/infrastructure.ts` ownership with TODO markers (per architect-reviewer recommendation); openfga-worker + queue-worker submit branch patches as report comments. docker-compose-worker takes full `.env.example`; queue-worker submits patch.
 
 ## Implementation Plan — AgentTeams
 
-### Phase 1: ADI on contested decisions (team-lead, ~10 min × 2 ADI runs)
+### Phase 0: Pre-Build OpenFGA wildcard live-spike (~15 min, BEFORE Build)
 
-- **1.1** `forgeplan_reason ADR-011` — primary ADI. Surfaces hypotheses on Decisions B (OpenFGA model) + E (migration tooling).
-- **1.2** Synthesize ADI output → Amendment 1 to ADR-011 + revise affected SPEC W-items.
+W-3-11-8a per Amendment 2 §A2.3 — verifies tuple semantics with per-document writes against live OpenFGA.
 
-### Phase 2: Pre-Build audit (5∥ reviewers, ~10-15 min)
+### Phase 1: Build (4-6∥ workers, ~50-90 min)
 
-- architect-reviewer / security-reviewer (CRITICAL for OpenFGA) / ddd-reviewer / typescript-reviewer / docs-reviewer.
+6 workers per file ownership matrix.
 
-### Phase 3: Build (4-6∥ workers, ~50-90 min wall-clock)
+### Phase 2: Phase B verify (team-lead solo, ~10-15 min)
 
-- 6 workers per disjoint scope (T1-T6 + docs subsumed in docker-compose-worker for unified README ownership). **Or** 5 workers if oxlint-worker scope merged into team-lead Phase B (smallest track).
+### Phase 3: Post-Build fidelity audit (4-6∥ reviewers, ~15 min)
 
-### Phase 4: Phase B verify + Post-Build audit (team-lead solo + 4-6∥ reviewers, ~25-35 min)
-
-### Phase 5: Phase D — EVID-019 + commit + Hindsight Group 44 (~10 min).
+### Phase 4: Phase D — EVID-019 + commit + Hindsight (~10 min)
 
 ## Affected Files
 
-### Wave 1 modifies/creates
-
-- 8 files per pg-storage-worker scope.
-- 7 files per openfga-worker scope.
-- 3 files per queue-worker scope (mostly env).
-- 1 file per oxlint-worker scope (`.oxlintrc.json`) + drafted script.
-- 5 files per docker-compose-worker scope.
-- 2 files per docs-worker scope.
-
-### Wave 2 (team-lead Phase B)
-
-- `pnpm-lock.yaml`
-- `.changeset/sprint-3-11-{pg-storage,openfga,async-redis,oxlint,docker-compose}.md` (NEW × 5)
-- `CLAUDE.md` (tier-table + production-grade reference status note)
-- root `package.json` finalize `lint:fast` script
-
-### Wave 4 (team-lead Phase D)
-
-- New EVID-019 artifact via `forgeplan_new`.
+See ADR-011 §Affected Files (predicted, per Amendment 2 revisions) for complete enumeration.
 
 ## Related Artifacts
 
 | Artifact | Type | Relation |
 |---|---|---|
 | PRD-004 (Sprint 3.11 vision) | PRD | based_on |
-| ADR-011 (Sprint 3.11 decisions) | ADR | based_on |
+| ADR-011 (Sprint 3.11 decisions + Amendments 1+2) | ADR | based_on |
 | RFC-002 (cross-package strategy) | RFC | refines |
 | ADR-005 (storage-core IStorageProvider) | ADR | informs |
 | ADR-007 (runtime-context middleware) | ADR | informs |
 | EVID-018 (Sprint 3.10 Addendum 2) | Evidence | informs |
-| KNOWN-ISSUES | Doc | informs (Sprint 3.11 closes m9s-example mock entries) |
+| KNOWN-ISSUES | Doc | informs |
 
-> **Next step**: ADI on ADR-011 contested Decisions B + E → revise W-3-11-9..15 + W-3-11-24 per ADI outcome → SPEC-016 Amendment 1 → pre-Build audit → Build (4-6∥) → Phase B → post-Build audit → EVID-019 + commit + Hindsight Group 44.
+> **Next step**: Pre-Build OpenFGA live-spike (W-3-11-8a) → Build (4-6∥ workers per revised file ownership matrix) → Phase B → post-Build audit → EVID-019 + commit + Hindsight Group 44.
 
+---
 
+## Amendment 1 — Pre-Build audit synthesis (per ADR-011 Amendment 2, 24 findings)
 
+W-item revisions per ADR-011 Amendment 2. Original W-items preserved above; this Amendment lists deltas + inlines templates per docs P1.1-P1.4 (EVID-016 §5 lesson — break the 11-cycle DOC-track regression pattern).
 
+### A1.1 — W-item revision summary (already inlined into §Scope above)
+
+24 W-item revisions + 5 NEW W-items (W-3-11-8a, 32a, 32b, 46a, 46b). All revisions integrated into §Scope tracks above for worker readability.
+
+### A1.2 — README §Production Setup outline (per docs P1.1)
+
+Inline outline (≥40 lines) for docs-worker — Sprint 3.6 §template structure adapted for infra setup:
+
+- §Prerequisites: Docker 24+, Node 22+, pnpm 10.x, ports 5432/6379/8080/4222/11434, ~3GB RAM
+- §One-command bring-up: `cp .env.example .env`, `docker compose up -d`, `docker compose ps` healthy wait
+- §Apply migrations: `pnpm install`, `pnpm migrate:status`, `pnpm migrate:up` (or auto via `MIGRATIONS_AUTO_APPLY=true`)
+- §Boot broker: `pnpm start`
+- §Smoke verification: curl ingest + sleep + curl search with expected response shapes
+- §Async caveats: `mode='queued'` immediately, search visibility 1-5s window
+- §⚠️ SECURITY: `AUTH_GATE=allow-all` refuses NODE_ENV=production (I-12); `FGA_API_TOKEN` required for production; `.env` gitignored; chunks tenant_id filter
+- §OpenFGA glossary: DSL→domain UL mapping (5 rows)
+- §Tear-down: `docker compose down -v`
+- §Common errors: ECONNREFUSED, OpenFGA store not found, Ollama model not pulled, HNSW slow first run
+
+### A1.3 — 5 changeset bodies (per docs P1.2)
+
+5 changeset bodies inlined for team-lead Phase B — see ADR-011 Amendment 2 cross-references:
+- `sprint-3-11-pg-storage.md` (patch m9s-example, NEW infra files via pg@8.13)
+- `sprint-3-11-openfga.md` (patch m9s-example, MODIFY existing gate, B2 model)
+- `sprint-3-11-async-redis.md` (patch m9s-example, env-driven default-on, eventual consistency test)
+- `sprint-3-11-oxlint.md` (workspace dev tool, no published bumps)
+- `sprint-3-11-docker-compose.md` (patch m9s-example, MODIFY existing compose, real-infra suite)
+
+### A1.4 — `.env.example` skeleton (per docs P1.4)
+
+Inlined skeleton (≥15 lines) for docker-compose-worker — placeholder credentials only:
+```bash
+# === Storage ===
+STORAGE_PROVIDER=postgres   # postgres | memory
+POSTGRES_URL=postgres://m9s:change-me-on-deploy@localhost:5432/m9s
+MIGRATIONS_AUTO_APPLY=true
+
+# === Authorization (OpenFGA) ===
+AUTH_GATE=openfga           # openfga | allow-all
+FGA_API_URL=http://localhost:8080
+FGA_STORE_ID=               # populated by openfga-bootstrap.ts
+FGA_API_TOKEN=              # preshared bearer (REQUIRED for production)
+
+# === Async + cache ===
+REDIS_URL=redis://localhost:6379
+
+# === Embedder (Ollama) ===
+EMBEDDER_PROVIDER=ollama
+EMBEDDER_URL=http://localhost:11434
+EMBEDDER_MODEL=nomic-embed-text
+
+# === Real-infra test gates ===
+PGVECTOR_E2E=
+OPENFGA_E2E=
+BULLMQ_E2E=
+OLLAMA_E2E=
+
+# === Optional ===
+NODE_ENV=development        # AllowAll refuses production (I-12)
+TRANSPORT_TYPE=null
+```
+
+### A1.5 — CLAUDE.md tier-table row diff (per docs P1.3)
+
+Inline diff for line 392:
+```diff
+- **Wave 5 fully complete** — 13 packages total ... + Sprint 3.10 closes Wave 5 polish ...
++ **Wave 5 fully complete** — 13 packages total ... + Sprint 3.10 closes Wave 5 polish ... **Sprint 3.11 elevates m9s-example to production-grade reference** — real Postgres+pgvector / OpenFGA ReBAC (B2 tenant-hierarchy via ADI) / BullMQ+Redis / Ollama / docker-compose / oxlint per ADR-011 + Amendment 1 (ADI) + Amendment 2 (24 pre-Build findings) + RFC-002 + EVID-019.
+```
+
+### A1.6 — Strategy markers final (per Amendment 2 §A2.13)
+
+T2 openfga: F+ → **E+** (existing gate MODIFY). T6 docker-compose: F+ → **E+** (existing compose MODIFY). All others unchanged.
+
+### A1.7 — File ownership matrix (revised) — see §File ownership matrix above
+
+### A1.8 — Net effect
+
+24 W-item revisions + 5 NEW W-items + 5 inline templates + 2 strategy marker changes. Build proceeds with: (a) Pre-Build OpenFGA live-spike (~15 min), (b) 6 parallel workers per revised file ownership matrix, (c) sequential `pnpm build` Phase B, (d) post-Build fidelity audit, (e) EVID-019 + commit + Hindsight Group 44.
+
+> **Net effect of Amendment 1**: Sprint 3.11 SPEC reconciled with reality. EVID-016 §5 lesson regression averted through inline templates. Build can proceed.
 
