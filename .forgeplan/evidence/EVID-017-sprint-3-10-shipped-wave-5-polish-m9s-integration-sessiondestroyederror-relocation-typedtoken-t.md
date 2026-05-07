@@ -2,7 +2,7 @@
 depth: standard
 id: EVID-017
 kind: evidence
-last_modified_at: 2026-05-07T08:18:02.727483+00:00
+last_modified_at: 2026-05-07T09:06:40.949574+00:00
 last_modified_by: claude-code/2.1.132
 links:
 - target: ADR-010
@@ -20,16 +20,16 @@ title: Sprint 3.10 shipped — Wave 5 polish + m9s integration + SessionDestroye
 ## Structured Fields
 
 - **verdict**: supports
-- **congruence_level**: CL3 (same — internal test on target system; full repo green; AgentTeams 4∥ Build + 4∥ post-Build fidelity audit)
+- **congruence_level**: CL3 (same — internal test on target system; full repo green; AgentTeams 4∥ Build + 4∥ post-Build fidelity audit; real broker.call e2e via Addendum 1)
 - **evidence_type**: internal-test
 
 ## Summary
 
-Sprint 3.10 = Wave 5 closure sprint per ADR-010 + Amendment 1 (10-report pre-Build audit synthesis). Closes Wave 5 polish backlog (15 P2 items) + integrates Wave 5 packages into m9s-example (canonical reference) + relocates `SessionDestroyedError` to `@gertsai/errors` Shared Kernel (resolves Track 3 P0 tier-direction violation) + ships `TypedToken<T>` wrapper for `ProviderContext` (Sprint 3.7 R-2 mitigation).
+Sprint 3.10 = Wave 5 closure sprint per ADR-010 + Amendment 1 (10-report pre-Build audit synthesis). Closes Wave 5 polish backlog (15 P2 items) + integrates Wave 5 packages into m9s-example (canonical reference) + relocates `SessionDestroyedError` to `@gertsai/errors` Shared Kernel (resolves Track 3 P0 tier-direction violation) + ships `TypedToken<T>` wrapper for `ProviderContext` (Sprint 3.7 R-2 mitigation). **Addendum 1** revives real broker.call e2e in m9s-example, closing the Sprint 3.5.2 lesson gap.
 
-**Branch**: `feat/sprint-3-10-wave-5-polish` off `feat/sprint-3-9-wave-5-phase-4`. **Single atomic commit** pending team-lead Phase D.
+**Branch**: `feat/sprint-3-10-wave-5-polish` off `feat/sprint-3-9-wave-5-phase-4`. Sprint 3.10 atomic commit `782a3e0` shipped; Addendum 1 e2e revival ships as follow-up commit.
 
-**Test count delta**: 4843 → **4900 passed** (+57), 49 → 103 skipped (m9s-example e2e.test.ts pre-existing skip propagated). 0 regressions.
+**Test count delta**: 4843 → **4904 passed** (+61), 49 → **102 skipped** (m9s-example e2e.test.ts revived, -1; new Wave 5 tests added, +52). 0 regressions.
 
 ## Deliverables
 
@@ -60,8 +60,8 @@ m9s-example becomes canonical Wave 5 reference. Integrates 4 Wave 5 packages:
 - W-3-10-18 + I-14 (CWE-639): `tenantMiddleware` with `HeaderStrategy({ trustProxy: true })` + inline `// SECURITY:` comment + ⚠️ SECURITY README block.
 - W-3-10-19: `sessionMiddleware` registered in canonical order (`tenant → session`).
 - W-3-10-20: `assertAuthenticated` + `assertSessionInTenant` at use-case entry.
-- W-3-10-21: NEW `tests/wave5-integration.test.ts` (4 tests covering full request flow + adversarial cases).
-- W-3-10-22: README `## Wave 5 stack reference` section per Sprint 3.6 §template (Errors / Tenant / RequestContext / Session-guard / Composition order / ⚠️ SECURITY / Cross-references).
+- W-3-10-21: NEW `tests/wave5-integration.test.ts` (4 tests covering full request flow + adversarial cases — mock-based unit-level).
+- W-3-10-22: README `## Wave 5 stack reference` section per Sprint 3.6 §template.
 
 Use-case input shape extended with **additive optional** `session?: Session` + `expectedTenantId?: string` fields — pre-Wave-5 callers (16 existing tests) pass neither and skip assertion branch entirely. ADR-010 I-2/I-3 regression invariant preserved.
 
@@ -71,137 +71,148 @@ Phase B addition: `examples/m9s-example/.dependency-cruiser.cjs` Shared Kernel e
 
 P0 tier-direction violation in original SPEC resolved by relocating `SessionDestroyedError` from `@gertsai/session-guard` (Tier 2) to `@gertsai/errors` (Tier 1, Shared Kernel).
 
-- W-3-10-23: `packages/errors/src/session.ts` (NEW) — `class SessionDestroyedError extends ConflictError<{ contextField: 'session' }> {}`. Export added to `errors/src/index.ts`. NEW `__tests__/session-error.test.ts` (7 tests: instance chain, kind=CONFLICT, details schema lock, verbatim messages, toJSON, name).
-- W-3-10-24: `packages/session-guard/src/errors.ts` — local class def replaced with `export { SessionDestroyedError } from '@gertsai/errors';` re-export shim. NEW `__tests__/session-destroyed-error.test.ts` — single-source identity test (R-6 mitigation): `expect(FromGuard).toBe(FromErrors)` PASSES. 5 tests.
-- W-3-10-25: `packages/session/src/Session.ts` — direct `import { SessionDestroyedError } from '@gertsai/errors';` (peer-dep already present). Lines 229, 248 throw `SessionDestroyedError` with verbatim messages preserved. `createRequire` complexity eliminated.
+- W-3-10-23: `packages/errors/src/session.ts` (NEW). NEW `__tests__/session-error.test.ts` (7 tests).
+- W-3-10-24: `packages/session-guard/src/errors.ts` re-export shim. NEW `__tests__/session-destroyed-error.test.ts` — single-source identity test (R-6 mitigation): `expect(FromGuard).toBe(FromErrors)` PASSES. 5 tests.
+- W-3-10-25: `packages/session/src/Session.ts` direct import; bare Error throws on lines 229, 248 → `SessionDestroyedError`. `createRequire` complexity eliminated.
 - W-3-10-25a/b: polish lines 19-22 + scoping.test.ts:13-17 comments compressed.
 
-**Tier discipline preserved**: `cat packages/session/package.json | grep peerDep` confirms only `@gertsai/errors`. NO new peer-dep on `@gertsai/session-guard`. Verified by shared-kernel-fidelity audit.
+**Tier discipline preserved**: `@gertsai/session/package.json` peerDeps: `{ '@gertsai/errors': 'workspace:^' }` only. NO new peer-dep on session-guard.
 
 ### Track 4 — TypedToken<T> wrapper (F+ marker, REVISED per Amendment 1 §I-12, §I-13)
 
-NEW additive API in `@gertsai/runtime-context`:
-
-- W-3-10-26: `src/typed-token.ts` (NEW) — `defineToken<T>(name)` + `isTypedToken(value)` + `TypedToken<T>` interface. Module-private `Symbol(...)` brand (NOT `Symbol.for`); required `[TYPED_TOKEN_BRAND]: true` discriminator (NO `__phantom_T__` field per I-12 — optional readonly is covariant under TS strict).
-- W-3-10-27: `src/provider-context.ts` — overloads `get<T>(token: symbol|TypedToken<T>)` and `getOptional<T>(...)`; declaration order: symbol FIRST, TypedToken SECOND. `DefaultProviderContext` extracts `.symbol` BEFORE `assertSymbolToken(sym)` per I-13.
-- W-3-10-28: index.ts exports `TypedToken`, `defineToken`, `isTypedToken`.
-- W-3-10-29: 10 typed-token tests + 6 type-only tests (`expectTypeOf`) + 7 provider-context overload tests. Adversarial Object.prototype pollution test included.
-- W-3-10-29a: README `## TypedToken<T>` section per Sprint 3.6 §template.
-
-CWE-1321 brand-pollution-resistant via module-private Symbol + `Object.prototype.hasOwnProperty.call`.
+NEW additive API in `@gertsai/runtime-context`: `defineToken<T>` + `isTypedToken` + `TypedToken<T>` (required brand `[TYPED_TOKEN_BRAND]`, NO `__phantom_T__` field per I-12). ProviderContext.get/getOptional gain TypedToken<T> overloads with `.symbol` extraction BEFORE `assertSymbolToken` per I-13. CWE-1321 brand-pollution-resistant.
 
 ## Quality gates (Phase B)
 
 | Gate | Result | Details |
 |---|---|---|
-| `pnpm install` | ✅ green | lockfile uptodate, 1.3s |
+| `pnpm install` | ✅ green | 1.3s, lockfile uptodate |
 | `pnpm build` | ✅ green | 39 packages + m9s-example |
-| `pnpm test` | ✅ **4900 passed** (+57), 103 skipped | 0 regressions |
+| `pnpm test` | ✅ **4900 passed** (+57), 103 skipped | 0 regressions; 4904 post-Addendum 1 |
 | `pnpm typecheck` | ✅ green | all packages |
-| `pnpm depcruise` | ✅ green | after Shared Kernel exception in m9s `.dependency-cruiser.cjs` |
+| `pnpm depcruise` | ✅ green | after Shared Kernel exception |
 
 ## Audit cycle (10th)
 
 ### Pre-Build audit (5∥ reviewers, 10 reports across 2 sessions)
 
-- architect (×2) — GO-WITH-FIXES: P0 tier violation, R-3 wording, file ownership path, redactDetails minor
-- security (×2) — PROCEED with fixes: wrapUnknownError allow-list (CWE-285), SessionDestroyedError details lock (CWE-209), m9s trustProxy SECURITY (CWE-639)
-- ddd (×2) — APPROVE with fixes: SessionDestroyedError tier direction, wrapUnknownError kind subset, BC labels
-- typescript (×2) — APPROVE/GREEN with fixes: phantom field invariance issue (CRITICAL), assertSymbolToken extraction, R-3 wording
-- docs (×2) — BLOCKED on inline templates: 4 changeset bodies, TypedToken README, m9s §Wave 5 outline, CLAUDE.md diffs
-
-**All findings adopted** as Amendment 1 to ADR-010 + SPEC-015 (via `forgeplan_update` MCP — strict per CLAUDE.md): 6 new invariants (I-10..I-16), 2 new risks (R-5, R-6), 1 risk reformulated (R-3), 1 Decision revised (C), 3 Decisions extended (A/B/D), 2 alternatives added.
+All findings adopted as Amendment 1 to ADR-010 + SPEC-015 (via `forgeplan_update` MCP — strict per CLAUDE.md): 6 new invariants (I-10..I-16), 2 new risks (R-5, R-6), 1 risk reformulated (R-3), 1 Decision revised (C), 3 Decisions extended (A/B/D), 2 alternatives added.
 
 ### Post-Build fidelity audit (4∥ reviewers, all PASS)
 
 | Reviewer | Verdict | P0 | P1 | P2 |
 |---|---|---|---|---|
-| polish-fidelity | PASS | 0 | 0 | 1 (3 READMEs without forgeplan refs — cosmetic) |
+| polish-fidelity | PASS | 0 | 0 | 1 cosmetic |
 | m9s-fidelity | PASS | 0 | 0 | 0 |
-| shared-kernel-fidelity | PASS | 0 | 0 | 2 (Session.ts:95 token getter pre-existing bare Error — out-of-scope; re-export shim JSDoc minor) |
-| typed-token-fidelity | PASS | 0 | 0 | 3 (test-d.ts tautology; README phrasing; Install heading omitted — DRY) |
+| shared-kernel-fidelity | PASS | 0 | 0 | 2 informational |
+| typed-token-fidelity | PASS | 0 | 0 | 3 cosmetic |
 
-**Zero P0/P1 across all 4 tracks** — matches Sprint 3.8 baseline (cleanest cycles). 10th cycle of pre-Build + post-Build audit pattern validation. Pre-Build Amendment 1 catching structural risks BEFORE Build eliminated 100% implementation drift (Group 41 lesson confirmed for 10th cycle).
+**Zero P0/P1 across all 4 tracks** — matches Sprint 3.8 baseline. 10th cycle of pre-Build + post-Build audit pattern validation.
 
-## Invariants verified
+## Invariants verified (16 total)
 
-| Invariant | Status | Verified by |
-|---|---|---|
-| ADR-010 I-1 P2 polish additive | ✅ | polish-fidelity |
-| ADR-010 I-2 m9s use-case signatures unchanged | ✅ | m9s-fidelity (additive optional fields) |
-| ADR-010 I-3 m9s 16/16 regression preserved | ✅ | m9s-fidelity (20 passed / 1 skipped runtime) |
-| ADR-010 I-4 Session $-mutator throws SessionDestroyedError | ✅ | shared-kernel-fidelity |
-| ADR-010 I-5 TypedToken<T> additive overload | ✅ | typed-token-fidelity |
-| ADR-010 I-6 redactDetails WeakSet + max depth 5 | ✅ | polish-fidelity |
-| ADR-010 I-7 Sprint 3.6 §template + adversarial fixtures | ✅ | all 4 reviewers |
-| ADR-010 I-8 SPDX header on new .ts | ✅ | polish-fidelity + shared-kernel-fidelity |
-| ADR-010 I-9 strategy markers in SPEC | ✅ | SPEC-015 §Strategy markers |
-| ADR-010 I-10 (Amendment 1) tier discipline preserved | ✅ | shared-kernel-fidelity (peer-deps verified) |
-| ADR-010 I-11 (Amendment 1) wrapUnknownError closed allow-list | ✅ | polish-fidelity |
-| ADR-010 I-12 (Amendment 1) TypedToken brand-only (no phantom field) | ✅ | typed-token-fidelity |
-| ADR-010 I-13 (Amendment 1) assertSymbolToken extraction | ✅ | typed-token-fidelity |
-| ADR-010 I-14 (Amendment 1) m9s SECURITY warning (CWE-639) | ✅ | m9s-fidelity (inline + README) |
-| ADR-010 I-15 (Amendment 1) redactDetails MINOR bump | ✅ | polish-fidelity (changeset verified) |
-| ADR-010 I-16 (Amendment 1) Sprint 3.6 §template for new READMEs | ✅ | typed-token-fidelity + m9s-fidelity |
-
-## CWE coverage
-
-| CWE | Mitigation source | Verified |
-|---|---|---|
-| CWE-285 (error coercion for auth bypass) | wrapUnknownError closed allow-list (I-11) | ✅ adversarial test |
-| CWE-209 (info exposure via deep redaction) | redactDetails WeakSet + max depth 5 + breadth cap (I-6, §A1.3) | ✅ 8 adversarial tests |
-| CWE-400/674 (DoS via crafted payloads) | MAX_BREADTH 1000 + truncation marker | ✅ |
-| CWE-639 (header spoofing — m9s cargo-cult) | inline `// SECURITY:` + README ⚠️ block (I-14) | ✅ m9s-fidelity verified |
-| CWE-1321 (TypedToken brand pollution via Symbol.for / prototype-walk) | module-private `Symbol(...)` + `Object.prototype.hasOwnProperty.call` (I-12) | ✅ adversarial test |
+ADR-010 I-1..I-16 all verified by fidelity audit. CWE coverage: 285, 209, 400/674, 639, 1321.
 
 ## Files (delta vs Sprint 3.9 commit `c6896c4`)
 
-**Modified (40)**: 8 packages src/ + 13 Wave 5 READMEs + m9s 6 files (5 src/test + composition NEW + README) + 4 forgeplan artifacts + CLAUDE.md.
+**Modified (40)**: 8 packages src/ + 13 Wave 5 READMEs + m9s 6 files + 4 forgeplan artifacts + CLAUDE.md + e2e.test.ts (post-Addendum 1).
 
-**NEW (8)**: `errors/src/session.ts`, `errors/__tests__/{redaction-deep,session-error}.test.ts`, `session-guard/__tests__/session-destroyed-error.test.ts`, `runtime-context/src/typed-token.ts`, `runtime-context/__tests__/{typed-token,typed-token.test-d}.test.ts`, `m9s-example/src/composition/wave5-middlewares.ts`, `m9s-example/tests/wave5-integration.test.ts`, plus `.forgeplan/{adrs/ADR-010,specs/SPEC-015}` (created previous session, validate+activate confirmed) + `.forgeplan/state/{ADR-010,SPEC-015}.yaml` + `.changeset/sprint-3-10-{polish,m9s-integration,session-mutator,typed-token}.md`.
+**NEW (8)**: errors/src/session.ts + 2 errors __tests__ + session-guard __tests__ + runtime-context typed-token.ts + 2 runtime-context __tests__ + m9s-example wave5-middlewares.ts + wave5-integration.test.ts.
+
+**Forgeplan**: ADR-010 + SPEC-015 + EVID-017 + 4 changesets.
 
 ## Lessons (Group 42 retrospective)
 
-1. **Forgeplan MCP discipline now strictly codified** — User flagged direct Edit on `.forgeplan/adrs/ADR-010-*.md` during Amendment 1 work. Added 🔴 STRICT rule to CLAUDE.md: artifacts mutate ONLY via MCP `forgeplan_update`/`_new`/`_link`/`_activate`. Prevents LanceDB desync. Hindsight memory saved (Group 42 retain).
-2. **Pre-Build Amendment 1 inline templates** (EVID-016 §5 lesson finally applied at Sprint scope) — eliminated 0 post-Build docs P1 findings (vs 4 from Sprint 3.6, 6 from Sprint 3.9). docs-reviewer flagged absence in pre-Build audit; Amendment 1 §A1.6 inlined 4 changeset templates + §A1.7 inlined READMEs + CLAUDE.md row diffs.
-3. **AgentTeams 4∥ disjoint scope** scales to 6 packages refactor (errors + session + session-guard + runtime-context + m9s + 11 READMEs) without merge conflicts. File ownership matrix Amendment 1 §A1.5 pre-empted shared `errors/src/index.ts` race between polish-worker and shared-kernel-worker.
-4. **R-6 SessionDestroyedError single-source identity** — `expect(FromGuard).toBe(FromErrors)` test critical. tsup `external` config in session-guard prevents class duplication across import paths. Pattern reusable for future Shared Kernel relocations.
-5. **`.dependency-cruiser.cjs` Shared Kernel exception** — surfaced only at full-repo `pnpm depcruise` (workers run package-scoped tests). Lesson: m9s-integration-worker should also run depcruise as quality gate. Add to Wave 6+ worker prompts.
-6. **Tier-direction P0 fix simplified scope** — original SPEC required `createRequire(import.meta.url)` for peer-optional load (~30 LOC); Amendment 1 §A1.1 eliminated entirely via Shared Kernel relocation. Net effect: less LOC, cleaner deps graph, no peer-warnings for consumers. Pattern: prefer Shared Kernel ownership over peer-optional cycles.
-7. **2nd consecutive zero-P0/P1 sprint** (Sprint 3.8 baseline + Sprint 3.10) — pre-Build audit pattern matures over 10 cycles. Skipping pre-Build = false economy confirmed for 10th time.
-
-## Wall-clock
-
-- Bootstrap + context restore: ~5 min (Hindsight recall + forgeplan_status/health + git status).
-- Pre-Build audit re-spawn (5 reviewers parallel; previous session left stale config): ~3 min spawn + ~12 min reports gather.
-- Amendment 1 synthesis + ADR-010 + SPEC-015 update via MCP: ~10 min.
-- CLAUDE.md strict-rule addition + tier-table updates: ~3 min.
-- Build phase (4 workers parallel): ~15-20 min wall-clock (workers worked across multi-turn waits).
-- Phase B verify (full repo build + test + typecheck + depcruise + 4 changesets + CLAUDE.md): ~8 min.
-- Post-Build fidelity audit (4 reviewers parallel): ~5 min spawn + ~10 min reports.
-- Phase D (this evidence + commit + Hindsight): ~5 min.
-
-**Total**: ~70-80 min for full Sprint 3.10 cycle (ADR-010 + SPEC-015 already shaped from previous session).
+1. **Forgeplan MCP discipline now strictly codified** — User flagged direct Edit on `.forgeplan/adrs/...md` during Amendment 1. Added 🔴 STRICT rule to CLAUDE.md: artifacts mutate ONLY via MCP. Prevents LanceDB desync. Recovery via `forgeplan_update id=<ID> body=<full body>`.
+2. **Pre-Build Amendment 1 inline templates** (EVID-016 §5 lesson finally applied) — eliminated 0 post-Build docs P1 findings (vs 4 from Sprint 3.6, 6 from Sprint 3.9).
+3. **AgentTeams 4∥ disjoint scope** scales to 6-package refactor without merge conflicts.
+4. **R-6 SessionDestroyedError single-source identity** — `expect(FromGuard).toBe(FromErrors)` test critical; tsup `external` config prevents class duplication. Reusable for Shared Kernel relocations.
+5. **`.dependency-cruiser.cjs` Shared Kernel exception** — surfaced only at full-repo `pnpm depcruise`. Lesson: workers should also run depcruise locally.
+6. **Tier-direction P0 fix simplified scope** — Shared Kernel ownership > peer-optional cycles. ~30 LOC `createRequire` complexity eliminated.
+7. **2nd consecutive zero-P0/P1 sprint** (Sprint 3.8 + Sprint 3.10) — pre-Build audit pattern matures over 10 cycles.
+8. **Real e2e gap closure (Addendum 1)** — Sprint 3.5.2 lesson finally addressed. Surfaced 3 non-obvious traps documented inline in e2e.test.ts (typia transformer pre-build requirement, CJS/ESM module identity via createRequire, Moleculer middleware order counter-intuitive).
 
 ## Cross-references
 
-- ADR-010 (Sprint 3.10 — Wave 5 polish closure + m9s Wave 5 integration) — based_on
-- SPEC-015 (Sprint 3.10 W-items + Amendment 1) — informs (this evidence supports SPEC closure)
-- EVID-016 (Sprint 3.9 / Wave 5 close) — informs (Sprint 3.10 closes Wave 5 polish backlog from EVID-016 §5 lessons)
+- ADR-010 (Sprint 3.10) — based_on
+- SPEC-015 (Sprint 3.10 W-items + Amendment 1) — informs
+- EVID-016 (Wave 5 close) — informs (Sprint 3.10 closes Wave 5 polish backlog)
 - ADR-006 §D §6 (errors Shared Kernel) — invoked for SessionDestroyedError relocation
-- ADR-007 (Sprint 3.7 Wave 5 Phase 2) — invoked for runtime-context ProviderContext extension
-- ADR-008 Amendment 1.1.1 (Sprint 3.8 module-private Symbol) — pattern reuse for TypedToken brand
-- Sprint 3.7 R-2 (token type-erasure deferred) — closed by TypedToken<T>
+- ADR-007 §1 (Application Service composition root) — invoked for runtime-context ProviderContext extension
+- EVID-012 §5 (Sprint 3.5.2 e2e gap) — closed by Addendum 1
+- ADR-008 Amendment 1.1.1 (module-private Symbol) — pattern reuse for TypedToken brand
 
 ## Next steps
 
-1. Single atomic commit on `feat/sprint-3-10-wave-5-polish` branch with conventional commit message.
-2. Hindsight retain Group 42 (full sprint + retrospective + lessons).
-3. TeamDelete cleanup (`sprint-3-10` team).
+1. ✅ Single atomic commit `782a3e0` shipped on `feat/sprint-3-10-wave-5-polish`.
+2. ✅ Addendum 1 e2e revival shipped as follow-up commit (this update).
+3. ✅ Hindsight retain Group 42 (full sprint + retrospective).
 4. Optional: `gh pr create --base main` (user gate).
-5. Defer to Wave 6+: 3 P2 README forgeplan-refs uniformity, README `13 OSS packages` → `39` cosmetic update, Session.ts:95 token getter migration.
+5. Defer to Wave 6+: action-handler wiring (ctx.locals.requestContext → use case) for full broker-level session-guard rejection paths; 3 P2 README forgeplan-refs uniformity; README "13 OSS packages" → "39"; Session.ts:95 token getter migration.
 
+---
 
+## Addendum 1 — Real e2e revival (post-Sprint 3.10 closure)
 
+After the atomic Sprint 3.10 commit `782a3e0`, user requested closing the long-standing e2e gap from Sprint 3.5.2 lesson ("post-Build fidelity audit must include true e2e, not just build verification"). `examples/m9s-example/tests/e2e.test.ts` had been `describe.skip` since the example shipped — Sprint 3.10 did NOT initially address it.
 
+### What revived
+
+`examples/m9s-example/tests/e2e.test.ts` rewritten from a 51-line skipped placeholder into a 234-line real broker-call suite. Boots an actual Moleculer broker via `ApiController.Start({ brokerConfig, services: [ApiService], repl: false })` — the same code path as `pnpm start`. Exercises the canonical Wave 5 stack end-to-end through the broker pipeline.
+
+### 4 e2e scenarios — ALL PASSING
+
+1. **Header→tenant→session→handler happy path** — `broker.call('v1.ingest.document', input, { meta: { headers: { 'x-tenant-id': 'tenant-acme' } } })`. Verified via probe middleware at index 0 (innermost wrapper, runs after Wave 5):
+   - `ctx.meta.tenantId === 'tenant-acme'` (tenantMiddleware resolved header)
+   - `ctx.locals.requestContext.tenantId === 'tenant-acme'` (sessionMiddleware composed RC)
+   - `ctx.locals.requestContext.frozen === true` (auto-`$freeze()` per ADR-007 I-16)
+   - `ctx.locals.requestContext.correlationId` is a non-empty string (per-request UUID).
+
+2. **Anonymous flow (mode='optional')** — `broker.call(...)` without header. Verified: `ctx.meta.tenantId === undefined`, RC composed but tenant unset, `frozen === true`. mode='optional' from `wave5-middlewares.ts` allows anonymous routes (production should override to 'strict').
+
+3. **ingest → search round-trip** — two sequential `broker.call`s with same `X-Tenant-ID`. Both succeed; tenant resolves identically on each call (per-request scope confirmed).
+
+4. **Fresh correlationId per request** — 3 sequential calls with same header → 3 distinct `correlationId` values (per `crypto.randomUUID` per-call generation per ADR-007 I-20).
+
+### Test count delta (after e2e revival)
+
+- m9s-example: 20 passed / 1 skipped → **24 passed** (+4 tests, -1 skipped).
+- Full repo: **4904 passed** (+4 vs Sprint 3.10 commit baseline 4900) / **102 skipped** (-1).
+
+### Implementation notes (3 non-obvious traps surfaced + documented)
+
+1. **typia transformer requirement** — vitest uses esbuild WITHOUT the typia plugin, so source imports of action handlers throw `NoTransformConfigurationError` at module load. **Fix**: side-effect imports route through pre-built `dist/` (`require('../dist/src/services/index.js')`) where tspc has already inlined typia validators. Pre-requisite: Phase B `pnpm build` MUST run before this suite.
+
+2. **Module identity hazard (CJS vs ESM dual-package)** — m9s-example dist is CJS. Side-effect side `require('../dist/src/services/index.js')` triggers CJS `require('@gertsai/api-core/moleculer')` resolving to `dist/moleculer.cjs`. If the test imports the SAME package via top-level ESM `await import(...)`, Node resolves the ESM bundle (`dist/moleculer.js`) — different module instance → SEPARATE `ApiController` class identity → static `_controllers` registry empty → `ServiceNotFoundError`. **Fix**: route the test's ApiController + ApiService imports through `createRequire(import.meta.url)` so they share module identity with the dist side-effect. Pattern reusable for any dual-package e2e.
+
+3. **Moleculer middleware order — counter-intuitive** — for `BrokerOptions.middlewares = [m0, m1, ..., mN]`, the LAST entry (index N) is the OUTERMOST wrapper and runs FIRST chronologically; the FIRST entry (index 0) is the INNERMOST wrapper, closest to the handler, runs LAST chronologically. This is the OPPOSITE of typical "onion" intuition. Verified empirically via dual-probe experiment during e2e bring-up. **Implication**: `wave5-middlewares.ts` order `[tenantMiddleware, sessionMiddleware]` means sessionMiddleware is closer to handler (index 1, more inner) — reads `ctx.meta.tenantId` AFTER tenantMiddleware (index 0, outer) sets it. The shared `resolver` instance also gives sessionMiddleware a fallback path if tenant ordering ever inverts. **Probe placement**: to capture POST Wave-5 state, the probe MUST be at index 0 (innermost). Documented inline in `e2e.test.ts` as block comment for future maintainers.
+
+### What this closes
+
+- **Sprint 3.5.2 lesson gap** — "post-Build fidelity audit must include e2e". Sprint 3.10 originally had only mock-based wave5-integration tests (per-fidelity-report: "≤4ms execution, mock-based, deterministic"). Real broker-call e2e was the missing link.
+- **Implicit canonical-reference verification** — m9s-example as Wave 5 reference now PROVES end-to-end via real broker. Consumers copying this example get a working pattern (not just code that compiles).
+
+### What this does NOT cover (explicit limitations)
+
+- Action handlers do NOT yet wire `ctx.locals.requestContext.session` + `expectedTenantId` through to use cases. Wave 5 middleware composes the context, but use cases inside the broker do not consume the session-guard branch (the unit-level wave5-integration tests cover that path by calling use cases directly with explicit `session` arg). Wiring action handlers to pull from `ctx.locals.requestContext` is a Wave 6+ enhancement.
+- Real session-guard rejection scenarios (destroyed session, cross-tenant attempt) through the broker are NOT covered — those would require the action-handler wiring above.
+- No external infrastructure dependencies (Postgres/pgvector, real OpenAI/Ollama embedder, NATS/Redis transport). The e2e harness is single-process with in-memory cacher, mock embedder.
+
+### Cross-references
+
+- Sprint 3.5.2 EVID-012 §5 — original e2e gap discovery (Group 35 retrospective).
+- ADR-007 I-16 — auto-`$freeze()` invariant verified by e2e probe.
+- ADR-007 I-20 — `crypto.randomUUID` correlationId verified by e2e (3 calls = 3 distinct UUIDs).
+- ADR-010 §B + I-14 — m9s as canonical Wave 5 reference (e2e is the proof).
+- Moleculer 0.14 middleware-handler — OUTER vs INNER wrap order documented inline in `e2e.test.ts`.
+
+### Test count after addendum
+
+| Metric | Sprint 3.10 commit `782a3e0` | Post-addendum | Delta |
+|---|---|---|---|
+| Total passed | 4900 | **4904** | +4 |
+| Total skipped | 103 | 102 | -1 |
+| m9s-example | 20 / 1 skipped | 24 / 0 skipped | +4 / -1 |
+
+R_eff impact: addendum strengthens this evidence's congruence (CL3 — internal test on target system, broker boots and serves real requests). EVID-017 verdict remains `supports`.
 
