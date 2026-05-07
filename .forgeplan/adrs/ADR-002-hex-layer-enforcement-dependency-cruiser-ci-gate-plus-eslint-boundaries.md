@@ -9,7 +9,7 @@ links:
   relation: based_on
 - target: ADR-001
   relation: informs
-status: draft
+status: active
 title: Hex layer enforcement — dependency-cruiser CI gate plus ESLint boundaries
 ---
 
@@ -322,6 +322,12 @@ PRD-001 (Wave 2, FR-016/017) фиксирует требование автом�
 | RFC-002 shared (module-loader runtime) | RFC | informs |
 
 > **Next step**: Create RFC-001 (gerts-module.yaml schema), затем RFC-002 (module-loader runtime).
+
+
+
+
+
+
 
 
 

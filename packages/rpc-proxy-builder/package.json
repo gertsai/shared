@@ -1,0 +1,56 @@
+{
+  "name": "@gertsai/rpc-proxy-builder",
+  "version": "0.1.0",
+  "description": "Tier 3 type-safe RPC proxy builder — derives Promise-returning method maps from ActionDefinition records via read-only Proxy. Transport-agnostic (Moleculer/WS/HTTP).",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "clean": "rm -rf dist .tsbuildinfo *.tsbuildinfo",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@gertsai/api-core": "workspace:^"
+  },
+  "devDependencies": {
+    "@gertsai/api-core": "workspace:^",
+    "vitest": "^3.0.0"
+  },
+  "keywords": [
+    "rpc",
+    "proxy",
+    "typescript",
+    "type-safe",
+    "moleculer",
+    "gerts",
+    "gertsai"
+  ],
+  "author": "gerts.ai"
+}

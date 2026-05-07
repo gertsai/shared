@@ -16,10 +16,15 @@
     "pnpm": ">=10.0.0"
   },
   "scripts": {
-    "build": "pnpm -r --workspace-concurrency=4 run build",
+    "build": "pnpm -r --workspace-concurrency=1 run build",
     "test": "pnpm -r --workspace-concurrency=4 run test",
     "typecheck": "pnpm -r run typecheck",
     "clean": "pnpm -r run clean && rm -rf .moon/cache node_modules/.cache",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fast": "oxlint . --report-unused-disable-directives",
+    "publint": "pnpm -r --filter './packages/*' exec publint --strict",
+    "attw": "pnpm -r --filter './packages/*' exec attw --pack . --ignore-rules cjs-resolves-to-esm",
+    "depcruise": "pnpm --filter @gertsai-examples/m9s-example exec depcruise --config .dependency-cruiser.cjs src",
     "moon:build": "moon run :build",
     "moon:test": "moon run :test",
     "changeset": "changeset",
@@ -27,10 +32,19 @@
     "release": "pnpm build && changeset publish"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.2",
     "@changesets/cli": "^2.27.10",
     "@moonrepo/cli": "^1.30.0",
     "@types/node": "^22.10.0",
-    "typescript": "^5.9.0",
+    "@typescript-eslint/eslint-plugin": "^8.59.2",
+    "@typescript-eslint/parser": "^8.59.2",
+    "dependency-cruiser": "^17.4.0",
+    "eslint": "^10.3.0",
+    "eslint-plugin-boundaries": "^6.0.2",
+    "oxlint": "^1.63.0",
+    "publint": "^0.3.18",
+    "tsup": "^8.5.1",
+    "typescript": "5.9.3",
     "vitest": "^3.0.0"
   }
 }

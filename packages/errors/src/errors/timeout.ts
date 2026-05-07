@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+import { AppError } from '../app-error.js';
+import { ErrorKind } from '../error-kind.js';
+
+export class TimeoutError<
+  D extends Record<string, unknown> = {
+    timeoutMs?: number;
+    operation?: string;
+  },
+> extends AppError<D> {
+  readonly kind = ErrorKind.TIMEOUT;
+}

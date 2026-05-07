@@ -6,8 +6,11 @@
  * this barrel registers the full surface in one go.
  */
 export * from './ingest-document.action';
-// Internal sub-actions consumed by the `wf-ingest.ingest.process` workflow.
-// Not exposed over REST (no `rest:` field on either action).
+// Internal sub-actions originally consumed by the journaled
+// `wf-ingest.ingest.process` workflow. Sprint 3.1 §W-7 collapsed the
+// workflow onto pure use-case delegation (`v1.ingest.process`), so these
+// are now unused from the workflow path but kept as stable internal
+// entry points (no `rest:` field on either action).
 export * from './embed-batch.action';
 export * from './store-chunks.action';
 // Workflow trigger — public REST endpoint (POST /ingest/workflow).

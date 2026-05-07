@@ -12,7 +12,7 @@
     "baseUrl": ".",
     "outDir": "./dist",
     "target": "ES2022",
-    "module": "commonjs",
+    "module": "CommonJS",
     "moduleResolution": "node",
     "esModuleInterop": true,
     "skipLibCheck": true,

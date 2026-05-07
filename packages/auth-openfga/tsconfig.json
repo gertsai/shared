@@ -9,12 +9,7 @@
     "noEmitOnError": false,
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "target": "ES2022",
-    "baseUrl": ".",
-    "paths": {
-      "@gerts/auth": ["../auth/dist/index.d.ts"],
-      "@gerts/auth/*": ["../auth/dist/*"]
-    }
+    "target": "ES2022"
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist", "**/*.test.ts"]

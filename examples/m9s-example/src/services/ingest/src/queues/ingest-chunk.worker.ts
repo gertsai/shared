@@ -23,7 +23,7 @@
  * Producer side lives in `actions/ingest-document.action.ts` and uses
  * `service.addJob(QUEUE_NAME, JOB_PROCESS_DOCUMENT, payload)`.
  */
-import type { QueueHandlerCtx } from '@gertsai/api-core';
+import type { QueueHandlerCtx } from '@gertsai/api-core/moleculer';
 import type Moleculer from 'moleculer';
 
 import { resolveExampleController } from '../../../../lib/example-controller';
@@ -139,7 +139,7 @@ controller.registerWorker(INGEST_QUEUE_NAME, [
         // Pipeline-style: the action layer maps to APIError; the worker
         // layer just throws and lets BullMQ's retry policy handle it.
         if (err instanceof PermissionDeniedError) {
-          throw new Error(`[permission-denied] ${err.message}`);
+          throw new Error(`[permission-denied] ${err.message}`, { cause: err });
         }
         throw err;
       }

@@ -1,8 +1,13 @@
 /**
  * Embed Batch Action — `v1.ingest._embed` (internal worker-only).
  *
- * One of the two journaled "leaves" of the `wf-ingest.ingest.process`
- * workflow. Workflows wrap `ctx.call(...)` with an event-log read/write so
+ * Originally one of the two journaled "leaves" of the previous
+ * `wf-ingest.ingest.process` workflow. Sprint 3.1 §W-7 collapsed the
+ * workflow handler onto a pure `IngestDocumentUseCase` delegation
+ * (now `v1.ingest.process`), so this internal action is no longer
+ * called from the workflow path. Kept as a stable internal entry
+ * point in case a future sprint re-introduces the two-step split for
+ * non-deterministic embedders. Workflows wrap `ctx.call(...)` with an event-log read/write so
  * that, on worker crash + replay, this action's last-known result is read
  * from the journal instead of being re-executed. Keeping the action surface
  * small (single deterministic input → single deterministic output) is what

@@ -1,13 +1,13 @@
 /**
  * Built-in diagnostic entries for common infrastructure failures.
  *
- * Auto-registered on import (side-effect) — importing this module
- * populates DiagnosticRegistry with 12 patterns.
+ * Pure data export — no side effects on module load. Consumers must
+ * call `registerBuiltinDiagnostics()` from `./index` (or register
+ * `DIAGNOSTIC_BUILTINS` directly) to opt in. See ADR-003 §I-1.
  */
 import type { DiagnosticEntry } from './types';
-import { DiagnosticRegistry } from './registry';
 
-const BUILTINS: DiagnosticEntry[] = [
+export const DIAGNOSTIC_BUILTINS: DiagnosticEntry[] = [
   // 1. PostgreSQL (Prisma-specific patterns to avoid false positives with generic ECONNREFUSED)
   {
     match:
@@ -148,6 +148,3 @@ const BUILTINS: DiagnosticEntry[] = [
     guide: 'infra/infinity/README.md',
   },
 ];
-
-// Auto-register on import
-DiagnosticRegistry.register(...BUILTINS);

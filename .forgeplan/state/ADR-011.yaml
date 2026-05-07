@@ -1,0 +1,17 @@
+artifact_id: ADR-011
+workflow_type: greenfield
+current_phase: done
+advanced_at: 2026-05-07T12:51:58.322062Z
+history:
+- to: shape
+  at: 2026-05-07T12:48:33.255319Z
+  reason: 'auto: forgeplan_new'
+- from: shape
+  to: validate
+  at: 2026-05-07T12:51:38.466532Z
+  reason: 'auto: forgeplan_validate PASS'
+- from: validate
+  to: done
+  at: 2026-05-07T12:51:58.322062Z
+  reason: 'auto: forgeplan_activate'
+schema_version: 1

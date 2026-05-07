@@ -1,6 +1,4 @@
 import { EventEmitter } from 'events';
-import fs from 'fs';
-import path from 'path';
 
 import RedisClient from 'ioredis';
 import type { GatewayResponse, IncomingRequest } from 'moleculer-web';
@@ -10,6 +8,7 @@ import { AdapterFactory } from '../adapters/AdapterFactory';
 import type { StorageAdapter } from '../adapters/StorageAdapter';
 import { RateLimitDebugger } from '../debug/RateLimitDebugger';
 import { RateLimitError } from '../errors/RateLimitError';
+import { loadLuaScript } from '../lua-loader';
 import { KeyGenerator } from '../services/KeyGenerator';
 import { PathNormalizer } from '../services/PathNormalizer';
 import { RouteResolver } from '../services/RouteResolver';
@@ -37,11 +36,8 @@ import { setDraft6Headers, setDraft7Headers } from './headers';
  * LUA scripts for rate limiting algorithms.
  */
 const LUA = {
-  incrementSW: fs.readFileSync(
-    path.join(__dirname, '../scripts/limitSlightWindowMain.lua'),
-    'utf8',
-  ),
-  gcra: fs.readFileSync(path.join(__dirname, '../scripts/limitGcra.lua'), 'utf8'),
+  incrementSW: loadLuaScript('limitSlightWindowMain'),
+  gcra: loadLuaScript('limitGcra'),
 };
 
 /**

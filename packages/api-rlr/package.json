@@ -5,8 +5,10 @@
   "engines": {
     "node": ">=22"
   },
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "import": {
@@ -14,24 +16,32 @@
         "default": "./dist/index.js"
       },
       "require": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
       }
-    }
+    },
+    "./package.json": "./package.json"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
     "prepublish": "pnpm build",
     "copy:lua": "copyfiles -u 1 src/scripts/*.lua dist",
-    "dev": "pnpm run build:watch",
-    "build": "tsc && pnpm copy:lua",
-    "build:watch": "tsc --watch",
+    "build": "tsup",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:redis": "HAS_REDIS=1 vitest run",
-    "test:coverage": "vitest run --coverage.enabled --coverage.reporter=html"
+    "test:coverage": "vitest run --coverage.enabled --coverage.reporter=html",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0"
   },
   "author": "Eli Rum <explosivebit@gmail.com>",
   "license": "Apache-2.0",
@@ -68,7 +78,6 @@
     "ioredis": "5.7.0",
     "moleculer": "^0.14.35",
     "moleculer-web": "^0.10.8",
-    "typescript": "^5.3.0",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^3.2.4"
   }

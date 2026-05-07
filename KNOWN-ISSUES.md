@@ -113,6 +113,184 @@ packages/m9s-cache
   └── ✕ unmet peer redlock@^4.0.0: found 5.0.0-beta.2
 ```
 
-Both are warnings only. Build and tests pass. Will be addressed in v0.1.x by
-either downgrading TypeScript to 5.8 or upgrading the peer-declaring
-dependencies once compatible versions ship.
+Both are warnings only. Build and tests pass.
+
+**TypeScript pin (Sprint 3.0.1, F-7):** TypeScript is intentionally pinned to
+the exact version `5.9.3` workspace-wide via the root `package.json` (single
+source of truth — individual `packages/*/package.json` no longer declare a
+`typescript` devDependency). The `@ryoppippi/unplugin-typia 2.6.5` peer range
+(`>=4.8.0 <5.9.0`) is therefore knowingly violated. Tracked: Sprint 3.x will
+either bump `@ryoppippi/unplugin-typia` to a release that widens the peer
+constraint, or pin workspace TS to a 5.8.x line if upstream typia is slow to
+update. The full test suite passes green on 5.9.3, so the warning is
+informational only.
+
+The `redlock` warning is unchanged: `moleculer 0.14.35` declares
+`redlock@^4.0.0` as a peer, but `redlock@5.0.0-beta.2` is the only ESM-native
+release and is what `@gertsai/m9s-cache` is wired against. Will be addressed
+in v0.1.x once moleculer ships a compatible peer range.
+
+## 8. Subpath imports require `moduleResolution: "node16"` or higher
+
+`@gertsai/core` (`/rag`, `/llm`) and `@gertsai/api-core` (`/contracts`,
+`/moleculer`, `/runtime/node`) are exposed via `package.json#exports` subpath
+keys. To resolve their types, downstream TypeScript consumers must use
+`moduleResolution: "node16"`, `"nodenext"`, or `"bundler"`.
+
+For consumers stuck on `moduleResolution: "node"` (TS pre-4.7 or Node10
+profile), Sprint 3.0.1 added `typesVersions` fallback maps to both packages
+(see `packages/{core,api-core}/package.json`). The fallback maps each subpath
+to its `dist/<subpath>/index.d.ts` file, providing best-effort Node10
+resolution. Cases not covered by the fallback (e.g. unusual TS resolver
+configurations) should upgrade to `node16`+; documented in
+`audit-pre-sprint-3-2` (production-validator F-P-1, type-auditor F-T-4).
+
+## 9. `@gertsai/api-core` — `oauth.class.ts` placeholder console.log calls
+
+`packages/api-core/src/lib/oauth/oauth.class.ts:151..174` contains five
+`console.log(...)` lines (`'Getting user'`, `'Revoking token'`, etc.) that
+are placeholder bodies of `OAuth2Server`-style provider methods. These are
+extraction artifacts — they were stub bodies in the upstream code and were
+not replaced during the Wave 2 extraction.
+
+Real consumers wiring an OAuth provider will see noisy logs in production.
+Workaround: pass a custom provider implementation via `setAuthProvider(...)`
+that overrides these stubs. Permanent fix planned for the @gertsai/auth-*
+extraction (Sprint 3.x or Wave 3).
+
+## 10. `BaseEntityStorageService.upsert` performs 2 RTTs vs 1
+
+**Status:** acceptable; tracked for Wave 6+
+
+`upsert(...)` consolidated from m9s-example DocumentRepository (Sprint 3.6
+W-3-6-24) issues `provider.get(...)` followed by either `provider.set(...)`
+or `provider.update(...)` — two round-trips. For the in-memory provider
+this is negligible. For a future Postgres adapter (or any networked
+backend) the latency cost is non-trivial; a single-RTT `upsert` (e.g.
+`INSERT ... ON CONFLICT DO UPDATE`) requires a new method on
+`IStorageProvider` and per-adapter implementation. Tracked for Wave 6+;
+not a blocker because `set` / `update` paths remain available when the
+caller already knows existence.
+
+## 11. Sprint 3.6 P2 polish backlog (non-blocking)
+
+**Status:** deferred to Sprint 3.6.1 / 3.7 maintenance pass
+
+Post-Build fidelity audit (Phase C, 3 reviewers) raised 9 P2 polish items
+across the 3 new/extended packages. None are blockers; bundled here so the
+cleanup is discoverable when working in those modules:
+
+**`@gertsai/errors`** (errors-fidelity):
+- `wrapUnknownError(x, kind?, correlationId?)` declares `kind?` parameter
+  but ignores it (`_kind?` placeholder). Either remove from signature or
+  honour the override.
+- `AppError` constructor `Object.freeze({ ...details })` is shallow-only;
+  nested objects are not frozen. Either deep-freeze or document explicitly
+  in JSDoc.
+- `redactDetails()` is shallow-scan — nested objects with `password`/etc.
+  inside are not redacted. Add adversarial test fixture documenting the
+  contract; consider deep-scan if needed.
+- `errors/internal.ts` uses `<Record<string, unknown>>` catch-all where
+  spec example showed `{ trace?: string }`. Tighten generic if useful.
+- README cross-references use relative paths to `.forgeplan/...` which will
+  break post-npm-publish. Switch to absolute repo URL or mark "repo-only".
+
+**`@gertsai/tenant-resolver`** (tenant-resolver-fidelity):
+- `MOLECULER_INSTALL_HINT` error string in `moleculer/index.ts` is
+  misleading — fires on "non-Moleculer Context shape", not on missing peer
+  install. Rename or split.
+- PathStrategy `...` wildcard semantics: only valid as trailing token, but
+  README does not flag the placement constraint; add JSDoc note.
+- `lookupHeader()` exact-case-first short-circuit precedence undocumented;
+  harden with JSDoc to prevent future regression.
+
+**`@gertsai/session`** (session-scoping-fidelity):
+- `__tests__/scoping.test.ts:13-17` carries a 5-line stub comment that
+  references the deleted Phase B fallback. Compress to one line.
+- `Session.ts:19-22` post-swap history comment is verbose; can be reduced.
+
+## 12. Resolved in Sprint 3.11 — m9s-example mock-vs-real
+
+**Status:** RESOLVED (Sprint 3.11, ADR-011 + SPEC-016 + EVID-019)
+
+The following m9s-example "mock by default" issues — surfaced across earlier
+sprints as gaps between the example and a credible production reference —
+are closed by Sprint 3.11. The example now defaults to real infrastructure
+(Postgres+pgvector, OpenFGA ReBAC, BullMQ+Redis async, Ollama embeddings,
+docker-compose orchestration) per ADR-011. Mock fallbacks are preserved
+opt-in via env override (per ADR-011 I-1), so prior mock-mode test
+fixtures continue to pass unchanged.
+
+- **`InMemoryStorageProvider` + `MemoryDocumentRepository` as default**
+  (was: per-process `Map`, no persistence, no cross-process visibility)
+  → resolved: `STORAGE_PROVIDER=postgres` is the default; the document store
+  is `PgDocumentStore implements IDocumentStore` backed by `@gertsai/pg-client`
+  via the new `pg-client.adapter.ts` thin wrapper around `pg@^8.13`. Mock
+  mode preserved via `STORAGE_PROVIDER=memory`. (W-3-11-4..7)
+- **`MemoryVectorStore` as default vector backend**
+  (was: ad-hoc cosine-similarity over an in-memory `Array<{vector, ...}>`)
+  → resolved: `PgVectorStore implements IChunkStore` backed by pgvector with
+  an HNSW index on `chunks.vector vector_cosine_ops`. Every chunks SQL
+  includes `WHERE tenant_id = $1` per ADR-011 I-13 (defence-in-depth tenant
+  isolation). (W-3-11-1, W-3-11-5)
+- **`AllowAllPermissionGate` as default authorization gate**
+  (was: every `check()` returned `true`; no real ReBAC; no production guard)
+  → resolved: `AUTH_GATE=openfga` is the default; the existing
+  `openfga-permission.gate.ts` was MODIFIED (E+ marker per Amendment 2
+  §A2.13) to use canonical `FgaResourceType` + `FGA_RELATIONS` from
+  `@gertsai/auth-openfga`, with a B2 Tenant-hierarchy authorization model
+  and per-document tuples written at ingest time. AllowAll gate now refuses
+  construction when `NODE_ENV='production'` per I-12. (W-3-11-9..15)
+- **Synchronous-only ingest fallback**
+  (was: `if (config.REDIS_URL)` gated; default unset → in-process
+  synchronous chunk processing; no observable async semantics)
+  → resolved: `REDIS_URL=redis://localhost:6379` is the default in
+  `.env.example`; BullMQ async ingest is on by default with explicit
+  eventual consistency contract test (Amendment 2 §A2.9 — `mode='queued'`
+  immediately, polling search returns `[]` until worker completes).
+  Inline fallback preserved when `REDIS_URL` is unset. (W-3-11-16..19)
+- **No production-grade onboarding path for new contributors**
+  (was: README documented mock mode + Ollama opt-in; no docker-compose for
+  the full stack; no migration tooling)
+  → resolved: single-command `docker compose up -d` brings up 5 services
+  (NATS, Redis, Postgres+pgvector, OpenFGA, Ollama) with healthcheck-gated
+  startup; raw-SQL migration runner with advisory lock + idempotency
+  guarantee (per ADR-011 §Decision E LOCKED E1 + I-15); README §Production
+  Setup self-contained ≤ 5 min onboarding (per NFR-2, EVID-019). (W-3-11-24..33)
+
+The `@gertsai/api-rlr` mock `PgClient` instances cited in §5 above are
+**unrelated** — those are unit-test scaffolding that mocks the 3-method
+PgClient interface to verify the rate-limiter algorithms without a live
+DB. They remain by design (per ADR-011 I-2 of `api-rlr` — database
+agnostic; integration coverage via Redis adapter path).
+
+The `BaseEntityStorageService.upsert` 2-RTT issue cited in §10 is
+**also unrelated** to Sprint 3.11 — it tracks a future single-RTT
+optimisation on the `IStorageProvider` contract (Wave 6+). m9s-example
+uses `PgClient` directly via `pg-document.repository.ts` per Amendment 2
+§A2.5, NOT `PgStorageProvider`, so the upsert path is independent.
+
+### Open follow-ups from Sprint 3.11 Post-Build review (deferred to Wave 6+)
+
+- **§FGA_API_TOKEN-plumbing** — `@gertsai/auth-openfga` does NOT currently
+  forward a bearer token to the underlying `@openfga/sdk` client. As a
+  defensive measure, `OpenFgaPermissionGate` THROWS on construction when
+  `client.apiToken` is supplied, so an authenticated production deployment
+  cannot fail silently on an anonymised request (Sprint 3.11 Post-Build
+  Track 2 §P1-1 fix). Plumbing the bearer token end-to-end is a follow-up
+  ADR against `@gertsai/auth-openfga`.
+- **§OpenFGA-model-drift-CI** — `scripts/openfga-bootstrap.ts` carries an
+  inline JSON authorization model that is kept in sync **manually** with
+  the canonical `openfga/model.fga` DSL file. There is no CI check that
+  the two stay equivalent. Drift would silently bootstrap a different
+  authorization graph than the DSL documents. Either add
+  `@openfga/syntax-transformer` as a devDep and parse `model.fga` at
+  runtime, or add a snapshot equivalence test in CI (Sprint 3.11
+  Post-Build Track 2 §P1-3).
+- **§FGA-singleton-multi-store** — `@gertsai/auth-openfga` exposes a
+  process-wide `getFgaClient()` singleton + `getPermissionCache()`. The
+  `OpenFgaPermissionGate` JSDoc now warns that production deployments
+  needing multiple distinct OpenFGA stores in one process MUST use
+  `resetFgaClient() + resetPermissionCache()` between configs (Sprint
+  3.11 Post-Build Track 2 §P1-2 documentation fix). A proper multi-tenant
+  isolation API is follow-up work.

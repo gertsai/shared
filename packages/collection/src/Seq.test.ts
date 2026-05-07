@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { MutableCollection } from './core/MutableCollection';
-import { Seq, cachedSeq, seq } from './seq';
+import { Seq, cachedSeq, seq } from './Seq';
 
 describe('Seq', () => {
   let data: Array<[string, number]>;

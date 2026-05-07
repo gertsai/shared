@@ -1,8 +1,11 @@
 /**
  * Start Workflow Action — `v1.ingest.workflow`.
  *
- * Public REST entry point that triggers the `wf-ingest.ingest.process`
- * workflow on the @moleculer/workflows runtime. This is a sibling to
+ * Public REST entry point that triggers the `v1.ingest.process`
+ * workflow on the @moleculer/workflows runtime (renamed from
+ * `wf-ingest.ingest.process` in Sprint 3.1 §W-7 when the workflow
+ * moved off a standalone `wf-ingest` service onto the synthesized
+ * `v1.ingest` schema via `setWorkflows(...)`). This is a sibling to
  * `v1.ingest.document` (BullMQ-style fire-and-forget); the difference is
  * the underlying execution model:
  *
@@ -25,7 +28,7 @@
  */
 import type { ServiceBroker } from 'moleculer';
 
-import { APIError, ResponseCode } from '@gertsai/api-core';
+import { APIError, ResponseCode } from '@gertsai/api-core/contracts';
 import typia from 'typia';
 
 import { resolveExampleController } from '../../../../lib/example-controller';
@@ -134,12 +137,15 @@ export const startWorkflow: any = controller.register('workflow', {
     });
 
     // -----------------------------------------------------------------
-    // Trigger the workflow. Workflow name = `<svc.fullName>.<key>`,
-    // i.e. `wf-ingest.ingest.process` (svc.fullName='wf-ingest', key in
-    // the workflows map='ingest.process'). See @moleculer/workflows
-    // middleware.js: `wf.name = svc.fullName + "." + (wf.name || name)`.
+    // Trigger the workflow. Workflow name = `<svc.fullName>.<key>`. As
+    // of Sprint 3.1 §W-7 the workflow is attached to the `v1.ingest`
+    // controller via `setWorkflows({ process: ... })` in `lifecycle.ts`,
+    // so svc.fullName='v1.ingest', key='process', final='v1.ingest.process'.
+    // (Previous shape was a standalone `wf-ingest` service.)
+    // See @moleculer/workflows middleware.js:
+    //   `wf.name = svc.fullName + "." + (wf.name || name)`.
     // -----------------------------------------------------------------
-    const job = await broker.wf.run('wf-ingest.ingest.process', {
+    const job = await broker.wf.run('v1.ingest.process', {
       docId,
       text,
       userId,

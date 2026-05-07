@@ -1,9 +1,12 @@
 {
   "name": "@gertsai/hsm",
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "description": "Hardware Security Module (HSM) integration for convergent encryption",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "import": {
@@ -11,8 +14,8 @@
         "default": "./dist/index.js"
       },
       "require": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
       }
     },
     "./providers": {
@@ -21,26 +24,36 @@
         "default": "./dist/providers/index.js"
       },
       "require": {
-        "types": "./dist/providers/index.d.ts",
-        "default": "./dist/providers/index.js"
+        "types": "./dist/providers/index.d.cts",
+        "default": "./dist/providers/index.cjs"
       }
+    },
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "providers": ["./dist/providers/index.d.ts"]
     }
   },
   "files": [
     "dist",
-    "src"
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "scripts": {
-    "build": "tspc --build tsconfig.json",
+    "build": "tsup",
+    "clean": "rm -rf dist .tsbuildinfo *.tsbuildinfo",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0",
     "bench": "vitest bench"
   },
   "dependencies": {},
   "devDependencies": {
     "@ryoppippi/unplugin-typia": "^2.6.5",
     "ts-patch": "^3.3.0",
-    "typescript": "^5.9.2",
     "vitest": "^3.0.0"
   },
   "peerDependencies": {

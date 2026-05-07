@@ -2,8 +2,10 @@
   "name": "@gertsai/fsm",
   "version": "0.1.0",
   "description": "Generic, zero-dependency finite state machine library with strong TypeScript generics",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "import": {
@@ -11,22 +13,26 @@
         "default": "./dist/index.js"
       },
       "require": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
       }
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "scripts": {
-    "build": "tsc --build tsconfig.json",
+    "build": "tsup",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0"
   },
   "keywords": [
     "fsm",
@@ -36,9 +42,8 @@
     "generic"
   ],
   "author": "gerts.ai",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "devDependencies": {
-    "typescript": "^5.7.0",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^3.0.0"
   }

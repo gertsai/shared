@@ -1,7 +1,11 @@
 /**
  * Store Chunks Action — `v1.ingest._store` (internal worker-only).
  *
- * Second journaled leaf of the `wf-ingest.ingest.process` workflow. Persists
+ * Originally the second journaled leaf of the previous
+ * `wf-ingest.ingest.process` workflow (now `v1.ingest.process`). Sprint
+ * 3.1 §W-7 collapsed the workflow handler onto pure use-case delegation,
+ * so this internal action is no longer reached from the workflow path —
+ * kept as a stable internal entry point. Persists
  * a fully prepared `Document` + chunk batch to the configured stores. The
  * action receives the chunk texts AND the embedding vectors produced by
  * `v1.ingest._embed` so the storage step is deterministic given its inputs

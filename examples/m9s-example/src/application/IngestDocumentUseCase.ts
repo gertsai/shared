@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: Apache-2.0
+import { InternalError, ValidationError } from '@gertsai/errors';
+import type { Session } from '@gertsai/session';
+import {
+  assertAuthenticated,
+  assertSessionInTenant,
+} from '@gertsai/session-guard';
+
 import { createDocument, type DocumentMetadata } from '../domain/document';
 import type { Chunk } from '../domain/chunk';
 import type { IDocumentStore } from '../domain/ports/IDocumentStore';
@@ -20,12 +28,24 @@ export interface IngestDocumentDeps {
 /**
  * Inputs to the Ingest use case.
  * Pure data shape — no transport coupling.
+ *
+ * Wave 5 (Sprint 3.10) additive optional fields:
+ *   - `session`: when supplied, the use case asserts the session is
+ *     authenticated via `@gertsai/session-guard.assertAuthenticated`.
+ *   - `expectedTenantId`: when both `session` AND `expectedTenantId` are
+ *     supplied, the use case additionally asserts the session is scoped to
+ *     that tenant via `assertSessionInTenant`.
+ *
+ * Both are OPTIONAL — pre-Wave-5 callers that pass `userId` only continue
+ * to work unchanged (per ADR-010 I-2 / I-3 regression invariant).
  */
 export interface IngestDocumentInput {
   readonly userId: string;
   readonly docId: string;
   readonly text: string;
   readonly metadata?: DocumentMetadata;
+  readonly session?: Session;
+  readonly expectedTenantId?: string;
 }
 
 /**
@@ -74,8 +94,17 @@ export class IngestDocumentUseCase {
   constructor(private readonly deps: IngestDocumentDeps) {}
 
   async execute(input: IngestDocumentInput): Promise<IngestDocumentResult> {
-    const { userId, docId, text, metadata } = input;
+    const { userId, docId, text, metadata, session, expectedTenantId } = input;
     const { gate, docStore, chunkStore, embedder } = this.deps;
+
+    // Wave 5 session-guard assertions (Sprint 3.10 W-3-10-20). Skipped when
+    // `session` is absent so existing pre-Wave-5 callers keep working.
+    if (session !== undefined) {
+      assertAuthenticated(session);
+      if (expectedTenantId !== undefined) {
+        assertSessionInTenant(session, expectedTenantId);
+      }
+    }
 
     // 1. AuthZ — fail closed
     const allowed = await gate.can(userId, 'ingest', docId);
@@ -90,14 +119,21 @@ export class IngestDocumentUseCase {
     const chunkTexts = splitIntoChunks(doc.text);
     if (chunkTexts.length === 0) {
       // Defensive — createDocument already rejected empty text.
-      throw new Error('Document produced zero chunks');
+      throw new ValidationError({
+        message: 'Document produced zero chunks',
+        details: { field: 'text', constraint: 'chunkable' },
+      });
     }
 
     const vectors = await embedder.embed(chunkTexts);
     if (vectors.length !== chunkTexts.length) {
-      throw new Error(
-        `Embedder returned ${vectors.length} vectors for ${chunkTexts.length} chunks`,
-      );
+      throw new InternalError({
+        message: `Embedder returned ${vectors.length} vectors for ${chunkTexts.length} chunks`,
+        details: {
+          expectedChunks: chunkTexts.length,
+          actualVectors: vectors.length,
+        },
+      });
     }
 
     const chunks: Chunk[] = chunkTexts.map((chunkText, idx) => ({

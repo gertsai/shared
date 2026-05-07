@@ -1,49 +1,142 @@
+// SPDX-License-Identifier: Apache-2.0
 import type { IPermissionGate } from '../domain/ports/IPermissionGate';
 
+// Type-only imports so this module can load even without `@gertsai/auth-openfga`
+// initialized at startup. The runtime side imports the package lazily inside
+// `can()`.
+import type { FgaResourceType, FgaCheckRequest } from '@gertsai/auth-openfga';
+
 /**
- * OpenFgaPermissionGate — production-shaped adapter.
+ * OpenFgaPermissionGate — production-shaped adapter (Sprint 3.11 E+).
  *
- * Delegates to `@gertsai/auth-openfga`'s `checkPermission()`. The package
- * is loaded LAZILY because:
- *   1. It is an ESM-only package — eager `require` from CJS hosts is fine
- *      on Node 22 but slower at startup.
- *   2. We do not want a missing OpenFGA store URL to crash dev startup
- *      when callers are using {@link AllowAllPermissionGate} instead.
+ * Delegates to `@gertsai/auth-openfga`'s `checkPermission()`. The package is
+ * loaded LAZILY because:
+ *   1. Eager import would crash dev startup when OpenFGA is unreachable —
+ *      callers using {@link AllowAllPermissionGate} must still boot.
+ *   2. Lazy load lets composition select the gate by env var without paying
+ *      the OpenFGA SDK import cost in non-OpenFGA configurations.
  *
- * Action -> relation mapping is intentionally tiny here. Real apps should
- * centralise this map, ideally generated from the OpenFGA model.
+ * The action→relation map is intentionally tiny: m9s-example needs only
+ * `ingest`/`search`. Real applications generate this from their authorization
+ * model. Resource types here use the canonical `FgaResourceType` taxonomy
+ * shipped by `@gertsai/auth-openfga` (per ADR-011 Amendment 2 §A2.2).
+ *
+ * Environment (read by composition root, passed through `options.client`):
+ *   FGA_API_URL    — OpenFGA HTTP endpoint (default http://localhost:8080).
+ *   FGA_STORE_ID   — store UUID populated by `scripts/openfga-bootstrap.ts`.
+ *   FGA_API_TOKEN  — preshared bearer token (production only; SDK plumbing
+ *                    pending — see KNOWN-ISSUES separate ADR for
+ *                    `@gertsai/auth-openfga` API completion per RFC-002
+ *                    §Cross-Package Contract Verification + ADR-011 I-2).
+ *
+ * Failure model (ADR-011 I-4 + §A2.4 fail-closed):
+ *   Any throw — connection refused, missing tuple, malformed model — is
+ *   logged with `cause` + masked resource id + returns `false`. NO rethrow,
+ *   NO partial state. The gate stays stateless (I-14): each call queries
+ *   OpenFGA fresh; caching belongs at the use-case layer with explicit
+ *   invalidation.
+ *
+ * Process-wide singleton caveat (Sprint 3.11 Post-Build Track 2 §P1-2):
+ *   `@gertsai/auth-openfga` exposes a process-wide `getFgaClient()` AND a
+ *   process-wide `getPermissionCache()`. Once primed with the FIRST
+ *   non-empty config, subsequent gate constructions with DIFFERENT
+ *   `apiUrl`/`storeId` may NOT rebind — the cached client survives. Tests
+ *   that assert error semantics MUST call:
+ *     `mod.resetFgaClient(); mod.resetPermissionCache();`
+ *   between scenarios. Production deployments that legitimately need
+ *   multiple distinct OpenFGA stores in one process should NOT use this
+ *   gate without modification — open a follow-up ADR.
+ */
+
+/**
+ * Per-deployment overrides for the gate. Composition root supplies these from
+ * `project.config`.
  */
 export interface OpenFgaPermissionGateOptions {
   /**
    * OpenFGA resource type used for non-resource-scoped checks (e.g. `search`
-   * with resource = '*'). Defaults to `'project'`.
+   * with resource = `'*'`). Defaults to `'tenant'` — m9s-example performs
+   * collection-wide reads under the caller's tenant scope.
    */
-  readonly defaultResourceType?: string;
+  readonly defaultResourceType?: FgaResourceType;
   /**
-   * Map of application action (`ingest`, `search`, ...) to OpenFGA relation
-   * name (`can_edit`, `can_view`, ...). Override per deployment.
+   * Map of application action (`ingest`, `search`, …) to OpenFGA relation
+   * name (`can_edit`, `can_view`, …). Override per deployment.
+   *
+   * Defaults to `DEFAULT_ACTION_RELATION` which uses the canonical
+   * `can_view`/`can_edit` permissions from `FGA_RELATIONS`.
    */
   readonly actionToRelation?: Readonly<Record<string, string>>;
   /**
    * Optional logger. Falls back to `console`.
    */
-  readonly logger?: { warn: (...args: unknown[]) => void; error: (...args: unknown[]) => void };
+  readonly logger?: {
+    warn: (...args: unknown[]) => void;
+    error: (...args: unknown[]) => void;
+  };
+  /**
+   * Pre-resolved client config. When provided, the gate constructs an
+   * isolated `GertsFgaClient` with these settings instead of relying on the
+   * package singleton. Recommended for tests + multi-tenant deployments.
+   */
+  readonly client?: {
+    /** OpenFGA HTTP endpoint, e.g. `http://localhost:8080`. */
+    readonly apiUrl?: string;
+    /** Store UUID — must already exist (provisioned by openfga-bootstrap.ts). */
+    readonly storeId?: string;
+    /**
+     * Preshared bearer token for `Authorization: Bearer ...`. Currently
+     * accepted but NOT plumbed through to `@openfga/sdk` — pending package
+     * surface extension (see file header).
+     */
+    readonly apiToken?: string;
+  };
 }
 
+/**
+ * Action verbs in m9s-example map to OpenFGA permission relations. The names
+ * match `FGA_RELATIONS.CAN_VIEW` / `FGA_RELATIONS.CAN_EDIT` exactly so the
+ * authorization model remains the single source of truth.
+ */
 const DEFAULT_ACTION_RELATION: Readonly<Record<string, string>> = {
   ingest: 'can_edit',
   search: 'can_view',
 };
 
+/**
+ * Replace any non-`[a-zA-Z0-9_-]` segment of a resource id with a single
+ * asterisk so log lines can't leak full identifiers when an attacker probes
+ * with crafted resources. Keeps short prefixes for debuggability.
+ */
+function maskResourceId(resource: string): string {
+  if (resource.length <= 4) return '***';
+  return `${resource.slice(0, 4)}***`;
+}
+
 export class OpenFgaPermissionGate implements IPermissionGate {
-  private readonly defaultResourceType: string;
+  private readonly defaultResourceType: FgaResourceType;
   private readonly actionToRelation: Readonly<Record<string, string>>;
   private readonly logger: NonNullable<OpenFgaPermissionGateOptions['logger']>;
+  private readonly clientConfig: OpenFgaPermissionGateOptions['client'];
 
   constructor(options: OpenFgaPermissionGateOptions = {}) {
-    this.defaultResourceType = options.defaultResourceType ?? 'project';
+    this.defaultResourceType = options.defaultResourceType ?? 'tenant';
     this.actionToRelation = options.actionToRelation ?? DEFAULT_ACTION_RELATION;
     this.logger = options.logger ?? console;
+    this.clientConfig = options.client;
+
+    // Sprint 3.11 Post-Build Track 2 §P1-1 (fail-closed on misleading config):
+    // The current `@gertsai/auth-openfga` surface does NOT plumb a bearer
+    // token through to the SDK. Accepting an `apiToken` silently would let
+    // operators believe their requests are authenticated when they aren't —
+    // a fail-OPEN against an enforcing OpenFGA deployment. Refuse the
+    // construction outright until the package gains a typed `apiToken`
+    // path (tracked in KNOWN-ISSUES §FGA_API_TOKEN-plumbing).
+    if (this.clientConfig?.apiToken !== undefined && this.clientConfig.apiToken !== '') {
+      throw new Error(
+        "OpenFgaPermissionGate: `client.apiToken` was supplied but `@gertsai/auth-openfga` does not yet forward bearer tokens to the OpenFGA SDK. Refusing to construct rather than silently drop credentials. See KNOWN-ISSUES §FGA_API_TOKEN-plumbing.",
+      );
+    }
   }
 
   async can(userId: string, action: string, resource: string): Promise<boolean> {
@@ -55,33 +148,70 @@ export class OpenFgaPermissionGate implements IPermissionGate {
       return false;
     }
 
-    // OpenFGA cannot check a wildcard object — collapse '*' to the type itself
-    // so callers retain a uniform IPermissionGate.can('search', '*') ergonomic.
-    const resourceId = resource === '*' ? 'global' : resource;
+    // Decode resource into (type, id). m9s-example callers pass either:
+    //   `'*'`                        — collection-wide; collapse to defaultResourceType.
+    //   `'<type>:<id>'`              — explicit, e.g. `'document:abc'`.
+    //   `'<id>'` (no colon)          — legacy short form; treated as defaultResourceType.
+    const { resourceType, resourceId } = decodeResource(resource, this.defaultResourceType);
 
     try {
-      // Lazy import: requires a running OpenFGA instance configured via env
-      // (FGA_API_URL, FGA_STORE_ID, FGA_API_TOKEN). In tests/dev without a
-      // store, this throws — we catch and fail-closed below.
+      // Lazy import: requires a running OpenFGA instance. In tests/dev without
+      // a store this throws and the catch below fails-closed.
       const mod = await import('@gertsai/auth-openfga');
-      const result = await mod.checkPermission({
+
+      // If composition supplied a pre-resolved client config, use a scoped
+      // client so this gate doesn't share singleton state with other adapters.
+      if (this.clientConfig?.apiUrl !== undefined || this.clientConfig?.storeId !== undefined) {
+        // Touching the singleton here is fine: it caches across `can()` calls
+        // and getFgaClient is idempotent on identical config.
+        mod.getFgaClient({
+          apiUrl: this.clientConfig?.apiUrl,
+          storeId: this.clientConfig?.storeId,
+        });
+      }
+
+      const checkRequest: FgaCheckRequest = {
         userId,
         relation,
-        // Cast: `resourceType` is a typed enum in @gertsai/auth-openfga; this
-        // adapter accepts caller-provided strings so we cross the boundary
-        // here. Replace with a typed mapping in production wiring.
-        resourceType: this.defaultResourceType as Parameters<typeof mod.checkPermission>[0]['resourceType'],
+        resourceType,
         resourceId,
-      });
+      };
+      const result = await mod.checkPermission(checkRequest);
       return result.allowed;
     } catch (err) {
-      // Fail-closed: any error contacting OpenFGA denies the request.
-      // requires running OpenFGA instance (see @gertsai/auth-openfga README).
-      this.logger.error(
-        '[OpenFgaPermissionGate] checkPermission failed — denying request',
-        err instanceof Error ? err.message : err,
-      );
+      // Fail-closed (ADR-011 I-4 + Amendment 2 §A2.4): never rethrow, log
+      // cause + masked resource so error tracking can correlate without
+      // leaking identifiers into logs.
+      this.logger.error('[OpenFgaPermissionGate] checkPermission failed — denying request', {
+        cause: err instanceof Error ? err.message : err,
+        operatorUuid: userId,
+        action,
+        resource: maskResourceId(resource),
+      });
       return false;
     }
   }
+}
+
+/**
+ * Pure helper — exported for tests. Decodes the wire-level `resource` string
+ * passed by use cases into a `(type, id)` pair the OpenFGA SDK accepts.
+ */
+export function decodeResource(
+  resource: string,
+  defaultResourceType: FgaResourceType,
+): { resourceType: FgaResourceType; resourceId: string } {
+  if (resource === '*' || resource === '') {
+    return { resourceType: defaultResourceType, resourceId: 'global' };
+  }
+  const colonIdx = resource.indexOf(':');
+  if (colonIdx > 0) {
+    const head = resource.slice(0, colonIdx);
+    const tail = resource.slice(colonIdx + 1);
+    // Trust the caller — `FgaResourceType` is a string union; any unrecognised
+    // type is rejected by OpenFGA at check-time and surfaces via the catch
+    // path in `can()`. We avoid hard-casting to `'as'` to keep type clarity.
+    return { resourceType: head as FgaResourceType, resourceId: tail };
+  }
+  return { resourceType: defaultResourceType, resourceId: resource };
 }

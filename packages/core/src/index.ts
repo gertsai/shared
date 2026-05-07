@@ -43,3 +43,7 @@ export * from './connectors';
 // Deny Ledger (RFC-042)
 // Persistent storage for access denials
 export * from './deny-ledger';
+
+// Language-neutral workflow contracts (SPEC-002)
+// Used by @gertsai/api-core moleculer adapter and future runtime adapters
+export * from './workflow';

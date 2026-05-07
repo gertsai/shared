@@ -1,0 +1,75 @@
+{
+  "name": "@gertsai/tenant",
+  "version": "0.0.0",
+  "description": "Language-neutral tenant identification primitives for @gertsai/*. Pure types + helpers in root, optional Moleculer adapter in `/moleculer` subpath.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./moleculer": {
+      "import": {
+        "types": "./dist/moleculer.d.ts",
+        "default": "./dist/moleculer.js"
+      },
+      "require": {
+        "types": "./dist/moleculer.d.cts",
+        "default": "./dist/moleculer.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "moleculer": ["./dist/moleculer.d.ts"]
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo *.tsbuildinfo",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0"
+  },
+  "peerDependencies": {
+    "moleculer": "^0.14.0"
+  },
+  "peerDependenciesMeta": {
+    "moleculer": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "moleculer": "^0.14.35",
+    "vitest": "^3.0.0"
+  },
+  "keywords": [
+    "tenant",
+    "multi-tenant",
+    "moleculer",
+    "gerts",
+    "gertsai"
+  ],
+  "author": "gerts.ai"
+}

@@ -157,12 +157,64 @@ declare module '@gertsai/di' {
     logger: LoggerService;
   }
 }
+
+// Runtime guards & assertions (Sprint 3.4 W-4A-4)
+isDestroyable(value): value is IDestroyable;
+isServiceIdentifier(value): value is ServiceIdentifier<unknown>;
+assertServiceIdentifier(value, label?): asserts value is ServiceIdentifier<unknown>;
+
+// Safe-destroy helpers (Sprint 3.4 W-4A-4)
+safeDestroy(target: unknown): unknown;                 // returns caught error or undefined
+safeDestroyAll(targets: Iterable<unknown>): SafeDestroyResult;
+
+// Type-level inference helpers (Sprint 3.4 W-4A-4)
+type InferServiceFromIdentifier<I extends ServiceIdentifier<any>>;
+type AnyServiceIdentifier = ServiceIdentifier<ServiceType>;
 ```
 
 Exports: `createIdentifier`, `diContainer`, `AbstractService`, `ServiceDirectory`,
-`ServicesRegistry`, plus types `IService`, `IGlobalService`, `ConsumerType`,
-`ServiceConsumer`, `ServiceIdentifier`, `ServiceFactory`,
+`ServicesRegistry`, `isDestroyable`, `isServiceIdentifier`,
+`assertServiceIdentifier`, `safeDestroy`, `safeDestroyAll`, plus types
+`IService`, `IGlobalService`, `ConsumerType`, `ServiceConsumer`,
+`ServiceIdentifier`, `ServiceFactory`, `SafeDestroyResult`,
+`InferServiceFromIdentifier`, `AnyServiceIdentifier`,
 `ServiceTypeMapping`, `GlobalServiceTypeMapping`, `DefaultServiceTypeMapping`.
+
+## Best practices
+
+### Heterogeneous teardown with `safeDestroyAll`
+
+Real-world consumer arrays mix services, plain objects, and the occasional
+service whose `$destroy()` throws. `safeDestroyAll` skips non-destroyables
+and isolates failures so one bad actor cannot abort the cascade:
+
+```typescript
+import { safeDestroyAll } from '@gertsai/di';
+
+// Heterogeneous teardown — some items may not be IDestroyable, some may throw.
+const result = safeDestroyAll([service1, service2, configBag, eventBus]);
+
+if (result.errors.length > 0) {
+  logger.error({ errors: result.errors }, 'Some services failed to destroy');
+  // App can decide whether to escalate.
+}
+// result.destroyed / result.skipped also available for telemetry.
+```
+
+## Deferred / future
+
+### Parameterized identifiers (Sprint 3.x)
+
+Orchestra's `orchlab/di` supports `ServiceIdentifier<T, Args>` with cached
+variants per `JSON.stringify(args)` key. Sprint 3.4 explicitly DEFERRED this
+pattern to avoid breaking existing consumers (would widen every generic).
+
+Roadmap (separate `parameterized.ts` module, additive non-breaking):
+- `createParameterizedIdentifier<S, I, Args>(name)` — separate brand.
+- `getParameterized(id, args)` — overload on `ServiceDirectory`.
+- `getAll(id)` — list all cached variants of a parameterized identifier.
+
+No timeline yet. Track in `forgeplan` workspace under future `Sprint 3.x`.
 
 ## Comparison
 
@@ -180,4 +232,4 @@ before `1.0`. Tier 2 in the workspace dependency graph (depends on `@gertsai/uti
 
 ## License
 
-UNLICENSED — internal use only. See repository root for terms.
+Apache-2.0 — see repository root `LICENSE` for terms.

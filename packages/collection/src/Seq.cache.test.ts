@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Seq, cachedSeq } from './seq';
+import { Seq, cachedSeq } from './Seq';
 
 describe('Seq cache semantics', () => {
   it('withCache caches results across iterations', () => {

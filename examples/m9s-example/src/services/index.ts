@@ -17,7 +17,7 @@
  */
 import IORedis from 'ioredis';
 
-import { ApiController, type BullMQConnectionOptions } from '@gertsai/api-core';
+import { ApiController, type BullMQConnectionOptions } from '@gertsai/api-core/moleculer';
 import { defaultSession, UserType } from '@gertsai/core';
 
 import config from '../../project.config';

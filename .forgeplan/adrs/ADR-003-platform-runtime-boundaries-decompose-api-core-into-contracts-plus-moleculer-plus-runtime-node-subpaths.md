@@ -7,7 +7,7 @@ last_modified_by: claude-code/2.1.128
 links:
 - target: PRD-001
   relation: based_on
-status: draft
+status: active
 title: Platform Runtime Boundaries — decompose api-core into contracts plus moleculer plus runtime-node subpaths
 ---
 
@@ -413,5 +413,15 @@ Per-package overrides:
 | docs/dd.md (audit 2026-05-05) | external doc | informs |
 
 > **Next step**: SPEC-002 (Sprint 2 Phase A checklist) approved → Sprint 2 implementation team.
+
+
+
+
+
+
+
+
+
+
 
 

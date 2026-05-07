@@ -1,0 +1,65 @@
+{
+  "name": "@gertsai/entity-svelte",
+  "version": "0.1.0",
+  "description": "Svelte framework adapter for @gertsai/entity — svelteReactiveAdapter (Proxy + writable store backing + WeakMap registry + 3 traps + sync notify + re-entrancy guard) and entityStore factory returning Readable<Entity<Data>> compatible with the $store template syntax. Per ADR-008 Decision E + Amendment I-11..I-14.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "clean": "rm -rf dist .tsbuildinfo *.tsbuildinfo",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@gertsai/entity": "workspace:^",
+    "svelte": ">=4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "svelte": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@gertsai/entity": "workspace:*",
+    "@gertsai/session": "workspace:*",
+    "svelte": "^4.2.0",
+    "vitest": "^3.0.0"
+  },
+  "keywords": [
+    "entity",
+    "svelte",
+    "reactive",
+    "writable",
+    "store",
+    "readable",
+    "gerts",
+    "gertsai"
+  ],
+  "author": "gerts.ai"
+}

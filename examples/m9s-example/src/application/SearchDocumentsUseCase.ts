@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: Apache-2.0
+import { InternalError, ValidationError } from '@gertsai/errors';
+import type { Session } from '@gertsai/session';
+import {
+  assertAuthenticated,
+  assertSessionInTenant,
+} from '@gertsai/session-guard';
+
 import type { ChunkSearchHit } from '../domain/chunk';
 import type { IChunkStore } from '../domain/ports/IChunkStore';
 import type { IEmbedder } from '../domain/ports/IEmbedder';
@@ -15,12 +23,24 @@ export interface SearchDocumentsDeps {
 
 /**
  * Inputs to the Search use case.
+ *
+ * Wave 5 (Sprint 3.10) additive optional fields:
+ *   - `session`: when supplied, the use case asserts the session is
+ *     authenticated via `@gertsai/session-guard.assertAuthenticated`.
+ *   - `expectedTenantId`: when both `session` AND `expectedTenantId` are
+ *     supplied, the use case additionally asserts the session is scoped to
+ *     that tenant via `assertSessionInTenant`.
+ *
+ * Both are OPTIONAL — pre-Wave-5 callers continue to work unchanged
+ * (per ADR-010 I-2 / I-3 regression invariant).
  */
 export interface SearchDocumentsInput {
   readonly userId: string;
   readonly query: string;
   /** Number of results to return (defaults to 3 if not supplied) */
   readonly topK?: number;
+  readonly session?: Session;
+  readonly expectedTenantId?: string;
 }
 
 /**
@@ -51,11 +71,23 @@ export class SearchDocumentsUseCase {
   constructor(private readonly deps: SearchDocumentsDeps) {}
 
   async execute(input: SearchDocumentsInput): Promise<SearchDocumentsResult> {
-    const { userId, query } = input;
+    const { userId, query, session, expectedTenantId } = input;
     const { gate, embedder, chunkStore } = this.deps;
 
+    // Wave 5 session-guard assertions (Sprint 3.10 W-3-10-20). Skipped when
+    // `session` is absent so existing pre-Wave-5 callers keep working.
+    if (session !== undefined) {
+      assertAuthenticated(session);
+      if (expectedTenantId !== undefined) {
+        assertSessionInTenant(session, expectedTenantId);
+      }
+    }
+
     if (!query || query.trim().length === 0) {
-      throw new Error('Search query must be non-empty');
+      throw new ValidationError({
+        message: 'Search query must be non-empty',
+        details: { field: 'query', constraint: 'non-empty' },
+      });
     }
 
     const topK = clampTopK(input.topK);
@@ -67,7 +99,10 @@ export class SearchDocumentsUseCase {
 
     const [queryVector] = await embedder.embed([query.trim()]);
     if (!queryVector) {
-      throw new Error('Embedder returned no vector for the query');
+      throw new InternalError({
+        message: 'Embedder returned no vector for the query',
+        details: { reason: 'embedder-empty-result' },
+      });
     }
 
     const results = await chunkStore.search(queryVector, topK);

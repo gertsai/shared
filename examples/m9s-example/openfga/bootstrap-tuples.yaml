@@ -1,0 +1,18 @@
+# OpenFGA bootstrap tuples — Sprint 3.11 m9s-example.
+#
+# Seeds ONLY tenant-membership tuples. Per-document tuples
+# `(document:<doc-uuid>, tenant, tenant:<tid>)` are written by
+# `pg-document.repository.ts` (Track 1) at ingest time as a post-INSERT
+# side-effect via `@gertsai/auth-openfga.writeTuples`.
+#
+# NO wildcard tuples (`document:*`) per ADR-011 Amendment 2 §A2.3 — non-portable
+# OpenFGA syntax. Per-document tuple writes verified in live-spike W-3-11-8a.
+#
+# Format: list of {user, relation, object} triples. Consumed by
+# `scripts/openfga-bootstrap.ts` after store + model creation.
+
+tuples:
+  # Default user — exists in tenant-acme (the seeded tenant).
+  - user: user:default
+    relation: member
+    object: tenant:tenant-acme

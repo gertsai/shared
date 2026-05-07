@@ -119,6 +119,28 @@ const config = {
   /** Redis key prefix to namespace bucket entries */
   RLR_PREFIX: process.env.RLR_PREFIX ?? 'm9s-example:rlr:',
 
+  // Persistent storage selection (Sprint 3.11 W-3-11-7).
+  // 'memory' keeps the in-process MemoryVectorStore + DocumentRepository
+  // (Sprint 3.4..3.10 path); 'postgres' switches to PgVectorStore +
+  // PgDocumentRepository over `@gertsai/pg-client` (Amendment 2 §A2.5/A2.6).
+  STORAGE_PROVIDER: oneOf(
+    process.env.STORAGE_PROVIDER,
+    ['memory', 'postgres'] as const,
+    'memory',
+  ),
+  /** Postgres connection string for STORAGE_PROVIDER='postgres'. */
+  POSTGRES_URL: process.env.POSTGRES_URL ?? '',
+  /** Run pending migrations at boot (true|false). Default false — explicit `pnpm migrate:up`. */
+  MIGRATIONS_AUTO_APPLY: bool(process.env.MIGRATIONS_AUTO_APPLY, false),
+  /**
+   * Tenant id used by PgDocumentRepository + PgVectorStore in m9s-example
+   * (single-tenant per process; production Wave 6+ scopes per request via
+   * `@gertsai/runtime-context`). Matches `bootstrap-tuples.yaml` seed.
+   */
+  TENANT_ID: process.env.TENANT_ID ?? 'tenant-acme',
+  /** Owner uuid stamped on documents persisted by m9s-example. */
+  DEFAULT_OWNER_UUID: process.env.DEFAULT_OWNER_UUID ?? 'user:default',
+
   // Embedder selection (composition root in src/composition/infrastructure.ts)
   /** Which IEmbedder adapter to instantiate. */
   EMBEDDER_PROVIDER: oneOf(
@@ -132,6 +154,39 @@ const config = {
   EMBEDDER_MODEL: process.env.EMBEDDER_MODEL ?? 'nomic-embed-text',
   /** OpenAI API key (required when EMBEDDER_PROVIDER='openai'). */
   EMBEDDER_API_KEY: process.env.EMBEDDER_API_KEY,
+
+  // Process environment (used to refuse 'allow-all' gate in production
+  // per ADR-011 I-12 fail-closed). Treats anything other than 'production'
+  // as non-prod for permissive defaults.
+  NODE_ENV: process.env.NODE_ENV ?? 'development',
+
+  // Permission gate selection (Sprint 3.11 W-3-11-13). 'allow-all' keeps the
+  // demo path; 'openfga' wires `OpenFgaPermissionGate` to the OpenFGA store
+  // bootstrapped via `scripts/openfga-bootstrap.ts`. Refused at boot under
+  // NODE_ENV='production' (ADR-011 I-12).
+  AUTH_GATE: oneOf(
+    process.env.AUTH_GATE,
+    ['allow-all', 'openfga'] as const,
+    'allow-all',
+  ),
+  /** OpenFGA HTTP endpoint (required when AUTH_GATE='openfga'). */
+  FGA_API_URL: process.env.FGA_API_URL ?? 'http://localhost:8080',
+  /** OpenFGA store UUID — emitted by `scripts/openfga-bootstrap.ts`. */
+  FGA_STORE_ID: process.env.FGA_STORE_ID ?? '',
+  /**
+   * Pre-shared bearer token for OpenFGA. Currently NOT plumbed through to
+   * `@openfga/sdk` — see KNOWN-ISSUES §FGA_API_TOKEN-plumbing for status.
+   */
+  FGA_API_TOKEN: process.env.FGA_API_TOKEN ?? '',
+
+  // Cacher driver selection (Sprint 3.11 W-3-11-19). 'memory' is the demo
+  // default; 'redis' switches `M9sCacheCacher` to `RedisCacheDriver` and
+  // requires REDIS_URL. Validated at moleculer.config.ts boot.
+  CACHE_DRIVER: oneOf(
+    process.env.CACHE_DRIVER,
+    ['memory', 'redis'] as const,
+    'memory',
+  ),
 } as const;
 
 export type Config = typeof config;
