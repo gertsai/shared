@@ -13,7 +13,7 @@ links:
   relation: informs
 - target: RFC-002
   relation: informs
-status: draft
+status: active
 title: Sprint 3.11 m9s-example real-infra reference application — Phase B verify + Post-Build audit + fixes
 ---
 
@@ -147,6 +147,7 @@ findings → 7 fixed + 1 deferred) → re-verify → EVID-019 (this artifact).
 - Sprint 3.11 SHAPE phase committed in `782a3e0..dec1513`; Build is
   uncommitted at evidence creation time and will land in a single atomic
   commit referencing this evidence.
+
 
 
 
