@@ -102,6 +102,11 @@ function pickGate(): IPermissionGate {
         client: {
           apiUrl: config.FGA_API_URL,
           storeId: config.FGA_STORE_ID,
+          // Wave 6.2 (RFC-003 Edge 2): apiToken is now plumbed
+          // end-to-end through `@gertsai/auth-openfga` to the SDK
+          // bearer credentials. The empty-string fallback to
+          // `undefined` keeps OpenFGA anonymous when the env var
+          // is unset (NFR-2 backwards-compat).
           apiToken: config.FGA_API_TOKEN || undefined,
         },
         logger: console,

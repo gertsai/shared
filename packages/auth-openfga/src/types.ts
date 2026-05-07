@@ -517,6 +517,20 @@ export interface FgaClientConfig {
   storeId?: string;
   /** Authorization model ID (will be fetched if not provided) */
   authorizationModelId?: string;
+  /**
+   * Pre-shared bearer token for OpenFGA `--authn-method=preshared`
+   * deployments (Wave 6.2 / RFC-003).
+   *
+   * When set, plumbed straight through to the underlying `@openfga/sdk`
+   * `OpenFgaClient` as
+   * `credentials: { method: ApiToken, config: { token: <apiToken> } }`.
+   * When unset, no `credentials` are passed and the SDK runs anonymously
+   * (the existing default behaviour, preserved for backwards compat).
+   *
+   * SECURITY: never log this value. The SDK includes it in
+   * `Authorization: Bearer ...` headers; treat as secret in transit.
+   */
+  apiToken?: string;
   /** Request timeout in ms */
   timeout?: number;
   /** Retry configuration */
@@ -535,6 +549,12 @@ export interface FgaResolvedConfig {
   storeId: string;
   authorizationModelId: string;
   timeout: number;
+  /**
+   * Echoed from {@link FgaClientConfig.apiToken} so callers can confirm
+   * the token was accepted (NOT for logging — see security note on the
+   * input field).
+   */
+  apiToken?: string;
 }
 
 // =============================================================================

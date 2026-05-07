@@ -85,9 +85,12 @@ export interface OpenFgaPermissionGateOptions {
     /** Store UUID — must already exist (provisioned by openfga-bootstrap.ts). */
     readonly storeId?: string;
     /**
-     * Preshared bearer token for `Authorization: Bearer ...`. Currently
-     * accepted but NOT plumbed through to `@openfga/sdk` — pending package
-     * surface extension (see file header).
+     * Preshared bearer token for `Authorization: Bearer ...`.
+     * Wave 6.2 (RFC-003 Edge 2): plumbed end-to-end through
+     * `@gertsai/auth-openfga` to the OpenFGA SDK
+     * `credentials: { method: ApiToken, config: { token } }`. The
+     * Sprint 3.11 §P1-1 throw-on-apiToken defensive guard has been
+     * removed; the token now reaches the SDK as intended.
      */
     readonly apiToken?: string;
   };
@@ -125,18 +128,12 @@ export class OpenFgaPermissionGate implements IPermissionGate {
     this.logger = options.logger ?? console;
     this.clientConfig = options.client;
 
-    // Sprint 3.11 Post-Build Track 2 §P1-1 (fail-closed on misleading config):
-    // The current `@gertsai/auth-openfga` surface does NOT plumb a bearer
-    // token through to the SDK. Accepting an `apiToken` silently would let
-    // operators believe their requests are authenticated when they aren't —
-    // a fail-OPEN against an enforcing OpenFGA deployment. Refuse the
-    // construction outright until the package gains a typed `apiToken`
-    // path (tracked in KNOWN-ISSUES §FGA_API_TOKEN-plumbing).
-    if (this.clientConfig?.apiToken !== undefined && this.clientConfig.apiToken !== '') {
-      throw new Error(
-        "OpenFgaPermissionGate: `client.apiToken` was supplied but `@gertsai/auth-openfga` does not yet forward bearer tokens to the OpenFGA SDK. Refusing to construct rather than silently drop credentials. See KNOWN-ISSUES §FGA_API_TOKEN-plumbing.",
-      );
-    }
+    // Wave 6.2 (RFC-003 Edge 2): the Sprint 3.11 §P1-1 throw-on-apiToken
+    // defensive guard has been removed — `@gertsai/auth-openfga` now
+    // forwards the bearer to the SDK via
+    // `credentials: { method: ApiToken, config: { token } }`. Tokens
+    // supplied here flow end-to-end. KNOWN-ISSUES §FGA_API_TOKEN-plumbing
+    // is now RESOLVED.
   }
 
   async can(userId: string, action: string, resource: string): Promise<boolean> {
@@ -161,12 +158,19 @@ export class OpenFgaPermissionGate implements IPermissionGate {
 
       // If composition supplied a pre-resolved client config, use a scoped
       // client so this gate doesn't share singleton state with other adapters.
-      if (this.clientConfig?.apiUrl !== undefined || this.clientConfig?.storeId !== undefined) {
+      // Wave 6.2 (RFC-003 Edge 2): forward `apiToken` to `getFgaClient`
+      // so the SDK is constructed with bearer credentials.
+      if (
+        this.clientConfig?.apiUrl !== undefined ||
+        this.clientConfig?.storeId !== undefined ||
+        this.clientConfig?.apiToken !== undefined
+      ) {
         // Touching the singleton here is fine: it caches across `can()` calls
         // and getFgaClient is idempotent on identical config.
         mod.getFgaClient({
           apiUrl: this.clientConfig?.apiUrl,
           storeId: this.clientConfig?.storeId,
+          apiToken: this.clientConfig?.apiToken,
         });
       }
 

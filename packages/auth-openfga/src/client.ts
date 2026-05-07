@@ -8,7 +8,7 @@
  * - Typed methods matching our model.fga
  */
 
-import { OpenFgaClient } from '@openfga/sdk';
+import { OpenFgaClient, CredentialsMethod } from '@openfga/sdk';
 import type {
   FgaClientConfig,
   FgaResolvedConfig,
@@ -22,6 +22,23 @@ import type {
   FgaExpandNode,
 } from './types.js';
 import { FGA_DEFAULT_CONFIG, userString, objectString } from './constants.js';
+
+/**
+ * SDK constructor options shape, exposed as a local alias so the
+ * `buildSdkConfig` helper has a single named return type. This is
+ * narrower than the SDK-exported type (we only ever set a known subset
+ * of fields) and intentional — extending requires a deliberate edit
+ * here rather than a transitive surface bump.
+ */
+type SdkClientOptions = {
+  apiUrl: string;
+  storeId?: string;
+  authorizationModelId?: string;
+  credentials?: {
+    method: CredentialsMethod.ApiToken;
+    config: { token: string };
+  };
+};
 
 // =============================================================================
 // Singleton Instance
@@ -64,9 +81,34 @@ export class GertsFgaClient {
       apiUrl: config?.apiUrl ?? FGA_DEFAULT_CONFIG.apiUrl,
       storeId: config?.storeId,
       authorizationModelId: config?.authorizationModelId,
+      apiToken: config?.apiToken,
       timeout: config?.timeout ?? FGA_DEFAULT_CONFIG.timeout,
       retry: config?.retry ?? FGA_DEFAULT_CONFIG.retry,
     };
+  }
+
+  /**
+   * Build the per-call SDK options payload. Centralises the
+   * conditional `credentials` branch so the three `new OpenFgaClient(...)`
+   * sites in `doInitialize()` stay consistent.
+   *
+   * Wave 6.2 (RFC-003 Edge 1): when `apiToken` is set, the SDK is given
+   * `{ method: ApiToken, config: { token } }`; when unset, `credentials`
+   * is omitted entirely so the existing anonymous flow is preserved
+   * (backwards-compat invariant I-1).
+   */
+  private buildSdkConfig(extra?: Pick<SdkClientOptions, 'storeId' | 'authorizationModelId'>): SdkClientOptions {
+    const opts: SdkClientOptions = {
+      apiUrl: this.config.apiUrl!,
+      ...extra,
+    };
+    if (this.config.apiToken) {
+      opts.credentials = {
+        method: CredentialsMethod.ApiToken,
+        config: { token: this.config.apiToken },
+      };
+    }
+    return opts;
   }
 
   // ---------------------------------------------------------------------------
@@ -92,12 +134,8 @@ export class GertsFgaClient {
   }
 
   private async doInitialize(): Promise<void> {
-    const clientConfig = {
-      apiUrl: this.config.apiUrl!,
-    };
-
-    // Create initial client for discovery
-    let tempClient = new OpenFgaClient(clientConfig);
+    // Create initial client for discovery (no storeId yet).
+    let tempClient = new OpenFgaClient(this.buildSdkConfig());
 
     // Discover or use provided storeId
     let storeId = this.config.storeId;
@@ -114,11 +152,8 @@ export class GertsFgaClient {
       }
     }
 
-    // Recreate client with storeId
-    tempClient = new OpenFgaClient({
-      ...clientConfig,
-      storeId,
-    });
+    // Recreate client with storeId (token re-applied via buildSdkConfig)
+    tempClient = new OpenFgaClient(this.buildSdkConfig({ storeId }));
 
     // Discover or use provided authorizationModelId
     let authorizationModelId = this.config.authorizationModelId;
@@ -130,18 +165,15 @@ export class GertsFgaClient {
       }
     }
 
-    // Create final client
-    this.client = new OpenFgaClient({
-      ...clientConfig,
-      storeId,
-      authorizationModelId,
-    });
+    // Create final client (token re-applied via buildSdkConfig)
+    this.client = new OpenFgaClient(this.buildSdkConfig({ storeId, authorizationModelId }));
 
     this.resolvedConfig = {
       apiUrl: this.config.apiUrl!,
       storeId,
       authorizationModelId: authorizationModelId ?? '',
       timeout: this.config.timeout!,
+      apiToken: this.config.apiToken,
     };
   }
 
