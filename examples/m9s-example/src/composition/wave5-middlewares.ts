@@ -31,7 +31,12 @@ import {
   type TenantResolverStrategy,
 } from '@gertsai/tenant-resolver';
 import { tenantMiddleware } from '@gertsai/tenant-resolver/moleculer';
-import { sessionMiddleware } from '@gertsai/runtime-context/moleculer';
+import {
+  REQUEST_CONTEXT_LOCALS_KEY,
+  sessionMiddleware,
+} from '@gertsai/runtime-context/moleculer';
+import type { RequestContext } from '@gertsai/runtime-context';
+import type { Session } from '@gertsai/session';
 
 /**
  * Build the tenant-resolution chain for the example.
@@ -107,4 +112,74 @@ export function buildWave5Middlewares(): readonly unknown[] {
     // first (it always does in the canonical order, but defensive).
     sessionMiddleware({ resolver }),
   ];
+}
+
+// ---------------------------------------------------------------------------
+// Action-handler helpers — Sprint 3.10 Addendum 2 wiring
+// ---------------------------------------------------------------------------
+
+/**
+ * Snapshot of the per-request Wave 5 context as seen by an action handler.
+ * Both fields are optional so that pre-Wave-5 callers (no sessionMiddleware
+ * registered) and anonymous flows (no tenant resolved) keep the same shape:
+ * undefined fields skip the corresponding session-guard branch in the use
+ * case (per ADR-010 I-2 / I-3 additive-optional regression invariant).
+ */
+export interface Wave5ContextSnapshot {
+  readonly session: Session | undefined;
+  readonly expectedTenantId: string | undefined;
+}
+
+/**
+ * Read the {@link RequestContext} composed by sessionMiddleware off
+ * `ctx.locals.requestContext` and project it to the additive-optional shape
+ * the use cases consume. Designed to be safe in three states:
+ *
+ *   1. Wave 5 middleware not registered → returns `{ session: undefined,
+ *      expectedTenantId: undefined }` (pre-Wave-5 path; use case skips
+ *      assertions, behaves identically to existing 16 regression tests).
+ *   2. Wave 5 registered but anonymous (mode='optional', no header) →
+ *      returns `{ session: <maybe>, expectedTenantId: undefined }`.
+ *   3. Wave 5 registered + tenant resolved + sessionFactory injected
+ *      session → returns both populated; use case fires
+ *      `assertAuthenticated` + `assertSessionInTenant` branch.
+ *
+ * Uses `RequestContext.{sessionOptional,tenantIdOptional}` (added Sprint
+ * 3.7) which return `undefined` instead of throwing — strict accessors
+ * `session` / `tenantId` would crash the action for anonymous requests
+ * even though those are valid under mode='optional'.
+ */
+export function tryGetRequestContextFromCtx(
+  ctx: Context,
+): Wave5ContextSnapshot {
+  const locals = (ctx as unknown as { locals?: Record<string, unknown> })
+    .locals;
+  const value = locals?.[REQUEST_CONTEXT_LOCALS_KEY];
+  // Structural duck-typing instead of `instanceof RequestContext`: tsup
+  // bundles a separate copy of the RequestContext class into each subpath
+  // (`@gertsai/runtime-context` root vs `@gertsai/runtime-context/moleculer`)
+  // — so an instance composed by `sessionMiddleware` (from the /moleculer
+  // subpath) is NOT `instanceof` the RequestContext re-exported by the root
+  // surface. The two classes are structurally identical; we check shape
+  // (`sessionOptional` and `tenantIdOptional` getters present) to recognise
+  // a valid RequestContext from either subpath.
+  //
+  // Sprint 3.10 Addendum 2 — surfaced via e2e session-guard rejection tests.
+  // P2 follow-up for Wave 6+: investigate runtime-context tsup config so
+  // both subpaths share a single `RequestContext` class identity. Until
+  // then, this duck-typing keeps consumers working across both import
+  // paths.
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    !('sessionOptional' in value) ||
+    !('tenantIdOptional' in value)
+  ) {
+    return { session: undefined, expectedTenantId: undefined };
+  }
+  const rc = value as RequestContext;
+  return {
+    session: rc.sessionOptional,
+    expectedTenantId: rc.tenantIdOptional,
+  };
 }

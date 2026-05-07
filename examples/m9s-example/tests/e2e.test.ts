@@ -276,3 +276,251 @@ describe('m9s-example e2e (broker.call) — Sprint 3.10 Wave 5 stack', () => {
     expect(unique.size).toBe(3);
   }, 30_000);
 });
+
+// ===========================================================================
+// Sprint 3.10 Addendum 2 — broker-level session-guard rejection scenarios
+//
+// The first describe block above proves Wave 5 middleware composes ctx
+// state through the broker pipeline. This second block goes one step
+// deeper: it injects an actual `Session` per request via a custom
+// `sessionFactory` and verifies that session-guard rejections (destroyed
+// session, cross-tenant) propagate from the use case → action handler
+// (which maps them to APIError per Sprint 3.10 Addendum 2 wiring) →
+// broker.call rejection.
+//
+// Boots a SECOND broker with a test-only Wave 5 stack so the production
+// broker config from the first block stays unchanged. The custom
+// sessionFactory reads `ctx.meta.testSession` (a real `Session` object
+// passed by the test) and wires it into the per-request RequestContext.
+// ===========================================================================
+describe('m9s-example e2e (broker.call) — session-guard rejection paths', () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let broker: any;
+
+  beforeAll(async () => {
+    requireFromHere('../dist/src/services/index.js');
+
+    const { ApiController } = requireFromHere(
+      '@gertsai/api-core/moleculer',
+    ) as typeof import('@gertsai/api-core/moleculer');
+    const brokerConfigDefault = requireFromHere('../dist/moleculer.config.js')
+      .default as import('moleculer').BrokerOptions;
+    const ApiService = requireFromHere(
+      '../dist/src/mol-services/api.service.js',
+    ).default;
+
+    // Pull the same Wave 5 primitives the production composition uses, but
+    // assemble a custom stack here with a sessionFactory that reads the
+    // test fixture session off `ctx.meta.testSession`. Going through
+    // requireFromHere keeps module identity aligned with the dist code path
+    // (same tenant-resolver / runtime-context instances as actions consume).
+    const { tenantMiddleware } = requireFromHere(
+      '@gertsai/tenant-resolver/moleculer',
+    );
+    const {
+      sessionMiddleware: sessionMiddlewareFn,
+    } = requireFromHere('@gertsai/runtime-context/moleculer');
+    const {
+      buildTenantResolver,
+    } = requireFromHere('../dist/src/composition/wave5-middlewares.js');
+
+    const resolver = buildTenantResolver();
+    const customWave5 = [
+      tenantMiddleware(resolver),
+      sessionMiddlewareFn({
+        resolver,
+        // Read pre-built Session fixture from meta. Structural typing —
+        // session-guard's assertAuthenticated/assertSessionInTenant inspect
+        // session.destroyed / session.tenantId properties, not class
+        // identity, so the fixture works across module boundaries.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        sessionFactory: (ctx: any) => {
+          const meta = (ctx.meta ?? {}) as Record<string, unknown>;
+          const fixture = meta['testSession'];
+          return fixture as unknown as undefined;
+        },
+      }),
+    ];
+
+    // Replace default Wave 5 with custom stack. Keep other broker config
+    // (cacher, transporter, etc.) intact.
+    const defaultMids = (brokerConfigDefault.middlewares ?? []) as Middleware[];
+    // Filter out the production tenant + session middlewares (they used the
+    // same hooks, occupy the first 2 slots — see wave5-middlewares.ts).
+    const nonWave5 = defaultMids.slice(2);
+
+    const brokerConfig = {
+      ...brokerConfigDefault,
+      middlewares: [...customWave5, ...nonWave5] as Middleware[],
+      logger: {
+        type: 'Console',
+        options: { level: 'error' },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any,
+    };
+
+    broker = await ApiController.Start({
+      brokerConfig,
+      services: [ApiService],
+      repl: false,
+    });
+  }, 30_000);
+
+  afterAll(async () => {
+    if (broker !== undefined) {
+      await broker.stop();
+    }
+  });
+
+  /**
+   * Construct a Session via require (CJS — same module identity as
+   * session-guard's assertAuthenticated/assertSessionInTenant consume
+   * inside the broker). The shape comes from `@gertsai/session`.
+   */
+  function makeSession(opts: {
+    tenantId?: string;
+    operatorUuid?: string;
+    destroyed?: boolean;
+  }) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Session } = requireFromHere('@gertsai/session');
+    const session = new Session({
+      operatorUuid: opts.operatorUuid ?? 'user-test-1',
+      operatorType: 'web',
+      tokenGetter: async () => 'tok',
+      dialog: {
+        confirm: async () => true,
+        alert: () => {},
+        error: () => {},
+      },
+      clientPlatform: 'web',
+      clientVersion: '0.0.0-test',
+      tenantId: opts.tenantId,
+    });
+    if (opts.destroyed === true) {
+      session.$destroy();
+    }
+    return session;
+  }
+
+  it('rejects ingest with destroyed session — surfaces 401 Authentication required', async () => {
+    const destroyed = makeSession({
+      tenantId: 'tenant-acme',
+      destroyed: true,
+    });
+
+    const input = {
+      docId: 'doc-rej-destroyed-1',
+      text: 'should be rejected before use case body runs',
+      userId: 'user-rej-1',
+    };
+
+    const result = await broker
+      .call('v1.ingest.document', input, {
+        meta: {
+          headers: { 'x-tenant-id': 'tenant-acme' },
+          testSession: destroyed,
+        },
+      })
+      .then(
+        () => ({ resolved: true as const }),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (err: any) => ({ resolved: false as const, err }),
+      );
+
+    expect(result.resolved).toBe(false);
+    if (result.resolved === false) {
+      // Action handler maps AuthenticationRequiredError → APIError
+      // (UNAUTHORIZED_REQUEST). Moleculer surfaces this as the rejection.
+      const errStr = String(result.err?.message ?? result.err);
+      expect(errStr).toMatch(/Authentication required|UNAUTHORIZED/i);
+    }
+  }, 15_000);
+
+  it('rejects ingest with cross-tenant session — surfaces 403 Tenant scope violation', async () => {
+    const wrongTenantSession = makeSession({
+      tenantId: 'tenant-foo', // session scoped to foo
+      operatorUuid: 'user-rej-2',
+    });
+
+    const input = {
+      docId: 'doc-rej-cross-tenant-1',
+      text: 'should be rejected — session.tenant !== expected.tenant',
+      userId: 'user-rej-2',
+    };
+
+    const result = await broker
+      .call('v1.ingest.document', input, {
+        meta: {
+          // Header (and thus expectedTenantId) is tenant-bar; session is foo.
+          headers: { 'x-tenant-id': 'tenant-bar' },
+          testSession: wrongTenantSession,
+        },
+      })
+      .then(
+        () => ({ resolved: true as const }),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (err: any) => ({ resolved: false as const, err }),
+      );
+
+    expect(result.resolved).toBe(false);
+    if (result.resolved === false) {
+      const errStr = String(result.err?.message ?? result.err);
+      expect(errStr).toMatch(/Tenant scope violation|FORBIDDEN/i);
+    }
+  }, 15_000);
+
+  it('happy path with valid session matching tenant — succeeds', async () => {
+    const session = makeSession({
+      tenantId: 'tenant-acme',
+      operatorUuid: 'user-happy-1',
+    });
+
+    const input = {
+      docId: 'doc-rej-happy-1',
+      text: 'session-guard assertions pass; use case runs to completion',
+      userId: 'user-happy-1',
+    };
+
+    const resp = await broker.call('v1.ingest.document', input, {
+      meta: {
+        headers: { 'x-tenant-id': 'tenant-acme' },
+        testSession: session,
+      },
+    });
+
+    expect(resp).toBeDefined();
+    const respData = (resp as { data?: { docId?: string } }).data;
+    expect(respData?.docId).toBe('doc-rej-happy-1');
+  }, 15_000);
+
+  it('rejects search with destroyed session — same code path as ingest', async () => {
+    const destroyed = makeSession({
+      tenantId: 'tenant-acme',
+      destroyed: true,
+    });
+
+    const result = await broker
+      .call(
+        'v1.search.query',
+        { query: 'anything' },
+        {
+          meta: {
+            headers: { 'x-tenant-id': 'tenant-acme' },
+            testSession: destroyed,
+          },
+        },
+      )
+      .then(
+        () => ({ resolved: true as const }),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (err: any) => ({ resolved: false as const, err }),
+      );
+
+    expect(result.resolved).toBe(false);
+    if (result.resolved === false) {
+      const errStr = String(result.err?.message ?? result.err);
+      expect(errStr).toMatch(/Authentication required|UNAUTHORIZED/i);
+    }
+  }, 15_000);
+});

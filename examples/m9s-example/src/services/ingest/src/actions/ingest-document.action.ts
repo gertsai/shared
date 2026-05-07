@@ -19,11 +19,16 @@
  * `IngestDocumentUseCase`, wired via the lifecycle handler.
  */
 import { APIError, ResponseCode } from '@gertsai/api-core/contracts';
+import {
+  AuthenticationRequiredError,
+  TenantScopeViolationError,
+} from '@gertsai/session-guard';
 import typia from 'typia';
 
 import config from '../../../../../project.config';
 import { resolveExampleController } from '../../../../lib/example-controller';
 import { PermissionDeniedError } from '../../../../application/errors/permission-denied.error';
+import { tryGetRequestContextFromCtx } from '../../../../composition/wave5-middlewares';
 import { INGEST_QUEUE_NAME, JOB_PROCESS_DOCUMENT } from '../queues';
 import type {
   IngestServiceContext,
@@ -99,11 +104,22 @@ export const ingestDocument: any = controller.register('document', {
 
       // Inline fallback — no Redis configured. Same code path as the
       // worker handler, just executed in the request thread.
+      //
+      // Sprint 3.10 Addendum 2 — wire Wave 5 RequestContext through to use
+      // case. tryGetRequestContextFromCtx returns `{ session, expectedTenantId
+      // }` populated when sessionMiddleware composed an authenticated
+      // RequestContext, or both undefined for anonymous / pre-Wave-5 callers.
+      // Use case treats the fields as additive optional per ADR-010 I-2/I-3
+      // (16-test regression invariant).
+      const { session, expectedTenantId } = tryGetRequestContextFromCtx(ctx);
+
       const { chunkCount } = await service.useCase.execute({
         docId,
         text,
         userId,
         metadata,
+        session,
+        expectedTenantId,
       });
 
       const response: IngestDocumentResponse = {
@@ -118,6 +134,27 @@ export const ingestDocument: any = controller.register('document', {
     } catch (err) {
       // Map domain errors to transport (HTTP) errors here — keeps the
       // application layer independent of @gertsai/api-core.
+      //
+      // Sprint 3.10 Addendum 2: session-guard rejections (composed by Wave 5
+      // middleware path → use case assertions) surface as AppError subclasses;
+      // map them to the closest HTTP/RFC-9457 status without leaking internal
+      // session details.
+      if (err instanceof AuthenticationRequiredError) {
+        // 401 Unauthorized — destroyed/missing session.
+        throw new APIError(
+          ResponseCode.UNAUTHORIZED_REQUEST,
+          undefined,
+          'Authentication required',
+        );
+      }
+      if (err instanceof TenantScopeViolationError) {
+        // 403 Forbidden — session tenant ≠ expected tenant.
+        throw new APIError(
+          ResponseCode.FORBIDDEN__INSUFFICIENT_RIGHTS,
+          undefined,
+          'Tenant scope violation',
+        );
+      }
       if (err instanceof PermissionDeniedError) {
         throw new APIError(ResponseCode.FORBIDDEN__INSUFFICIENT_RIGHTS, undefined, err.message);
       }
