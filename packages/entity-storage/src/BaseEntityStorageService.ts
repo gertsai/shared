@@ -103,6 +103,21 @@ export type SetEntityInput<Meta extends StorageMetadata> = Meta['write'] & {
 };
 
 /**
+ * Wave 6.5 / Type-audit P1-1 — named alias for `upsert(entity)` input.
+ *
+ * Tightens `SetEntityInput<Meta>` (where `_uid` is optional) to a shape
+ * where `_uid` is REQUIRED — `upsert` needs a stable id to route the
+ * `INSERT ... ON CONFLICT (id) DO UPDATE` decision. The intersection
+ * with the explicit `{ readonly _uid: string }` makes the constraint
+ * visible at the call site without forcing each consumer to spell the
+ * intersection out.
+ */
+export type UpsertEntityInput<Meta extends StorageMetadata> =
+  SetEntityInput<Meta> & {
+    readonly _uid: string;
+  };
+
+/**
  * Discriminated payload union emitted with every `entity-*` event. Listeners
  * narrow on the `event` literal to access shape-specific fields:
  *
@@ -451,7 +466,7 @@ export abstract class BaseEntityStorageService<
    * already knows the row's existence status.
    */
   async upsert(
-    entity: SetEntityInput<Meta> & { readonly _uid: string },
+    entity: UpsertEntityInput<Meta>,
     opts: MutationRoutingOpts<Meta, UpdateActionTypes> = {},
   ): Promise<{ id: string }> {
     this._assertAlive();

@@ -32,12 +32,15 @@ interface UserData {
 interface UserMeta extends StorageMetadata<UserData, UserData, 'name' | 'email'> {}
 
 describe('PgStorageProvider — capabilities + listeners', () => {
-  it('declares capabilities { listeners:false, transactions:true, batches:true }', () => {
+  it('declares capabilities { listeners:false, transactions:true, batches:true, upsert:false }', () => {
     const provider = new PgStorageProvider<UserMeta>({ client: mockPgClient() });
     expect(provider.capabilities).toEqual({
       listeners: false,
       transactions: true,
       batches: true,
+      // Wave 6.5 / PRD-007 — `upsert: false` until audit-aware impl ships
+      // (current set() overwrites the whole jsonb, including creator_uuid).
+      upsert: false,
     });
   });
 

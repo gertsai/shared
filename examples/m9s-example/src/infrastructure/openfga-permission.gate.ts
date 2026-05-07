@@ -4,7 +4,11 @@ import type { IPermissionGate } from '../domain/ports/IPermissionGate';
 // Type-only imports so this module can load even without `@gertsai/auth-openfga`
 // initialized at startup. The runtime side imports the package lazily inside
 // `can()`.
-import type { FgaResourceType, FgaCheckRequest } from '@gertsai/auth-openfga';
+import type {
+  FgaResourceType,
+  FgaCheckRequest,
+  FgaClientConfig,
+} from '@gertsai/auth-openfga';
 
 /**
  * OpenFgaPermissionGate — production-shaped adapter (Sprint 3.11 E+).
@@ -78,22 +82,21 @@ export interface OpenFgaPermissionGateOptions {
    * Pre-resolved client config. When provided, the gate constructs an
    * isolated `GertsFgaClient` with these settings instead of relying on the
    * package singleton. Recommended for tests + multi-tenant deployments.
+   *
+   * Wave 6 type-audit P1-3 — sourced from `Pick<FgaClientConfig, ...>` so
+   * future identity-affecting fields added to `@gertsai/auth-openfga`
+   * propagate here automatically without manual sync.
+   *
+   * Wave 6.2 (RFC-003 Edge 2): `apiToken` is plumbed end-to-end through
+   * `@gertsai/auth-openfga` to the OpenFGA SDK
+   * `credentials: { method: ApiToken, config: { token } }`. The Sprint
+   * 3.11 §P1-1 throw-on-apiToken defensive guard has been removed; the
+   * token now reaches the SDK as intended.
    */
-  readonly client?: {
-    /** OpenFGA HTTP endpoint, e.g. `http://localhost:8080`. */
-    readonly apiUrl?: string;
-    /** Store UUID — must already exist (provisioned by openfga-bootstrap.ts). */
-    readonly storeId?: string;
-    /**
-     * Preshared bearer token for `Authorization: Bearer ...`.
-     * Wave 6.2 (RFC-003 Edge 2): plumbed end-to-end through
-     * `@gertsai/auth-openfga` to the OpenFGA SDK
-     * `credentials: { method: ApiToken, config: { token } }`. The
-     * Sprint 3.11 §P1-1 throw-on-apiToken defensive guard has been
-     * removed; the token now reaches the SDK as intended.
-     */
-    readonly apiToken?: string;
-  };
+  readonly client?: Pick<
+    FgaClientConfig,
+    'apiUrl' | 'storeId' | 'apiToken' | 'authorizationModelId'
+  >;
 }
 
 /**

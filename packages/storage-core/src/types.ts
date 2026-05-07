@@ -409,7 +409,7 @@ export interface IStorageProvider<Meta extends StorageMetadata> {
     path: string,
     id: string,
     data: Meta['write'],
-  ): Promise<{ id: string }>;
+  ): Promise<{ readonly id: string }>;
 
   /**
    * Delete the document at `(path, id)`. This is a hard-delete at the
