@@ -263,20 +263,21 @@ export class PgStorageProvider<Meta extends StorageMetadata>
   implements IStorageProvider<Meta>
 {
   /**
-   * Wave 6.5 / PRD-007: `upsert: false` because the current `set()`
-   * statement does `INSERT ... ON CONFLICT (id) DO UPDATE SET data =
-   * EXCLUDED.data` — this overwrites the WHOLE jsonb payload on
-   * conflict, INCLUDING `creator_uuid`/`created_at`. A correct
-   * audit-aware fast path needs to enumerate audit columns separately
-   * and exclude create-time fields from the UPDATE SET-list. Per-provider
-   * follow-up work; interface is in place so a future iteration can opt in
-   * without breaking the package surface.
+   * Wave 6.5 / PRD-007 + Wave 7.2 audit-aware upsert.
+   *
+   * `set()` (above) uses a naive `ON CONFLICT DO UPDATE SET data =
+   * EXCLUDED.data` — correct for `set()` semantics (overwrite).
+   * `upsertDoc()` BELOW uses a surgical jsonb merge that strips
+   * `creator_uuid` + `created_at` from the incoming EXCLUDED payload
+   * before merging, so create-time audit is preserved across UPDATE.
+   * That makes `preservesCreatorAudit: true` honest and lets
+   * `BaseEntityStorageService.upsert()` use the 1-RTT fast path.
    */
   readonly capabilities = {
     listeners: false,
     transactions: true,
     batches: true,
-    upsert: false,
+    upsert: { supported: true, preservesCreatorAudit: true },
   } as const satisfies StorageCapabilities;
 
   private readonly _client: PgClient;
@@ -307,22 +308,46 @@ export class PgStorageProvider<Meta extends StorageMetadata>
   }
 
   /**
-   * Wave 6.5 / PRD-007 native 1-RTT upsert.
+   * Wave 6.5 / PRD-007 + Wave 7.2 audit-aware native 1-RTT upsert.
    *
-   * The Postgres `set()` above is already an `INSERT ... ON CONFLICT
-   * DO UPDATE` — `upsertDoc()` reuses the same statement and returns
-   * the resolved id. This collapses the Sprint 3.5
-   * `BaseEntityStorageService.upsert()` 2-RTT path
-   * (`getDoc → set/update`) to a single SQL statement.
+   * SQL contract:
+   *
+   * ```sql
+   * INSERT INTO <table> (id, data) VALUES ($1, $2)
+   * ON CONFLICT (id) DO UPDATE
+   *   SET data = <table>.data || (EXCLUDED.data - 'creator_uuid' - 'created_at')
+   * ```
+   *
+   * On INSERT: the row is created with the full incoming payload (incl.
+   * `creator_uuid` + `created_at` stamped by the service via
+   * `buildDataForSet`).
+   *
+   * On UPDATE: jsonb operator `-` strips `creator_uuid` and `created_at`
+   * from the incoming EXCLUDED payload, then `||` merges the remaining
+   * fields onto the existing row's jsonb. Result: existing row keeps its
+   * original `creator_uuid` + `created_at`, while modify-time fields
+   * (`last_modified_uuid`, `last_modified_at`) are overwritten by the
+   * incoming values — exactly the audit semantic that the Sprint 3.5
+   * 2-RTT `update()` path produces.
+   *
+   * One round-trip vs. the Sprint 3.5 `getDoc → update` two-RTT path,
+   * audit-correct.
+   *
+   * Field names match the `@gertsai/entity-audit` convention. If the
+   * convention changes, update both this method AND the matching
+   * `InMemoryStorageProvider.upsertDoc`.
    */
   async upsertDoc(
     path: string,
     id: string,
     data: Meta['write'],
   ): Promise<{ id: string }> {
+    const table = this._table(path);
     await rawExecute(
       this._client,
-      `INSERT INTO ${this._table(path)} (id, data) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data`,
+      `INSERT INTO ${table} (id, data) VALUES ($1, $2) ` +
+        `ON CONFLICT (id) DO UPDATE SET ` +
+        `data = ${table}.data || (EXCLUDED.data - 'creator_uuid' - 'created_at')`,
       [id, data],
     );
     return { id };

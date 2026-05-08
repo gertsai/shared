@@ -40,7 +40,13 @@ class RecordingProvider implements IStorageProvider<DocMeta> {
       listeners: false,
       transactions: false,
       batches: false,
-      upsert: capUpsert,
+      // Wave 7.2 audit P1-1: tri-state cap. `capUpsert: true` →
+      // `supported` AND `preservesCreatorAudit` both true (only shape
+      // the service uses for the 1-RTT path). `capUpsert: false` →
+      // both false (2-RTT fallback path).
+      upsert: capUpsert
+        ? { supported: true, preservesCreatorAudit: true }
+        : { supported: false, preservesCreatorAudit: false },
     };
   }
 
