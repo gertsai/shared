@@ -48,7 +48,7 @@ export abstract class Entity<Data extends object> extends Model {
     }
     this._uidPath = opts.uidPath;
     this._reactive = opts.reactive ?? plainReactiveAdapter;
-    const seed = { ...this.$defaultData(), ...(opts.data ?? {}) } as Data;
+    const seed = { ...this.$defaultData(), ...opts.data } as Data;
     this._data = this._reactive.reactive(seed);
     // Mirror Orchestra `Entity` constructor: mark the entity instance itself
     // as raw so that UI frameworks that recursively wrap (e.g., Vue `reactive`

@@ -778,8 +778,8 @@ describe('DataStream', () => {
         stream.pause();
 
         // All writes go to buffer
-        const r1 = stream.write(1); // buffer: 1
-        const r2 = stream.write(2); // buffer: 2
+        const _r1 = stream.write(1); // buffer: 1
+        const _r2 = stream.write(2); // buffer: 2
         const r3 = stream.write(3); // buffer: 3 = highWaterMark
 
         // Should return false when buffer hits highWaterMark
@@ -830,7 +830,7 @@ describe('DataStream', () => {
 
         // Now pause again and add more to test the backpressure update
         stream.pause();
-        const rNext = stream.write(3); // buffer grows during pause
+        const _rNext = stream.write(3); // buffer grows during pause
 
         // The paused branch correctly calls _checkBackpressure
         // This test verifies the fix doesn't break existing behavior

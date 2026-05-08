@@ -142,7 +142,7 @@ export class InMemoryStorageProvider<
   ): VersionedDoc {
     const prev = coll.get(id);
     const merged = {
-      ...((prev?.data as Record<string, unknown> | undefined) ?? {}),
+      ...(prev?.data as Record<string, unknown> | undefined),
       ...partial,
     };
     const versioned: VersionedDoc = {

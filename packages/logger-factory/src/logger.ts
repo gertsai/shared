@@ -61,7 +61,7 @@ const LEVEL_ORDER: Record<LogLevel, number> = {
 
 export function createLogger(opts: LoggerFactoryOpts = {}): Logger {
   const backend = opts.backend ?? consoleBackend;
-  const baseContext: LogContext = Object.freeze({ ...(opts.baseContext ?? {}) });
+  const baseContext: LogContext = Object.freeze({ ...opts.baseContext });
   const userRedact = opts.redact ?? [];
   const redactSet = new Set(
     [...REDACTION_KEYS, ...userRedact].map((k) => k.toLowerCase()),
@@ -87,7 +87,7 @@ export function createLogger(opts: LoggerFactoryOpts = {}): Logger {
 
   function emit(level: LogLevel, msg: string, ctx?: LogContext): void {
     if (!shouldLog(level)) return;
-    const merged: LogContext = { ...baseContext, ...(ctx ?? {}) };
+    const merged: LogContext = { ...baseContext, ...ctx };
     backend.log(level, msg, applyRedaction(merged));
   }
 

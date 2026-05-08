@@ -27,7 +27,7 @@ describe('@gertsai/otel/moleculer withMoleculerTracing', () => {
     );
     const tracing = (result as { tracing?: Record<string, unknown> }).tracing;
     expect(tracing?.sampling).toEqual({ rate: 0.25 });
-    expect((tracing?.exporter as { options: { endpoint: string } }).options.endpoint).toBe(
+    expect((tracing!.exporter as { options: { endpoint: string } }).options.endpoint).toBe(
       'http://collector:9411/api/v2/spans',
     );
   });

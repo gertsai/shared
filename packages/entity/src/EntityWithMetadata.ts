@@ -49,7 +49,7 @@ export abstract class EntityWithMetadata<
     super(opts);
     const seedMeta = {
       ...this.$defaultMetadata(),
-      ...(opts.metadata ?? {}),
+      ...opts.metadata,
     } as Metadata;
     this._metadata = this._reactive.reactive(seedMeta);
     this._isMockup = opts.isMockup ?? true;

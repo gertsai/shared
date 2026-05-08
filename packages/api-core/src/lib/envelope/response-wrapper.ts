@@ -19,7 +19,6 @@ import { generateId, generateRequestId, RETRYABLE_ERROR_CODES } from './types';
 import type { OrchestraApiResponse } from '../apiResponse/OrchestraApiResponse.class';
 import type { ResponseCode } from '../apiResponse/types';
 import {
-  type OrchestraInfo,
   getOrchestraInfo,
   extractTenantId,
   extractTraceId,

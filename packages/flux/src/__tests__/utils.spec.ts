@@ -22,6 +22,7 @@ describe('Utils', () => {
     });
 
     it('should return true for thenable objects', () => {
+      // eslint-disable-next-line unicorn/no-thenable -- intentional: testing isPromise's thenable detection
       const thenable = { then: () => {} };
       expect(isPromise(thenable)).toBe(true);
     });
@@ -37,6 +38,7 @@ describe('Utils', () => {
     });
 
     it('should return false for objects with non-function then property', () => {
+      // eslint-disable-next-line unicorn/no-thenable -- intentional: testing isPromise rejects non-function then
       const notThenable = { then: 'not a function' };
       expect(isPromise(notThenable)).toBe(false);
     });

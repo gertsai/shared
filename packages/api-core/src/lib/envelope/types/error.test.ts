@@ -4,7 +4,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   type GertsErrorType,
-  type GertsErrorCode,
   type GertsProcessingStage,
   type GertsErrorResponse,
   ERROR_STATUS_CODES,

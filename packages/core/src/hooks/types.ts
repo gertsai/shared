@@ -13,7 +13,7 @@
  * - Filter support (agents, tools)
  */
 
-import type { LLMMessage, LLMTool, LLMResponse } from '../llm/types';
+import type { LLMMessage, LLMTool } from '../llm/types';
 
 // ============================================================================
 // Run Input/Output Types

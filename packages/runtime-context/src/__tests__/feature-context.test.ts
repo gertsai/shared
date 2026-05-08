@@ -45,7 +45,7 @@ describe('DefaultFeatureContext', () => {
       enabled: new Set(['a', 'b']),
       flagProvider: () => true,
     });
-    expect([...ctx.enabledFlags()].sort()).toEqual(['a', 'b']);
+    expect([...ctx.enabledFlags()].toSorted()).toEqual(['a', 'b']);
   });
 
   it('empty init reports nothing enabled', () => {

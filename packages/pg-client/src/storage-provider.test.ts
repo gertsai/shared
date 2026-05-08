@@ -310,7 +310,7 @@ function buildPgProviderWithFakeStore(): PgStorageProvider<KvMeta> {
         const row = store.get(id);
         return (row ? [{ data: row }] : []) as T[];
       }
-      if (/SELECT data FROM kv$/.test(sql) || /SELECT data FROM kv\b/.test(sql)) {
+      if (sql.endsWith('SELECT data FROM kv') || /SELECT data FROM kv\b/.test(sql)) {
         return Array.from(store.values()).map((data) => ({ data })) as T[];
       }
       if (/SELECT COUNT/i.test(sql)) {

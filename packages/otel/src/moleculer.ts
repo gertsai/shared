@@ -67,7 +67,7 @@ export function withMoleculerTracing(
           endpoint: opts.otlpEndpoint ?? 'http://localhost:9411/api/v2/spans',
         },
       },
-      ...(existingTracing ?? {}),
+      ...existingTracing,
     } as BrokerOptions['tracing'],
   };
 }

@@ -83,7 +83,8 @@ describe('Backward Compatibility', () => {
     };
 
     // Should not use modular architecture by default
-    const middleware = RLRMiddleware(options);
+    // Side-effect call: assertions below verify mockStore.defineCommand was invoked
+    RLRMiddleware(options);
 
     // Check that Lua commands are defined (legacy behavior)
     expect(mockStore.defineCommand).toHaveBeenCalledWith(

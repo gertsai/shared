@@ -8,7 +8,6 @@ import {
   sleep,
   isReasonableDelay,
   DEFAULT_RETRY_CONFIG,
-  type RetryConfig,
 } from './retry';
 
 // Mock retryable error for testing

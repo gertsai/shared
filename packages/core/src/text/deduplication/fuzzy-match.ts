@@ -376,8 +376,8 @@ export class FuzzyMatchDeduplication implements IDeduplicationStrategy {
     const matchDistance = Math.floor(Math.max(a.length, b.length) / 2) - 1;
 
     // Track which characters have been matched
-    const aMatches = new Array(a.length).fill(false);
-    const bMatches = new Array(b.length).fill(false);
+    const aMatches = Array.from({ length: a.length }, () => false);
+    const bMatches = Array.from({ length: b.length }, () => false);
 
     let matches = 0;
     let transpositions = 0;

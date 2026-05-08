@@ -5,7 +5,6 @@ import {
   hashCollection,
   memoize,
   memoizeCollectionOp,
-  memoizeMethod,
   memoizeReducer,
 } from './memoize';
 

@@ -30,7 +30,7 @@ describe('operations edge cases', () => {
 
   it('uniqueBy with collisions', () => {
     const res = uniqueBy(entries, (v) => v % 2);
-    expect(Array.from(res.values()).sort()).toEqual([1, 2]);
+    expect(Array.from(res.values()).toSorted()).toEqual([1, 2]);
   });
 
   it('set algebra helpers', () => {

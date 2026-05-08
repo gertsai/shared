@@ -27,7 +27,7 @@ describe('transform operations', () => {
 
   describe('map', () => {
     it('should transform entries to new values', () => {
-      const result = map(numberMap, (value, key) => value * 2);
+      const result = map(numberMap, (value, _key) => value * 2);
       expect(result).toEqual([2, 4, 6, 8]);
     });
 
@@ -72,7 +72,7 @@ describe('transform operations', () => {
 
   describe('mapKeys', () => {
     it('should transform keys keeping values', () => {
-      const result = mapKeys(numberMap, (key, value) => key.toUpperCase());
+      const result = mapKeys(numberMap, (key, _value) => key.toUpperCase());
       expect(result).toEqual(
         new Map([
           ['A', 1],

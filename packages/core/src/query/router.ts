@@ -17,11 +17,7 @@ import type {
   ExecutorMetadata,
   QueryToolOptions,
 } from './executor.js';
-import {
-  getAllSupportedTypes,
-  findExecutorByName,
-  findExecutorsByType,
-} from './executor.js';
+import { getAllSupportedTypes } from './executor.js';
 
 // ============================================================================
 // Query Selection
@@ -319,7 +315,7 @@ export class QueryRouter implements IQueryExecutor<QueryRequest, unknown> {
         metadata: {
           ...result.metadata,
           custom: {
-            ...(result.metadata.custom as object ?? {}),
+            ...(result.metadata.custom as object),
             routing: {
               selector: this.selector.name,
               executor: selection.executorName,
@@ -367,7 +363,7 @@ export class QueryRouter implements IQueryExecutor<QueryRequest, unknown> {
           metadata: {
             ...result.metadata,
             custom: {
-              ...(result.metadata.custom as object ?? {}),
+              ...(result.metadata.custom as object),
               routing: {
                 selector: this.selector.name,
                 executor: selection.executorName,

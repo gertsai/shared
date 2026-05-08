@@ -199,7 +199,7 @@ describe('ITimestamp interface', () => {
           nanoseconds: 500000000,
           toDate: () => new Date(),
           toMillis: () => 0,
-          isEqual: (other) => false, // Different implementation
+          isEqual: (_other) => false, // Different implementation
           toString: () => '',
         };
 
@@ -265,7 +265,7 @@ describe('ITimestamp interface', () => {
         new MockTimestamp(1609459200, 0),
       ];
 
-      const sorted = timestamps.sort((a, b) => a.toMillis() - b.toMillis());
+      const sorted = timestamps.toSorted((a, b) => a.toMillis() - b.toMillis());
 
       expect(sorted[0].toMillis()).toBe(1609459200000);
       expect(sorted[1].toMillis()).toBe(1609459200500);

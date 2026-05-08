@@ -116,7 +116,7 @@ export function setupObservability(opts: SetupObservabilityOpts): ObservabilityH
 
   const resourceAttrs: Record<string, string> = {
     [serviceNameKey]: opts.serviceName,
-    ...(opts.resource ?? {}),
+    ...opts.resource,
   };
 
   const resource = buildResource(resourcesMod, resourceAttrs);

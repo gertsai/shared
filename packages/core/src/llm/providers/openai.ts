@@ -23,7 +23,6 @@ import type {
   LLMCallOptions,
   LLMTool,
   TokenUsage,
-  LLMRole,
   JSONSchemaDefinition,
 } from '../types';
 

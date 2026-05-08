@@ -15,7 +15,7 @@ import type Moleculer from 'moleculer';
 
 import type { ResponseCode } from '../apiResponse';
 import type { ContextMeta, TypiaValidator } from '../common';
-import type { TypiaParamsWithSchema, ActionParams } from '../common/typia-params';
+import type { TypiaParamsWithSchema } from '../common/typia-params';
 
 // =============================================================================
 // Service Context Extension

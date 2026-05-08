@@ -230,7 +230,7 @@ export class LexoRank {
         segments.push(rest % this.#MAX_SEGMENT);
         rest = Math.floor(rest / this.#MAX_SEGMENT);
       }
-      return this.#make(segments.reverse());
+      return this.#make(segments.toReversed());
     }
     return this.#make([num]);
   }

@@ -2,10 +2,6 @@
 import { DataAccessUuidMissingError } from '@gertsai/session-guard';
 import type { Session } from '@gertsai/session';
 
-import {
-  SessionMissingError,
-  TenantContextMissingError,
-} from './errors.js';
 import type { RequestContext } from './request-context.js';
 
 /**

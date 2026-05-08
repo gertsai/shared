@@ -160,7 +160,7 @@ export function compareCosts(
     results.push({ modelId: id, model, cost });
   }
 
-  return results.sort((a, b) => a.cost.totalCost - b.cost.totalCost);
+  return results.toSorted((a, b) => a.cost.totalCost - b.cost.totalCost);
 }
 
 /**

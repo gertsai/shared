@@ -252,6 +252,7 @@ export interface GraphConfig {
  * };
  * ```
  */
+// eslint-disable-next-line no-unused-vars -- phantom type param for public API capability discrimination (used positionally in callers)
 export interface RAGRequest<C extends RAGCapabilities = {}> {
   // ============== Required ==============
 

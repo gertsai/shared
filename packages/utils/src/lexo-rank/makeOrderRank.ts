@@ -31,7 +31,7 @@ export function makeOrderRank({
     ranks[prev_uid] = prev_rank;
   }
 
-  const contextRanks = Object.entries(ranks).sort((a, b) => {
+  const contextRanks = Object.entries(ranks).toSorted((a, b) => {
     if (a[1] > b[1]) {
       return 1;
     }

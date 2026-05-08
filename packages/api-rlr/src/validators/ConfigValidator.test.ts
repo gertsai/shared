@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Redis } from 'ioredis';
 import { ConfigValidator } from './ConfigValidator';
 import { LimiterStrategy, Methods } from '../utils/types';
-import type { RateLimitOptions } from '../utils/types';
 import { createMockRedis } from '../utils/test-types';
 
 describe('ConfigValidator', () => {

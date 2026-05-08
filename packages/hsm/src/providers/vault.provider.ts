@@ -615,12 +615,16 @@ export class VaultProvider implements HSMProvider {
     const timeout = setTimeout(() => controller.abort(), this.config.timeoutMs);
 
     try {
-      const response = await fetch(url, {
+      const fetchInit: RequestInit = {
         method,
         headers,
-        body: body ? JSON.stringify(body) : undefined,
         signal: controller.signal,
-      });
+      };
+      // Only attach body for non-GET methods (GET cannot have a body per Fetch spec)
+      if (body && method !== 'GET') {
+        fetchInit.body = JSON.stringify(body);
+      }
+      const response = await fetch(url, fetchInit);
 
       if (!response.ok) {
         const errorText = await response.text();

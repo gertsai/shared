@@ -537,7 +537,7 @@ export class M9sCacheCacher extends BaseCacherClass {
     }
     if (obj && typeof obj === 'object') {
       const record = obj as Record<string, unknown>;
-      const keys = Object.keys(record).sort(); // Sort for stability
+      const keys = Object.keys(record).toSorted(); // Sort for stability
       return (
         '{' +
         keys.map((key) => `${key}:${this._generateKeyFromObject(record[key])}`).join('|') +

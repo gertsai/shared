@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { CitationSchema } from './citation';
-import { EntitySchema, TripletSchema } from '../extraction/schemas';
+import { EntitySchema } from '../extraction/schemas';
 import { TextNodeSchema } from '../nodes/text-node';
 
 /**

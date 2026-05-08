@@ -97,7 +97,7 @@ describe('specialized weak collections', () => {
     const va = { v: 1 };
     const vb = { v: 2 };
     m.set('a', va).set('b', vb);
-    expect(Array.from(m.keys()).sort()).toEqual(['a', 'b']);
+    expect(Array.from(m.keys()).toSorted()).toEqual(['a', 'b']);
     expect(Array.from(m.entries()).length).toBe(2);
     // delete 'a' and ensure iterators reflect the change
     expect(m.delete('a')).toBe(true);

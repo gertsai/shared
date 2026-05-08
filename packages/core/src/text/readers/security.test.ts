@@ -6,7 +6,7 @@
  * - SEC-002: Path traversal is prevented in DirectoryReader (REAL filesystem tests)
  * - SEC-003: ReDoS protection in TokenTextSplitter (Performance + functional)
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import {
@@ -321,7 +321,7 @@ describe('SEC-002: Path Traversal Protection', () => {
       const docs = await reader.loadData(testDir);
 
       expect(docs.length).toBe(2);
-      expect(docs.map((d) => d.text).sort()).toEqual(['nested file', 'root file']);
+      expect(docs.map((d) => d.text).toSorted()).toEqual(['nested file', 'root file']);
     });
 
     // REAL TEST: Directory symlinks pointing outside should be blocked

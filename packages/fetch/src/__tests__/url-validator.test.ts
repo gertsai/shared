@@ -10,7 +10,6 @@ import {
   validateUrl,
   assertSafeUrl,
   createUrlValidator,
-  type UrlValidatorConfig,
 } from '../lib/url-validator';
 
 describe('validateUrl', () => {

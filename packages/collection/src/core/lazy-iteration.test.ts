@@ -5,7 +5,7 @@
  * FIX-021: PersistentCollection.[INTERNAL_DATA]() should cache materialized Map
  */
 
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { PersistentCollection } from './PersistentCollection';
 import { PersistentMap } from './PersistentMap';
 import { INTERNAL_DATA } from '../types/internal';
@@ -291,7 +291,7 @@ describe('Performance characteristics', () => {
     // First call - materializes
     const startFirst = performance.now();
     const first = collection[INTERNAL_DATA]();
-    const elapsedFirst = performance.now() - startFirst;
+    const _elapsedFirst = performance.now() - startFirst;
 
     // Subsequent calls - should be cached
     const startSecond = performance.now();

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { withCommonOps } from './CommonOperations';
 import { ExtendedOpsMixin, withExtendedOps } from './ExtendedOps';
 import { MutableCollection } from '../core/MutableCollection';
@@ -27,13 +27,13 @@ describe('ExtendedOps', () => {
         even
           .toArray()
           .map(([, v]: [string, number]) => v)
-          .sort(),
+          .toSorted(),
       ).toEqual([2, 4]);
       expect(
         odd
           .toArray()
           .map(([, v]: [string, number]) => v)
-          .sort(),
+          .toSorted(),
       ).toEqual([1, 3]);
     }
     const c2 = createMutableCollection<string, number>([['x', 10]]);
@@ -508,7 +508,7 @@ describe('ExtendedOps', () => {
         viewValues = Array.from(view.values());
 
         // Test forEach
-        view.forEach((value: number, key: string) => {
+        view.forEach((_value: number, _key: string) => {
           forEachCount++;
         });
 

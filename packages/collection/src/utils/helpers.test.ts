@@ -498,7 +498,7 @@ describe('helpers', () => {
       ];
 
       const comparator = createComparatorByKey((item) => item.id);
-      const sorted = [...items].sort(comparator);
+      const sorted = [...items].toSorted(comparator);
 
       expect(sorted[0].id).toBe(1);
       expect(sorted[1].id).toBe(1);

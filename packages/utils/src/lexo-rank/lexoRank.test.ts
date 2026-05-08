@@ -69,7 +69,7 @@ describe('LexoRank', () => {
 
     // Perform operations on the generated ranks
     for (let i = 0; i < ranks.length - 1; i++) {
-      const [prev, next] = [ranks[i] as string, ranks[i + 1] as string].sort();
+      const [prev, next] = [ranks[i] as string, ranks[i + 1] as string].toSorted();
       const middle = lexoRank.middle(prev, next);
 
       expect(middle.localeCompare(prev)).toBe(1);

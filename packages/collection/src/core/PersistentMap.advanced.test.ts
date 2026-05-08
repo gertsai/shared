@@ -5,7 +5,7 @@ describe('PersistentMap advanced HAMT operations', () => {
   describe('Complex collision scenarios', () => {
     it('should handle CollisionNode to CollisionNode merges', () => {
       // Create a custom hash function that forces collisions
-      const forceCollision = (key: any) => {
+      const _forceCollision = (_key: any) => {
         // Force all keys to have same hash for testing
         return 42;
       };

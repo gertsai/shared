@@ -60,7 +60,6 @@ export class JSONReader extends FileReader {
 
   async loadData(source: string): Promise<Document[]> {
     const fs = await import('fs/promises');
-    const path = await import('path');
 
     // SEC-001: Validate file size before reading
     await this.validateFileSize(source);

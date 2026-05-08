@@ -77,7 +77,7 @@ describe.skipIf(!RUN)('Comprehensive Rate Limit Integration', () => {
       const timeFrame = 10000; // 10 seconds
       const limit = 10; // 10 req/10s = 1 req/sec
       const burst = 3;
-      const I = timeFrame / limit; // 1000ms inter-arrival
+      const _I = timeFrame / limit; // 1000ms inter-arrival (kept for documentation)
 
       const now = Date.now();
       const results: Array<{ allow: number; remaining: number; retryAfter: number }> = [];
@@ -403,7 +403,7 @@ describe.skipIf(!RUN)('Comprehensive Rate Limit Integration', () => {
             Date.now().toString(),
           );
           successes++;
-        } catch (e) {
+        } catch {
           errors++;
         }
       });

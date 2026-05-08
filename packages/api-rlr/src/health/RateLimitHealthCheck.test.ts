@@ -171,7 +171,7 @@ used_memory_human:1.5M
       );
 
       // Should delete all 5 keys
-      expect(mockStore.del).toHaveBeenCalledWith(...[...page1Keys, ...page2Keys, ...page3Keys]);
+      expect(mockStore.del).toHaveBeenCalledWith(...page1Keys, ...page2Keys, ...page3Keys);
     });
 
     it('handles scanStream with multiple batches', async () => {
@@ -190,7 +190,7 @@ used_memory_human:1.5M
       await healthCheck.cleanup();
 
       // Should delete all keys from all batches
-      expect(mockStore.del).toHaveBeenCalledWith(...[...batch1, ...batch2]);
+      expect(mockStore.del).toHaveBeenCalledWith(...batch1, ...batch2);
     });
 
     it('handles cleanup errors gracefully', async () => {

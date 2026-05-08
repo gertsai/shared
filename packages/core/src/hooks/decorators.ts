@@ -15,7 +15,6 @@
 
 import type {
   HookMetadata,
-  HookFilters,
   BeforeLLMHook,
   AfterLLMHook,
   BeforeToolHook,
@@ -383,7 +382,7 @@ export function priorityHook<T extends Function>(
  */
 export function Hook(options?: HookDecoratorOptions): MethodDecorator {
   return function (
-    target: Object,
+    target: object,
     propertyKey: string | symbol,
     descriptor: PropertyDescriptor
   ): PropertyDescriptor {
@@ -408,7 +407,7 @@ export function BeforeLLMCall(
   options?: LLMHookDecoratorOptions
 ): MethodDecorator {
   return function (
-    target: Object,
+    target: object,
     propertyKey: string | symbol,
     descriptor: PropertyDescriptor
   ): PropertyDescriptor {
@@ -441,7 +440,7 @@ export function AfterLLMCall(
   options?: LLMHookDecoratorOptions
 ): MethodDecorator {
   return function (
-    target: Object,
+    target: object,
     propertyKey: string | symbol,
     descriptor: PropertyDescriptor
   ): PropertyDescriptor {
@@ -474,7 +473,7 @@ export function BeforeToolCall(
   options?: ToolHookDecoratorOptions
 ): MethodDecorator {
   return function (
-    target: Object,
+    target: object,
     propertyKey: string | symbol,
     descriptor: PropertyDescriptor
   ): PropertyDescriptor {
@@ -508,7 +507,7 @@ export function AfterToolCall(
   options?: ToolHookDecoratorOptions
 ): MethodDecorator {
   return function (
-    target: Object,
+    target: object,
     propertyKey: string | symbol,
     descriptor: PropertyDescriptor
   ): PropertyDescriptor {

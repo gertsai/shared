@@ -265,8 +265,8 @@ describe('PersistentCollection advanced operations', () => {
       expect(obj).toEqual({ key_a: 1, key_b: 2 });
 
       // Test with symbol keys
-      const sym1 = Symbol.for('test1');
-      const sym2 = Symbol.for('test2');
+      const _sym1 = Symbol.for('test1');
+      const _sym2 = Symbol.for('test2');
 
       const obj2 = col.toObjectWithKey((k) => Symbol.for(`sym_${k}`));
       expect(obj2[Symbol.for('sym_a')]).toBe(1);
@@ -424,7 +424,7 @@ describe('PersistentCollection advanced operations', () => {
 
       // Test lazy operations - only 4 values > 19990 (19992, 19994, 19996, 19998)
       let count = 0;
-      for (const [k, v] of large.filterIter((v) => v > 19990)) {
+      for (const [_k, v] of large.filterIter((v) => v > 19990)) {
         count++;
         expect(v).toBeGreaterThan(19990);
         if (count > 10) break; // Safety limit

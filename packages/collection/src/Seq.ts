@@ -189,9 +189,9 @@ export class Seq<Key, Value> {
 
     const newSeq = new Seq<Key, NewValue>(source, this._cacheOptions);
     // Preserve operations count for toString without executing them in new sequence
-    (newSeq as unknown as { operations: Array<unknown> }).operations = new Array(
-      this.operations.length + 1,
-    );
+    (newSeq as unknown as { operations: Array<unknown> }).operations = Array.from({
+      length: this.operations.length + 1,
+    });
 
     // Share caches if configured
     if (this._cacheOptions.shareCache) {

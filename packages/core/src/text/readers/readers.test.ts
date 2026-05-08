@@ -5,7 +5,6 @@ import { tmpdir } from 'os';
 
 import { TextFileReader } from './text';
 import { MarkdownReader } from './markdown';
-import { JSONReader } from './json';
 import { CSVReader } from './csv';
 import { HTMLReader } from './html';
 import { ReaderRegistry } from './registry';

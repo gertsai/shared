@@ -18,11 +18,9 @@ import type {
   BeforeToolHook,
   AfterToolHook,
   HookFilters,
-  HookMetadata,
   PreHook,
   PostHook,
 } from './types';
-import type { LLMCallContext, ToolCallContext } from './context';
 
 // ============================================================================
 // Registered Hook Entry

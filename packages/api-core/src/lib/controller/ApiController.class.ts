@@ -46,7 +46,6 @@ import type {
   LifecycleHandler,
   LifecycleHandlerContext,
   QueueHandler,
-  QueueHandlerCtx,
   QueueOptions,
   QueueProcessingStatus,
   QueueTraceContext,
@@ -1210,6 +1209,10 @@ export class ApiController<
         // BullMQ: Create workers for each registered queue handler
         // Skip if workersEnabled=false (API Gateway mode - only adds jobs, doesn't process)
         if (ApiController._config.queue && this.schema.queues) {
+          // `service` aliases `this` so we can pass the Moleculer-bound service
+          // reference into BullMQ Worker callbacks (which use their own `this`)
+          // and across nested arrow scopes that capture by reference.
+          // oxlint-disable-next-line typescript/no-this-alias
           const service = this;
 
           _forIn(this.schema.queues, (fn: any, queueName: string) => {

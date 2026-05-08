@@ -2389,7 +2389,7 @@ export function applyTenantConfigUpdate(
  * @returns Hash string
  */
 export function calculateConfigHash(config: TenantConfig): string {
-  const { configHash, createdAt, updatedAt, ...rest } = config;
+  const { configHash: _configHash, createdAt: _createdAt, updatedAt: _updatedAt, ...rest } = config;
   // Simple hash based on JSON string
   const str = JSON.stringify(rest);
   let hash = 0;

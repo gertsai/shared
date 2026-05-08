@@ -353,7 +353,7 @@ export function memoizeReducer<T, R>(
  * @returns Hash string
  */
 export function hashCollection<K, V>(collection: ReadableCollection<K, V>): string {
-  const entries = Array.from(collection.entries()).sort((a, b) => {
+  const entries = Array.from(collection.entries()).toSorted((a, b) => {
     const keyA = String(a[0]);
     const keyB = String(b[0]);
     return keyA.localeCompare(keyB);

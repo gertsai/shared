@@ -43,7 +43,7 @@ export class SimpleTokenizer implements ITokenizer {
    * @param tokens - Array of token IDs
    * @returns Empty string (stub implementation)
    */
-  decode(tokens: number[]): string {
+  decode(_tokens: number[]): string {
     // This is a stub - in production use tiktoken or similar
     return '';
   }

@@ -19,7 +19,6 @@ export const enum HAMTConstants {
 
 // Local aliases for internal use (const enum values are inlined)
 const SHIFT = HAMTConstants.SHIFT;
-const SIZE = HAMTConstants.SIZE;
 const MASK = HAMTConstants.MASK;
 
 /**

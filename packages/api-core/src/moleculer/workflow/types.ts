@@ -5,4 +5,7 @@
  * as a stable module path; future Moleculer-workflow-specific types may land
  * here without revisiting the barrel.
  */
-export {};
+
+// Placeholder re-export anchor so consumers' `import type {} from './types'`
+// resolves; concrete Moleculer-workflow types may be added here later.
+export type WorkflowTypesModuleAnchor = never;
