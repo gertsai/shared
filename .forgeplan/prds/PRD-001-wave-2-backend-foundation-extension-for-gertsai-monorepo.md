@@ -7,7 +7,7 @@ last_modified_by: claude-code/2.1.128
 links:
 - target: ADR-004
   relation: refines
-status: draft
+status: active
 title: Wave 2 — Backend Foundation Extension for @gertsai/* monorepo
 ---
 
@@ -471,6 +471,7 @@ And   `controller.setWorkflows(...)` in `@gertsai/api-core/moleculer` accepts Wo
 ---
 
 > **Next step**: review + activate ADR-003 + SPEC-001; затем Sprint 1 implementation (~3 часа); затем Sprint 2 typia smoke + decomposition Phase A.
+
 
 
 

@@ -509,14 +509,20 @@ export interface FgaExpandNode {
 
 /**
  * OpenFGA client configuration.
+ *
+ * Wave 7.1 type-audit P1-4 — all fields `readonly` for consistency with
+ * `OpenFgaPermissionGateOptions` / `CheckPermissionOptions`. Internal
+ * `GertsFgaClient` constructor copies fields into a fresh object, so
+ * external mutation after construction was never intended; tightening
+ * the input shape eliminates a silent footgun.
  */
 export interface FgaClientConfig {
   /** API URL (default: http://localhost:8080) */
-  apiUrl?: string;
+  readonly apiUrl?: string;
   /** Store ID (will be fetched/created if not provided) */
-  storeId?: string;
+  readonly storeId?: string;
   /** Authorization model ID (will be fetched if not provided) */
-  authorizationModelId?: string;
+  readonly authorizationModelId?: string;
   /**
    * Pre-shared bearer token for OpenFGA `--authn-method=preshared`
    * deployments (Wave 6.2 / RFC-003).
@@ -530,14 +536,14 @@ export interface FgaClientConfig {
    * SECURITY: never log this value. The SDK includes it in
    * `Authorization: Bearer ...` headers; treat as secret in transit.
    */
-  apiToken?: string;
+  readonly apiToken?: string;
   /** Request timeout in ms */
-  timeout?: number;
+  readonly timeout?: number;
   /** Retry configuration */
-  retry?: {
-    maxAttempts: number;
-    initialDelay: number;
-    maxDelay: number;
+  readonly retry?: {
+    readonly maxAttempts: number;
+    readonly initialDelay: number;
+    readonly maxDelay: number;
   };
 }
 

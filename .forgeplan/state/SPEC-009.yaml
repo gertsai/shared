@@ -1,9 +1,13 @@
 artifact_id: SPEC-009
 workflow_type: greenfield
-current_phase: shape
-advanced_at: 2026-05-06T08:50:54.254571Z
+current_phase: done
+advanced_at: 2026-05-08T09:56:08.674437Z
 history:
 - to: shape
   at: 2026-05-06T08:50:54.254571Z
   reason: 'auto: forgeplan_new'
+- from: shape
+  to: done
+  at: 2026-05-08T09:56:08.674437Z
+  reason: 'auto: forgeplan_activate'
 schema_version: 1

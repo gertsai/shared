@@ -9,7 +9,7 @@ links:
   relation: informs
 - target: PRD-001
   relation: informs
-status: draft
+status: active
 title: Sprint 1 hygiene fixes applied — all 9 SPEC-001 items pass acceptance
 ---
 
@@ -123,6 +123,7 @@ Sprint 1 implementation per SPEC-001 завершён через AgentTeams patt
 | ADR-003 (Platform Runtime Boundaries) | ADR | informs (Sprint 1 — preрequisite для ADR-003 Sprint 2) |
 | Commit `1f8494e` | git commit | implementation |
 | docs/dd.md | external doc | source of all 9 H-items |
+
 
 
 

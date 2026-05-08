@@ -11,7 +11,7 @@ links:
   relation: informs
 - target: RFC-001
   relation: informs
-status: draft
+status: active
 title: Sprint 3.0 complete — unified dual-package release foundation shipped
 ---
 
@@ -177,6 +177,7 @@ Three target consumer profiles все теперь supported:
 | EVID-002 (smoke typia) | Evidence | informs (Phase 0 background) |
 | EVID-003 (Sprint 2 complete) | Evidence | informs |
 | audit-pre-sprint-3-1 (5 reviewers) | external | informs (drives all Phase 4 fixes) |
+
 
 
 

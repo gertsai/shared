@@ -11,7 +11,7 @@ links:
   relation: based_on
 - target: EVID-011
   relation: refines
-status: draft
+status: active
 title: Sprint 3.5.2 — m9s-example Wave 4 migration (Entity envelope + Session-aware Repository)
 ---
 
@@ -199,6 +199,7 @@ class DocumentRepository
 | `examples/m9s-example/` | external | Migration target |
 
 > Next step: SPEC-010 force-activate (validate gate over-fits для example migration), spawn Wave 1 teammates, then Wave 2, then team-lead Phase B/C.
+
 
 
 

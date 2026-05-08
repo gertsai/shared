@@ -1,7 +1,7 @@
 artifact_id: PRD-001
 workflow_type: greenfield
-current_phase: validate
-advanced_at: 2026-05-05T06:57:32.010997Z
+current_phase: done
+advanced_at: 2026-05-08T09:55:33.888504Z
 history:
 - to: shape
   at: 2026-05-05T06:54:03.122965Z
@@ -10,4 +10,8 @@ history:
   to: validate
   at: 2026-05-05T06:57:32.010997Z
   reason: 'auto: forgeplan_validate PASS'
+- from: validate
+  to: done
+  at: 2026-05-08T09:55:33.888504Z
+  reason: 'auto: forgeplan_activate'
 schema_version: 1

@@ -13,7 +13,7 @@ links:
   relation: informs
 - target: PRD-001
   relation: informs
-status: draft
+status: active
 title: Sprint 2 Phase A complete — api-core decomposition shipped on feat branch
 ---
 
@@ -183,6 +183,7 @@ Plus changeset `.changeset/sprint-2-decomposition-phase-a.md` (minor bumps дл�
 | EVID-001 (Sprint 1 fixes applied) | Evidence | informs (Sprint 1 was preрequisite) |
 | EVID-002 (smoke typia + subpath) | Evidence | informs (smoke evidence supported Phase A direction) |
 | Branch feat/api-core-decomposition | git artifact | implementation (4 commits) |
+
 
 
 
