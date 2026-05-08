@@ -474,10 +474,16 @@ export abstract class BaseEntityStorageService<
     // Routing opts (batch/transaction) bypass the fast path because the
     // routing primitives still go through `set()`/`update()` semantics
     // at the runner level.
+    // Wave 7.2 audit P1-1 — tri-state cap requires BOTH `supported` and
+    // `preservesCreatorAudit` for the 1-RTT path; otherwise the
+    // creator audit would be silently overwritten on UPDATE, a
+    // regression vs. the 2-RTT path's `update()` semantics.
+    const upsertCap = this._provider.capabilities.upsert;
     if (
       !opts.batch &&
       !opts.transaction &&
-      this._provider.capabilities.upsert === true &&
+      upsertCap?.supported === true &&
+      upsertCap?.preservesCreatorAudit === true &&
       this._provider.upsertDoc
     ) {
       const { _uid, ...rest } = entity as { _uid: string } & Record<

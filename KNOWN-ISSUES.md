@@ -160,25 +160,25 @@ extraction (Sprint 3.x or Wave 3).
 
 ## 10. `BaseEntityStorageService.upsert` performs 2 RTTs vs 1
 
-**Status (Wave 6.5):** PARTIALLY RESOLVED via PRD-007.
+**Status (Wave 7.2):** RESOLVED via PRD-007 + Wave 7.2 audit P1-1 reshape.
 
-Wave 6.5 added the optional `IStorageProvider.upsertDoc?` primitive +
-`StorageCapabilities.upsert?: boolean` flag. When a provider opts in
-(`capabilities.upsert === true`), `BaseEntityStorageService.upsert()`
-now bypasses the 2-RTT `getDoc → set/update` path and delegates
-directly to `provider.upsertDoc()` for ONE round-trip.
+`StorageCapabilities.upsert` is now a tri-state object
+`{ supported: boolean; preservesCreatorAudit: boolean }`. Both shipped
+providers opt in with both flags `true`:
 
-Both shipped providers (`InMemoryStorageProvider` and
-`PgStorageProvider`) currently report `upsert: false` because their
-naive 1-RTT path would overwrite create-time audit fields
-(`creator_uuid`, `created_at`) on conflict. A correct audit-aware
-upsert needs to enumerate audit columns separately and exclude
-create-time fields from the UPDATE SET-list. Per-provider follow-up
-work.
+- `InMemoryStorageProvider.upsertDoc()` pre-checks `Map.has(id)` (zero
+  RTT — sync local) and merges create-time fields from existing on
+  UPDATE. Audit-aware.
+- `PgStorageProvider.upsertDoc()` uses surgical jsonb merge:
+  `data || (EXCLUDED.data - 'creator_uuid' - 'created_at')` so existing
+  rows preserve creator audit on conflict — single SQL statement, audit-aware.
 
-The interface is in place so a future audit-aware provider can opt in
-without a breaking change. v0.1.0 callers see no behaviour change —
-the 2-RTT path is the back-compat default.
+`BaseEntityStorageService.upsert()` requires BOTH `supported: true` AND
+`preservesCreatorAudit: true` for the 1-RTT fast path; otherwise falls
+back to the Sprint 3.5 2-RTT path. Existing `upsert.test.ts` updated to
+match the new contract (no `ENTITY_CREATED` / `ENTITY_UPDATED` event
+emission on the fast path because insert-vs-update cannot be told
+without a pre-read).
 
 ### Original entry (preserved for reference)
 

@@ -203,18 +203,30 @@ export interface StorageCapabilities {
    */
   readonly batches: boolean;
   /**
-   * Wave 6.5 / PRD-007: whether `upsertDoc` is implemented as a SINGLE
-   * round-trip (typically `INSERT ... ON CONFLICT DO UPDATE` for SQL
-   * backends, `Map.set` for in-memory). When `true`,
-   * `BaseEntityStorageService.upsert` delegates directly; when `false`
-   * (the default for adapters that don't implement it), the service
-   * falls back to the Sprint 3.5 `getDoc → set/update` 2-RTT path.
+   * Wave 6.5 / PRD-007 + Wave 7.2 audit P1-1 — native upsert capability.
    *
-   * Optional with default `false` so existing providers stay
-   * back-compat; new providers SHOULD opt in if their backend supports
-   * native upsert semantics.
+   * Replaced the original `upsert?: boolean` with an object so providers
+   * can advertise the TWO orthogonal facts the service cares about:
+   *
+   *   - `supported` — provider has implemented `upsertDoc()` at all.
+   *   - `preservesCreatorAudit` — on conflict, the provider preserves
+   *     create-time audit fields (`creator_uuid`, `created_at`) instead
+   *     of overwriting them with the incoming payload.
+   *
+   * `BaseEntityStorageService.upsert()` uses the 1-RTT fast path ONLY
+   * when BOTH flags are true. A provider that has `supported: true` but
+   * `preservesCreatorAudit: false` would be a silent audit regression
+   * vs. the 2-RTT `getDoc → set/update` path; the service detects this
+   * and falls back.
+   *
+   * Optional with default behaviour (omitted) = `{ supported: false,
+   * preservesCreatorAudit: false }` so existing providers stay
+   * back-compat; new providers opt in by declaring both flags.
    */
-  readonly upsert?: boolean;
+  readonly upsert?: {
+    readonly supported: boolean;
+    readonly preservesCreatorAudit: boolean;
+  };
 }
 
 /**

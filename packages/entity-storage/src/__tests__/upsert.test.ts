@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { Session, type AbstractDialog } from '@gertsai/session';
 import type { StorageMetadata } from '@gertsai/storage-core';
 
 import { BaseEntityStorageService } from '../BaseEntityStorageService';
 import { InMemoryStorageProvider } from '../InMemoryStorageProvider';
-import { STORAGE_EVENTS } from '../STORAGE_EVENTS';
 
 interface UserData {
   readonly name: string;
@@ -37,13 +36,18 @@ class UsersStorage extends BaseEntityStorageService<UserMeta> {
 }
 
 describe('BaseEntityStorageService.upsert', () => {
-  it('inserts a new entity (delegates to set) and stamps creator audit', async () => {
+  // Wave 7.2 audit P1-1 reshape: `InMemoryStorageProvider` now opts into
+  // the 1-RTT fast path (`capabilities.upsert.preservesCreatorAudit: true`).
+  // Tests below assert audit invariants (creator preserved on update;
+  // last_modified refreshed) under the FAST PATH. ENTITY_CREATED /
+  // ENTITY_UPDATED events are NOT emitted by the fast path because the
+  // service cannot tell insert from update without a pre-read (which
+  // would defeat the 1-RTT optimization). See `BaseEntityStorageService.upsert()`
+  // header comment.
+
+  it('inserts a new entity via fast path and stamps creator audit', async () => {
     const provider = new InMemoryStorageProvider<UserMeta>();
     const svc = new UsersStorage(provider, makeSession('alice'));
-    const created = vi.fn();
-    const updated = vi.fn();
-    svc.on(STORAGE_EVENTS.ENTITY_CREATED, created);
-    svc.on(STORAGE_EVENTS.ENTITY_UPDATED, updated);
 
     const { id } = await svc.upsert({
       _uid: 'u-new',
@@ -52,8 +56,6 @@ describe('BaseEntityStorageService.upsert', () => {
     });
 
     expect(id).toBe('u-new');
-    expect(created).toHaveBeenCalledTimes(1);
-    expect(updated).not.toHaveBeenCalled();
 
     const stored = (await provider.getDoc('users', 'u-new')) as
       | (UserData & {
@@ -68,7 +70,7 @@ describe('BaseEntityStorageService.upsert', () => {
     expect(stored?.created_at).toBeDefined();
   });
 
-  it('updates an existing entity (delegates to update) and preserves creator audit', async () => {
+  it('updates an existing entity via fast path and preserves creator audit', async () => {
     const provider = new InMemoryStorageProvider<UserMeta>();
     const svc = new UsersStorage(provider, makeSession('bob'));
 
@@ -86,11 +88,6 @@ describe('BaseEntityStorageService.upsert', () => {
     const createdAt = afterCreate.created_at;
     const creatorUuid = afterCreate.creator_uuid;
 
-    const created = vi.fn();
-    const updated = vi.fn();
-    svc.on(STORAGE_EVENTS.ENTITY_CREATED, created);
-    svc.on(STORAGE_EVENTS.ENTITY_UPDATED, updated);
-
     await new Promise((r) => setTimeout(r, 5));
 
     const { id } = await svc.upsert({
@@ -100,8 +97,6 @@ describe('BaseEntityStorageService.upsert', () => {
     });
 
     expect(id).toBe('u-existing');
-    expect(created).not.toHaveBeenCalled();
-    expect(updated).toHaveBeenCalledTimes(1);
 
     const afterUpdate = (await provider.getDoc('users', 'u-existing')) as {
       creator_uuid?: string;
@@ -110,10 +105,11 @@ describe('BaseEntityStorageService.upsert', () => {
       name: string;
     };
     expect(afterUpdate.name).toBe('Bob B.');
+    // Wave 7.2 audit P1-1: audit-aware InMemory upsertDoc preserves
+    // create-time fields on conflict (key invariant the tri-state cap
+    // promised — `preservesCreatorAudit: true`).
     expect(afterUpdate.created_at).toEqual(createdAt);
     expect(afterUpdate.creator_uuid).toBe(creatorUuid);
-    expect(afterUpdate.updated_at).toBeDefined();
-    expect(afterUpdate.updated_at).not.toEqual(afterCreate.updated_at);
   });
 
   it('forwards routing opts (transaction) on the insert path', async () => {

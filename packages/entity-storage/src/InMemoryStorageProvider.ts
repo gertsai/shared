@@ -62,21 +62,21 @@ export class InMemoryStorageProvider<
 {
   /** Per audit fix F-A-1 + F-T-3 — `as const satisfies` narrows literally. */
   /**
-   * Wave 6.5 / PRD-007: `upsert: false` because `InMemoryStorageProvider`
-   * does NOT preserve creator audit on conflict. The naive fast path
-   * (`Map.set` of the fully-stamped payload) would overwrite
-   * `creator_uuid`/`created_at` on UPDATE — semantic regression vs. the
-   * Sprint 3.5 2-RTT path which routes through `update()` (modify-time
-   * stamping only). Provider-specific audit-aware upsert is per-provider
-   * follow-up work; the interface (`upsertDoc?`) is in place so a future
-   * audit-aware InMemory variant (or a SQL provider that excludes
-   * create-time columns from `ON CONFLICT DO UPDATE`) can opt in.
+   * Wave 6.5 / PRD-007 + Wave 7.2 audit P1-1 — audit-aware upsert opt-in.
+   *
+   * `upsertDoc()` below pre-checks `Map.has(id)` (zero RTT cost — Map
+   * is local) to decide whether to apply create-time stamps verbatim
+   * (insert path) or preserve existing `creator_uuid`/`created_at`
+   * (update path). This makes the InMemory provider safely
+   * `preservesCreatorAudit: true`; `BaseEntityStorageService.upsert()`
+   * uses the 1-RTT fast path and the original creator stays put across
+   * subsequent upserts.
    */
   readonly capabilities = {
     listeners: true,
     transactions: true,
     batches: true,
-    upsert: false,
+    upsert: { supported: true, preservesCreatorAudit: true },
   } as const satisfies StorageCapabilities;
 
   private readonly _store = new Map<string, Map<string, VersionedDoc>>();
@@ -174,18 +174,42 @@ export class InMemoryStorageProvider<
   }
 
   /**
-   * Wave 6.5 / PRD-007 native upsert. For an in-memory Map this is
-   * equivalent to `set()` — the Map handles the insert-vs-update
-   * branch internally — but exposing it on the interface lets
-   * `BaseEntityStorageService.upsert()` use the 1-RTT fast path
-   * uniformly across providers.
+   * Wave 6.5 / PRD-007 + Wave 7.2 audit-aware upsert.
+   *
+   * `Map.has(id)` is local + sync (no RTT), so we can safely pre-check
+   * existence and merge create-time audit fields from the existing row
+   * when the doc already exists — preserving `creator_uuid` and
+   * `created_at` across UPDATE, just like the Sprint 3.5 `update()`
+   * path. This keeps `capabilities.upsert.preservesCreatorAudit: true`
+   * honest.
+   *
+   * Field names: hard-coded to `creator_uuid` + `created_at` per the
+   * `@gertsai/entity-audit` convention (Sprint 3.4). Future schema
+   * change → update both this provider AND `PgStorageProvider.upsertDoc`.
    */
   async upsertDoc(
     path: string,
     id: string,
     data: Meta['write'],
   ): Promise<{ id: string }> {
-    this._writeOnto(this._coll(path), id, data);
+    const coll = this._coll(path);
+    const existing = coll.get(id);
+    if (existing) {
+      // Update path — preserve creator-time audit fields.
+      const existingDoc = (existing as { data: Record<string, unknown> }).data;
+      const incoming = data as Record<string, unknown>;
+      const merged = { ...incoming } as Record<string, unknown>;
+      if ('creator_uuid' in existingDoc) {
+        merged.creator_uuid = existingDoc.creator_uuid;
+      }
+      if ('created_at' in existingDoc) {
+        merged.created_at = existingDoc.created_at;
+      }
+      this._writeOnto(coll, id, merged as Meta['write']);
+    } else {
+      // Insert path — stamp the incoming payload verbatim.
+      this._writeOnto(coll, id, data);
+    }
     this._emitDoc(path, id);
     this._emitColl(path);
     return { id };

@@ -32,15 +32,17 @@ interface UserData {
 interface UserMeta extends StorageMetadata<UserData, UserData, 'name' | 'email'> {}
 
 describe('PgStorageProvider — capabilities + listeners', () => {
-  it('declares capabilities { listeners:false, transactions:true, batches:true, upsert:false }', () => {
+  it('declares capabilities including audit-aware native upsert (Wave 7.2)', () => {
     const provider = new PgStorageProvider<UserMeta>({ client: mockPgClient() });
     expect(provider.capabilities).toEqual({
       listeners: false,
       transactions: true,
       batches: true,
-      // Wave 6.5 / PRD-007 — `upsert: false` until audit-aware impl ships
-      // (current set() overwrites the whole jsonb, including creator_uuid).
-      upsert: false,
+      // Wave 6.5 / PRD-007 + Wave 7.2 audit P1-1: tri-state cap.
+      // `upsertDoc()` uses `data || (EXCLUDED.data - 'creator_uuid' -
+      // 'created_at')` so create-time audit is preserved on conflict —
+      // `preservesCreatorAudit: true` is honest.
+      upsert: { supported: true, preservesCreatorAudit: true },
     });
   });
 
