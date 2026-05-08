@@ -61,10 +61,22 @@ export class InMemoryStorageProvider<
 > implements IStorageProvider<Meta>
 {
   /** Per audit fix F-A-1 + F-T-3 — `as const satisfies` narrows literally. */
+  /**
+   * Wave 6.5 / PRD-007: `upsert: false` because `InMemoryStorageProvider`
+   * does NOT preserve creator audit on conflict. The naive fast path
+   * (`Map.set` of the fully-stamped payload) would overwrite
+   * `creator_uuid`/`created_at` on UPDATE — semantic regression vs. the
+   * Sprint 3.5 2-RTT path which routes through `update()` (modify-time
+   * stamping only). Provider-specific audit-aware upsert is per-provider
+   * follow-up work; the interface (`upsertDoc?`) is in place so a future
+   * audit-aware InMemory variant (or a SQL provider that excludes
+   * create-time columns from `ON CONFLICT DO UPDATE`) can opt in.
+   */
   readonly capabilities = {
     listeners: true,
     transactions: true,
     batches: true,
+    upsert: false,
   } as const satisfies StorageCapabilities;
 
   private readonly _store = new Map<string, Map<string, VersionedDoc>>();
@@ -159,6 +171,24 @@ export class InMemoryStorageProvider<
     this._writeOnto(this._coll(path), id, data);
     this._emitDoc(path, id);
     this._emitColl(path);
+  }
+
+  /**
+   * Wave 6.5 / PRD-007 native upsert. For an in-memory Map this is
+   * equivalent to `set()` — the Map handles the insert-vs-update
+   * branch internally — but exposing it on the interface lets
+   * `BaseEntityStorageService.upsert()` use the 1-RTT fast path
+   * uniformly across providers.
+   */
+  async upsertDoc(
+    path: string,
+    id: string,
+    data: Meta['write'],
+  ): Promise<{ id: string }> {
+    this._writeOnto(this._coll(path), id, data);
+    this._emitDoc(path, id);
+    this._emitColl(path);
+    return { id };
   }
 
   async update(

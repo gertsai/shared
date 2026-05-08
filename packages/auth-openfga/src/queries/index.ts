@@ -7,7 +7,7 @@
  * All permission check functions now support optional ABAC context.
  */
 
-import { getFgaClient } from '../client.js';
+import { getFgaClient, type GertsFgaClient } from '../client.js';
 import { isDenied } from '../deny/index.js';
 import { getPermissionCache } from '../cache/index.js';
 import type {
@@ -42,7 +42,46 @@ import type {
  * });
  * ```
  */
-export async function checkPermission(request: FgaCheckRequest): Promise<FgaCheckResponse> {
+/**
+ * Wave 6.3 (ADR-012 + RFC-004 Edge 1.4) — opts for cross-tenant
+ * isolation.
+ *
+ * When `client` is supplied, `checkPermission` uses that instance
+ * directly — bypassing the default `getFgaClient()` lookup. This is
+ * the key escape hatch for multi-tenant SaaS: callers (typically the
+ * `OpenFgaPermissionGate` in m9s-example) resolve their per-tenant
+ * client via `getFgaClient(gateConfig)` and forward it here so the
+ * SDK call uses the right credentials + storeId.
+ *
+ * When `cacheScope` is supplied, the per-tenant `PermissionCache` is
+ * consulted instead of the default. Typically the gate passes
+ * `fingerprint(gateConfig)` for symmetry with the client cache.
+ *
+ * When neither is supplied, behaviour is identical to the
+ * pre-Wave-6.3 single-config path (back-compat).
+ *
+ * Wave 6.3 Pre-Build ARCH-P1-2 — `clientScope` removed: was
+ * documented "reserved for future" and never implemented; reserved
+ * surface in published packages locks semantics future maintainers
+ * must preserve. Re-add when a real follow-up needs string-scope
+ * lookup. Adding optional fields is non-breaking, removing them is —
+ * so erring on the side of NOT shipping unused surface.
+ */
+export interface CheckPermissionOptions {
+  /**
+   * Explicit client instance — when present, used directly instead of
+   * the default singleton. Pair with the matching `cacheScope` for
+   * full isolation.
+   */
+  readonly client?: GertsFgaClient;
+  /** Cache partition key — typically `fingerprint(config)` for symmetry. */
+  readonly cacheScope?: string;
+}
+
+export async function checkPermission(
+  request: FgaCheckRequest,
+  opts?: CheckPermissionOptions,
+): Promise<FgaCheckResponse> {
   // 1. Check deny ledger first (instant revoke)
   const denyResult = await isDenied({
     userId: request.userId,
@@ -59,7 +98,7 @@ export async function checkPermission(request: FgaCheckRequest): Promise<FgaChec
   }
 
   // 2. Check cache (skip for requests with ABAC context as they're dynamic)
-  const cache = getPermissionCache();
+  const cache = getPermissionCache(undefined, opts?.cacheScope);
   const cacheKey = {
     userId: request.userId,
     relation: request.relation,
@@ -74,8 +113,11 @@ export async function checkPermission(request: FgaCheckRequest): Promise<FgaChec
     }
   }
 
-  // 3. Proceed to OpenFGA check
-  const client = getFgaClient();
+  // 3. Proceed to OpenFGA check.
+  //    Wave 6.3: if caller supplied an explicit client, use it (per-tenant
+  //    isolation). Else fall through to the default singleton — preserves
+  //    current behaviour for single-config workloads.
+  const client = opts?.client ?? getFgaClient();
   const result = await client.check(request);
 
   // 4. Cache result (only for non-ABAC requests)

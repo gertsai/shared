@@ -42,8 +42,14 @@
  * ```
  */
 
-// Client
-export { GertsFgaClient, getFgaClient, resetFgaClient } from './client.js';
+// Client (Wave 6.3 / ADR-012: + createFgaClient for non-cached factory)
+export {
+  GertsFgaClient,
+  getFgaClient,
+  createFgaClient,
+  resetFgaClient,
+} from './client.js';
+export { fingerprint, DEFAULT_FINGERPRINT } from './util/fingerprint.js';
 
 // Types
 export type {

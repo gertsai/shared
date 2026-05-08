@@ -103,6 +103,21 @@ export type SetEntityInput<Meta extends StorageMetadata> = Meta['write'] & {
 };
 
 /**
+ * Wave 6.5 / Type-audit P1-1 — named alias for `upsert(entity)` input.
+ *
+ * Tightens `SetEntityInput<Meta>` (where `_uid` is optional) to a shape
+ * where `_uid` is REQUIRED — `upsert` needs a stable id to route the
+ * `INSERT ... ON CONFLICT (id) DO UPDATE` decision. The intersection
+ * with the explicit `{ readonly _uid: string }` makes the constraint
+ * visible at the call site without forcing each consumer to spell the
+ * intersection out.
+ */
+export type UpsertEntityInput<Meta extends StorageMetadata> =
+  SetEntityInput<Meta> & {
+    readonly _uid: string;
+  };
+
+/**
  * Discriminated payload union emitted with every `entity-*` event. Listeners
  * narrow on the `event` literal to access shape-specific fields:
  *
@@ -435,24 +450,58 @@ export abstract class BaseEntityStorageService<
    * Returns `{ id }` matching the existing or freshly-stamped uid so the
    * caller does not need to branch.
    *
-   * **Cost model** (Sprint 3.10 W-3-10-12 clarification, see KNOWN-ISSUES
-   * §10): this implementation issues **two storage round-trips** —
-   * `provider.getDoc` for the existence check, followed by either
-   * `provider.setDoc` or the update path. Backends that natively support
-   * `INSERT ... ON CONFLICT DO UPDATE` (Postgres) or `UPSERT` (CockroachDB,
-   * SQLite) can collapse this to one RTT, but doing so requires the
-   * provider to expose a dedicated upsert primitive (not present on
-   * {@link IStorageProvider} as of v0.2.x). For high-throughput hot paths
-   * prefer running this method **inside a `runInTransaction`** to amortise
-   * connection acquisition overhead, OR sidestep it by calling `set` /
-   * `update` directly when the caller already knows the row's existence
-   * status.
+   * **Cost model** (Wave 6.5 / PRD-007): when the underlying provider
+   * advertises `capabilities.upsert === true` AND implements `upsertDoc`,
+   * this method delegates directly for ONE round-trip — typically
+   * `INSERT ... ON CONFLICT (id) DO UPDATE` for SQL backends. When
+   * neither flag is set (the default for Sprint 3.5 providers), falls
+   * back to the original 2-RTT path (`getDoc → set/update`). Audit
+   * stamping is identical between paths because the entity arrives at
+   * `provider.upsertDoc` already stamped via the service-level
+   * `_assertAlive` + audit pipeline.
+   *
+   * For high-throughput hot paths prefer running this method **inside
+   * a `runInTransaction`** to amortise connection acquisition overhead,
+   * OR sidestep it by calling `set` / `update` directly when the caller
+   * already knows the row's existence status.
    */
   async upsert(
-    entity: SetEntityInput<Meta> & { readonly _uid: string },
+    entity: UpsertEntityInput<Meta>,
     opts: MutationRoutingOpts<Meta, UpdateActionTypes> = {},
   ): Promise<{ id: string }> {
     this._assertAlive();
+    // Wave 6.5 fast path — provider has native 1-RTT upsert.
+    // Routing opts (batch/transaction) bypass the fast path because the
+    // routing primitives still go through `set()`/`update()` semantics
+    // at the runner level.
+    if (
+      !opts.batch &&
+      !opts.transaction &&
+      this._provider.capabilities.upsert === true &&
+      this._provider.upsertDoc
+    ) {
+      const { _uid, ...rest } = entity as { _uid: string } & Record<
+        string,
+        unknown
+      >;
+      // Same audit stamping as `set()` — `buildDataForSet` populates BOTH
+      // create-time (`creator_uuid`, `created_*`) and modify-time
+      // (`last_modified_*`) fields. For SQL providers using
+      // `INSERT ... ON CONFLICT DO UPDATE`, the provider is responsible
+      // for excluding `creator_uuid`/`created_*` from the UPDATE SET-list
+      // so existing rows preserve their original creator audit.
+      const stamped = buildDataForSet(rest as object, this._session, {
+        _uid,
+      }) as unknown as Meta['write'];
+      // Wave 6.5: fast path does NOT emit ENTITY_CREATED / ENTITY_UPDATED
+      // because we cannot tell insert from update without a pre-read
+      // (which would defeat the 1-RTT optimization). Listeners that need
+      // create-vs-update discrimination should subscribe via
+      // `provider.onDocumentSnapshot` (where supported) or use the slow
+      // path by setting `capabilities.upsert = false` on their provider.
+      return this._provider.upsertDoc(this._path, _uid, stamped);
+    }
+    // Backwards-compat 2-RTT fallback (Sprint 3.5 path).
     const existing = await this.get(entity._uid);
     if (existing) {
       const { _uid, ...rest } = entity as { _uid: string } & Record<

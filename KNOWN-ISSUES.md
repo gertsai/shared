@@ -160,6 +160,29 @@ extraction (Sprint 3.x or Wave 3).
 
 ## 10. `BaseEntityStorageService.upsert` performs 2 RTTs vs 1
 
+**Status (Wave 6.5):** PARTIALLY RESOLVED via PRD-007.
+
+Wave 6.5 added the optional `IStorageProvider.upsertDoc?` primitive +
+`StorageCapabilities.upsert?: boolean` flag. When a provider opts in
+(`capabilities.upsert === true`), `BaseEntityStorageService.upsert()`
+now bypasses the 2-RTT `getDoc → set/update` path and delegates
+directly to `provider.upsertDoc()` for ONE round-trip.
+
+Both shipped providers (`InMemoryStorageProvider` and
+`PgStorageProvider`) currently report `upsert: false` because their
+naive 1-RTT path would overwrite create-time audit fields
+(`creator_uuid`, `created_at`) on conflict. A correct audit-aware
+upsert needs to enumerate audit columns separately and exclude
+create-time fields from the UPDATE SET-list. Per-provider follow-up
+work.
+
+The interface is in place so a future audit-aware provider can opt in
+without a breaking change. v0.1.0 callers see no behaviour change —
+the 2-RTT path is the back-compat default.
+
+### Original entry (preserved for reference)
+
+
 **Status:** acceptable; tracked for Wave 6+
 
 `upsert(...)` consolidated from m9s-example DocumentRepository (Sprint 3.6
@@ -293,10 +316,20 @@ uses `PgClient` directly via `pg-document.repository.ts` per Amendment 2
   break production rollout. The DSL is canonical to humans; the inline
   JSON is canonical to OpenFGA at write time; the test enforces
   equivalence. Drift now fails CI on every PR.
-- **§FGA-singleton-multi-store** — `@gertsai/auth-openfga` exposes a
-  process-wide `getFgaClient()` singleton + `getPermissionCache()`. The
-  `OpenFgaPermissionGate` JSDoc now warns that production deployments
-  needing multiple distinct OpenFGA stores in one process MUST use
-  `resetFgaClient() + resetPermissionCache()` between configs (Sprint
-  3.11 Post-Build Track 2 §P1-2 documentation fix). A proper multi-tenant
-  isolation API is follow-up work.
+- ~~**§FGA-singleton-multi-store**~~ **RESOLVED in Wave 6.3** (PRD-006 +
+  ADR-012 + RFC-004 + SPEC-017 + EVID-021). The process-wide
+  singleton was replaced with `Map<fingerprint, GertsFgaClient>` keyed
+  by SHA-256 hex digest of canonical-JSON of distinguishing config
+  fields (`apiUrl`, `apiToken`, `authorizationModelId`, `storeId`).
+  Same pattern applied to `getPermissionCache(scope?)`. New
+  `createFgaClient()` factory provides explicit non-cached escape
+  hatch. `checkPermission(req, { client?, cacheScope? })` accepts
+  per-tenant client + scope. m9s-example `OpenFgaPermissionGate`
+  auto-derives a per-instance fingerprint cache scope (memoised on
+  first `can()` call). Token confidentiality enforced — never
+  plaintext in any Map key. Backwards-compat absolute: every
+  pre-Wave-6.3 call shape behaves identically when only one config
+  is in play. 86/86 auth-openfga tests pass (+22 from baseline 64),
+  42/42 m9s mock + 16/16 m9s real-infra. Pre-Build audit (security +
+  arch + types) returned 1 P0 (literal type) + 5 P1, all fixed
+  inline before activation.
