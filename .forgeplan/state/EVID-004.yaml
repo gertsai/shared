@@ -1,7 +1,7 @@
 artifact_id: EVID-004
 workflow_type: greenfield
-current_phase: validate
-advanced_at: 2026-05-05T12:41:13.923336Z
+current_phase: done
+advanced_at: 2026-05-08T09:55:29.061283Z
 history:
 - to: shape
   at: 2026-05-05T12:39:48.338619Z
@@ -10,4 +10,8 @@ history:
   to: validate
   at: 2026-05-05T12:41:13.923336Z
   reason: 'auto: forgeplan_validate PASS'
+- from: validate
+  to: done
+  at: 2026-05-08T09:55:29.061283Z
+  reason: 'auto: forgeplan_activate'
 schema_version: 1

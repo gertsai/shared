@@ -9,7 +9,7 @@ links:
   relation: informs
 - target: SPEC-002
   relation: informs
-status: draft
+status: active
 title: Sprint 2 Phase 0 smoke — typia + subpath exports compatibility GREEN with moduleResolution finding
 ---
 
@@ -132,6 +132,7 @@ Consider updating to 'node16', 'nodenext', or 'bundler'.
 | PRD-001 (Wave 2 — Clean Library Platform) | PRD | informs |
 | Branch sprint-2/smoke-typia-subpath | git artifact | implementation evidence (НЕ committed на main) |
 | docs/dd.md | external doc | informs (источник decomposition motivation) |
+
 
 
 

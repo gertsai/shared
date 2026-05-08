@@ -13,7 +13,7 @@ links:
   relation: refines
 - target: EVID-010
   relation: refines
-status: draft
+status: active
 title: Sprint 3.5.1 — fidelity fix sprint (post-audit P0/P1) + reference coverage check (Orchestra/gertsai_codex)
 ---
 
@@ -173,6 +173,7 @@ Phase C (team-lead solo): commits + EVID-011 + activation + Hindsight Group 32 +
 | gertsai_codex | external | W-8 reference scan |
 
 > Next step: SPEC-009 → forgeplan_validate → activate (force) → Phase A 7∥ workers → Phase B → Phase C.
+
 
 
 

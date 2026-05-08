@@ -151,7 +151,10 @@ export {
 // Subject types (SEC-009)
 export type { SubjectType } from './constants.js';
 
-// Queries
+// Queries — Wave 7.1 audit P1-5: explicit `CheckPermissionOptions` export so
+// consumers can name the options bag when threading it through their own
+// helpers (previously inferred at call-site only).
+export type { CheckPermissionOptions } from './queries/index.js';
 export {
   checkPermission,
   canView,
