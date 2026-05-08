@@ -43,11 +43,11 @@ packages, extracted из `gertsai_codex` (RFC-extracted с preserved git history
 ## Что это за проект
 
 - **Тип**: TypeScript-only multi-package OSS monorepo (npm packages).
-- **Scope**: `@gertsai/*` — **39 packages** (14 first-wave v0.1.0 + 5 foundation libs Wave 1 v0.2.0 per ADR-004 + 4 entity/session/audit + di-enhanced Wave 4A per PRD-002 + ADR-005 + 13 Wave 5 packages per PRD-003 [2 Phase 1 errors/tenant-resolver per ADR-006 + 3 Phase 2 runtime-context/session-guard/audit-primitives per ADR-007 + 4 Phase 3 entity-vue/react/solid/svelte per ADR-008 + 4 Phase 4 async-utils/logger-factory/rpc-proxy-builder/rest-request-manager per ADR-009]). **Wave 5 complete.**
+- **Scope**: `@gertsai/*` — **38 packages** (14 first-wave v0.1.0 + 5 foundation libs Sprint 3.2 per ADR-004 [config/tenant/otel/queue/pg-client] + 3 Wave 4A new Sprint 3.4 per PRD-002 [entity/session/entity-audit; di enhanced in-place] + 3 Wave 4B new Sprint 3.5 per ADR-005 [storage-core/query-dsl/entity-storage] + 13 Wave 5 packages per PRD-003 [2 Phase 1 errors/tenant-resolver per ADR-006 + 3 Phase 2 runtime-context/session-guard/audit-primitives per ADR-007 + 4 Phase 3 entity-vue/react/solid/svelte per ADR-008 + 4 Phase 4 async-utils/logger-factory/rpc-proxy-builder/rest-request-manager per ADR-009]). **Waves 5–7 complete** — Sprint 3.10 + Sprint 3.11 + Wave 6.{2,3,4,5} + Wave 7.{1,2} are E+/F+ enhancements on existing packages, not new packages.
 - **Стек**: Node ≥22 LTS · pnpm 10.x · TypeScript 5.9 · Vitest · moonrepo · Changesets.
 - **Источник foundation-решений**: `~/Work/GertsHub/.forgeplan/{adrs,epics,evidence}/`
   (read-only, не править отсюда). Главные: ADR-005, ADR-006, ADR-009, EPIC-007, EVID-008.
-- **Текущий статус**: v0.1.0 готов локально, не запушен и не опубликован. См. `KNOWN-ISSUES.md`.
+- **Текущий статус**: Wave 7.2 закрыта на `main` (последние commits `c1f29cb` Wave 7.2 + `f791e8a` storage tri-state + `53e80c0` Wave 7.1). v0.2.0 ещё **не опубликован** в npm — pending publish gate. См. `KNOWN-ISSUES.md` для текущих limitations.
 
 ---
 
@@ -387,11 +387,19 @@ Embedding-модель `bge-m3` (для `search`/`embed`) подгружаетс
 
 **Tactical** (тривиально, обратимо, 1 файл): Observe → Route → Branch → Code → Commit. Без artifact, orchestrator, review, /quality-gate.
 
-## 39 packages — tier таблица + build (post-Sprint 3.0..3.9 per ADR-004 + ADR-005 + ADR-006 + ADR-007 + ADR-008 + ADR-009)
+## 38 packages — tier таблица + build (post-Sprint 3.0..3.11 + Wave 6/7 enhancements per ADR-004..ADR-012)
 
-**Wave 5 fully complete** — 13 packages total (2 Phase 1 + 3 Phase 2 + 4 Phase 3 + 4 Phase 4). **Sprint 3.10 closes Wave 5 polish backlog** + m9s-example Wave 5 integration (canonical reference) + SessionDestroyedError relocation to `@gertsai/errors` Shared Kernel + TypedToken<T> wrapper for ProviderContext per ADR-010 + Amendment 1.
+**Wave 5 fully complete** — 13 packages total (2 Phase 1 + 3 Phase 2 + 4 Phase 3 + 4 Phase 4). Subsequent enhancement waves (no new packages, all E+/F+):
+- **Sprint 3.10** (ADR-010 + Amendment 1) — Wave 5 polish + m9s integration + SessionDestroyedError relocation to `@gertsai/errors` Shared Kernel + TypedToken<T> wrapper for ProviderContext.
+- **Sprint 3.11** (ADR-011 local + SPEC-016 + EVID-018/019) — m9s-example production-grade reference application (real Ollama infra + storage + AuthZ + lint migration).
+- **Wave 6.2** (EVID-020) — `@gertsai/auth-openfga` apiToken plumbed end-to-end to OpenFGA SDK.
+- **Wave 6.3** (ADR-012 + SPEC-017 + EVID-021) — `@gertsai/auth-openfga` multi-instance scoping via SHA-256 fingerprint cache key.
+- **Wave 6.4** (commit `940bdef`) — oxlint correctness sweep + lib bump to ES2023.
+- **Wave 6.5** (EVID-022) — `@gertsai/storage-core` adds `upsertDoc` primitive + capability flag.
+- **Wave 7.1** (commit `53e80c0`) — audit P1 type-system polish + activate legacy drafts.
+- **Wave 7.2** (commit `f791e8a`) — `@gertsai/storage-core` tri-state upsert capability + audit-aware impls in `@gertsai/entity-storage` (closes §10).
 
-Все 39 packages используют **uniform tsup dual ESM+CJS** (Sprint 3.0 §U-1..U-6) с фиксированными scripts (`build`, `clean`, `test`, `typecheck`, `lint` — Sprint 3.0.1 F-8).
+Все 38 packages используют **uniform tsup dual ESM+CJS** (Sprint 3.0 §U-1..U-6) с фиксированными scripts (`build`, `clean`, `test`, `typecheck`, `lint` — Sprint 3.0.1 F-8).
 
 | Tier | Package | Internal deps | Source | Notes |
 |---|---|---|---|---|
@@ -416,7 +424,7 @@ Embedding-модель `bge-m3` (для `search`/`embed`) подгружаетс
 | 2 | `@gertsai/flux` | collection | first wave | reactive streams |
 | **2** | **`@gertsai/queue`** | — | **Sprint 3.2 W-5 (P+F)** | BullMQ wrappers + `/standalone` runner; consumed BY api-core (Sprint 3.x migration) |
 | **2** | **`@gertsai/entity`** | session; entity-vue (peer; optional, only for /vue subpath) | **Sprint 3.4 W-4A-1 (F fresh)** + **Sprint 3.8 (E+ — /vue subpath becomes re-export shim per ADR-008 Decision B)** | Model + Entity + EntityWithMetadata base classes; pluggable ReactiveAdapter; `/vue` subpath delegates to `@gertsai/entity-vue` standalone; framework adapters live in `@gertsai/entity-{vue,react,solid,svelte}` per ADR-008 |
-| **2** | **`@gertsai/storage-core`** | di | **Sprint 3.5 W-4B-1 (F fresh)** | Backend-agnostic IStorageProvider<Meta> interface + StorageMetadata generic + IBatchRunner/ITransactionRunner + capabilities flag + storageProviderIdentifier DI token + ListenersNotSupportedError/TransactionConflictError per ADR-005 Decision A |
+| **2** | **`@gertsai/storage-core`** | di | **Sprint 3.5 W-4B-1 (F fresh)** + **Wave 6.5 (E+ upsertDoc)** + **Wave 7.2 (E+ tri-state upsert)** | Backend-agnostic IStorageProvider<Meta> interface + StorageMetadata generic + IBatchRunner/ITransactionRunner + capabilities flag + storageProviderIdentifier DI token + ListenersNotSupportedError/TransactionConflictError per ADR-005 Decision A. Wave 6.5 (EVID-022): `upsertDoc` primitive + capability flag. Wave 7.2 (commit `f791e8a`): tri-state `upsertDoc` capability `'native' / 'emulated' / false` per audit P1 closure §10. |
 | **2** | **`@gertsai/query-dsl`** | storage-core | **Sprint 3.5 W-4B-3 (F fresh)** | Type-safe query constraints (whereField/orderBy/limit/start*/end*) compile-validated against Meta['indexed']; `./sql` subpath = compileToSql reference Postgres compiler |
 | **2** | **`@gertsai/audit-primitives`** | — | **Sprint 3.7 W-3-7-18..23 (F fresh)** | Pure data layer (zero internal deps per ADR-007 I-7) — Timestamp + AuditMarks interfaces + TimestampProvider call-signature alias `() => Timestamp` (matches entity-audit shape per ADR-007 I-14) + 2 default providers (date / fixed) + 4 conversion helpers |
 | **2** | **`@gertsai/entity-vue`** | entity (peer) | **Sprint 3.8 W-3-8-1..6 (F+E+)** | vueReactiveAdapter standalone Vue ReactiveAdapter; lazy `createRequire('@vue/runtime-core')` per ADR-008 Amendment 1.2.9; entity/vue subpath becomes re-export shim per ADR-008 Decision B + I-3 |
@@ -427,9 +435,9 @@ Embedding-модель `bge-m3` (для `search`/`embed`) подгружаетс
 | **2** | **`@gertsai/session-guard`** | session, errors (peers) | **Sprint 3.7 W-3-7-11..17 (F fresh)** | External invariant guards over `@gertsai/session`: 4 predicates (`isAuthenticated/hasOperatorType/isInTenant/isImpersonating`) + 5 dedicated errors (incl. `AuthenticationRequiredError` per ADR-007 Amendment 1.1.2 split) + 5 assertion helpers + 3 result-shape `check*` variants. `isInTenant` returns false on undefined-tenant (I-18); `isImpersonating` throws on empty UUIDs (I-19) |
 | 3 | `@gertsai/core` | llm-costs | first wave | platform contracts (Workflow types, Sprint 3.1 W-1; Sprint 3.0.1 F-9 meta) |
 | 3 | `@gertsai/hsm` | — | first wave | hierarchical state machines |
-| **3** | **`@gertsai/entity-storage`** | storage-core, entity, entity-audit, session, di | **Sprint 3.5 W-4B-2 (F fresh)** | abstract BaseEntityStorageService<Meta, UpdateActionTypes> session-aware audit-stamped CRUD + soft-delete + EventEmitter (STORAGE_EVENTS) + IDestroyable; class InMemoryStorageProvider<Meta> Map-backed test fixture full-listeners support |
+| **3** | **`@gertsai/entity-storage`** | storage-core, entity, entity-audit, session, di | **Sprint 3.5 W-4B-2 (F fresh)** + **Wave 7.2 (E+ audit-aware upsert impls)** | abstract BaseEntityStorageService<Meta, UpdateActionTypes> session-aware audit-stamped CRUD + soft-delete + EventEmitter (STORAGE_EVENTS) + IDestroyable; class InMemoryStorageProvider<Meta> Map-backed test fixture full-listeners support. Wave 7.2 (commit `f791e8a`): audit-aware upsert implementations consuming storage-core tri-state capability. |
 | **3** | **`@gertsai/rpc-proxy-builder`** | api-core (peer; type-only via /contracts) | **Sprint 3.9 W-3-9-17..21 (F)** | createRpcProxy<TActionMap> + RpcTransport interface; module-private `Symbol('rpc-proxy')` brand per I-7; **3 read-only Proxy traps** (get/set→false/deleteProperty→false) per I-15 (CWE-1188 protection); unknown action throws Error per I-14 (CWE-1230 fail-open prevention); WeakMap idempotent cache |
-| 4 | `@gertsai/auth-openfga` | core | first wave | OpenFGA ReBAC adapter |
+| **4** | **`@gertsai/auth-openfga`** | core | first wave + **Wave 6.2 (E+ apiToken)** + **Wave 6.3 (E+ multi-instance scoping)** | OpenFGA ReBAC adapter. Wave 6.2 (EVID-020, commit `219502e`): apiToken plumbed end-to-end to OpenFGA SDK. Wave 6.3 (ADR-012 + SPEC-017 + EVID-021, commit `67df840`): multi-instance scoped-singletons via SHA-256 fingerprint cache key (resolves `singleton-multi-store` issue). |
 | 4 | `@gertsai/api-core` | core, auth-openfga | first wave | Moleculer SDK; subpaths /contracts /moleculer /runtime/node (Sprint 2 ADR-003) |
 | **4** | **`@gertsai/runtime-context`** | errors, session, tenant-resolver, di (peers); moleculer (peer-optional) | **Sprint 3.7 W-3-7-1..10 (F fresh)** + **Sprint 3.10 W-3-10-26..29a (F+ — TypedToken<T> overload)** | Per-request composition root — RequestContext + AuthContext + FeatureContext + ProviderContext + 5 dedicated errors (Sprint 3.7 per ADR-007). Sprint 3.10: `defineToken<T>` + `isTypedToken` + `TypedToken<T>` interface (required brand `[TYPED_TOKEN_BRAND]` discriminator, NO phantom field per ADR-010 Amendment 1 §I-12); ProviderContext gains overloads accepting both `symbol` and `TypedToken<T>` (declaration order: symbol first, TypedToken second); `DefaultProviderContext` extracts `.symbol` from TypedToken before `assertSymbolToken` per I-13. Module-private `Symbol(...)` brand per Sprint 3.8 I-11 reuse (CWE-1321 prevention). `/moleculer` subpath unchanged. |
 | 5 | `@gertsai/api-rlr` | api-core | first wave | rate limiter / retry loop runtime (ADR-011) |
@@ -440,7 +448,7 @@ Embedding-модель `bge-m3` (для `search`/`embed`) подгружаетс
 - **E+** = Enhancement of existing package, additive only (Wave 5 ADR-006 §D §5; e.g. Sprint 3.6 session scoping).
 
 **Что важно знать**:
-- All 14 first-wave + 5 Sprint 3.2 + 3 Sprint 3.4 + 3 Sprint 3.5 packages (25 physical directories; di-enhanced counted as 26th deliverable in Wave 4 logical roll-up): uniform tsup dual ESM+CJS (Sprint 3.0 §U-3..U-6).
+- All 38 packages (14 first-wave + 5 Sprint 3.2 + 3 Sprint 3.4 + 3 Sprint 3.5 + 13 Wave 5 = 38 physical directories; `di` was enhanced in-place during Sprint 3.4, not a new package): uniform tsup dual ESM+CJS (Sprint 3.0 §U-3..U-6).
 - `tspc` only used in m9s-example (typia transformer). Production packages migrated off ts-patch.
 - `core` + `api-core` имеют subpath exports + typesVersions для Node10 fallback (Sprint 3.0.1 F-4).
 - `tenant`, `otel`, `queue`, `entity`, `query-dsl`, `pg-client` имеют `/moleculer`, `/moleculer`, `/standalone`, `/vue`, `/sql`, `/storage` subpaths соответственно — typesVersions добавлен per Sprint 3.0.1 F-4 pattern.
@@ -448,11 +456,16 @@ Embedding-модель `bge-m3` (для `search`/`embed`) подгружаетс
 - `core/src/connectors/identity-resolver.ts` — закомментирован экспорт. См. `KNOWN-ISSUES.md` пункт 1.
 - **PgStorageProvider** (Sprint 3.5 `@gertsai/pg-client/storage`) wraps existing 3-method PgClient via raw SQL (compileToSql). capabilities { listeners: false, transactions: true, batches: true }. SQLSTATE 40001/40P01 → TransactionConflictError. ADR-005 I-3 + ADR-011 I-1/I-2 preserved (root surface unchanged).
 
-**Cross-references**:
-- ADR-004 (Foundation libs naming + extraction strategy) — обоснование rename `observe→otel`, `database→pg-client`, drop `auth-moleculer`.
-- ADR-003 (Platform Runtime Boundaries) — subpath patterns; new packages follow.
+**Cross-references** (ADR-XXX — local `.forgeplan/adrs/` unless marked **Hub**):
 - ADR-002 (Hex layer enforcement) — applies к `examples/m9s-example/` only; foundation libs flat utility packages OUTSIDE hex.
-- ADR-011 (Hub) — `@gertsai/pg-client` invariants I-1, I-2 (agnostic, no Prisma binding).
+- ADR-003 (Platform Runtime Boundaries) — subpath patterns; new packages follow.
+- ADR-004 (Foundation libs naming + extraction strategy) — rename `observe→otel`, `database→pg-client`, drop `auth-moleculer`.
+- ADR-005 (storage-core architecture) — abstract IStorageProvider + pg-client as adapter.
+- ADR-006/7/8/9/10 (Wave 5 Phases 1–4 + Sprint 3.10 polish closure).
+- ADR-011 **(local)** + SPEC-016 + EVID-018/019 (Sprint 3.11 m9s-example production-grade reference).
+- ADR-012 + SPEC-017 + EVID-021 (Wave 6.3 multi-instance scoped-singletons via SHA-256 fingerprint).
+- EVID-020 (Wave 6.2 apiToken plumbing) + EVID-022 (Wave 6.5 upsertDoc primitive).
+- **Hub ADR-011** (external, `~/Work/GertsHub/.forgeplan/`) — `@gertsai/pg-client` invariants I-1/I-2 (agnostic, no Prisma binding). Note: Hub-ADR-011 ID coincides with local-ADR-011 — disambiguate by prefix when citing.
 
 ---
 
