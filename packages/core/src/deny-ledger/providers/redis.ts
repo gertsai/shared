@@ -212,16 +212,20 @@ function deserializeEntry(json: string): DenyEntry | null {
     if (!isValidEntryData(data)) {
       return null;
     }
+    const resourceType = data.resourceType ?? undefined;
+    const resourceId = data.resourceId ?? undefined;
+    const metadata = data.metadata as DenyEntry['metadata'];
+    const expiresAt = data.expiresAt ? new Date(data.expiresAt) : undefined;
     return {
       id: data.id,
       tenantId: data.tenantId,
       subjectType: data.subjectType as DenyEntry['subjectType'],
       subjectId: data.subjectId,
       reason: data.reason as DenyEntry['reason'],
-      resourceType: data.resourceType ?? undefined,
-      resourceId: data.resourceId ?? undefined,
-      metadata: data.metadata as DenyEntry['metadata'],
-      expiresAt: data.expiresAt ? new Date(data.expiresAt) : undefined,
+      ...(resourceType !== undefined && { resourceType }),
+      ...(resourceId !== undefined && { resourceId }),
+      ...(metadata !== undefined && { metadata }),
+      ...(expiresAt !== undefined && { expiresAt }),
       createdAt: new Date(data.createdAt),
     };
   } catch {
@@ -335,13 +339,15 @@ export class RedisDenyLedger implements DenyLedgerProvider {
 
         // Skip invalid entries (corrupted cache data)
         if (!entry) {
-          expiredKeys.push(keys[i]);
+          // bounds guaranteed by loop condition
+          expiredKeys.push(keys[i]!);
           continue;
         }
 
         // Check expiration
         if (entry.expiresAt && entry.expiresAt <= new Date()) {
-          expiredKeys.push(keys[i]);
+          // bounds guaranteed by loop condition
+          expiredKeys.push(keys[i]!);
           continue;
         }
 

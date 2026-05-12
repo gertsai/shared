@@ -91,7 +91,8 @@ const DEFAULT_CONFIG: ResolvedConfig = {
  */
 function ipv4ToInt(ip: string): number {
   const parts = ip.split('.').map(Number);
-  return ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
+  const [a = 0, b = 0, c = 0, d = 0] = parts;
+  return ((a << 24) | (b << 16) | (c << 8) | d) >>> 0;
 }
 
 /**

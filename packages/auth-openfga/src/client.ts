@@ -23,6 +23,7 @@ import type {
 } from './types.js';
 import { FGA_DEFAULT_CONFIG, userString, objectString } from './constants.js';
 import { fingerprint } from './util/fingerprint.js';
+import { LruTtlMap, type LruTtlMapOptions } from './internal/lru-ttl-map.js';
 
 /**
  * SDK constructor options shape, exposed as a local alias so the
@@ -46,29 +47,63 @@ type SdkClientOptions = {
 // =============================================================================
 
 /**
- * Map of cached `GertsFgaClient` instances keyed by fingerprint of
- * their `FgaClientConfig`. Replaces the pre-Wave-6.3
+ * Bounded LRU+TTL cache of `GertsFgaClient` instances keyed by
+ * fingerprint of their `FgaClientConfig`. Replaces the pre-Wave-6.3
  * `let clientInstance: GertsFgaClient | null` global so distinct
  * configs (e.g. multiple OpenFGA stores in a multi-tenant SaaS) can
  * coexist without aliasing.
  *
+ * Wave 7.4 (PRD-011 / RFC-007 / ADR-013): cache is an {@link LruTtlMap}
+ * rather than an unbounded `Map` to defend against CWE-770 unbounded
+ * resource consumption in long-lived processes that mint many
+ * fingerprints over time (e.g. per-tenant config drift).
+ *
  * Backwards compat: callers passing the same config (or no config) in
  * a single-config workload observe identical behaviour to the pre-
- * Wave-6.3 singleton — same fingerprint → same cached instance.
+ * Wave-6.3 singleton — same fingerprint → same cached instance, so
+ * long as the entry has not been evicted by LRU/TTL.
  *
  * NEVER store apiToken as plaintext in keys: `fingerprint()` SHA-256
  * hashes the canonical JSON before keying. See ADR-012 invariant I-2.
  */
-const clientInstances = new Map<string, GertsFgaClient>();
+const DEFAULT_CLIENT_LRU_OPTIONS: Required<Pick<LruTtlMapOptions, 'maxSize' | 'ttlMs'>> = {
+  maxSize: 1000,
+  ttlMs: 5 * 60 * 1000, // 5 minutes sliding TTL
+};
+
+let clientInstances: LruTtlMap<string, GertsFgaClient> = new LruTtlMap<string, GertsFgaClient>(
+  DEFAULT_CLIENT_LRU_OPTIONS,
+);
+
+/**
+ * Reconfigure the LRU+TTL cache used by `getFgaClient`.
+ *
+ * Wave 7.4 (RFC-007): exposes the `maxSize` / `ttlMs` / `now` knobs of
+ * the underlying {@link LruTtlMap} for ops/tests. Calling this
+ * **discards** the existing cache — equivalent to `resetFgaClient()`
+ * followed by a fresh allocation.
+ *
+ * Defaults: `{ maxSize: 1000, ttlMs: 300_000 }` (5 min sliding TTL).
+ */
+export function configureFgaClientCache(opts?: LruTtlMapOptions): void {
+  clientInstances = new LruTtlMap<string, GertsFgaClient>({
+    ...DEFAULT_CLIENT_LRU_OPTIONS,
+    ...opts,
+  });
+}
 
 /**
  * Get-or-create a `GertsFgaClient` for the given config. Same config
- * (any property order) returns the same cached instance.
+ * (any property order) returns the same cached instance — as long as
+ * the entry has not been evicted by LRU/TTL.
  *
- * Wave 6.3 (ADR-012): cache is now keyed by fingerprint instead of
- * being a single global. Backward-compat: `getFgaClient()` no-arg
- * uses a stable `__default__` key; one-config workloads behave
- * identically to before.
+ * Wave 6.3 (ADR-012): cache is keyed by fingerprint instead of being a
+ * single global. Backward-compat: `getFgaClient()` no-arg uses a stable
+ * `__default__` key; one-config workloads behave identically.
+ *
+ * Wave 7.4 (PRD-011): cache is now bounded (default 1000 entries, 5 min
+ * sliding TTL). If your workload requires different bounds, call
+ * {@link configureFgaClientCache} once at startup.
  */
 export function getFgaClient(config?: FgaClientConfig): GertsFgaClient {
   const key = fingerprint(config);
@@ -130,11 +165,13 @@ export class GertsFgaClient {
   constructor(config?: FgaClientConfig) {
     this.config = {
       apiUrl: config?.apiUrl ?? FGA_DEFAULT_CONFIG.apiUrl,
-      storeId: config?.storeId,
-      authorizationModelId: config?.authorizationModelId,
-      apiToken: config?.apiToken,
       timeout: config?.timeout ?? FGA_DEFAULT_CONFIG.timeout,
       retry: config?.retry ?? FGA_DEFAULT_CONFIG.retry,
+      ...(config?.storeId !== undefined && { storeId: config.storeId }),
+      ...(config?.authorizationModelId !== undefined && {
+        authorizationModelId: config.authorizationModelId,
+      }),
+      ...(config?.apiToken !== undefined && { apiToken: config.apiToken }),
     };
   }
 
@@ -212,19 +249,25 @@ export class GertsFgaClient {
       const models = await tempClient.readAuthorizationModels();
       if (models.authorization_models && models.authorization_models.length > 0) {
         // Use the latest model
-        authorizationModelId = models.authorization_models[0].id;
+        authorizationModelId = models.authorization_models[0]?.id;
       }
     }
 
     // Create final client (token re-applied via buildSdkConfig)
-    this.client = new OpenFgaClient(this.buildSdkConfig({ storeId, authorizationModelId }));
+    this.client = new OpenFgaClient(
+      this.buildSdkConfig(
+        authorizationModelId !== undefined
+          ? { storeId, authorizationModelId }
+          : { storeId },
+      ),
+    );
 
     this.resolvedConfig = {
       apiUrl: this.config.apiUrl!,
       storeId,
       authorizationModelId: authorizationModelId ?? '',
       timeout: this.config.timeout!,
-      apiToken: this.config.apiToken,
+      ...(this.config.apiToken !== undefined && { apiToken: this.config.apiToken }),
     };
   }
 
@@ -337,10 +380,11 @@ export class GertsFgaClient {
 
     const { result } = await this.withRetry(() => client.batchCheck({ checks }));
 
-    return (result ?? []).map((r) => ({
-      request: requests[parseInt(r.correlationId!, 10)],
-      allowed: r.allowed ?? false,
-    }));
+    return (result ?? []).flatMap((r) => {
+      const req = requests[parseInt(r.correlationId!, 10)];
+      if (req === undefined) return [];
+      return [{ request: req, allowed: r.allowed ?? false }];
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -529,7 +573,7 @@ export class GertsFgaClient {
       const computed = t.computed as { userset?: string };
       return {
         type: 'leaf',
-        computed: computed.userset,
+        ...(computed.userset !== undefined && { computed: computed.userset }),
       };
     }
 
@@ -576,8 +620,8 @@ export class GertsFgaClient {
     const client = await this.getClient();
     await this.withRetry(() =>
       client.write({
-        writes: options.writes,
-        deletes: options.deletes,
+        ...(options.writes !== undefined && { writes: options.writes }),
+        ...(options.deletes !== undefined && { deletes: options.deletes }),
       }),
     );
   }

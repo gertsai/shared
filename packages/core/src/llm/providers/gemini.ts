@@ -127,11 +127,12 @@ type GeminiGenerateResponse = ValidatedGeminiResponse;
  */
 export class GeminiProvider extends BaseLLM {
   constructor(config: GeminiConfig, eventBus?: EventBus) {
+    const resolvedApiKey = config.apiKey ?? process.env.GEMINI_API_KEY;
     super(
       {
         ...config,
         provider: 'gemini',
-        apiKey: config.apiKey ?? process.env.GEMINI_API_KEY,
+        ...(resolvedApiKey !== undefined && { apiKey: resolvedApiKey }),
       },
       eventBus
     );
@@ -191,13 +192,14 @@ export class GeminiProvider extends BaseLLM {
         totalTokens: response.usageMetadata?.totalTokenCount ?? 0,
       };
 
+      const mappedFinishReason = this.mapFinishReason(
+        response.candidates?.[0]?.finishReason
+      );
       const llmResponse: LLMResponse = {
         content: processedContent,
         usage,
         model: response.modelVersion ?? this.model,
-        finishReason: this.mapFinishReason(
-          response.candidates?.[0]?.finishReason
-        ),
+        ...(mappedFinishReason !== undefined && { finishReason: mappedFinishReason }),
       };
 
       this.trackTokenUsage(usage);
@@ -256,7 +258,10 @@ export class GeminiProvider extends BaseLLM {
         ? { parts: [{ text: systemParts.join('\n\n') }] }
         : undefined;
 
-    return { contents, systemInstruction };
+    return {
+      contents,
+      ...(systemInstruction !== undefined && { systemInstruction }),
+    };
   }
 
   private prepareParams(

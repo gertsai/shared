@@ -282,7 +282,9 @@ export function extractUsageInfo(data: unknown): UsageInfo | undefined {
   if ('_meta' in obj && typeof obj._meta === 'object' && obj._meta !== null) {
     const meta = obj._meta as Record<string, unknown>;
     if ('tokens' in meta || 'promptTokens' in meta || 'totalTokens' in meta) {
-      const usage: UsageInfo = {
+      const usage: {
+        -readonly [K in keyof UsageInfo]: UsageInfo[K];
+      } = {
         prompt_tokens: (typeof meta.promptTokens === 'number'
           ? meta.promptTokens
           : 0) as UsageInfo['prompt_tokens'],
@@ -292,10 +294,13 @@ export function extractUsageInfo(data: unknown): UsageInfo | undefined {
         total_tokens: (typeof meta.totalTokens === 'number'
           ? meta.totalTokens
           : 0) as UsageInfo['total_tokens'],
-        ...(typeof meta.processingTime === 'number' && {
-          processing_time_ms: meta.processingTime as UsageInfo['processing_time_ms'],
-        }),
       };
+      if (typeof meta.processingTime === 'number') {
+        usage.processing_time_ms = meta.processingTime as Exclude<
+          UsageInfo['processing_time_ms'],
+          undefined
+        >;
+      }
       return usage;
     }
   }

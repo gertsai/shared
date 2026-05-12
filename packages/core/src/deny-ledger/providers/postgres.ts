@@ -167,19 +167,26 @@ function toPrismaEntry(
 }
 
 function fromPrismaEntry(prisma: PrismaDenyLedgerEntry): DenyEntry {
+  // Convert empty string sentinel back to undefined; collect optional fields
+  // and apply via conditional spread for exactOptionalPropertyTypes compliance.
+  const resourceType = prisma.resourceType || undefined;
+  const resourceId = prisma.resourceId || undefined;
+  const expiresAt = prisma.expiresAt ?? undefined;
+  const metadata = (prisma.metadata ?? undefined) as Record<string, unknown> | undefined;
+  const createdBy = prisma.createdBy ?? undefined;
+  const incidentId = prisma.incidentId ?? undefined;
   return {
     id: prisma.id,
     tenantId: prisma.tenantId,
     subjectType: SUBJECT_TYPE_FROM_PRISMA[prisma.subjectType],
     subjectId: prisma.subjectId,
-    // Convert empty string sentinel back to undefined
-    resourceType: prisma.resourceType || undefined,
-    resourceId: prisma.resourceId || undefined,
     reason: REASON_FROM_PRISMA[prisma.reason],
-    expiresAt: prisma.expiresAt ?? undefined,
-    metadata: prisma.metadata as Record<string, unknown> | undefined,
-    createdBy: prisma.createdBy ?? undefined,
-    incidentId: prisma.incidentId ?? undefined,
+    ...(resourceType !== undefined && { resourceType }),
+    ...(resourceId !== undefined && { resourceId }),
+    ...(expiresAt !== undefined && { expiresAt }),
+    ...(metadata !== undefined && { metadata }),
+    ...(createdBy !== undefined && { createdBy }),
+    ...(incidentId !== undefined && { incidentId }),
     createdAt: prisma.createdAt,
   };
 }

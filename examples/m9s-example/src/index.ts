@@ -136,9 +136,9 @@ async function main(): Promise<void> {
     brokerConfig,
     services: [ApiService, DocumentEventsChannelService],
     repl: replEnabled,
-    enabledServices,
     workersEnabled,
-    enabledWorkers,
+    ...(enabledServices !== undefined && { enabledServices }),
+    ...(enabledWorkers !== undefined && { enabledWorkers }),
   });
 }
 

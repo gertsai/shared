@@ -1,0 +1,25 @@
+artifact_id: PRD-008
+workflow_type: greenfield
+current_phase: done
+advanced_at: 2026-05-12T15:27:04.407832Z
+history:
+- to: shape
+  at: 2026-05-08T13:39:23.197108Z
+  reason: 'auto: forgeplan_new'
+- from: shape
+  to: validate
+  at: 2026-05-08T13:42:04.652044Z
+  reason: 'auto: forgeplan_validate PASS'
+- from: validate
+  to: done
+  at: 2026-05-08T13:48:59.227518Z
+  reason: 'auto: forgeplan_activate'
+- from: done
+  to: validate
+  at: 2026-05-08T16:20:25.006535Z
+  reason: 'auto: forgeplan_validate PASS'
+- from: validate
+  to: done
+  at: 2026-05-12T15:27:04.407832Z
+  reason: 'backfill artifact: work already shipped via PR #6 (53e80c0) + PR #7 (f791e8a) on main; phase reverted to validate by post-activate re-validation, restoring done'
+schema_version: 1

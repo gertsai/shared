@@ -488,7 +488,8 @@ export async function bulkWriteTuples(
     await Promise.all(batches.map((batch, i) => processBatch(batch, i)));
   } else {
     for (let i = 0; i < batches.length; i++) {
-      await processBatch(batches[i], i);
+      // bounds guaranteed by loop condition i < batches.length
+      await processBatch(batches[i]!, i);
     }
   }
 
@@ -551,7 +552,8 @@ export async function bulkDeleteTuples(
     await Promise.all(batches.map((batch, i) => processBatch(batch, i)));
   } else {
     for (let i = 0; i < batches.length; i++) {
-      await processBatch(batches[i], i);
+      // bounds guaranteed by loop condition i < batches.length
+      await processBatch(batches[i]!, i);
     }
   }
 

@@ -6,9 +6,15 @@
  * - Event-driven invalidation
  * - Wildcard invalidation patterns
  *
+ * Wave 7.4 (PRD-011 / RFC-007): both the module-scoped per-scope
+ * `permissionCaches` Map and the per-instance `PermissionCache.cache`
+ * Map are now bounded via {@link LruTtlMap} to defend against CWE-770
+ * unbounded growth in long-lived processes.
+ *
  * @module @gertsai/auth-openfga/cache
  */
 
+import { LruTtlMap, type LruTtlMapOptions } from '../internal/lru-ttl-map.js';
 import type { FgaCheckResponse, FgaResourceType } from '../types.js';
 
 // =============================================================================
@@ -62,9 +68,18 @@ export interface PermissionChangeEvent {
 
 /**
  * LRU cache for permission check results.
+ *
+ * Wave 7.4 (RFC-007): backing storage migrated from unbounded
+ * `Map<string, CacheEntry>` to {@link LruTtlMap} for CWE-770 defense.
+ * Eviction policy (LRU + absolute TTL) is enforced by `LruTtlMap`; the
+ * per-entry `expiresAt` field is retained for back-compat shape but is
+ * no longer load-bearing for TTL pruning. `invalidate` walks the
+ * `LruTtlMap.keys()` iterator (note: may surface lazily-expired
+ * entries — that is consistent with the pre-7.4 behaviour which also
+ * iterated entries regardless of expiry).
  */
 export class PermissionCache {
-  private cache: Map<string, CacheEntry> = new Map();
+  private cache: LruTtlMap<string, CacheEntry>;
   private config: Required<PermissionCacheConfig>;
   private stats = {
     hits: 0,
@@ -73,12 +88,26 @@ export class PermissionCache {
     invalidations: 0,
   };
 
-  constructor(config?: PermissionCacheConfig) {
+  /**
+   * @param config — cache configuration; `maxSize` + `ttlMs` propagate to the
+   *                 internal {@link LruTtlMap}.
+   * @param lruOpts — optional `LruTtlMap` overrides (e.g. `now` clock for
+   *                  testability). Additive — back-compat preserved per
+   *                  RFC-007 I-3.
+   */
+  constructor(config?: PermissionCacheConfig, lruOpts?: LruTtlMapOptions) {
     this.config = {
       maxSize: config?.maxSize ?? 10000,
       ttlMs: config?.ttlMs ?? 60000,
       enabled: config?.enabled ?? true,
     };
+    this.cache = new LruTtlMap<string, CacheEntry>({
+      maxSize: this.config.maxSize,
+      ttlMs: this.config.ttlMs,
+      ...(lruOpts?.now !== undefined && { now: lruOpts.now }),
+      ...(lruOpts?.maxSize !== undefined && { maxSize: lruOpts.maxSize }),
+      ...(lruOpts?.ttlMs !== undefined && { ttlMs: lruOpts.ttlMs }),
+    });
   }
 
   /**
@@ -90,6 +119,10 @@ export class PermissionCache {
 
   /**
    * Gets a cached permission result.
+   *
+   * Wave 7.4: LRU access touch + TTL expiry are now handled inside
+   * {@link LruTtlMap.get}; this method only translates the
+   * `undefined → null` boundary and updates `stats`.
    */
   get(key: PermissionCacheKey): FgaCheckResponse | null {
     if (!this.config.enabled) {
@@ -99,21 +132,10 @@ export class PermissionCache {
     const cacheKey = this.makeKey(key);
     const entry = this.cache.get(cacheKey);
 
-    if (!entry) {
+    if (entry === undefined) {
       this.stats.misses++;
       return null;
     }
-
-    // Check TTL
-    if (Date.now() > entry.expiresAt) {
-      this.cache.delete(cacheKey);
-      this.stats.misses++;
-      return null;
-    }
-
-    // Move to end (LRU)
-    this.cache.delete(cacheKey);
-    this.cache.set(cacheKey, entry);
 
     this.stats.hits++;
     return entry.value;
@@ -121,6 +143,10 @@ export class PermissionCache {
 
   /**
    * Sets a permission result in cache.
+   *
+   * Wave 7.4: LRU size eviction is handled inside {@link LruTtlMap.set};
+   * we detect eviction by comparing `size` deltas and increment
+   * `stats.evictions` accordingly.
    */
   set(key: PermissionCacheKey, value: FgaCheckResponse): void {
     if (!this.config.enabled) {
@@ -129,22 +155,22 @@ export class PermissionCache {
 
     const cacheKey = this.makeKey(key);
     const now = Date.now();
-
-    // Evict if at max size
-    if (this.cache.size >= this.config.maxSize) {
-      // Delete oldest entry (first in map)
-      const oldestKey = this.cache.keys().next().value;
-      if (oldestKey) {
-        this.cache.delete(oldestKey);
-        this.stats.evictions++;
-      }
-    }
+    const wasPresent = this.cache.has(cacheKey);
+    const sizeBefore = this.cache.size;
 
     this.cache.set(cacheKey, {
       value,
       createdAt: now,
       expiresAt: now + this.config.ttlMs,
     });
+
+    // Eviction detection: if pre-set size was at maxSize and the key
+    // was not already present, LruTtlMap must have evicted one entry
+    // to make room. We cannot know which key was evicted (LruTtlMap
+    // exposes no notification), only the count.
+    if (!wasPresent && sizeBefore >= this.config.maxSize) {
+      this.stats.evictions++;
+    }
   }
 
   /**
@@ -170,9 +196,19 @@ export class PermissionCache {
     }
 
     let invalidated = 0;
+    // Snapshot keys to avoid iterating the underlying store while we
+    // mutate it via `delete`.
+    const keysSnapshot: readonly string[] = Array.from(this.cache.keys());
 
-    for (const [key] of this.cache) {
-      const [userId, relation, resourceType, resourceId] = key.split(':');
+    for (const key of keysSnapshot) {
+      // Key format is `<uid>:<rel>:<rtype>:<rid>` — fixed 4 parts. Under
+      // `noUncheckedIndexedAccess` the slot type is `string | undefined`,
+      // so we treat `undefined` as wildcard-non-match per RFC-006 canon.
+      const parts = key.split(':');
+      const userId = parts[0];
+      const relation = parts[1];
+      const resourceType = parts[2];
+      const resourceId = parts[3];
 
       const matches =
         (event.userId === undefined || event.userId === userId) &&
@@ -180,8 +216,7 @@ export class PermissionCache {
         (event.resourceType === undefined || event.resourceType === resourceType) &&
         (event.resourceId === undefined || event.resourceId === resourceId);
 
-      if (matches) {
-        this.cache.delete(key);
+      if (matches && this.cache.delete(key)) {
         invalidated++;
       }
     }
@@ -278,8 +313,12 @@ const DEFAULT_SCOPE = '__default__';
  * Backwards compat: existing callers passing no scope share the
  * `__default__` slot — observe identical behaviour to the pre-Wave-
  * 6.3 single global.
+ *
+ * Wave 7.4 (RFC-007 §3): migrated from unbounded `Map<...>` to
+ * {@link LruTtlMap} with `maxSize=10000` and no top-level TTL
+ * (each `PermissionCache` self-manages entry TTL).
  */
-const permissionCaches = new Map<string, PermissionCache>();
+const permissionCaches = new LruTtlMap<string, PermissionCache>({ maxSize: 10000 });
 
 /**
  * Get-or-create the `PermissionCache` for the given scope.
@@ -290,17 +329,26 @@ const permissionCaches = new Map<string, PermissionCache>();
  * `fingerprint({apiUrl, storeId, ...})` for symmetry with the
  * client cache).
  *
+ * Wave 7.4 (RFC-007 I-3 additive): optional `opts?: LruTtlMapOptions`
+ * third argument forwards to the per-instance `PermissionCache.cache`
+ * `LruTtlMap` — primarily for `now` clock injection in tests. The
+ * module-scoped `permissionCaches` LRU is not tunable from callers
+ * (RFC-007 §3: consumers do not tune that layer).
+ *
  * @param config — cache config; only consulted on first construction
  *                 of a given scope.
  * @param scope  — scope key. Defaults to `__default__` for back-compat.
+ * @param opts   — optional `LruTtlMapOptions` passed to the inner
+ *                 per-instance cache on first construction (additive).
  */
 export function getPermissionCache(
   config?: PermissionCacheConfig,
   scope: string = DEFAULT_SCOPE,
+  opts?: LruTtlMapOptions,
 ): PermissionCache {
   let cache = permissionCaches.get(scope);
-  if (!cache) {
-    cache = new PermissionCache(config);
+  if (cache === undefined) {
+    cache = new PermissionCache(config, opts);
     permissionCaches.set(scope, cache);
   }
   return cache;
@@ -362,7 +410,12 @@ export function createInvalidationHandler(): (payload: Record<string, unknown>) 
     const resourceId = payload.resourceId as string | undefined;
     const relation = payload.relation as string | undefined;
 
-    cache.invalidate({ userId, resourceType, resourceId, relation });
+    cache.invalidate({
+      ...(userId !== undefined && { userId }),
+      ...(resourceType !== undefined && { resourceType }),
+      ...(resourceId !== undefined && { resourceId }),
+      ...(relation !== undefined && { relation }),
+    });
   };
 }
 

@@ -196,14 +196,14 @@ export class Seq<Key, Value> {
     // Share caches if configured
     if (this._cacheOptions.shareCache) {
       const maxCacheSize = this._cacheOptions.maxCacheSize;
-      (
-        newSeq as unknown as {
-          _operationCache?: LRUCache<string, Array<[Key, NewValue]>>;
-        }
-      )._operationCache =
-        this._cacheOptions.cacheResults && maxCacheSize
-          ? new LRUCache<string, Array<[Key, NewValue]>>(maxCacheSize)
-          : undefined;
+      const target = newSeq as unknown as {
+        _operationCache?: LRUCache<string, Array<[Key, NewValue]>>;
+      };
+      if (this._cacheOptions.cacheResults && maxCacheSize) {
+        target._operationCache = new LRUCache<string, Array<[Key, NewValue]>>(maxCacheSize);
+      } else {
+        delete target._operationCache;
+      }
     }
 
     return newSeq;
@@ -422,10 +422,10 @@ export class Seq<Key, Value> {
     const cloned = new Seq<Key, Value>(this.source, this._cacheOptions);
     cloned.operations = [...this.operations];
     if (this._cacheOptions.shareCache) {
-      cloned._cache = this._cache;
+      if (this._cache !== undefined) cloned._cache = this._cache;
       cloned._cacheComplete = this._cacheComplete;
       // Do not share operation-level cache across different op chains
-      cloned._operationCache = undefined;
+      delete cloned._operationCache;
     }
     return cloned;
   }
@@ -434,7 +434,7 @@ export class Seq<Key, Value> {
    * Invalidates the cache, forcing re-evaluation
    */
   invalidateCache(): this {
-    this._cache = undefined;
+    delete this._cache;
     this._cacheComplete = false;
     if (this._operationCache) {
       this._operationCache.clear();

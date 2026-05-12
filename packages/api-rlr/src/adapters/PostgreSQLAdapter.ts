@@ -152,8 +152,9 @@ export class PostgreSQLAdapter implements StorageAdapter {
 
       let timestamps: bigint[] = [];
 
-      if (bucket.length > 0) {
-        timestamps = bucket[0].timestamps || [];
+      const firstRow = bucket[0];
+      if (firstRow) {
+        timestamps = firstRow.timestamps || [];
       }
 
       // Remove old timestamps (older than previous window start)
@@ -260,8 +261,9 @@ export class PostgreSQLAdapter implements StorageAdapter {
 
       let tat = 0;
 
-      if (bucket.length > 0) {
-        tat = Number(bucket[0].tat) || 0;
+      const firstRow = bucket[0];
+      if (firstRow) {
+        tat = Number(firstRow.tat) || 0;
       }
 
       // Initialize TAT if zero

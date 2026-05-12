@@ -98,16 +98,16 @@ function pickGate(): IPermissionGate {
           "AUTH_GATE='openfga' requires FGA_STORE_ID to be set (run scripts/openfga-bootstrap.ts).",
         );
       }
+      // Wave 6.2 (RFC-003 Edge 2): apiToken is now plumbed end-to-end
+      // through `@gertsai/auth-openfga` to the SDK bearer credentials.
+      // Under EOPT we conditionally spread `apiToken` so unset env vars
+      // omit the key entirely (keeps OpenFGA anonymous, NFR-2 back-compat).
+      const fgaApiToken = config.FGA_API_TOKEN || undefined;
       return new OpenFgaPermissionGate({
         client: {
           apiUrl: config.FGA_API_URL,
           storeId: config.FGA_STORE_ID,
-          // Wave 6.2 (RFC-003 Edge 2): apiToken is now plumbed
-          // end-to-end through `@gertsai/auth-openfga` to the SDK
-          // bearer credentials. The empty-string fallback to
-          // `undefined` keeps OpenFGA anonymous when the env var
-          // is unset (NFR-2 backwards-compat).
-          apiToken: config.FGA_API_TOKEN || undefined,
+          ...(fgaApiToken !== undefined && { apiToken: fgaApiToken }),
         },
         logger: console,
       });

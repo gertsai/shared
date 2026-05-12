@@ -81,6 +81,7 @@ export const DEFAULT_TRUSTED_PROXIES = [
  */
 export function isIpInCidr(ip: string, cidr: string): boolean {
   const [range, bits] = cidr.split('/');
+  if (range === undefined || bits === undefined) return false;
   const mask = parseInt(bits, 10);
 
   // Handle IPv4
@@ -108,7 +109,8 @@ export function isIpInCidr(ip: string, cidr: string): boolean {
  */
 function ipv4ToNumber(ip: string): number {
   const parts = ip.split('.').map((p) => parseInt(p, 10));
-  return ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
+  const [a = 0, b = 0, c = 0, d = 0] = parts;
+  return ((a << 24) | (b << 16) | (c << 8) | d) >>> 0;
 }
 
 /**

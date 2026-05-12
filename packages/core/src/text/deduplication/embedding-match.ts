@@ -47,7 +47,8 @@ export class EmbeddingDeduplication implements IDeduplicationStrategy {
 
     // Store embeddings back on entities for reuse
     allEntities.forEach((e, i) => {
-      e.embedding = embeddings[i];
+      // bounds guaranteed: embeddings.length === allEntities.length
+      e.embedding = embeddings[i]!;
     });
 
     // Find similar pairs using cosine similarity
@@ -55,31 +56,34 @@ export class EmbeddingDeduplication implements IDeduplicationStrategy {
     const processed = new Set<string>();
 
     for (let i = 0; i < allEntities.length; i++) {
-      if (processed.has(allEntities[i].id)) continue;
+      // bounds guaranteed by loop conditions throughout this block
+      const ei = allEntities[i]!;
+      if (processed.has(ei.id)) continue;
 
-      const duplicates: Entity[] = [allEntities[i]];
-      processed.add(allEntities[i].id);
+      const duplicates: Entity[] = [ei];
+      processed.add(ei.id);
 
       for (let j = i + 1; j < allEntities.length; j++) {
-        if (processed.has(allEntities[j].id)) continue;
+        const ej = allEntities[j]!;
+        if (processed.has(ej.id)) continue;
 
         // Only compare same type entities
-        if (allEntities[i].type !== allEntities[j].type) continue;
+        if (ei.type !== ej.type) continue;
 
-        const similarity = this.cosineSimilarity(embeddings[i], embeddings[j]);
+        const similarity = this.cosineSimilarity(embeddings[i]!, embeddings[j]!);
 
         if (similarity >= this.config.threshold) {
-          duplicates.push(allEntities[j]);
-          processed.add(allEntities[j].id);
+          duplicates.push(ej);
+          processed.add(ej.id);
         }
       }
 
       if (duplicates.length > 1) {
         const duplicateIndices = duplicates.map((dup) => allEntities.indexOf(dup));
-        const duplicateEmbeddings = duplicateIndices.map((idx) => embeddings[idx]);
+        const duplicateEmbeddings = duplicateIndices.map((idx) => embeddings[idx]!);
 
         groups.push({
-          canonical: duplicates[0],
+          canonical: duplicates[0]!,
           duplicates,
           matchScore: this.averageCosineSimilarity(duplicateEmbeddings),
           matchMethod: 'embedding',
@@ -120,8 +124,8 @@ export class EmbeddingDeduplication implements IDeduplicationStrategy {
     const avgEmbedding = this.averageEmbedding(validEmbeddings);
 
     return {
-      ...duplicates[0],
-      aliases: Array.from(allAliases).filter((a) => a !== duplicates[0].name),
+      ...duplicates[0]!,
+      aliases: Array.from(allAliases).filter((a) => a !== duplicates[0]!.name),
       confidence: maxConfidence,
       mentions: allMentions,
       properties: mergedProperties,
@@ -147,9 +151,12 @@ export class EmbeddingDeduplication implements IDeduplicationStrategy {
     let normB = 0;
 
     for (let i = 0; i < a.length; i++) {
-      dotProduct += a[i] * b[i];
-      normA += a[i] * a[i];
-      normB += b[i] * b[i];
+      // bounds guaranteed: a.length === b.length verified above
+      const ai = a[i]!;
+      const bi = b[i]!;
+      dotProduct += ai * bi;
+      normA += ai * ai;
+      normB += bi * bi;
     }
 
     const denominator = Math.sqrt(normA) * Math.sqrt(normB);
@@ -174,7 +181,8 @@ export class EmbeddingDeduplication implements IDeduplicationStrategy {
 
     for (let i = 0; i < embeddings.length; i++) {
       for (let j = i + 1; j < embeddings.length; j++) {
-        totalSimilarity += this.cosineSimilarity(embeddings[i], embeddings[j]);
+        // bounds guaranteed by loop conditions
+        totalSimilarity += this.cosineSimilarity(embeddings[i]!, embeddings[j]!);
         comparisons++;
       }
     }
@@ -191,9 +199,9 @@ export class EmbeddingDeduplication implements IDeduplicationStrategy {
    */
   private averageEmbedding(embeddings: number[][]): number[] {
     if (embeddings.length === 0) return [];
-    if (embeddings.length === 1) return embeddings[0];
+    if (embeddings.length === 1) return embeddings[0]!;
 
-    const dimension = embeddings[0].length;
+    const dimension = embeddings[0]!.length;
     const result = Array.from({ length: dimension }, () => 0);
 
     // Sum all embeddings
@@ -204,7 +212,8 @@ export class EmbeddingDeduplication implements IDeduplicationStrategy {
         );
       }
       for (let i = 0; i < dimension; i++) {
-        result[i] += embedding[i];
+        // bounds guaranteed: i < dimension === embedding.length
+        result[i]! += embedding[i]!;
       }
     }
 

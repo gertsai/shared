@@ -66,7 +66,7 @@ export class NoOpAuthProvider implements AuthProvider {
     try {
       // Parse JWT payload without verification
       const parts = token.split('.');
-      if (parts.length !== 3) {
+      if (parts.length !== 3 || parts[1] === undefined) {
         throw new AuthProviderError(AuthErrorCode.TOKEN_INVALID, 'Invalid JWT format');
       }
 

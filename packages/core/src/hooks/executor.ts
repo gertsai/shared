@@ -429,8 +429,9 @@ export class HookExecutor {
    * @returns false if any hook blocks execution, null otherwise
    */
   async executeBeforeLLMHooks(context: LLMCallContext): Promise<boolean> {
+    const agent = context.agent as { name?: string; role?: string } | undefined;
     const hooks = hookManager.getBeforeLLMHooks({
-      agent: context.agent as { name?: string; role?: string } | undefined,
+      ...(agent !== undefined && { agent }),
     });
 
     for (const hook of hooks) {
@@ -455,8 +456,9 @@ export class HookExecutor {
    * @returns Modified response or null
    */
   async executeAfterLLMHooks(context: LLMCallContext): Promise<string | null> {
+    const agent = context.agent as { name?: string; role?: string } | undefined;
     const hooks = hookManager.getAfterLLMHooks({
-      agent: context.agent as { name?: string; role?: string } | undefined,
+      ...(agent !== undefined && { agent }),
     });
 
     let modifiedResponse: string | null = null;
@@ -488,9 +490,10 @@ export class HookExecutor {
    * @returns false if any hook blocks execution
    */
   async executeBeforeToolHooks(context: ToolCallContext): Promise<boolean> {
+    const agent = context.agent as { name?: string; role?: string } | undefined;
     const hooks = hookManager.getBeforeToolHooks({
       toolName: context.toolName,
-      agent: context.agent as { name?: string; role?: string } | undefined,
+      ...(agent !== undefined && { agent }),
     });
 
     for (const hook of hooks) {
@@ -515,9 +518,10 @@ export class HookExecutor {
    * @returns Modified result or null
    */
   async executeAfterToolHooks(context: ToolCallContext): Promise<string | null> {
+    const agent = context.agent as { name?: string; role?: string } | undefined;
     const hooks = hookManager.getAfterToolHooks({
       toolName: context.toolName,
-      agent: context.agent as { name?: string; role?: string } | undefined,
+      ...(agent !== undefined && { agent }),
     });
 
     let modifiedResult: string | null = null;
@@ -688,8 +692,8 @@ export class HookExecutor {
       hookName,
       hookType,
       isBackground,
-      durationMs,
-      error,
+      ...(durationMs !== undefined && { durationMs }),
+      ...(error !== undefined && { error }),
     };
 
     this.eventBus.emit(eventType, event);

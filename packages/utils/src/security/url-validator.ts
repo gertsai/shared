@@ -138,39 +138,39 @@ function extractIPv4FromMapped(ip: string): string | null {
 
   // Standard format: ::ffff:192.168.1.1
   const standardMatch = lower.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
-  if (standardMatch) {
+  if (standardMatch?.[1]) {
     return standardMatch[1];
   }
 
   // Full format with dotted decimal: 0:0:0:0:0:ffff:192.168.1.1
   // Allows variable leading zeros in each segment
   const fullDottedMatch = lower.match(/^0*:0*:0*:0*:0*:ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
-  if (fullDottedMatch) {
+  if (fullDottedMatch?.[1]) {
     return fullDottedMatch[1];
   }
 
   // Hex format (short): ::ffff:c0a8:0101 (192.168.1.1 in hex)
   const hexMatch = lower.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
-  if (hexMatch) {
+  if (hexMatch?.[1] && hexMatch[2]) {
     return hexSegmentsToIPv4(hexMatch[1], hexMatch[2]);
   }
 
   // Full hex format: 0:0:0:0:0:ffff:c0a8:0101
   const fullHexMatch = lower.match(/^0*:0*:0*:0*:0*:ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
-  if (fullHexMatch) {
+  if (fullHexMatch?.[1] && fullHexMatch[2]) {
     return hexSegmentsToIPv4(fullHexMatch[1], fullHexMatch[2]);
   }
 
   // IPv4-compatible address (deprecated but still parsed): ::192.168.1.1
   const compatMatch = lower.match(/^::(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
-  if (compatMatch) {
+  if (compatMatch?.[1]) {
     return compatMatch[1];
   }
 
   // IPv4-compatible in hex (URL parser converts ::192.168.1.1 to ::c0a8:101)
   // Format: ::c0a8:101 (without ffff)
   const compatHexMatch = lower.match(/^::([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
-  if (compatHexMatch) {
+  if (compatHexMatch?.[1] && compatHexMatch[2]) {
     return hexSegmentsToIPv4(compatHexMatch[1], compatHexMatch[2]);
   }
 

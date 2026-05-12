@@ -151,7 +151,12 @@ export function createIngestProcessWorkflow(deps: {
           userId,
           docId,
           text,
-          metadata: metadata as Parameters<IngestDocumentUseCase['execute']>[0]['metadata'],
+          ...(metadata !== undefined && {
+            metadata: metadata as Exclude<
+              Parameters<IngestDocumentUseCase['execute']>[0]['metadata'],
+              undefined
+            >,
+          }),
         });
 
         return {

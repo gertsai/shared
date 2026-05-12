@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { PathStrategy } from '../strategies/path.strategy.js';
 import type { HttpRequestLike } from '../strategy.js';
 
-const reqWithUrl = (url: string | undefined): HttpRequestLike => ({ headers: {}, url });
+const reqWithUrl = (url: string | undefined): HttpRequestLike => ({
+  headers: {},
+  ...(url !== undefined && { url }),
+});
 
 describe('PathStrategy', () => {
   it('extracts tenantId from a basic /t/:tenantId pattern', async () => {

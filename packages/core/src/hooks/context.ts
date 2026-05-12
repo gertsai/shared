@@ -97,9 +97,10 @@ export class LLMCallContext implements ILLMCallHookContext {
     this.agent = options.agent ?? null;
     this.task = options.task ?? null;
     this.workflow = options.workflow ?? null;
-    this.response = options.response;
-    this.tools = options.tools;
-    this.humanInputHandler = options.humanInputHandler;
+    if (options.response !== undefined) this.response = options.response;
+    if (options.tools !== undefined) this.tools = options.tools;
+    if (options.humanInputHandler !== undefined)
+      this.humanInputHandler = options.humanInputHandler;
   }
 
   /**
@@ -169,9 +170,11 @@ export class LLMCallContext implements ILLMCallHookContext {
       agent: this.agent,
       task: this.task,
       workflow: this.workflow,
-      response: this.response,
-      tools: this.tools ? [...this.tools] : undefined,
-      humanInputHandler: this.humanInputHandler,
+      ...(this.response !== undefined && { response: this.response }),
+      ...(this.tools !== undefined && { tools: [...this.tools] }),
+      ...(this.humanInputHandler !== undefined && {
+        humanInputHandler: this.humanInputHandler,
+      }),
     });
   }
 }
@@ -252,8 +255,9 @@ export class ToolCallContext implements IToolCallHookContext {
     this.agent = options.agent ?? null;
     this.task = options.task ?? null;
     this.workflow = options.workflow ?? null;
-    this.toolResult = options.toolResult;
-    this.humanInputHandler = options.humanInputHandler;
+    if (options.toolResult !== undefined) this.toolResult = options.toolResult;
+    if (options.humanInputHandler !== undefined)
+      this.humanInputHandler = options.humanInputHandler;
   }
 
   /**
@@ -323,8 +327,10 @@ export class ToolCallContext implements IToolCallHookContext {
       agent: this.agent,
       task: this.task,
       workflow: this.workflow,
-      toolResult: this.toolResult,
-      humanInputHandler: this.humanInputHandler,
+      ...(this.toolResult !== undefined && { toolResult: this.toolResult }),
+      ...(this.humanInputHandler !== undefined && {
+        humanInputHandler: this.humanInputHandler,
+      }),
     });
   }
 }

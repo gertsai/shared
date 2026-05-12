@@ -72,6 +72,6 @@ export class PathNormalizer {
     const reactionMatch = path.match(this.reactionsPattern);
     const reaction = reactionMatch ? reactionMatch[1] : undefined;
 
-    return { ids, reaction };
+    return { ids, ...(reaction !== undefined && { reaction }) };
   }
 }

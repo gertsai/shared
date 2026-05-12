@@ -51,7 +51,8 @@ export class CSVReader extends FileReader {
     if (rows.length === 0) return [];
 
     const hasHeader = this.readerOptions.hasHeader ?? true;
-    const headers = hasHeader ? rows[0] : rows[0].map((_, i) => `col_${i}`);
+    // rows.length > 0 verified above
+    const headers = hasHeader ? rows[0]! : rows[0]!.map((_, i) => `col_${i}`);
     const dataRows = hasHeader ? rows.slice(1) : rows;
 
     return dataRows.map((row, index) => {
@@ -152,7 +153,8 @@ export class CSVReader extends FileReader {
 
     for (const col of contentCols) {
       if (typeof col === 'number') {
-        values.push(rowObj[headers[col]] ?? '');
+        const headerKey = headers[col];
+        values.push(headerKey ? (rowObj[headerKey] ?? '') : '');
       } else {
         values.push(rowObj[col] ?? '');
       }
@@ -180,7 +182,9 @@ export class CSVReader extends FileReader {
     for (const col of metaCols) {
       if (typeof col === 'number') {
         const key = headers[col];
-        metadata[key] = rowObj[key] ?? '';
+        if (key !== undefined) {
+          metadata[key] = rowObj[key] ?? '';
+        }
       } else {
         metadata[col] = rowObj[col] ?? '';
       }

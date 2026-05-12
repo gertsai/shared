@@ -779,10 +779,12 @@ export class ApiController<
                 // W3C spec: traceId must be non-zero
                 const safeTraceId = traceId === '0'.repeat(32) ? '0'.repeat(31) + '1' : traceId;
                 const safeSpanId = spanId === '0'.repeat(16) ? '0'.repeat(15) + '1' : spanId;
+                const reqId = ctx.requestID;
+                const parId = ctx.parentID;
                 return {
-                  traceId: ctx.requestID ?? undefined,
-                  parentId: ctx.parentID ?? undefined,
-                  sampled: ctx.tracing ?? undefined,
+                  ...(typeof reqId === 'string' && { traceId: reqId }),
+                  ...(typeof parId === 'string' && { parentId: parId }),
+                  ...(ctx.tracing === true && { sampled: ctx.tracing }),
                   traceparent: `00-${safeTraceId}-${safeSpanId}-01`,
                 };
               })()
@@ -1087,10 +1089,13 @@ export class ApiController<
           getQueue(name: string): Queue {
             const queues = this.$queues;
             if (!queues[name]) {
+              const queueCfg = ApiController._config.queue!;
               queues[name] = new Queue(name, {
-                connection: ApiController._config.queue!.connection,
-                defaultJobOptions: ApiController._config.queue!.defaultJobOptions,
-                prefix: ApiController._config.queue!.prefix,
+                connection: queueCfg.connection,
+                ...(queueCfg.defaultJobOptions !== undefined && {
+                  defaultJobOptions: queueCfg.defaultJobOptions,
+                }),
+                ...(queueCfg.prefix !== undefined && { prefix: queueCfg.prefix }),
               });
             }
             return queues[name];
@@ -1327,7 +1332,9 @@ export class ApiController<
               {
                 connection: ApiController._config.queue!.connection,
                 concurrency: maxConcurrency,
-                prefix: ApiController._config.queue!.prefix,
+                ...(ApiController._config.queue!.prefix !== undefined && {
+                  prefix: ApiController._config.queue!.prefix,
+                }),
                 // Lock configuration for long-running LLM operations
                 lockDuration,
                 stalledInterval,

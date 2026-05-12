@@ -101,7 +101,7 @@ export class RateLimiter {
       timeFrame: limits.timeFrame,
       now,
       burst: limits.burst || 3, // Default burst value
-      cost: limits.cost, // Cost-based rate limiting
+      ...(limits.cost !== undefined && { cost: limits.cost }),
     });
 
     // Store result in context
@@ -167,19 +167,21 @@ export class RateLimiter {
       limit: this.config.limit,
       timeFrame: this.config.timeFrame,
       strategy: this.config.strategy || LimiterStrategy.SLIDING_WINDOW,
-      burst: this.config.burst,
-      cost: this.config.cost, // Default cost from global config
+      ...(this.config.burst !== undefined && { burst: this.config.burst }),
+      ...(this.config.cost !== undefined && { cost: this.config.cost }),
     };
 
     // Apply route overrides
     if (route) {
+      const nextBurst = route.burst ?? limits.burst;
+      const nextCost = route.cost ?? limits.cost;
       limits = {
         ...limits,
         limit: route.limit ?? limits.limit,
         timeFrame: route.timeFrame ?? limits.timeFrame,
         strategy: route.strategy ?? limits.strategy,
-        burst: route.burst ?? limits.burst,
-        cost: route.cost ?? limits.cost, // Route-specific cost
+        ...(nextBurst !== undefined && { burst: nextBurst }),
+        ...(nextCost !== undefined && { cost: nextCost }),
       };
     }
 
@@ -197,12 +199,13 @@ export class RateLimiter {
       });
 
       if (dynamicLimits) {
+        const nextBurst = dynamicLimits.burst ?? limits.burst;
         limits = {
           ...limits,
           limit: dynamicLimits.limit ?? limits.limit,
           timeFrame: dynamicLimits.timeFrame ?? limits.timeFrame,
           strategy: dynamicLimits.strategy ?? limits.strategy,
-          burst: dynamicLimits.burst ?? limits.burst,
+          ...(nextBurst !== undefined && { burst: nextBurst }),
         };
       }
     }

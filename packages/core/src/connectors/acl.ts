@@ -566,11 +566,13 @@ export function mergeExternalAccessWithInternal(
     userGroups?: Iterable<string>;
   },
 ): DocumentAccess {
+  const userEmails = internalAccess?.userEmails;
+  const userGroups = internalAccess?.userGroups;
   return createDocumentAccess({
-    userEmails: internalAccess?.userEmails,
-    userGroups: internalAccess?.userGroups,
     externalUserEmails: externalAccess.externalUserEmails,
     externalUserGroupIds: externalAccess.externalUserGroupIds,
     isPublic: externalAccess.isPublic,
+    ...(userEmails !== undefined && { userEmails }),
+    ...(userGroups !== undefined && { userGroups }),
   });
 }

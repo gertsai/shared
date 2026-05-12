@@ -417,9 +417,10 @@ export function median<K>(iterable: Iterable<[K, number]>): number {
     return NaN;
   }
   const mid = Math.floor(values.length / 2);
+  // bounds guaranteed: values.length > 0 ⇒ 0 ≤ mid < values.length and mid-1 ≥ 0 when length ≥ 2
   return values.length % 2 !== 0
-    ? values[mid]
-    : (values[mid - 1] + values[mid]) / 2;
+    ? values[mid]!
+    : (values[mid - 1]! + values[mid]!) / 2;
 }
 
 /**

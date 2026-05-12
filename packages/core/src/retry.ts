@@ -215,12 +215,14 @@ export async function withRetry<T>(
     }
   }
 
-  return {
+  // Mutable-build for optional `error` field under EOPT
+  const out: { -readonly [K in keyof RetryResult<T>]: RetryResult<T>[K] } = {
     success: false,
-    error: lastError,
     attempts: attempt,
     totalTimeMs: Date.now() - startTime,
   };
+  if (lastError !== undefined) out.error = lastError;
+  return out;
 }
 
 /**

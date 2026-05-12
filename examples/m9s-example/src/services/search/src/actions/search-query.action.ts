@@ -54,9 +54,9 @@ export const searchQuery: any = controller.register('query', {
       const { results } = await service.useCase.execute({
         userId,
         query,
-        topK,
-        session,
-        expectedTenantId,
+        ...(topK !== undefined && { topK }),
+        ...(session !== undefined && { session }),
+        ...(expectedTenantId !== undefined && { expectedTenantId }),
       });
       logger.info('[v1.search.query] completed', { count: results.length });
       // Map ReadonlyArray<ChunkSearchHit> to plain objects for typia validation.

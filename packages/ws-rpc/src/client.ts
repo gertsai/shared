@@ -201,7 +201,7 @@ export class WsRpcClient extends EventEmitter<WsRpcEvents> {
     ) => WebSocket;
 
     return new (WSClass as unknown as WSLikeCtor)(this.url, this.protocols, {
-      headers: this.headers,
+      ...(this.headers !== undefined && { headers: this.headers }),
     });
   }
 

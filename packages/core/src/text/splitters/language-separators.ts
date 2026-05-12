@@ -35,6 +35,6 @@ function normalizeLanguage(lang: string): string {
 
 export function getSeparatorsForLanguage(lang: string): string[] {
   const key = normalizeLanguage(lang);
-  return LANGUAGE_SEPARATORS[key] ?? LANGUAGE_SEPARATORS[DEFAULT_LANGUAGE];
+  return LANGUAGE_SEPARATORS[key] ?? LANGUAGE_SEPARATORS[DEFAULT_LANGUAGE] ?? [];
 }
 

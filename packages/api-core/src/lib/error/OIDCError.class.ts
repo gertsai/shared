@@ -197,8 +197,8 @@ export class OIDCError extends APIError {
     this.name = 'OIDCError';
     this.oauth2Error = oauth2Error;
     this.errorDescription = errorDescription;
-    this.redirectUri = options?.redirectUri;
-    this.state = options?.state;
+    if (options?.redirectUri !== undefined) this.redirectUri = options.redirectUri;
+    if (options?.state !== undefined) this.state = options.state;
   }
 
   /**

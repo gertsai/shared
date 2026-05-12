@@ -11,7 +11,7 @@
  *
  * Per PRD-001 FR-018 + ADR-004 (renamed from @gertsai/observe).
  */
-import type { BrokerOptions } from 'moleculer';
+import type { BrokerOptions, TracerOptions } from 'moleculer';
 
 /**
  * Options for {@link withMoleculerTracing}.
@@ -56,18 +56,21 @@ export function withMoleculerTracing(
     | object
     | undefined;
 
-  return {
-    ...brokerOptions,
-    tracing: {
-      enabled: true,
-      sampling: { rate: opts.sampling ?? 1 },
-      exporter: {
-        type: 'Zipkin',
-        options: {
-          endpoint: opts.otlpEndpoint ?? 'http://localhost:9411/api/v2/spans',
-        },
+  // Build via mutation to avoid object-literal exact-shape conflict with
+  // Moleculer's non-EOPT BrokerOptions (its `field?: T` would otherwise reject
+  // the spread carrying `field?: T | undefined`).
+  const tracing: TracerOptions = {
+    enabled: true,
+    sampling: { rate: opts.sampling ?? 1 },
+    exporter: {
+      type: 'Zipkin',
+      options: {
+        endpoint: opts.otlpEndpoint ?? 'http://localhost:9411/api/v2/spans',
       },
-      ...existingTracing,
-    } as BrokerOptions['tracing'],
+    },
+    ...existingTracing,
   };
+  const result: BrokerOptions = { ...brokerOptions };
+  result.tracing = tracing;
+  return result;
 }

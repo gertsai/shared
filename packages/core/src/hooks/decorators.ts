@@ -152,8 +152,8 @@ export function beforeLLMCall(options?: LLMHookDecoratorOptions) {
   return function <T extends BeforeLLMHook>(target: T): T {
     const metadata: HookMetadata = {
       name: target.name ?? 'anonymous',
-      filterAgents: options?.agents,
       priority: options?.priority ?? 0,
+      ...(options?.agents !== undefined && { filterAgents: options.agents }),
     };
 
     setHookMetadata(target, metadata);
@@ -162,7 +162,7 @@ export function beforeLLMCall(options?: LLMHookDecoratorOptions) {
     if (options?.autoRegister !== false) {
       hookManager.registerBeforeLLMHook(
         target,
-        { agents: options?.agents },
+        options?.agents !== undefined ? { agents: options.agents } : {},
         options?.priority ?? 0
       );
     }
@@ -188,8 +188,8 @@ export function afterLLMCall(options?: LLMHookDecoratorOptions) {
   return function <T extends AfterLLMHook>(target: T): T {
     const metadata: HookMetadata = {
       name: target.name ?? 'anonymous',
-      filterAgents: options?.agents,
       priority: options?.priority ?? 0,
+      ...(options?.agents !== undefined && { filterAgents: options.agents }),
     };
 
     setHookMetadata(target, metadata);
@@ -197,7 +197,7 @@ export function afterLLMCall(options?: LLMHookDecoratorOptions) {
     if (options?.autoRegister !== false) {
       hookManager.registerAfterLLMHook(
         target,
-        { agents: options?.agents },
+        options?.agents !== undefined ? { agents: options.agents } : {},
         options?.priority ?? 0
       );
     }
@@ -254,9 +254,9 @@ export function beforeToolCall(options?: ToolHookDecoratorOptions) {
   return function <T extends BeforeToolHook>(target: T): T {
     const metadata: HookMetadata = {
       name: target.name ?? 'anonymous',
-      filterTools: options?.tools,
-      filterAgents: options?.agents,
       priority: options?.priority ?? 0,
+      ...(options?.tools !== undefined && { filterTools: options.tools }),
+      ...(options?.agents !== undefined && { filterAgents: options.agents }),
     };
 
     setHookMetadata(target, metadata);
@@ -264,7 +264,10 @@ export function beforeToolCall(options?: ToolHookDecoratorOptions) {
     if (options?.autoRegister !== false) {
       hookManager.registerBeforeToolHook(
         target,
-        { tools: options?.tools, agents: options?.agents },
+        {
+          ...(options?.tools !== undefined && { tools: options.tools }),
+          ...(options?.agents !== undefined && { agents: options.agents }),
+        },
         options?.priority ?? 0
       );
     }
@@ -290,9 +293,9 @@ export function afterToolCall(options?: ToolHookDecoratorOptions) {
   return function <T extends AfterToolHook>(target: T): T {
     const metadata: HookMetadata = {
       name: target.name ?? 'anonymous',
-      filterTools: options?.tools,
-      filterAgents: options?.agents,
       priority: options?.priority ?? 0,
+      ...(options?.tools !== undefined && { filterTools: options.tools }),
+      ...(options?.agents !== undefined && { filterAgents: options.agents }),
     };
 
     setHookMetadata(target, metadata);
@@ -300,7 +303,10 @@ export function afterToolCall(options?: ToolHookDecoratorOptions) {
     if (options?.autoRegister !== false) {
       hookManager.registerAfterToolHook(
         target,
-        { tools: options?.tools, agents: options?.agents },
+        {
+          ...(options?.tools !== undefined && { tools: options.tools }),
+          ...(options?.agents !== undefined && { agents: options.agents }),
+        },
         options?.priority ?? 0
       );
     }
@@ -415,8 +421,8 @@ export function BeforeLLMCall(
 
     const metadata: HookMetadata = {
       name: String(propertyKey),
-      filterAgents: options?.agents,
       priority: options?.priority ?? 0,
+      ...(options?.agents !== undefined && { filterAgents: options.agents }),
     };
 
     setHookMetadata(originalMethod, metadata);
@@ -424,7 +430,7 @@ export function BeforeLLMCall(
     if (options?.autoRegister) {
       hookManager.registerBeforeLLMHook(
         originalMethod,
-        { agents: options?.agents },
+        options?.agents !== undefined ? { agents: options.agents } : {},
         options?.priority ?? 0
       );
     }
@@ -448,8 +454,8 @@ export function AfterLLMCall(
 
     const metadata: HookMetadata = {
       name: String(propertyKey),
-      filterAgents: options?.agents,
       priority: options?.priority ?? 0,
+      ...(options?.agents !== undefined && { filterAgents: options.agents }),
     };
 
     setHookMetadata(originalMethod, metadata);
@@ -457,7 +463,7 @@ export function AfterLLMCall(
     if (options?.autoRegister) {
       hookManager.registerAfterLLMHook(
         originalMethod,
-        { agents: options?.agents },
+        options?.agents !== undefined ? { agents: options.agents } : {},
         options?.priority ?? 0
       );
     }
@@ -481,9 +487,9 @@ export function BeforeToolCall(
 
     const metadata: HookMetadata = {
       name: String(propertyKey),
-      filterTools: options?.tools,
-      filterAgents: options?.agents,
       priority: options?.priority ?? 0,
+      ...(options?.tools !== undefined && { filterTools: options.tools }),
+      ...(options?.agents !== undefined && { filterAgents: options.agents }),
     };
 
     setHookMetadata(originalMethod, metadata);
@@ -491,7 +497,10 @@ export function BeforeToolCall(
     if (options?.autoRegister) {
       hookManager.registerBeforeToolHook(
         originalMethod,
-        { tools: options?.tools, agents: options?.agents },
+        {
+          ...(options?.tools !== undefined && { tools: options.tools }),
+          ...(options?.agents !== undefined && { agents: options.agents }),
+        },
         options?.priority ?? 0
       );
     }
@@ -515,9 +524,9 @@ export function AfterToolCall(
 
     const metadata: HookMetadata = {
       name: String(propertyKey),
-      filterTools: options?.tools,
-      filterAgents: options?.agents,
       priority: options?.priority ?? 0,
+      ...(options?.tools !== undefined && { filterTools: options.tools }),
+      ...(options?.agents !== undefined && { filterAgents: options.agents }),
     };
 
     setHookMetadata(originalMethod, metadata);
@@ -525,7 +534,10 @@ export function AfterToolCall(
     if (options?.autoRegister) {
       hookManager.registerAfterToolHook(
         originalMethod,
-        { tools: options?.tools, agents: options?.agents },
+        {
+          ...(options?.tools !== undefined && { tools: options.tools }),
+          ...(options?.agents !== undefined && { agents: options.agents }),
+        },
         options?.priority ?? 0
       );
     }

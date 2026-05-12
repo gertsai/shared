@@ -22,6 +22,7 @@ const logLevel: Record<string, string> = Object.entries(process.env)
     return [finalKey, value ?? ''];
   })
   .toSorted(([aKey], [bKey]) => {
+    if (aKey === undefined || bKey === undefined) return 0;
     if ((aKey === '*' || aKey === '@') && bKey !== '*' && bKey !== '@') {
       return 1;
     }
@@ -37,10 +38,13 @@ const logLevel: Record<string, string> = Object.entries(process.env)
     return 0;
   })
   .reduce(
-    (obj, [key, value]) => ({
-      ...obj,
-      [key.replace(/@/g, '**')]: value,
-    }),
+    (obj, [key, value]) => {
+      if (key === undefined) return obj;
+      return {
+        ...obj,
+        [key.replace(/@/g, '**')]: value,
+      };
+    },
     {},
   );
 

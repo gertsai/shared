@@ -130,7 +130,8 @@ export class LRUCache<T = unknown> {
     this.maxSize = options.maxSize ?? 1000;
     this.defaultTTL = options.defaultTTL;
     this.tenantIsolation = options.tenantIsolation ?? false;
-    this.onEvict = options.onEvict;
+    // Conditional assignment for optional class field under EOPT
+    if (options.onEvict !== undefined) this.onEvict = options.onEvict;
 
     if (this.maxSize <= 0) {
       throw new Error('maxSize must be greater than 0');

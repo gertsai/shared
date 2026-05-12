@@ -147,7 +147,7 @@ export async function canView(
     relation: 'can_view',
     resourceType,
     resourceId,
-    context,
+    ...(context !== undefined && { context }),
   });
   return result.allowed;
 }
@@ -171,7 +171,7 @@ export async function canEdit(
     relation: 'can_edit',
     resourceType,
     resourceId,
-    context,
+    ...(context !== undefined && { context }),
   });
   return result.allowed;
 }
@@ -195,7 +195,7 @@ export async function canDelete(
     relation: 'can_delete',
     resourceType,
     resourceId,
-    context,
+    ...(context !== undefined && { context }),
   });
   return result.allowed;
 }
@@ -219,7 +219,7 @@ export async function canManage(
     relation: 'can_manage',
     resourceType,
     resourceId,
-    context,
+    ...(context !== undefined && { context }),
   });
   return result.allowed;
 }
@@ -241,7 +241,7 @@ export async function canExecuteQuery(
     relation: 'can_execute',
     resourceType: 'query',
     resourceId: queryId,
-    context,
+    ...(context !== undefined && { context }),
   });
   return result.allowed;
 }
@@ -499,7 +499,7 @@ export async function explainAccess(request: FgaCheckRequest): Promise<{
     allowed: checkResult.allowed,
     reason,
     paths,
-    expandTree,
+    ...(expandTree !== undefined && { expandTree }),
   };
 }
 

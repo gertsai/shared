@@ -113,7 +113,11 @@ export class IngestDocumentUseCase {
     }
 
     // 2. Build the domain entity (validates invariants)
-    const doc = createDocument({ id: docId, text, metadata });
+    const doc = createDocument({
+      id: docId,
+      text,
+      ...(metadata !== undefined && { metadata }),
+    });
 
     // 3. Chunk + embed
     const chunkTexts = splitIntoChunks(doc.text);
@@ -140,7 +144,8 @@ export class IngestDocumentUseCase {
       docId: doc.id,
       idx,
       text: chunkText,
-      vector: vectors[idx],
+      // bounds guaranteed by length check above (vectors.length === chunkTexts.length)
+      vector: vectors[idx]!,
     }));
 
     // 4. Persist (document first so a partial failure leaves a recoverable trail)

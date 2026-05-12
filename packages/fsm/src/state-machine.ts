@@ -159,7 +159,7 @@ export class StateMachine<S extends StateValue = string> {
       from,
       to,
       timestamp: Date.now(),
-      context: frozenContext,
+      ...(frozenContext !== undefined && { context: frozenContext }),
     });
 
     this._notifyHandlers(from, to, frozenContext);
@@ -190,7 +190,7 @@ export class StateMachine<S extends StateValue = string> {
       from,
       to,
       timestamp: Date.now(),
-      context: frozenContext,
+      ...(frozenContext !== undefined && { context: frozenContext }),
     });
 
     this._notifyHandlers(from, to, frozenContext);

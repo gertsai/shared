@@ -115,7 +115,7 @@ export class ExactMatchDeduplication implements IDeduplicationStrategy {
       // Only return groups with 2+ entities (actual duplicates)
       if (duplicates.length > 1) {
         duplicateGroups.push({
-          canonical: duplicates[0], // First entity becomes canonical
+          canonical: duplicates[0]!, // First entity becomes canonical (bounds: length > 1)
           duplicates,
           matchScore: 1.0, // Perfect match for exact strategy
           matchMethod: 'exact',
@@ -181,11 +181,11 @@ export class ExactMatchDeduplication implements IDeduplicationStrategy {
     }
 
     if (duplicates.length === 1) {
-      return duplicates[0];
+      return duplicates[0]!;
     }
 
-    // Base entity (first duplicate becomes canonical)
-    const canonical = duplicates[0];
+    // Base entity (first duplicate becomes canonical — bounds: length checked above)
+    const canonical = duplicates[0]!;
 
     // Step 1: Merge all mentions (O(m) where m = total duplicates)
     const allMentions = duplicates.flatMap((entity) => entity.mentions);

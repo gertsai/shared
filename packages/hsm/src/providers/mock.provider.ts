@@ -197,14 +197,22 @@ export class MockHSMProvider implements HSMProvider {
       const ciphertextStr = ciphertext.toString('utf-8');
       const parts = ciphertextStr.split(':');
 
-      if (parts.length !== 5 || parts[0] !== 'mock') {
+      const [prefix, versionPart, ivPart, authTagPart, encryptedPart] = parts;
+      if (
+        parts.length !== 5 ||
+        prefix !== 'mock' ||
+        versionPart === undefined ||
+        ivPart === undefined ||
+        authTagPart === undefined ||
+        encryptedPart === undefined
+      ) {
         throw new HSMError('Invalid mock ciphertext format', HSMErrorCodes.DECRYPT_FAILED, 'mock');
       }
 
-      const keyVersion = parseInt(parts[1].substring(1), 10);
-      const iv = Buffer.from(parts[2], 'base64');
-      const authTag = Buffer.from(parts[3], 'base64');
-      const encrypted = Buffer.from(parts[4], 'base64');
+      const keyVersion = parseInt(versionPart.substring(1), 10);
+      const iv = Buffer.from(ivPart, 'base64');
+      const authTag = Buffer.from(authTagPart, 'base64');
+      const encrypted = Buffer.from(encryptedPart, 'base64');
 
       // Derive key from context using the master key from the correct version
       const masterKey = this._masterKeyHistory.get(keyVersion) ?? this._masterKey;
@@ -255,7 +263,7 @@ export class MockHSMProvider implements HSMProvider {
       derived: true,
       exportable: false,
       createdAt: this._createdAt,
-      lastRotatedAt: this._lastRotatedAt,
+      ...(this._lastRotatedAt !== undefined && { lastRotatedAt: this._lastRotatedAt }),
     };
   }
 

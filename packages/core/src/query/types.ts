@@ -253,6 +253,8 @@ export function querySuccess<TData, TMeta = unknown>(
     custom?: TMeta;
   }
 ): QuerySuccess<TData, TMeta> {
+  const confidence = options?.confidence;
+  const custom = options?.custom;
   return {
     status: 'success',
     data,
@@ -260,8 +262,8 @@ export function querySuccess<TData, TMeta = unknown>(
     metadata: {
       durationMs,
       cached: options?.cached ?? false,
-      confidence: options?.confidence,
-      custom: options?.custom,
+      ...(confidence !== undefined && { confidence }),
+      ...(custom !== undefined && { custom }),
     },
   };
 }
@@ -286,12 +288,13 @@ export function queryFailure(
     details?: Record<string, unknown>;
   }
 ): QueryFailure {
+  const details = options?.details;
   return {
     status: 'error',
     code,
     message,
     retryable: options?.retryable ?? false,
-    details: options?.details,
+    ...(details !== undefined && { details }),
   };
 }
 
@@ -319,6 +322,8 @@ export function queryPartial<TData, TMeta = unknown>(
     custom?: TMeta;
   }
 ): QueryPartial<TData, TMeta> {
+  const confidence = options?.confidence;
+  const custom = options?.custom;
   return {
     status: 'partial',
     data,
@@ -327,8 +332,8 @@ export function queryPartial<TData, TMeta = unknown>(
     metadata: {
       durationMs,
       cached: options?.cached ?? false,
-      confidence: options?.confidence,
-      custom: options?.custom,
+      ...(confidence !== undefined && { confidence }),
+      ...(custom !== undefined && { custom }),
     },
   };
 }
@@ -398,7 +403,9 @@ export class QueryError extends Error {
     this.name = 'QueryError';
     this.code = code;
     this.retryable = options?.retryable ?? false;
-    this.details = options?.details;
+    if (options?.details !== undefined) {
+      this.details = options.details;
+    }
 
     // Maintain proper stack trace in V8
     if (Error.captureStackTrace) {
@@ -412,7 +419,7 @@ export class QueryError extends Error {
   toFailure(): QueryFailure {
     return queryFailure(this.code, this.message, {
       retryable: this.retryable,
-      details: this.details,
+      ...(this.details !== undefined && { details: this.details }),
     });
   }
 

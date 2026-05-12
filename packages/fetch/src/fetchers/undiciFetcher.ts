@@ -227,8 +227,12 @@ export async function makeRequest(
     const validation = validateUrl(url, {
       allowLocalhost: security.allowLocalhost ?? false,
       allowPrivateNetworks: security.allowPrivateNetworks ?? false,
-      allowedHostnames: security.allowedHostnames,
-      blockedHostnames: security.blockedHostnames,
+      ...(security.allowedHostnames !== undefined && {
+        allowedHostnames: security.allowedHostnames,
+      }),
+      ...(security.blockedHostnames !== undefined && {
+        blockedHostnames: security.blockedHostnames,
+      }),
     });
 
     if (!validation.valid) {

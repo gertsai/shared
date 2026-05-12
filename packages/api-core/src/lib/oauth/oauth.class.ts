@@ -203,7 +203,11 @@ export class OAuth extends Service {
 
             try {
               if (config.BYPASS_AUTH) {
-                const tokenData = JSON.parse(atob(token.split('.')[1]));
+                const jwtParts = token.split('.');
+                if (jwtParts[1] === undefined) {
+                  throw new Error('Invalid JWT format: missing payload segment');
+                }
+                const tokenData = JSON.parse(atob(jwtParts[1]));
                 // @ts-ignore
                 ctx.meta.user_uuid = tokenData.user_id;
                 // @ts-ignore

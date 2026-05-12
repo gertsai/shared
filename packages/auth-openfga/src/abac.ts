@@ -117,9 +117,10 @@ export function buildNetworkContext(
 ): Pick<ABACContext, 'user_ip' | 'allowed_cidrs'> {
   const ip = extractClientIp(request);
 
+  const allowedCidrs = policy?.allowedCidrs ?? DEFAULT_ABAC_POLICY.allowedCidrs;
   return {
     user_ip: ip,
-    allowed_cidrs: policy?.allowedCidrs ?? DEFAULT_ABAC_POLICY.allowedCidrs,
+    ...(allowedCidrs !== undefined && { allowed_cidrs: allowedCidrs }),
   };
 }
 
@@ -141,10 +142,11 @@ export function buildGeoContext(
 ): Pick<ABACContext, 'user_country' | 'allowed_countries' | 'blocked_countries'> {
   const country = extractCountryCode(request);
 
+  const blockedCountries = policy?.blockedCountries ?? DEFAULT_ABAC_POLICY.blockedCountries;
   return {
     user_country: country,
-    allowed_countries: policy?.allowedCountries,
-    blocked_countries: policy?.blockedCountries ?? DEFAULT_ABAC_POLICY.blockedCountries,
+    ...(policy?.allowedCountries !== undefined && { allowed_countries: policy.allowedCountries }),
+    ...(blockedCountries !== undefined && { blocked_countries: blockedCountries }),
   };
 }
 
@@ -165,9 +167,9 @@ export function buildResourceContext(
   resource: ABACResourceInfo,
 ): Pick<ABACContext, 'user_clearance' | 'resource_sensitivity' | 'resource_status'> {
   return {
-    user_clearance: user.clearance,
-    resource_sensitivity: resource.sensitivity,
-    resource_status: resource.status,
+    ...(user.clearance !== undefined && { user_clearance: user.clearance }),
+    ...(resource.sensitivity !== undefined && { resource_sensitivity: resource.sensitivity }),
+    ...(resource.status !== undefined && { resource_status: resource.status }),
   };
 }
 
@@ -244,7 +246,7 @@ export function extractClientIp(
       const ips = xff.split(',').map((ip) => ip.trim());
       for (let i = ips.length - 1; i >= 0; i--) {
         const ip = ips[i];
-        if (isValidIp(ip) && !isTrustedProxy(ip, trustedProxies)) {
+        if (ip && isValidIp(ip) && !isTrustedProxy(ip, trustedProxies)) {
           return ip;
         }
       }
@@ -269,8 +271,8 @@ export function extractClientIpUnsafe(request: ABACRequestInfo): string {
   // X-Forwarded-For (first IP in chain) - INSECURE!
   const xff = headers['x-forwarded-for'];
   if (xff) {
-    const firstIp = xff.split(',')[0].trim();
-    if (isValidIp(firstIp)) return firstIp;
+    const firstIp = xff.split(',')[0]?.trim();
+    if (firstIp && isValidIp(firstIp)) return firstIp;
   }
 
   // X-Real-IP

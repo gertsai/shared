@@ -87,8 +87,11 @@ async function ttlExample() {
   // Override TTL for specific entry (30 seconds)
   cache.set(toCacheKey('token:xyz'), 'auth-token', { ttl: 30000 });
 
-  // No TTL (permanent until evicted)
-  cache.set(toCacheKey('config:app'), 'config-data', { ttl: undefined });
+  // No TTL (permanent until evicted): use a separate cache with no defaultTTL.
+  // Under EOPT, `set(..., { ttl: undefined })` is rejected; use a cache that
+  // does not configure defaultTTL when you want entries that never expire.
+  const permanentCache = new LRUCache<string>();
+  permanentCache.set(toCacheKey('config:app'), 'config-data');
 
   console.log('Session:', cache.get(toCacheKey('session:abc'))); // exists
 
@@ -97,7 +100,7 @@ async function ttlExample() {
 
   console.log('Session after 6s:', cache.get(toCacheKey('session:abc'))); // undefined (expired)
   console.log('Token after 6s:', cache.get(toCacheKey('token:xyz'))); // exists (30s TTL)
-  console.log('Config after 6s:', cache.get(toCacheKey('config:app'))); // exists (no TTL)
+  console.log('Config after 6s:', permanentCache.get(toCacheKey('config:app'))); // exists (no TTL)
 
   // Manually evict expired entries
   const evicted = cache.evictExpired();
@@ -367,7 +370,8 @@ function graphqlCacheExample() {
     ttl?: number
   ): void {
     const key = toCacheKey(`${typename}:${id}:${field}`);
-    fieldCache.set(key, value, { ttl });
+    // Conditional spread for optional `ttl` under EOPT
+    fieldCache.set(key, value, ttl !== undefined ? { ttl } : undefined);
   }
 
   function getCachedField(typename: string, id: string, field: string): unknown {

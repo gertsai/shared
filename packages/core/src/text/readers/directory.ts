@@ -91,7 +91,7 @@ export class DirectoryReader implements IDocumentReader {
       maxFiles: options.maxFiles ?? 1000,
       registry: options.registry ?? this.createDefaultRegistry(options.maxFileSize),
       followSymlinks: options.followSymlinks ?? false,
-      maxFileSize: options.maxFileSize,
+      ...(options.maxFileSize !== undefined && { maxFileSize: options.maxFileSize }),
     };
     this.registry = this.options.registry;
   }

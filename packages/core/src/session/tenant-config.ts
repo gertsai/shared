@@ -2269,114 +2269,201 @@ export function applyTenantConfigUpdate(
   existing: TenantConfig,
   update: TenantConfigUpdate,
 ): TenantConfig {
+  // Compute each deep-merged optional field separately. We use conditional
+  // spread to only emit keys whose merged value is defined — required under
+  // exactOptionalPropertyTypes: TenantConfig declares these as `field?: T`
+  // (NOT `field?: T | undefined`), so writing `field: undefined` is rejected.
+  const prompts = update.prompts ? { ...existing.prompts, ...update.prompts } : existing.prompts;
+  const graphRag = update.graphRag
+    ? { ...existing.graphRag, ...update.graphRag }
+    : existing.graphRag;
+  const locale = update.locale ? { ...existing.locale, ...update.locale } : existing.locale;
+  const rateLimits = update.rateLimits
+    ? { ...existing.rateLimits, ...update.rateLimits }
+    : existing.rateLimits;
+  const features = update.features
+    ? { ...existing.features, ...update.features }
+    : existing.features;
+  const ingestion = update.ingestion
+    ? { ...existing.ingestion, ...update.ingestion }
+    : existing.ingestion;
+  const memory = update.memory
+    ? {
+        ...existing.memory,
+        ...update.memory,
+        disposition: {
+          ...existing.memory?.disposition,
+          ...update.memory?.disposition,
+        },
+        llm: {
+          ...existing.memory?.llm,
+          ...update.memory?.llm,
+        },
+      }
+    : existing.memory;
+  const observe = update.observe
+    ? { ...existing.observe, ...update.observe }
+    : existing.observe;
+  const tracing = update.tracing
+    ? { ...existing.tracing, ...update.tracing }
+    : existing.tracing;
+  const aclSync = update.aclSync
+    ? (() => {
+        const mergedPublicDocs = update.aclSync.publicDocs
+          ? { ...existing.aclSync?.publicDocs, ...update.aclSync.publicDocs }
+          : existing.aclSync?.publicDocs;
+        return {
+          ...existing.aclSync,
+          ...update.aclSync,
+          ...(mergedPublicDocs !== undefined && { publicDocs: mergedPublicDocs }),
+        };
+      })()
+    : existing.aclSync;
+  const denyLedger = update.denyLedger
+    ? { ...existing.denyLedger, ...update.denyLedger }
+    : existing.denyLedger;
+  const entityResolution = update.entityResolution
+    ? {
+        ...DEFAULT_TENANT_CONFIG.entityResolution,
+        ...existing.entityResolution,
+        ...update.entityResolution,
+        thresholds: {
+          ...DEFAULT_TENANT_CONFIG.entityResolution?.thresholds,
+          ...existing.entityResolution?.thresholds,
+          ...update.entityResolution?.thresholds,
+        },
+      }
+    : existing.entityResolution;
+  const multilingual = update.multilingual
+    ? { ...DEFAULT_TENANT_CONFIG.multilingual, ...existing.multilingual, ...update.multilingual }
+    : existing.multilingual;
+  const vectorSearch = update.vectorSearch
+    ? { ...DEFAULT_TENANT_CONFIG.vectorSearch, ...existing.vectorSearch, ...update.vectorSearch }
+    : existing.vectorSearch;
+  const reranker = update.reranker
+    ? { ...DEFAULT_TENANT_CONFIG.reranker, ...existing.reranker, ...update.reranker }
+    : existing.reranker;
+  const qualityMonitoring: QualityMonitoringConfig | undefined = update.qualityMonitoring
+    ? {
+        enabled: false,
+        samplerCron: '0 2 * * *',
+        driftAlpha: 0.3,
+        driftWarningThreshold: 0.05,
+        driftCriticalThreshold: 0.1,
+        ...existing.qualityMonitoring,
+        ...update.qualityMonitoring,
+      }
+    : existing.qualityMonitoring;
+  const evalCfg = update.eval
+    ? {
+        ...DEFAULT_TENANT_CONFIG.eval,
+        ...existing.eval,
+        ...update.eval,
+        thresholds: {
+          ...DEFAULT_TENANT_CONFIG.eval?.thresholds,
+          ...existing.eval?.thresholds,
+          ...update.eval?.thresholds,
+        },
+      }
+    : existing.eval;
+  const agentReasoning = update.agentReasoning
+    ? {
+        ...DEFAULT_TENANT_CONFIG.agentReasoning!,
+        ...existing.agentReasoning,
+        ...update.agentReasoning,
+        toolRankerWeights: {
+          ...DEFAULT_TENANT_CONFIG.agentReasoning!.toolRankerWeights,
+          ...existing.agentReasoning?.toolRankerWeights,
+          ...update.agentReasoning?.toolRankerWeights,
+        },
+        defaultBudget: {
+          ...DEFAULT_TENANT_CONFIG.agentReasoning!.defaultBudget,
+          ...existing.agentReasoning?.defaultBudget,
+          ...update.agentReasoning?.defaultBudget,
+        },
+      }
+    : existing.agentReasoning;
+  const metadata = update.metadata
+    ? { ...existing.metadata, ...update.metadata }
+    : existing.metadata;
+
+  // Strip update fields that we've already deep-merged into typed locals
+  // above. Spreading the full `update` would re-introduce Partial<*> types
+  // and defeat EOPT inference.
+  const {
+    llm: _llm,
+    embedding: _embedding,
+    prompts: _prompts,
+    graphRag: _graphRag,
+    locale: _locale,
+    rateLimits: _rateLimits,
+    features: _features,
+    ingestion: _ingestion,
+    memory: _memory,
+    observe: _observe,
+    tracing: _tracing,
+    aclSync: _aclSync,
+    denyLedger: _denyLedger,
+    entityResolution: _entityResolution,
+    multilingual: _multilingual,
+    vectorSearch: _vectorSearch,
+    reranker: _reranker,
+    qualityMonitoring: _qualityMonitoring,
+    eval: _eval,
+    agentReasoning: _agentReasoning,
+    metadata: _metadata,
+    ...updateRest
+  } = update;
+  void _llm;
+  void _embedding;
+  void _prompts;
+  void _graphRag;
+  void _locale;
+  void _rateLimits;
+  void _features;
+  void _ingestion;
+  void _memory;
+  void _observe;
+  void _tracing;
+  void _aclSync;
+  void _denyLedger;
+  void _entityResolution;
+  void _multilingual;
+  void _vectorSearch;
+  void _reranker;
+  void _qualityMonitoring;
+  void _eval;
+  void _agentReasoning;
+  void _metadata;
+
   return {
     ...existing,
-    ...update,
-    // Deep merge for nested objects
+    ...updateRest,
+    // Deep-merged non-optional fields
     llm: update.llm ? { ...existing.llm, ...update.llm } : existing.llm,
     embedding: update.embedding
       ? { ...existing.embedding, ...update.embedding }
       : existing.embedding,
-    prompts: update.prompts ? { ...existing.prompts, ...update.prompts } : existing.prompts,
-    graphRag: update.graphRag ? { ...existing.graphRag, ...update.graphRag } : existing.graphRag,
-    locale: update.locale ? { ...existing.locale, ...update.locale } : existing.locale,
-    rateLimits: update.rateLimits
-      ? { ...existing.rateLimits, ...update.rateLimits }
-      : existing.rateLimits,
-    features: update.features ? { ...existing.features, ...update.features } : existing.features,
-    ingestion: update.ingestion
-      ? { ...existing.ingestion, ...update.ingestion }
-      : existing.ingestion,
-    memory: update.memory
-      ? {
-          ...existing.memory,
-          ...update.memory,
-          disposition: {
-            ...existing.memory?.disposition,
-            ...update.memory?.disposition,
-          },
-          llm: {
-            ...existing.memory?.llm,
-            ...update.memory?.llm,
-          },
-        }
-      : existing.memory,
-    observe: update.observe ? { ...existing.observe, ...update.observe } : existing.observe,
-    tracing: update.tracing ? { ...existing.tracing, ...update.tracing } : existing.tracing,
-    aclSync: update.aclSync
-      ? {
-          ...existing.aclSync,
-          ...update.aclSync,
-          publicDocs: update.aclSync.publicDocs
-            ? { ...existing.aclSync?.publicDocs, ...update.aclSync.publicDocs }
-            : existing.aclSync?.publicDocs,
-        }
-      : existing.aclSync,
-    denyLedger: update.denyLedger
-      ? { ...existing.denyLedger, ...update.denyLedger }
-      : existing.denyLedger,
-    entityResolution: update.entityResolution
-      ? {
-          ...DEFAULT_TENANT_CONFIG.entityResolution,
-          ...existing.entityResolution,
-          ...update.entityResolution,
-          thresholds: {
-            ...DEFAULT_TENANT_CONFIG.entityResolution?.thresholds,
-            ...existing.entityResolution?.thresholds,
-            ...update.entityResolution?.thresholds,
-          },
-        }
-      : existing.entityResolution,
-    multilingual: update.multilingual
-      ? { ...DEFAULT_TENANT_CONFIG.multilingual, ...existing.multilingual, ...update.multilingual }
-      : existing.multilingual,
-    vectorSearch: update.vectorSearch
-      ? { ...DEFAULT_TENANT_CONFIG.vectorSearch, ...existing.vectorSearch, ...update.vectorSearch }
-      : existing.vectorSearch,
-    reranker: update.reranker
-      ? { ...DEFAULT_TENANT_CONFIG.reranker, ...existing.reranker, ...update.reranker }
-      : existing.reranker,
-    qualityMonitoring: update.qualityMonitoring
-      ? {
-          enabled: false,
-          samplerCron: '0 2 * * *',
-          driftAlpha: 0.3,
-          driftWarningThreshold: 0.05,
-          driftCriticalThreshold: 0.1,
-          ...existing.qualityMonitoring,
-          ...update.qualityMonitoring,
-        }
-      : existing.qualityMonitoring,
-    eval: update.eval
-      ? {
-          ...DEFAULT_TENANT_CONFIG.eval,
-          ...existing.eval,
-          ...update.eval,
-          thresholds: {
-            ...DEFAULT_TENANT_CONFIG.eval?.thresholds,
-            ...existing.eval?.thresholds,
-            ...update.eval?.thresholds,
-          },
-        }
-      : existing.eval,
-    agentReasoning: update.agentReasoning
-      ? {
-          ...DEFAULT_TENANT_CONFIG.agentReasoning!,
-          ...existing.agentReasoning,
-          ...update.agentReasoning,
-          toolRankerWeights: {
-            ...DEFAULT_TENANT_CONFIG.agentReasoning!.toolRankerWeights,
-            ...existing.agentReasoning?.toolRankerWeights,
-            ...update.agentReasoning?.toolRankerWeights,
-          },
-          defaultBudget: {
-            ...DEFAULT_TENANT_CONFIG.agentReasoning!.defaultBudget,
-            ...existing.agentReasoning?.defaultBudget,
-            ...update.agentReasoning?.defaultBudget,
-          },
-        }
-      : existing.agentReasoning,
-    metadata: update.metadata ? { ...existing.metadata, ...update.metadata } : existing.metadata,
+    // Optional fields applied via conditional spread (EOPT-safe)
+    ...(prompts !== undefined && { prompts }),
+    ...(graphRag !== undefined && { graphRag }),
+    ...(locale !== undefined && { locale }),
+    ...(rateLimits !== undefined && { rateLimits }),
+    ...(features !== undefined && { features }),
+    ...(ingestion !== undefined && { ingestion }),
+    ...(memory !== undefined && { memory }),
+    ...(observe !== undefined && { observe }),
+    ...(tracing !== undefined && { tracing }),
+    ...(aclSync !== undefined && { aclSync }),
+    ...(denyLedger !== undefined && { denyLedger }),
+    ...(entityResolution !== undefined && { entityResolution }),
+    ...(multilingual !== undefined && { multilingual }),
+    ...(vectorSearch !== undefined && { vectorSearch }),
+    ...(reranker !== undefined && { reranker }),
+    ...(qualityMonitoring !== undefined && { qualityMonitoring }),
+    ...(evalCfg !== undefined && { eval: evalCfg }),
+    ...(agentReasoning !== undefined && { agentReasoning }),
+    ...(metadata !== undefined && { metadata }),
     // Update timestamp
     updatedAt: new Date().toISOString(),
   };
@@ -2511,7 +2598,7 @@ export function sanitizeTenantConfig(config: TenantConfig): SanitizedTenantConfi
     ...config,
     llm: sanitizedLlm,
     embedding: sanitizedEmbedding,
-    reranker: sanitizedReranker,
+    ...(sanitizedReranker !== undefined && { reranker: sanitizedReranker }),
   };
 }
 

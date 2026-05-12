@@ -84,7 +84,7 @@ export class CacheStore {
     try {
       const value = this.serializer.deserialize<T>(payload);
       const ttl = this.driver.ttl ? await this.driver.ttl(formattedKey) : undefined;
-      return { found: true, value, ttl };
+      return { found: true, value, ...(ttl !== undefined && { ttl }) };
     } catch (error) {
       this.handleDeserializationError(key, error);
       return { found: false, value: null };
@@ -313,7 +313,8 @@ export class CacheStore {
       try {
         return this.serializer.deserialize<T>(payload);
       } catch (error) {
-        this.handleDeserializationError(keys[index], error);
+        // bounds guaranteed: payloads.length === keys.length
+        this.handleDeserializationError(keys[index]!, error);
         return null;
       }
     });

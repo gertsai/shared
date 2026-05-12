@@ -100,7 +100,7 @@ export const createApiService = (
       const gertsError = wrapErrorResponse({
         ctx: res.$ctx,
         orchResponse: toBaseResponse(orchResponse),
-        path: req?.url,
+        ...(req?.url !== undefined && { path: req.url }),
       });
 
       const payload = {
@@ -134,12 +134,13 @@ export const createApiService = (
 
     // Success response with GertsResponse envelope
     const pkgInfo = extractPackageInfo(packageJson);
+    const nodeName = config.MOLECULER_NODE_NAME ?? undefined;
     const gertsResponse = wrapSuccessResponse({
       ctx: res.$ctx,
       orchResponse: toBaseResponse(orchResponse),
-      path: req?.url,
+      ...(req?.url !== undefined && { path: req.url }),
       packageJson: pkgInfo,
-      nodeName: config.MOLECULER_NODE_NAME ?? undefined,
+      ...(nodeName !== undefined && { nodeName }),
     });
 
     const payload = buildResponsePayload(gertsResponse, true);

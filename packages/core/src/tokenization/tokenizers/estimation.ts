@@ -148,7 +148,7 @@ export class EstimationTokenizer implements IUniversalTokenizer {
  * @returns EstimationTokenizer with provider-specific multiplier
  */
 export function createEstimationTokenizer(model?: string): EstimationTokenizer {
-  return new EstimationTokenizer({ model });
+  return new EstimationTokenizer(model !== undefined ? { model } : {});
 }
 
 /**

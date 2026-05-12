@@ -432,9 +432,9 @@ export function getProvider(key: string): ProviderConfig | undefined {
 
   // 3. Normalize compound key: "vertex_ai-language-models" → "vertex_ai"
   const base = key.split('-')[0];
-  return (
-    PROVIDERS[base] ?? (PROVIDER_ALIASES[base] ? PROVIDERS[PROVIDER_ALIASES[base]] : undefined)
-  );
+  if (!base) return undefined;
+  const aliasedBase = PROVIDER_ALIASES[base];
+  return PROVIDERS[base] ?? (aliasedBase ? PROVIDERS[aliasedBase] : undefined);
 }
 
 /** Get all known provider configs */

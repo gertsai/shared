@@ -30,6 +30,7 @@ import type {
   ModelRouterCapabilities,
   ModelRouterCostEstimate,
   ModelRouterOption,
+  ModelRouterPricing,
   ModelRouterRequest,
   ModelRouterSelection,
   ModelRouterSelectionResult,
@@ -82,7 +83,7 @@ export class ModelRouter {
 
   constructor(config?: RouterConfig) {
     this.defaultProvider = config?.defaultProvider ?? 'openai';
-    this.eventBus = config?.eventBus;
+    if (config?.eventBus !== undefined) this.eventBus = config.eventBus;
     this.costOptimization = config?.costOptimization ?? false;
 
     // Initialize fallbacks
@@ -229,23 +230,24 @@ export class ModelRouter {
 
     const contextWindow = getContextWindowSize(model);
     const capabilities = this.buildCapabilities(info);
-    const pricing = info
+    const pricing: ModelRouterPricing | undefined = info
       ? {
-          inputPerMillion: info.pricePerMillionInputTokens ?? undefined,
-          outputPerMillion: info.pricePerMillionOutputTokens ?? undefined,
+          ...(info.pricePerMillionInputTokens !== undefined && info.pricePerMillionInputTokens !== null && { inputPerMillion: info.pricePerMillionInputTokens }),
+          ...(info.pricePerMillionOutputTokens !== undefined && info.pricePerMillionOutputTokens !== null && { outputPerMillion: info.pricePerMillionOutputTokens }),
         }
       : undefined;
     const costPerMillion = (pricing?.inputPerMillion ?? 0) + (pricing?.outputPerMillion ?? 0);
+    const estimatedCostPerMillion = costPerMillion || undefined;
 
     return {
       model,
       provider,
-      name: info?.name,
-      description: info?.description,
+      ...(info?.name !== undefined && { name: info.name }),
+      ...(info?.description !== undefined && { description: info.description }),
       contextWindow,
       capabilities,
-      pricing,
-      estimatedCostPerMillion: costPerMillion || undefined,
+      ...(pricing !== undefined && { pricing }),
+      ...(estimatedCostPerMillion !== undefined && { estimatedCostPerMillion }),
       legacy: info?.legacy ?? false,
     };
   }
@@ -307,6 +309,12 @@ export class ModelRouter {
     const fallbackChain = candidates.map((candidate) => candidate.model);
     const selectedModel = request.model ?? candidates[0]?.model ?? this.getDefaultCandidate();
 
+    const costEstimate = this.estimateCost(
+      selectedModel,
+      request.inputTokens,
+      request.outputTokens,
+      request.budgetUsd,
+    );
     const selection: ModelRouterSelection = {
       selectedModel,
       provider: this.parseModel(selectedModel).provider ?? this.defaultProvider,
@@ -314,15 +322,10 @@ export class ModelRouter {
       reason: request.model
         ? 'Model hint provided'
         : `Selected based on ${request.taskType ?? 'general'} task type`,
-      taskType: request.taskType,
+      ...(request.taskType !== undefined && { taskType: request.taskType }),
       candidateCount: candidates.length,
-      tenantId: request.tenantId,
-      costEstimate: this.estimateCost(
-        selectedModel,
-        request.inputTokens,
-        request.outputTokens,
-        request.budgetUsd,
-      ),
+      ...(request.tenantId !== undefined && { tenantId: request.tenantId }),
+      ...(costEstimate !== undefined && { costEstimate }),
     };
 
     this.emitRouterSelection(selection);
@@ -350,7 +353,7 @@ export class ModelRouter {
 
     // Check for provider prefix (e.g., 'openai/gpt-4o')
     if (model.includes('/')) {
-      const [prefix, ...rest] = model.split('/');
+      const [prefix = '', ...rest] = model.split('/');
       const modelName = rest.join('/');
 
       // Simple mapping for prefixes
@@ -456,13 +459,16 @@ export class ModelRouter {
     }
 
     const estimate: ModelRouterCostEstimate = {
-      inputTokens,
-      outputTokens,
-      budgetUsd,
+      ...(inputTokens !== undefined && { inputTokens }),
+      ...(outputTokens !== undefined && { outputTokens }),
+      ...(budgetUsd !== undefined && { budgetUsd }),
     };
 
     if ((inputTokens ?? 0) + (outputTokens ?? 0) > 0) {
-      estimate.estimatedCostUsd = calculateCost(model, inputTokens ?? 0, outputTokens ?? 0);
+      const estimatedCostUsd = calculateCost(model, inputTokens ?? 0, outputTokens ?? 0);
+      if (estimatedCostUsd !== undefined) {
+        estimate.estimatedCostUsd = estimatedCostUsd;
+      }
     }
 
     return estimate;
@@ -483,10 +489,10 @@ export class ModelRouter {
       provider: selection.provider,
       fallbackChain: selection.fallbackChain,
       reason: selection.reason,
-      taskType: selection.taskType,
-      tenantId: selection.tenantId,
+      ...(selection.taskType !== undefined && { taskType: selection.taskType }),
+      ...(selection.tenantId !== undefined && { tenantId: selection.tenantId }),
       candidateCount: selection.candidateCount,
-      costEstimate: selection.costEstimate,
+      ...(selection.costEstimate !== undefined && { costEstimate: selection.costEstimate }),
     };
 
     this.eventBus.emit('llm.router.selection', event);
@@ -527,48 +533,51 @@ export class ModelRouter {
   ): BaseLLM {
     const baseConfig: LLMConfig = {
       model,
-      temperature: config?.temperature,
-      maxTokens: config?.maxTokens,
-      streaming: config?.streaming,
-      stop: config?.stop,
-      topP: config?.topP,
-      frequencyPenalty: config?.frequencyPenalty,
-      presencePenalty: config?.presencePenalty,
-      seed: config?.seed,
-      timeout: config?.timeout,
-      maxRetries: config?.maxRetries,
+      ...(config?.temperature !== undefined && { temperature: config.temperature }),
+      ...(config?.maxTokens !== undefined && { maxTokens: config.maxTokens }),
+      ...(config?.streaming !== undefined && { streaming: config.streaming }),
+      ...(config?.stop !== undefined && { stop: config.stop }),
+      ...(config?.topP !== undefined && { topP: config.topP }),
+      ...(config?.frequencyPenalty !== undefined && { frequencyPenalty: config.frequencyPenalty }),
+      ...(config?.presencePenalty !== undefined && { presencePenalty: config.presencePenalty }),
+      ...(config?.seed !== undefined && { seed: config.seed }),
+      ...(config?.timeout !== undefined && { timeout: config.timeout }),
+      ...(config?.maxRetries !== undefined && { maxRetries: config.maxRetries }),
     };
 
     switch (provider) {
       case 'openai': {
+        const openaiCfg = config as Partial<OpenAIConfig> | undefined;
         const openaiConfig: OpenAIConfig = {
           ...baseConfig,
-          apiKey: (config as OpenAIConfig)?.apiKey,
-          baseUrl: (config as OpenAIConfig)?.baseUrl,
-          organization: (config as OpenAIConfig)?.organization,
-          project: (config as OpenAIConfig)?.project,
-          reasoningEffort: (config as OpenAIConfig)?.reasoningEffort,
+          ...(openaiCfg?.apiKey !== undefined && { apiKey: openaiCfg.apiKey }),
+          ...(openaiCfg?.baseUrl !== undefined && { baseUrl: openaiCfg.baseUrl }),
+          ...(openaiCfg?.organization !== undefined && { organization: openaiCfg.organization }),
+          ...(openaiCfg?.project !== undefined && { project: openaiCfg.project }),
+          ...(openaiCfg?.reasoningEffort !== undefined && { reasoningEffort: openaiCfg.reasoningEffort }),
         };
         return new OpenAIProvider(openaiConfig, this.eventBus);
       }
 
       case 'anthropic': {
+        const anthropicCfg = config as Partial<AnthropicConfig> | undefined;
         const anthropicConfig: AnthropicConfig = {
           ...baseConfig,
-          apiKey: (config as AnthropicConfig)?.apiKey,
-          baseUrl: (config as AnthropicConfig)?.baseUrl,
-          topP: (config as AnthropicConfig)?.topP,
-          topK: (config as AnthropicConfig)?.topK,
-          thinking: (config as AnthropicConfig)?.thinking,
+          ...(anthropicCfg?.apiKey !== undefined && { apiKey: anthropicCfg.apiKey }),
+          ...(anthropicCfg?.baseUrl !== undefined && { baseUrl: anthropicCfg.baseUrl }),
+          ...(anthropicCfg?.topP !== undefined && { topP: anthropicCfg.topP }),
+          ...(anthropicCfg?.topK !== undefined && { topK: anthropicCfg.topK }),
+          ...(anthropicCfg?.thinking !== undefined && { thinking: anthropicCfg.thinking }),
         };
         return new AnthropicProvider(anthropicConfig, this.eventBus);
       }
 
       case 'gemini': {
+        const geminiCfg = config as Partial<GeminiConfig> | undefined;
         const geminiConfig: GeminiConfig = {
           ...baseConfig,
-          apiKey: (config as GeminiConfig)?.apiKey,
-          baseUrl: (config as GeminiConfig)?.baseUrl,
+          ...(geminiCfg?.apiKey !== undefined && { apiKey: geminiCfg.apiKey }),
+          ...(geminiCfg?.baseUrl !== undefined && { baseUrl: geminiCfg.baseUrl }),
         };
         return new GeminiProvider(geminiConfig, this.eventBus);
       }

@@ -63,7 +63,8 @@ function hashNumber(n: number): number {
   }
   // For floats and large integers, use bit representation
   hashFloat64[0] = n;
-  return hashUint32[0] ^ hashUint32[1];
+  // bounds guaranteed: hashUint32 is a fixed-size Uint32Array(2)
+  return hashUint32[0]! ^ hashUint32[1]!;
 }
 
 function hashString(str: string): number {
@@ -246,8 +247,8 @@ class CollisionNode<K, V> extends Node<K, V> {
       return null;
     }
     if (newEntries.length === 1) {
-      const [only] = newEntries;
-      return only;
+      // bounds guaranteed by length check above
+      return newEntries[0]!;
     }
     return new CollisionNode(this.hash, newEntries);
   }
@@ -283,7 +284,8 @@ class BranchNode<K, V> extends Node<K, V> {
     }
 
     const index = popcount(this.bitmap & (bit - 1));
-    return this.children[index].get(shift + SHIFT, hash, key);
+    // HAMT bitmap invariant guarantees child at index exists
+    return this.children[index]!.get(shift + SHIFT, hash, key);
   }
 
   lookup(shift: number, hash: number, key: K): LookupResult<V> {
@@ -293,7 +295,8 @@ class BranchNode<K, V> extends Node<K, V> {
     }
 
     const index = popcount(this.bitmap & (bit - 1));
-    return this.children[index].lookup(shift + SHIFT, hash, key);
+    // HAMT bitmap invariant guarantees child at index exists
+    return this.children[index]!.lookup(shift + SHIFT, hash, key);
   }
 
   set(shift: number, hash: number, key: K, value: V): Node<K, V> {
@@ -307,8 +310,8 @@ class BranchNode<K, V> extends Node<K, V> {
       return new BranchNode(this.bitmap | bit, newChildren);
     }
 
-    // Update existing branch
-    const child = this.children[index];
+    // Update existing branch — HAMT bitmap invariant guarantees child at index
+    const child = this.children[index]!;
     const newChild = child.set(shift + SHIFT, hash, key, value);
 
     if (newChild === child) {
@@ -327,7 +330,8 @@ class BranchNode<K, V> extends Node<K, V> {
     }
 
     const index = popcount(this.bitmap & (bit - 1));
-    const child = this.children[index];
+    // HAMT bitmap invariant guarantees child at index
+    const child = this.children[index]!;
     const newChild = child.delete(shift + SHIFT, hash, key);
 
     if (newChild === child) {

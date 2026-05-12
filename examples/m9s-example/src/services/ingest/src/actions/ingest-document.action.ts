@@ -117,9 +117,9 @@ export const ingestDocument: any = controller.register('document', {
         docId,
         text,
         userId,
-        metadata,
-        session,
-        expectedTenantId,
+        ...(metadata !== undefined && { metadata }),
+        ...(session !== undefined && { session }),
+        ...(expectedTenantId !== undefined && { expectedTenantId }),
       });
 
       const response: IngestDocumentResponse = {

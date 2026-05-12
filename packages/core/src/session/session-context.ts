@@ -118,11 +118,11 @@ export class GraphRAGSessionContext implements IDestroyable {
 
     this._requestMeta = {
       requestId: config.requestId || randomUUID(),
-      traceId: config.traceId,
       clientPlatform: config.clientPlatform,
-      clientVersion: config.clientVersion,
       startedAt: new Date(),
       timeout: config.timeout || 60000,
+      ...(config.traceId !== undefined && { traceId: config.traceId }),
+      ...(config.clientVersion !== undefined && { clientVersion: config.clientVersion }),
     };
 
     this._graphRagSettings = {
@@ -335,11 +335,13 @@ export class GraphRAGSessionContext implements IDestroyable {
       tenantId: data.tenantId,
       operator: data.operator,
       clientPlatform: data.requestMeta.clientPlatform as ClientPlatform,
-      clientVersion: data.requestMeta.clientVersion,
       requestId: data.requestMeta.requestId,
-      traceId: data.requestMeta.traceId,
       timeout: data.requestMeta.timeout,
       graphRagSettings: data.graphRagSettings,
+      ...(data.requestMeta.clientVersion !== undefined && {
+        clientVersion: data.requestMeta.clientVersion,
+      }),
+      ...(data.requestMeta.traceId !== undefined && { traceId: data.requestMeta.traceId }),
     });
 
     // Restore state
@@ -386,13 +388,13 @@ export class GraphRAGSessionContext implements IDestroyable {
       operatorId: this._operator.id,
       operatorType: this._operator.type,
       requestId: this._requestMeta.requestId,
-      traceId: this._requestMeta.traceId,
       clientPlatform: this._requestMeta.clientPlatform,
       startedAt: this._requestMeta.startedAt,
       duration: Date.now() - this._requestMeta.startedAt.getTime(),
       touchedEntities: this._touchedEntities.size,
       performedQueries: this._performedQueries.length,
       performedActions: this._performedActions,
+      ...(this._requestMeta.traceId !== undefined && { traceId: this._requestMeta.traceId }),
     };
   }
 

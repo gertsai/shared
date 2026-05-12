@@ -300,7 +300,10 @@ export abstract class BaseEntityStorageService<
     this._assertAlive();
     const actionOpts =
       opts.action !== undefined
-        ? { action: opts.action, params: opts.params }
+        ? {
+            action: opts.action,
+            ...(opts.params !== undefined && { params: opts.params }),
+          }
         : undefined;
     if (opts.batch) {
       this._logger.debug('update:batch', { path: this._path, id: uid });

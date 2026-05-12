@@ -121,7 +121,9 @@ export function setupObservability(opts: SetupObservabilityOpts): ObservabilityH
 
   const resource = buildResource(resourcesMod, resourceAttrs);
 
-  const exporter = new exporterMod.OTLPTraceExporter({ url: opts.otlpEndpoint });
+  const exporter = new exporterMod.OTLPTraceExporter({
+    ...(opts.otlpEndpoint !== undefined && { url: opts.otlpEndpoint }),
+  });
 
   const sdk = new sdkNode.NodeSDK({
     resource,

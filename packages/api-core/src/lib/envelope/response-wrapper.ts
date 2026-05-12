@@ -340,22 +340,28 @@ export function wrapErrorResponse(
   const stage = detectStageFromPath(path);
 
   // Build GertsErrorResponse
+  type ErrorDetail = GertsErrorResponse['error'];
+  const errorDetail: {
+    -readonly [K in keyof ErrorDetail]: ErrorDetail[K];
+  } = {
+    message: info.message || error?.message || 'An error occurred',
+    type: errorType,
+    code: errorCode,
+    retryable,
+  };
+  if (errorCode === 'RATE_LIMIT_EXCEEDED') {
+    errorDetail.retry_after = 60 as number & { readonly __type: 'uint32' };
+  }
+  if (stage !== undefined) {
+    errorDetail.stage = stage as Exclude<ErrorDetail['stage'], undefined>;
+  }
   const gertsError: GertsErrorResponse = {
     success: false,
-    error: {
-      message: info.message || error?.message || 'An error occurred',
-      type: errorType,
-      code: errorCode,
-      retryable,
-      ...(errorCode === 'RATE_LIMIT_EXCEEDED'
-        ? { retry_after: 60 as number & { readonly __type: 'uint32' } }
-        : {}),
-      ...(stage !== undefined ? { stage: stage as GertsErrorResponse['error']['stage'] } : {}),
-    },
+    error: errorDetail,
     request_id: requestId || generateRequestId(),
     timestamp: new Date().toISOString() as GertsErrorResponse['timestamp'],
-    ...(tenantId.length > 0 ? { tenant_id: tenantId } : {}),
-    ...(traceId !== undefined ? { trace_id: traceId } : {}),
+    ...(tenantId.length > 0 && { tenant_id: tenantId }),
+    ...(traceId !== undefined && { trace_id: traceId }),
   };
 
   // Legacy fields for backward compatibility (ctx may be undefined in early middleware errors)

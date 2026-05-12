@@ -113,13 +113,13 @@ export class APIError<CODE extends ResponseCode = ResponseCode> extends GertsErr
       severity,
       retryable,
       kind,
-      details: data as Record<string, unknown> | undefined,
+      ...(data !== undefined && { details: data as Record<string, unknown> }),
     });
 
     this.name = 'APIError';
-    this.data = data;
-    this.additionalMessage = additionalMessage;
-    this.domain = options?.domain;
+    if (data !== undefined) this.data = data;
+    if (additionalMessage !== undefined) this.additionalMessage = additionalMessage;
+    if (options?.domain !== undefined) this.domain = options.domain;
 
     // Expose 4xx errors by default, hide 5xx details
     this.expose = options?.expose ?? httpCode < 500;
@@ -192,7 +192,7 @@ export class APIError<CODE extends ResponseCode = ResponseCode> extends GertsErr
       for (const value of Object.values(ResponseCode)) {
         const parts = value.split('/');
         // Only map base codes (exactly 2 parts: "409/conflict"), skip sub-codes ("401/01/token_invalid")
-        if (parts.length === 2) {
+        if (parts.length === 2 && parts[0] !== undefined) {
           const code = parseInt(parts[0], 10);
           if (!isNaN(code) && !APIError._httpCodeMap.has(code)) {
             APIError._httpCodeMap.set(code, value as ResponseCode);

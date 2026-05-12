@@ -50,13 +50,13 @@ export function makeOrderRank({
       if (nextRankIndex === -1 || nextRankIndex === 0) {
         // If rank of next item is not found, or it's first
         // - set rank below first
-        return $lexoRank.prev(contextRanks[0][1]);
+        return $lexoRank.prev(contextRanks[0]![1]);
       } else {
         // If rank of next item is found, and it's not first
         // - set rank between previous and next by rank
         return $lexoRank.middle(
-          contextRanks[nextRankIndex - 1][1],
-          contextRanks[nextRankIndex][1],
+          contextRanks[nextRankIndex - 1]![1],
+          contextRanks[nextRankIndex]![1],
         );
       }
     } else if (prev_uid) {
@@ -66,24 +66,24 @@ export function makeOrderRank({
       if (prevRankIndex === -1 || prevRankIndex === contextRanks.length - 1) {
         // If rank of previous item is not found, or it's last
         // - set rank below first
-        return $lexoRank.next(contextRanks[contextRanks.length - 1][1]);
+        return $lexoRank.next(contextRanks[contextRanks.length - 1]![1]);
       } else {
         // If rank of previous item is found, and it's not last
         // - set rank between previous and next by rank
         return $lexoRank.middle(
-          contextRanks[prevRankIndex][1],
-          contextRanks[prevRankIndex + 1][1],
+          contextRanks[prevRankIndex]![1],
+          contextRanks[prevRankIndex + 1]![1],
         );
       }
     } else {
       if (to_start) {
         // If nor next nor prev item is specified
         // - set rank to the start
-        return $lexoRank.prev(contextRanks[0][1]);
+        return $lexoRank.prev(contextRanks[0]![1]);
       }
       // If nor next nor prev item is specified
       // - set rank to the end
-      return $lexoRank.next(contextRanks[contextRanks.length - 1][1]);
+      return $lexoRank.next(contextRanks[contextRanks.length - 1]![1]);
     }
   } else {
     // If its first item in the list
