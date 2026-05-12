@@ -43,11 +43,13 @@
  */
 
 // Client (Wave 6.3 / ADR-012: + createFgaClient for non-cached factory)
+// Wave 7.4 (PRD-011 / RFC-007): + configureFgaClientCache to tune LRU+TTL knobs.
 export {
   GertsFgaClient,
   getFgaClient,
   createFgaClient,
   resetFgaClient,
+  configureFgaClientCache,
 } from './client.js';
 export { fingerprint, DEFAULT_FINGERPRINT } from './util/fingerprint.js';
 
