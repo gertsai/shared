@@ -338,7 +338,7 @@ export class VaultProvider implements HSMProvider {
       latencyMs,
       keyAvailable,
       sealStatus,
-      version,
+      ...(version !== undefined && { version }),
     };
   }
 
@@ -495,10 +495,9 @@ export class VaultProvider implements HSMProvider {
       derived: response.data.derived,
       exportable: response.data.exportable,
       createdAt: new Date(keys[firstVersion.toString()]?.creation_time ?? Date.now()),
-      lastRotatedAt:
-        latestVersion > 1
-          ? new Date(keys[latestVersion.toString()]?.creation_time ?? Date.now())
-          : undefined,
+      ...(latestVersion > 1 && {
+        lastRotatedAt: new Date(keys[latestVersion.toString()]?.creation_time ?? Date.now()),
+      }),
     };
   }
 

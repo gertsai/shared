@@ -17,7 +17,8 @@ import {
  * absent or empty (use `getMoleculerTenantIdStrict` to enforce presence).
  */
 export function getMoleculerTenantId(ctx: Context): TenantId | undefined {
-  return getTenantIdOptionalRoot({ meta: ctx?.meta as { tenantId?: string } | undefined });
+  const meta = ctx?.meta as { tenantId?: string } | undefined;
+  return getTenantIdOptionalRoot(meta !== undefined ? { meta } : {});
 }
 
 /**
@@ -25,7 +26,8 @@ export function getMoleculerTenantId(ctx: Context): TenantId | undefined {
  * `MissingTenantIdError` when the value is missing or empty.
  */
 export function getMoleculerTenantIdStrict(ctx: Context): TenantId {
-  return getTenantIdStrictRoot({ meta: ctx?.meta as { tenantId?: string } | undefined });
+  const meta = ctx?.meta as { tenantId?: string } | undefined;
+  return getTenantIdStrictRoot(meta !== undefined ? { meta } : {});
 }
 
 /**

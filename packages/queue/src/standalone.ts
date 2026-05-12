@@ -46,7 +46,7 @@ export function startStandalone(opts: StartStandaloneOpts): StandaloneHandle {
   const workers = opts.queues.map((q) =>
     createWorker(q.name, q.processor as (job: Job<unknown, void>) => Promise<void>, {
       connection: opts.connection,
-      concurrency: q.concurrency,
+      ...(q.concurrency !== undefined && { concurrency: q.concurrency }),
     }),
   );
 

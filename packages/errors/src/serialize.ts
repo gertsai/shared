@@ -10,17 +10,23 @@ import type { ErrorKind } from './error-kind.js';
  * `__truncated` marker so toJSON() never infinite-loops nor emits raw
  * native Error objects (which would leak stack traces).
  */
+/**
+ * `cause` value inside a SerializedAppError. Either a nested serialized
+ * error (recursive) or a truncation marker for cycle/depth/non-app cases.
+ */
+export type SerializedAppCause =
+  | SerializedAppError
+  | {
+      readonly __truncated: true;
+      readonly reason: 'cycle' | 'depth-exceeded' | 'non-app-error';
+    };
+
 export type SerializedAppError = {
   readonly kind: ErrorKind;
   readonly message: string;
   readonly details: Readonly<Record<string, unknown>>;
   readonly correlationId?: string;
-  readonly cause?:
-    | SerializedAppError
-    | {
-        readonly __truncated: true;
-        readonly reason: 'cycle' | 'depth-exceeded' | 'non-app-error';
-      };
+  readonly cause?: SerializedAppCause;
 };
 
 const MAX_DEPTH = 5;
@@ -40,13 +46,19 @@ function walk(
   depth: number,
 ): SerializedAppError {
   visited.add(err);
-  const out: SerializedAppError = {
+  // Build incrementally to honour EOPT — conditional spreads (and the spread
+  // result type) include `| undefined` on the spread keys, which violates
+  // SerializedAppError's exact-optional shape. Mutate the in-scope object
+  // instead and return as readonly via the signature.
+  const out: {
+    -readonly [K in keyof SerializedAppError]: SerializedAppError[K];
+  } = {
     kind: err.kind,
     message: err.message,
     details: err.details,
-    ...(err.correlationId !== undefined ? { correlationId: err.correlationId } : {}),
-    ...(err.cause !== undefined ? { cause: walkCause(err.cause, visited, depth + 1) } : {}),
   };
+  if (err.correlationId !== undefined) out.correlationId = err.correlationId;
+  if (err.cause !== undefined) out.cause = walkCause(err.cause, visited, depth + 1);
   return out;
 }
 
@@ -54,7 +66,7 @@ function walkCause(
   cause: unknown,
   visited: WeakSet<AppError>,
   depth: number,
-): SerializedAppError['cause'] {
+): SerializedAppCause {
   if (depth > MAX_DEPTH) {
     return { __truncated: true, reason: 'depth-exceeded' };
   }

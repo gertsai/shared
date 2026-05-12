@@ -263,7 +263,7 @@ export class MockHSMProvider implements HSMProvider {
       derived: true,
       exportable: false,
       createdAt: this._createdAt,
-      lastRotatedAt: this._lastRotatedAt,
+      ...(this._lastRotatedAt !== undefined && { lastRotatedAt: this._lastRotatedAt }),
     };
   }
 

@@ -94,12 +94,12 @@ export function createQueue<T = unknown>(name: string, opts: QueueOpts): Queue<T
   const connection: ConnectionOptions = {
     host: opts.connection.host,
     port: opts.connection.port,
-    password: opts.connection.password,
-    db: opts.connection.db,
+    ...(opts.connection.password !== undefined && { password: opts.connection.password }),
+    ...(opts.connection.db !== undefined && { db: opts.connection.db }),
   };
   return new bullmq.Queue<T>(name, {
     connection,
-    defaultJobOptions: opts.defaultJobOptions,
+    ...(opts.defaultJobOptions !== undefined && { defaultJobOptions: opts.defaultJobOptions }),
   });
 }
 

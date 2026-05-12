@@ -42,7 +42,9 @@ export class InvalidTransitionError<S extends StateValue = string> extends Error
     this.from = from;
     this.to = to;
     this.validTargets = validTargets;
-    this.context = context ? Object.freeze({ ...context }) : undefined;
+    if (context !== undefined) {
+      this.context = Object.freeze({ ...context });
+    }
   }
 }
 

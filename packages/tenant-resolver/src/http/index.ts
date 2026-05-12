@@ -13,8 +13,8 @@ import type { HttpRequestLike } from '../strategy.js';
 export function nodeHttpAdapter(req: IncomingMessage): HttpRequestLike {
   return {
     headers: req.headers as Readonly<Record<string, string | string[] | undefined>>,
-    url: req.url,
-    method: req.method,
+    ...(req.url !== undefined && { url: req.url }),
+    ...(req.method !== undefined && { method: req.method }),
   };
 }
 
