@@ -1,0 +1,13 @@
+artifact_id: EVID-026
+workflow_type: greenfield
+current_phase: done
+advanced_at: 2026-05-12T18:40:59.836719Z
+history:
+- to: shape
+  at: 2026-05-12T18:39:49.214292Z
+  reason: 'auto: forgeplan_new'
+- from: shape
+  to: done
+  at: 2026-05-12T18:40:59.836719Z
+  reason: 'auto: forgeplan_activate'
+schema_version: 1

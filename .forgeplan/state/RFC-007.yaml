@@ -1,0 +1,17 @@
+artifact_id: RFC-007
+workflow_type: greenfield
+current_phase: done
+advanced_at: 2026-05-12T18:40:59.143798Z
+history:
+- to: shape
+  at: 2026-05-12T18:27:55.300747Z
+  reason: 'auto: forgeplan_new'
+- from: shape
+  to: validate
+  at: 2026-05-12T18:28:43.755308Z
+  reason: 'auto: forgeplan_validate PASS'
+- from: validate
+  to: done
+  at: 2026-05-12T18:40:59.143798Z
+  reason: 'auto: forgeplan_activate'
+schema_version: 1
