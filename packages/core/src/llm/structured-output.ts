@@ -394,8 +394,8 @@ export function getStructuredOutputCapabilities(model: string): StructuredOutput
     }
   }
 
-  // Default fallback
-  return MODEL_STRUCTURED_OUTPUT_CAPABILITIES['default'];
+  // Default fallback — key 'default' is statically defined in the map
+  return MODEL_STRUCTURED_OUTPUT_CAPABILITIES['default']!;
 }
 
 /**

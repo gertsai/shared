@@ -51,25 +51,25 @@ export class MockEmbedder implements IEmbedder {
       // Magnitude is a stable function of the token hash to avoid trivial
       // collisions producing identical vectors.
       const magnitude = ((h >>> 8) & 0xff) / 255 + 0.25;
-      vec[slot] += magnitude;
+      vec[slot]! += magnitude;
     }
 
     // Sprinkle char-level signal so single-token texts still vary.
     for (let i = 0; i < text.length; i++) {
       const code = text.charCodeAt(i);
       const slot = (code * 2654435761) >>> 0; // Knuth multiplicative hash
-      vec[slot % dim] += ((code & 0x0f) + 1) / 16;
+      vec[slot % dim]! += ((code & 0x0f) + 1) / 16;
     }
 
     // L2 normalize so cosine similarity behaves predictably.
     let norm = 0;
-    for (let i = 0; i < dim; i++) norm += vec[i] * vec[i];
+    for (let i = 0; i < dim; i++) norm += vec[i]! * vec[i]!;
     norm = Math.sqrt(norm);
     if (norm === 0) {
       // All-zero vector — return as-is; cosineSimilarity() handles 0 safely.
       return vec;
     }
-    for (let i = 0; i < dim; i++) vec[i] /= norm;
+    for (let i = 0; i < dim; i++) vec[i]! /= norm;
     return vec;
   }
 }

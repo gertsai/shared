@@ -24,11 +24,11 @@ type Names = {
  */
 export function convertName(name: string, nameLength = 4): Names {
   const splitted = name.split(/\s/g);
-  const [first_name, last_name] = splitted;
+  const [first_name = '', last_name = ''] = splitted;
   if (splitted.length < 2) {
     return <Names>{
       first_name,
-      last_name: last_name || '',
+      last_name,
       nickname: `${first_name.toLowerCase()}.${getRandomId(
         nameLength,
         'abcdefghijklmnopqrstuvwxyz',
@@ -38,7 +38,7 @@ export function convertName(name: string, nameLength = 4): Names {
   } else {
     return <Names>{
       first_name,
-      last_name: last_name || '',
+      last_name,
       nickname: `${first_name.toLowerCase()}.${last_name.toLowerCase()}`,
     };
   }

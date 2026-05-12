@@ -33,10 +33,11 @@ export function parseEntityRefs(text: string): EntityRefMatch[] {
   const regex = new RegExp(ENTITY_REF_REGEX.source, 'g');
   let match: RegExpExecArray | null;
   while ((match = regex.exec(text)) !== null) {
+    // regex has 3 capture groups; on match all are defined
     results.push({
-      type: match[1],
-      id: match[2],
-      label: match[3],
+      type: match[1]!,
+      id: match[2]!,
+      label: match[3]!,
       start: match.index,
       end: match.index + match[0].length,
     });
@@ -84,7 +85,8 @@ export function injectEntityRefs(
 
   // Restore placeholders
   for (let i = 0; i < placeholders.length; i++) {
-    result = result.replace(`\x00REF${i}\x00`, placeholders[i]);
+    // bounds guaranteed by loop condition
+    result = result.replace(`\x00REF${i}\x00`, placeholders[i]!);
   }
   return result;
 }

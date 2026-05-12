@@ -350,7 +350,7 @@ export class ModelRouter {
 
     // Check for provider prefix (e.g., 'openai/gpt-4o')
     if (model.includes('/')) {
-      const [prefix, ...rest] = model.split('/');
+      const [prefix = '', ...rest] = model.split('/');
       const modelName = rest.join('/');
 
       // Simple mapping for prefixes

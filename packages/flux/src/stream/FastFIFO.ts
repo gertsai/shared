@@ -122,7 +122,8 @@ export class FastFIFO<T> {
    */
   *[Symbol.iterator](): Iterator<T> {
     for (let i = this._head; i < this._buffer.length; i++) {
-      yield this._buffer[i];
+      // bounds guaranteed by loop condition i < this._buffer.length
+      yield this._buffer[i]!;
     }
   }
 

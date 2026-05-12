@@ -42,6 +42,7 @@ export function iterablesEqual<K, V>(
 
   return arr1.every((entry1, i) => {
     const entry2 = arr2[i];
+    if (!entry2) return false;
     return Object.is(entry1[0], entry2[0]) && Object.is(entry1[1], entry2[1]);
   });
 }

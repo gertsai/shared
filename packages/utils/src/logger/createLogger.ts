@@ -52,10 +52,11 @@ export const createLogger = (tag: string, logLevel?: number) => {
  * ```
  */
 export const setLogLevels = (levels: LogLevelOverrides) => {
-  Object.keys(levels).forEach((tag) => {
-    loggerLevels[tag] = levels[tag];
+  Object.entries(levels).forEach(([tag, level]) => {
+    if (level === undefined) return;
+    loggerLevels[tag] = level;
     if (loggerInstances.has(tag)) {
-      loggerInstances.get(tag)!.level = levels[tag];
+      loggerInstances.get(tag)!.level = level;
     }
   });
 };

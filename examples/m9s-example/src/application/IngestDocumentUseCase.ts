@@ -140,7 +140,8 @@ export class IngestDocumentUseCase {
       docId: doc.id,
       idx,
       text: chunkText,
-      vector: vectors[idx],
+      // bounds guaranteed by length check above (vectors.length === chunkTexts.length)
+      vector: vectors[idx]!,
     }));
 
     // 4. Persist (document first so a partial failure leaves a recoverable trail)

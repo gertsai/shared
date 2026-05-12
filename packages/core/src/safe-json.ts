@@ -43,7 +43,7 @@ export function safeJsonParse<T = unknown>(text: string): T | null {
   //    Handles: ```json\n{...}\n```, ```\n{...}\n```, ```json{...}```
   const fenceRegex = /```(?:json|JSON|js|javascript)?\s*\n?([\s\S]*?)\n?\s*```/;
   const fenceMatch = trimmed.match(fenceRegex);
-  if (fenceMatch) {
+  if (fenceMatch?.[1]) {
     const inner = fenceMatch[1].trim();
     try {
       return JSON.parse(inner) as T;

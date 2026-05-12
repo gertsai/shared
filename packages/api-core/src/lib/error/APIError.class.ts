@@ -192,7 +192,7 @@ export class APIError<CODE extends ResponseCode = ResponseCode> extends GertsErr
       for (const value of Object.values(ResponseCode)) {
         const parts = value.split('/');
         // Only map base codes (exactly 2 parts: "409/conflict"), skip sub-codes ("401/01/token_invalid")
-        if (parts.length === 2) {
+        if (parts.length === 2 && parts[0] !== undefined) {
           const code = parseInt(parts[0], 10);
           if (!isNaN(code) && !APIError._httpCodeMap.has(code)) {
             APIError._httpCodeMap.set(code, value as ResponseCode);

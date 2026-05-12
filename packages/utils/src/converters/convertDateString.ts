@@ -15,7 +15,7 @@ export function convertDateStringToDate(input: DateString): Date {
   const currentDate = new Date();
 
   const parts = input.split(' ');
-  if (parts.length !== 2) {
+  if (parts.length !== 2 || parts[0] === undefined || parts[1] === undefined) {
     throw new Error(
       'Input string must be in format "number unit", e.g. "5 minutes", "10 days", "3 months", or "1 year".',
     );

@@ -137,7 +137,7 @@ export class TokenTextSplitter extends BaseTextSplitter {
       currentSentence += char;
 
       // Check if this is a sentence ending followed by whitespace
-      if (sentenceEnders.has(char)) {
+      if (sentenceEnders.has(char!)) {
         // Look ahead for whitespace
         const nextChar = text[i + 1];
         if (nextChar && /\s/.test(nextChar)) {
@@ -146,7 +146,7 @@ export class TokenTextSplitter extends BaseTextSplitter {
           currentSentence = '';
 
           // Skip leading whitespace for next sentence
-          while (i + 1 < text.length && /\s/.test(text[i + 1])) {
+          while (i + 1 < text.length && /\s/.test(text[i + 1]!)) {
             i++;
           }
         }

@@ -244,7 +244,7 @@ export function extractClientIp(
       const ips = xff.split(',').map((ip) => ip.trim());
       for (let i = ips.length - 1; i >= 0; i--) {
         const ip = ips[i];
-        if (isValidIp(ip) && !isTrustedProxy(ip, trustedProxies)) {
+        if (ip && isValidIp(ip) && !isTrustedProxy(ip, trustedProxies)) {
           return ip;
         }
       }
@@ -269,8 +269,8 @@ export function extractClientIpUnsafe(request: ABACRequestInfo): string {
   // X-Forwarded-For (first IP in chain) - INSECURE!
   const xff = headers['x-forwarded-for'];
   if (xff) {
-    const firstIp = xff.split(',')[0].trim();
-    if (isValidIp(firstIp)) return firstIp;
+    const firstIp = xff.split(',')[0]?.trim();
+    if (firstIp && isValidIp(firstIp)) return firstIp;
   }
 
   // X-Real-IP

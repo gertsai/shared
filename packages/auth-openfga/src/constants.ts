@@ -182,7 +182,7 @@ export function objectString(type: string, id: string): string {
  * @example parseObjectString('project:demo') → { type: 'project', id: 'demo' }
  */
 export function parseObjectString(object: string): { type: string; id: string } {
-  const [type, ...rest] = object.split(':');
+  const [type = '', ...rest] = object.split(':');
   return { type, id: rest.join(':') };
 }
 
@@ -193,7 +193,7 @@ export function parseObjectString(object: string): { type: string; id: string } 
  */
 export function parseUserString(user: string): { type: string; id: string; relation?: string } {
   if (user.includes('#')) {
-    const [typeId, relation] = user.split('#');
+    const [typeId = '', relation] = user.split('#');
     const { type, id } = parseObjectString(typeId);
     return { type, id, relation };
   }

@@ -105,10 +105,11 @@ export class TypeBasedSelector implements IQuerySelector {
       );
     });
 
+    // matching.length > 0 verified above
     return {
-      executorName: sorted[0].name,
+      executorName: sorted[0]!.name,
       confidence: 1.0,
-      reason: `Type '${query.type}' matched executor '${sorted[0].name}'`,
+      reason: `Type '${query.type}' matched executor '${sorted[0]!.name}'`,
     };
   }
 }
@@ -159,10 +160,11 @@ export class PriorityBasedSelector implements IQuerySelector {
       return priorityB - priorityA;
     });
 
+    // matching.length > 0 verified above
     return {
-      executorName: sorted[0].name,
+      executorName: sorted[0]!.name,
       confidence: 1.0,
-      reason: `Type '${query.type}' matched executor '${sorted[0].name}' (priority: ${this.priorities.get(sorted[0].name) ?? 0})`,
+      reason: `Type '${query.type}' matched executor '${sorted[0]!.name}' (priority: ${this.priorities.get(sorted[0]!.name) ?? 0})`,
     };
   }
 }

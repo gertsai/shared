@@ -55,7 +55,7 @@ const rlrUseChain = config.RLR_ENABLED && config.REDIS_URL
           // `extractClientIp` from @gertsai/api-core for proxy-aware headers.
           const xff = req.headers['x-forwarded-for'];
           const ip = Array.isArray(xff) ? xff[0] : xff;
-          return `ip:${(ip ?? 'unknown').split(',')[0].trim()}`;
+          return `ip:${((ip ?? 'unknown').split(',')[0] ?? 'unknown').trim()}`;
         },
       }),
     ]

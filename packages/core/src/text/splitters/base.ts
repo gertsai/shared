@@ -22,6 +22,7 @@ function linkSequentialRelationships(nodes: TextNode[]): void {
     const prev = nodes[i - 1];
     const next = nodes[i + 1];
     const current = nodes[i];
+    if (!current) continue;
 
     if (!prev && !next) continue;
     current.relationships ??= {};

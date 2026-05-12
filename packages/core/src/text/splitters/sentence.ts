@@ -42,7 +42,7 @@ function normalizeLanguage(lang: string | undefined): string {
 
 function getAbbreviationSet(options: SentenceSplitterOptions | undefined): Set<string> {
   const language = normalizeLanguage(options?.language);
-  const base = ABBREVIATIONS[language] ?? ABBREVIATIONS.en;
+  const base = ABBREVIATIONS[language] ?? ABBREVIATIONS.en ?? [];
   const extras = options?.abbreviations ?? [];
   return new Set([...base, ...extras]);
 }
@@ -69,12 +69,12 @@ function splitSentences(text: string, abbreviations: Set<string>): string[] {
     if (!isSentenceEnd) continue;
 
     if (ch === '.' && looksLikeAbbreviation(text, i, abbreviations)) continue;
-    if (ch === '.' && i > 0 && /\d/.test(text[i - 1]) && i + 1 < text.length && /\d/.test(text[i + 1])) {
+    if (ch === '.' && i > 0 && /\d/.test(text[i - 1]!) && i + 1 < text.length && /\d/.test(text[i + 1]!)) {
       continue; // decimal numbers like 3.14
     }
 
     let end = i + 1;
-    while (end < text.length && /\s/.test(text[end])) end++;
+    while (end < text.length && /\s/.test(text[end]!)) end++;
 
     const sentenceText = text.slice(start, end);
     if (sentenceText) sentences.push(sentenceText);

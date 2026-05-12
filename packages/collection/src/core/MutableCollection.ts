@@ -629,7 +629,8 @@ class MutableCollectionBase<K, V>
     const entries = [...this.entries()];
     let acc = initialValue;
     for (let i = entries.length - 1; i >= 0; i--) {
-      const [key, val] = entries[i];
+      // bounds guaranteed by loop condition
+      const [key, val] = entries[i]!;
       acc = fn(acc, val, key);
     }
     return acc;

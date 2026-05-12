@@ -193,7 +193,7 @@ const generateResponseMeta = <
         success: true,
         message,
         code,
-        http_code: +code.split('/')[0],
+        http_code: +(code.split('/')[0] ?? '0'),
       },
     },
   }) as unknown as Record<CODE, ResponseMeta<CODE, DATA>>;
@@ -239,7 +239,7 @@ const generateErrorMeta = <
         success: false,
         message,
         code,
-        http_code: +code.split('/')[0],
+        http_code: +(code.split('/')[0] ?? '0'),
         ...(options?.retryable !== undefined ? { retryable: options.retryable } : {}),
         ...(options?.stage !== undefined ? { stage: options.stage } : {}),
       },

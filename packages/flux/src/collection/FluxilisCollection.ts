@@ -536,7 +536,8 @@ export class FluxilisCollection<K extends FluxilisKey, V> extends MutableCollect
     // O(count) instead of O(n log n) with sort
     for (let i = 0; i < count; i++) {
       const j = i + Math.floor(Math.random() * (values.length - i));
-      [values[i], values[j]] = [values[j], values[i]];
+      // bounds guaranteed: i < count ≤ values.length, j < values.length
+      [values[i], values[j]] = [values[j]!, values[i]!];
     }
 
     return values.slice(0, count);
@@ -574,7 +575,8 @@ export class FluxilisCollection<K extends FluxilisKey, V> extends MutableCollect
     // O(count) instead of O(n log n) with sort
     for (let i = 0; i < count; i++) {
       const j = i + Math.floor(Math.random() * (keys.length - i));
-      [keys[i], keys[j]] = [keys[j], keys[i]];
+      // bounds guaranteed: i < count ≤ keys.length, j < keys.length
+      [keys[i], keys[j]] = [keys[j]!, keys[i]!];
     }
 
     return keys.slice(0, count);

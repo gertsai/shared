@@ -125,7 +125,8 @@ export class CommonOpsMixin<K, V, T extends ReadableCollection<K, V>> {
     // Fisher-Yates partial shuffle for unique selection
     for (let i = 0; i < n; i++) {
       const j = i + Math.floor(Math.random() * (arr.length - i));
-      [arr[i], arr[j]] = [arr[j], arr[i]];
+      // bounds guaranteed: i < n ≤ arr.length, j < arr.length
+      [arr[i], arr[j]] = [arr[j]!, arr[i]!];
     }
 
     return arr.slice(0, n);
@@ -154,7 +155,8 @@ export class CommonOpsMixin<K, V, T extends ReadableCollection<K, V>> {
 
     for (let i = 0; i < n; i++) {
       const j = i + Math.floor(Math.random() * (arr.length - i));
-      [arr[i], arr[j]] = [arr[j], arr[i]];
+      // bounds guaranteed: i < n ≤ arr.length, j < arr.length
+      [arr[i], arr[j]] = [arr[j]!, arr[i]!];
     }
 
     return arr.slice(0, n);

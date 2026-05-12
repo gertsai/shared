@@ -348,13 +348,13 @@ export class TypiaOutputParser<T> {
   private extractJSON(text: string): string {
     // Try to extract JSON from markdown code block
     const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (codeBlockMatch) {
+    if (codeBlockMatch?.[1]) {
       return codeBlockMatch[1].trim();
     }
 
     // Try to find JSON object/array
     const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
-    if (jsonMatch) {
+    if (jsonMatch?.[1]) {
       return jsonMatch[1].trim();
     }
 

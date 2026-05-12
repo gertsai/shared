@@ -313,7 +313,8 @@ export class CacheStore {
       try {
         return this.serializer.deserialize<T>(payload);
       } catch (error) {
-        this.handleDeserializationError(keys[index], error);
+        // bounds guaranteed: payloads.length === keys.length
+        this.handleDeserializationError(keys[index]!, error);
         return null;
       }
     });

@@ -125,7 +125,7 @@ export class PgVectorStore implements IChunkStore {
     const rows = await this.client.$queryRaw<{ count: string }>`
       SELECT COUNT(*)::text AS count FROM chunks WHERE tenant_id = ${this.tenantId}
     `;
-    return rows.length === 0 ? 0 : Number.parseInt(rows[0].count, 10);
+    return rows.length === 0 ? 0 : Number.parseInt(rows[0]!.count, 10);
   }
 
   private assertVector(

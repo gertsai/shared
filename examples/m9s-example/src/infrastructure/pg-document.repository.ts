@@ -106,7 +106,7 @@ export class PgDocumentRepository implements IDocumentStore {
        LIMIT 1
     `;
     if (rows.length === 0) return null;
-    const row = rows[0];
+    const row = rows[0]!;
     return {
       id: row.id,
       text: row.text,

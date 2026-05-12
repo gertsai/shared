@@ -161,7 +161,7 @@ export class RateLimitTestUtils {
     fn.mock = {
       calls,
       get lastCall(): unknown {
-        return calls.length ? calls[calls.length - 1][0] : undefined;
+        return calls.length ? calls[calls.length - 1]?.[0] : undefined;
       },
     } as any;
 

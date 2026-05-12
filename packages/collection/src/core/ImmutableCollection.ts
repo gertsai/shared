@@ -582,6 +582,7 @@ class ImmutableCollectionBase<K, V>
     if (sortedArray.length === thisArray.length) {
       const sameOrder = sortedArray.every((entry, i) => {
         const thisEntry = thisArray[i];
+        if (!thisEntry) return false;
         return Object.is(entry[0], thisEntry[0]) && Object.is(entry[1], thisEntry[1]);
       });
 

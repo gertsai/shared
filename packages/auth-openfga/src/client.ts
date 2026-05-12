@@ -212,7 +212,7 @@ export class GertsFgaClient {
       const models = await tempClient.readAuthorizationModels();
       if (models.authorization_models && models.authorization_models.length > 0) {
         // Use the latest model
-        authorizationModelId = models.authorization_models[0].id;
+        authorizationModelId = models.authorization_models[0]?.id;
       }
     }
 
@@ -337,10 +337,11 @@ export class GertsFgaClient {
 
     const { result } = await this.withRetry(() => client.batchCheck({ checks }));
 
-    return (result ?? []).map((r) => ({
-      request: requests[parseInt(r.correlationId!, 10)],
-      allowed: r.allowed ?? false,
-    }));
+    return (result ?? []).flatMap((r) => {
+      const req = requests[parseInt(r.correlationId!, 10)];
+      if (req === undefined) return [];
+      return [{ request: req, allowed: r.allowed ?? false }];
+    });
   }
 
   // ---------------------------------------------------------------------------

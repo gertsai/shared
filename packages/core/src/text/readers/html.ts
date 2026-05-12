@@ -102,12 +102,18 @@ export class HTMLReader extends FileReader {
 
     // Process name-then-content format
     while ((match = nameContentRegex.exec(html)) !== null) {
-      meta[match[1]] = match[2];
+      // regex has 2 capture groups; on match both are defined
+      if (match[1] !== undefined && match[2] !== undefined) {
+        meta[match[1]] = match[2];
+      }
     }
 
     // Process content-then-name format
     while ((match = contentNameRegex.exec(html)) !== null) {
-      meta[match[2]] = match[1];
+      // regex has 2 capture groups; on match both are defined
+      if (match[1] !== undefined && match[2] !== undefined) {
+        meta[match[2]] = match[1];
+      }
     }
 
     return meta;

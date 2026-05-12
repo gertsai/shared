@@ -560,15 +560,15 @@ export class M9sCacheCacher extends BaseCacherClass {
   private async isStale(tags?: TagVersionMap): Promise<boolean> {
     if (!tags || Object.keys(tags).length === 0) return false;
 
-    const tagKeys = Object.keys(tags);
-    const currentVersions = await this.getTags(tagKeys);
+    const tagEntries = Object.entries(tags);
+    const currentVersions = await this.getTags(tagEntries.map(([tag]) => tag));
 
-    return tagKeys.some((tag, index) => {
+    return tagEntries.some(([, expectedVersion], index) => {
       const currentVersion = currentVersions[index];
       // Tag deleted = stale
       if (currentVersion == null) return true;
       // Current version newer = stale
-      return currentVersion > tags[tag];
+      return currentVersion > expectedVersion;
     });
   }
 
@@ -580,13 +580,13 @@ export class M9sCacheCacher extends BaseCacherClass {
    * Otherwise falls back to non-atomic read-compare-write.
    */
   private async updateTagsIfNewer(tags: TagVersionMap): Promise<void> {
-    const tagKeys = Object.keys(tags);
-    if (tagKeys.length === 0) return;
+    const tagEntries = Object.entries(tags);
+    if (tagEntries.length === 0) return;
 
     // Prepare entries with full tag keys
-    const entries: Array<[string, number]> = tagKeys.map((tag) => [
+    const entries: Array<[string, number]> = tagEntries.map(([tag, version]) => [
       `${this._tagPrefix}${tag}`,
-      tags[tag],
+      version,
     ]);
 
     // Use atomic setIfNewer if driver supports it (Redis Lua script)
@@ -597,13 +597,13 @@ export class M9sCacheCacher extends BaseCacherClass {
 
     // Fallback: non-atomic read-compare-write (for drivers without atomic support)
     // Note: This has TOCTOU race condition, but is better than nothing
-    const currentVersions = await this.getTags(tagKeys);
+    const currentVersions = await this.getTags(tagEntries.map(([tag]) => tag));
 
     const toUpdate: TagVersionMap = {};
-    tagKeys.forEach((tag, index) => {
+    tagEntries.forEach(([tag, version], index) => {
       const currentVersion = currentVersions[index];
-      if (currentVersion == null || currentVersion < tags[tag]) {
-        toUpdate[tag] = tags[tag];
+      if (currentVersion == null || currentVersion < version) {
+        toUpdate[tag] = version;
       }
     });
 

@@ -60,8 +60,9 @@ export function cosineSimilarity(
   let normA = 0;
   let normB = 0;
   for (let i = 0; i < len; i++) {
-    const ai = a[i];
-    const bi = b[i];
+    // bounds guaranteed: i < len = min(a.length, b.length)
+    const ai = a[i]!;
+    const bi = b[i]!;
     dot += ai * bi;
     normA += ai * ai;
     normB += bi * bi;

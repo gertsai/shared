@@ -335,13 +335,15 @@ export class RedisDenyLedger implements DenyLedgerProvider {
 
         // Skip invalid entries (corrupted cache data)
         if (!entry) {
-          expiredKeys.push(keys[i]);
+          // bounds guaranteed by loop condition
+          expiredKeys.push(keys[i]!);
           continue;
         }
 
         // Check expiration
         if (entry.expiresAt && entry.expiresAt <= new Date()) {
-          expiredKeys.push(keys[i]);
+          // bounds guaranteed by loop condition
+          expiredKeys.push(keys[i]!);
           continue;
         }
 

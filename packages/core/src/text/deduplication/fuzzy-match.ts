@@ -129,41 +129,41 @@ export class FuzzyMatchDeduplication implements IDeduplicationStrategy {
     const processed = new Set<string>();
 
     for (let i = 0; i < allEntities.length; i++) {
-      if (processed.has(allEntities[i].id)) {
+      // bounds guaranteed by outer loop condition
+      const ei = allEntities[i]!;
+      if (processed.has(ei.id)) {
         continue;
       }
 
-      const duplicates: Entity[] = [allEntities[i]];
-      processed.add(allEntities[i].id);
+      const duplicates: Entity[] = [ei];
+      processed.add(ei.id);
 
       // Compare with remaining entities
       for (let j = i + 1; j < allEntities.length; j++) {
-        if (processed.has(allEntities[j].id)) {
+        const ej = allEntities[j]!;
+        if (processed.has(ej.id)) {
           continue;
         }
 
         // Only compare same type entities
-        if (allEntities[i].type !== allEntities[j].type) {
+        if (ei.type !== ej.type) {
           continue;
         }
 
         // Calculate similarity
-        const similarity = this.calculateSimilarity(
-          allEntities[i].name,
-          allEntities[j].name
-        );
+        const similarity = this.calculateSimilarity(ei.name, ej.name);
 
         // If above threshold, add to duplicate group
         if (similarity >= this.config.threshold) {
-          duplicates.push(allEntities[j]);
-          processed.add(allEntities[j].id);
+          duplicates.push(ej);
+          processed.add(ej.id);
         }
       }
 
       // Only create group if duplicates found (2+ entities)
       if (duplicates.length > 1) {
         groups.push({
-          canonical: duplicates[0], // First entity becomes canonical
+          canonical: duplicates[0]!, // First entity becomes canonical
           duplicates,
           matchScore: this.averageSimilarity(duplicates),
           matchMethod: 'fuzzy',
@@ -213,8 +213,8 @@ export class FuzzyMatchDeduplication implements IDeduplicationStrategy {
 
     // Create merged entity
     return {
-      ...duplicates[0], // Use first entity as base
-      aliases: Array.from(allAliases).filter(a => a !== duplicates[0].name), // Remove canonical name from aliases
+      ...duplicates[0]!, // Use first entity as base
+      aliases: Array.from(allAliases).filter(a => a !== duplicates[0]!.name), // Remove canonical name from aliases
       confidence: maxConfidence,
       mentions: allMentions,
       properties: mergedProperties,
@@ -290,23 +290,23 @@ export class FuzzyMatchDeduplication implements IDeduplicationStrategy {
 
     // Initialize first row (insertions to get b)
     for (let j = 0; j <= b.length; j++) {
-      matrix[0][j] = j;
+      matrix[0]![j] = j;
     }
 
-    // Fill matrix using recurrence relation
+    // Fill matrix using recurrence relation — all bounds guaranteed by loop ranges
     for (let i = 1; i <= a.length; i++) {
       for (let j = 1; j <= b.length; j++) {
         const cost = a[i - 1] === b[j - 1] ? 0 : 1; // Substitution cost
 
-        matrix[i][j] = Math.min(
-          matrix[i - 1][j] + 1,     // Deletion
-          matrix[i][j - 1] + 1,     // Insertion
-          matrix[i - 1][j - 1] + cost // Substitution
+        matrix[i]![j] = Math.min(
+          matrix[i - 1]![j]! + 1,     // Deletion
+          matrix[i]![j - 1]! + 1,     // Insertion
+          matrix[i - 1]![j - 1]! + cost // Substitution
         );
       }
     }
 
-    return matrix[a.length][b.length];
+    return matrix[a.length]![b.length]!;
   }
 
   /**
@@ -481,7 +481,8 @@ export class FuzzyMatchDeduplication implements IDeduplicationStrategy {
     // Compare all pairs
     for (let i = 0; i < entities.length; i++) {
       for (let j = i + 1; j < entities.length; j++) {
-        totalSimilarity += this.calculateSimilarity(entities[i].name, entities[j].name);
+        // bounds guaranteed by loop conditions
+        totalSimilarity += this.calculateSimilarity(entities[i]!.name, entities[j]!.name);
         comparisons++;
       }
     }

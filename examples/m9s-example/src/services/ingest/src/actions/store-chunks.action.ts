@@ -82,7 +82,8 @@ export const storeChunks: any = controller.register('_store', {
       docId: doc.id,
       idx,
       text: chunkText,
-      vector: vectors[idx],
+      // bounds guaranteed: vectors.length === chunks.length (paired upstream)
+      vector: vectors[idx]!,
     }));
 
     // Document first — partial failures leave a recoverable trail.

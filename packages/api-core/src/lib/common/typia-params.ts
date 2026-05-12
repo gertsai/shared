@@ -156,7 +156,7 @@ export function createTypiaParams<T>(
     | undefined;
   const schemaNames = Object.keys(schemas ?? {});
   const typeName = schemaNames[0];
-  const schema = schemas?.[typeName] ?? {};
+  const schema = typeName !== undefined ? (schemas?.[typeName] ?? {}) : {};
 
   return {
     validate,

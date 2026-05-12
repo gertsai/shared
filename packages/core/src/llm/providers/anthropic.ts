@@ -436,7 +436,8 @@ export class AnthropicProvider extends BaseLLM {
     // Ensure first message is from user (Anthropic requirement)
     if (formattedMessages.length === 0) {
       formattedMessages.push({ role: 'user', content: 'Hello' });
-    } else if (formattedMessages[0].role !== 'user') {
+    } else if (formattedMessages[0]!.role !== 'user') {
+      // formattedMessages.length > 0 verified above
       formattedMessages.unshift({ role: 'user', content: 'Hello' });
     }
 
