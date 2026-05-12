@@ -11,7 +11,7 @@ links:
   relation: informs
 - target: RFC-005
   relation: informs
-status: draft
+status: active
 title: 'Wave 7.3b rollout strategy: Big Bang with type-widening preference'
 ---
 
@@ -118,6 +118,8 @@ NFR-1 invariant: rollback is a single mechanical operation; the underlying type 
 | RFC-005 | informs (Big Bang with Pilot-then-Pivot pattern reused) |
 | PRD-008 | informs (Wave 7 closure context) |
 | EVID-024 | informs (Wave 7.3a ship evidence — pattern proven) |
+
+
 
 
 

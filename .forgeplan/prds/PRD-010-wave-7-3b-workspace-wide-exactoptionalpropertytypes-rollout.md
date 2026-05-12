@@ -9,7 +9,7 @@ links:
   relation: refines
 - target: PRD-008
   relation: informs
-status: draft
+status: active
 title: 'Wave 7.3b: workspace-wide exactOptionalPropertyTypes rollout'
 ---
 
@@ -114,6 +114,8 @@ Fix patterns (RFC will detail with examples):
 ## Acceptance Gate
 
 PRD is satisfied when all 3 goals (G-1, G-2, G-3) measured and PASS, all 6 FRs verified, NFR-1 + NFR-2 spot-checked, evidence pack EVID-NNN records the test/typecheck/build counts.
+
+
 
 
 
