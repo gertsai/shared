@@ -46,6 +46,7 @@ import { ApiController } from '@gertsai/api-core/moleculer';
 
 import config from '../project.config';
 import brokerConfig from '../moleculer.config';
+import { createAppLogger } from './composition/logger.js';
 import ApiService from './mol-services/api.service';
 // Sprint 3.1 §W-7: the `ingest.process` workflow is now registered onto
 // the `v1.ingest` controller via `setWorkflows(...)` in
@@ -61,6 +62,11 @@ import ApiService from './mol-services/api.service';
 // the handlers active. Without REDIS_URL the service registers but no
 // Redis Streams consumer-groups are created.
 import DocumentEventsChannelService from './services/channels/document-events.channel';
+
+// Module-scoped logger (Wave 8.1) — `module: 'm9s-example'` baseContext
+// carries through every emitted line, replacing the legacy `[m9s-example]`
+// string prefix. Redaction is default-on per logger-factory I-17.
+const log = createAppLogger('m9s-example');
 
 // =============================================================================
 // Env parsing helpers — mirror apps/pipeline/src/index.ts
@@ -104,32 +110,27 @@ async function main(): Promise<void> {
   const enabledWorkers = parseWorkersEnv();
   const replEnabled = process.argv.includes('--repl');
 
-  // eslint-disable-next-line no-console
-  console.log(
-    `[m9s-example] starting v${config.APP_VERSION} ` +
-      `(namespace=${config.MOLECULER_NAMESPACE}, port=${config.WEB_SERVER_PORT})`,
-  );
+  log.info('starting', {
+    appVersion: config.APP_VERSION,
+    namespace: config.MOLECULER_NAMESPACE,
+    port: config.WEB_SERVER_PORT,
+  });
 
   if (enabledServices) {
-    // eslint-disable-next-line no-console
-    console.log(`[m9s-example] Loading services: ${enabledServices.join(', ')}`);
+    log.info('loading services', { services: enabledServices });
   } else {
-    // eslint-disable-next-line no-console
-    console.log('[m9s-example] Loading ALL services');
+    log.info('loading all services');
   }
 
   if (!workersEnabled) {
-    // eslint-disable-next-line no-console
-    console.log('[m9s-example] Workers DISABLED (API Gateway / producer-only mode)');
+    log.info('workers disabled', { reason: 'API Gateway / producer-only mode' });
   } else if (enabledWorkers) {
-    // eslint-disable-next-line no-console
-    console.log(
-      `[m9s-example] Workers ENABLED: ${enabledWorkers.join(', ')} ` +
-        `(concurrency=${config.WORKER_CONCURRENCY})`,
-    );
+    log.info('workers enabled', {
+      workers: enabledWorkers,
+      concurrency: config.WORKER_CONCURRENCY,
+    });
   } else {
-    // eslint-disable-next-line no-console
-    console.log(`[m9s-example] Workers ENABLED (concurrency=${config.WORKER_CONCURRENCY})`);
+    log.info('workers enabled', { concurrency: config.WORKER_CONCURRENCY });
   }
 
   await ApiController.Start({
@@ -145,9 +146,8 @@ async function main(): Promise<void> {
 // Only run when executed directly. Allows tests to import this file
 // without triggering broker startup as a side effect.
 if (require.main === module) {
-  main().catch((err) => {
-    // eslint-disable-next-line no-console
-    console.error('[m9s-example] startup failed:', err);
+  main().catch((err: unknown) => {
+    log.error('startup failed', { err });
     process.exit(1);
   });
 }

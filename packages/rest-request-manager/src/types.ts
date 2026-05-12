@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { RetryOpts } from '@gertsai/async-utils';
+import type { FetchSecurityConfig } from '@gertsai/fetch';
 import type { Logger } from '@gertsai/logger-factory';
 
 export type RestMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
@@ -50,4 +51,16 @@ export interface RestRequestManagerOpts {
   readonly logger?: Logger;
   readonly redactRequestKeys?: readonly string[];
   readonly redactResponseKeys?: readonly string[];
+  /**
+   * Wave 8.1: forwarded verbatim to every `httpCaller` invocation from
+   * {@link RestRequestManager.invoke}. Lets callers opt into local /
+   * private-network targets (e.g. `http://localhost:11434` Ollama) without
+   * losing the manager's retry / rate-limit / circuit-breaker layer.
+   *
+   * Defaults match `@gertsai/fetch`: ssrfProtection on, localhost
+   * disallowed, private networks disallowed. Override only when the
+   * caller has out-of-band assurance about the target (typically local
+   * development infra or test fixtures).
+   */
+  readonly security?: FetchSecurityConfig;
 }

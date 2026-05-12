@@ -229,6 +229,7 @@ export class RestRequestManager {
       method: request.method,
       headers,
       ...(bodyInit !== undefined && { body: bodyInit }),
+      ...(this.opts.security !== undefined && { security: this.opts.security }),
     });
   }
 

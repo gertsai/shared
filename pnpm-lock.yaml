@@ -59,6 +59,9 @@ importers:
       '@gertsai/api-rlr':
         specifier: workspace:*
         version: link:../../packages/api-rlr
+      '@gertsai/async-utils':
+        specifier: workspace:*
+        version: link:../../packages/async-utils
       '@gertsai/auth-openfga':
         specifier: workspace:*
         version: link:../../packages/auth-openfga
@@ -77,12 +80,18 @@ importers:
       '@gertsai/fetch':
         specifier: workspace:*
         version: link:../../packages/fetch
+      '@gertsai/logger-factory':
+        specifier: workspace:*
+        version: link:../../packages/logger-factory
       '@gertsai/m9s-cache':
         specifier: workspace:*
         version: link:../../packages/m9s-cache
       '@gertsai/pg-client':
         specifier: workspace:*
         version: link:../../packages/pg-client
+      '@gertsai/rest-request-manager':
+        specifier: workspace:*
+        version: link:../../packages/rest-request-manager
       '@gertsai/runtime-context':
         specifier: workspace:*
         version: link:../../packages/runtime-context

@@ -27,7 +27,7 @@ import typia from 'typia';
 
 import config from '../../../../../project.config';
 import { resolveExampleController } from '../../../../lib/example-controller';
-import { PermissionDeniedError } from '../../../../application/errors/permission-denied.error';
+import { ForbiddenError } from '../../../../composition/errors.js';
 import { tryGetRequestContextFromCtx } from '../../../../composition/wave5-middlewares';
 import { INGEST_QUEUE_NAME, JOB_PROCESS_DOCUMENT } from '../queues';
 import type {
@@ -155,7 +155,7 @@ export const ingestDocument: any = controller.register('document', {
           'Tenant scope violation',
         );
       }
-      if (err instanceof PermissionDeniedError) {
+      if (err instanceof ForbiddenError) {
         throw new APIError(ResponseCode.FORBIDDEN__INSUFFICIENT_RIGHTS, undefined, err.message);
       }
       if (err instanceof Error && err.message.startsWith('Document.')) {

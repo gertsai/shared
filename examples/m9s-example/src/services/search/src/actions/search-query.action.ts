@@ -20,7 +20,7 @@ import {
 import typia from 'typia';
 
 import { resolveExampleController } from '../../../../lib/example-controller';
-import { PermissionDeniedError } from '../../../../application/errors/permission-denied.error';
+import { ForbiddenError } from '../../../../composition/errors.js';
 import { tryGetRequestContextFromCtx } from '../../../../composition/wave5-middlewares';
 import type { SearchServiceContext, SearchQueryRequest, SearchQueryResponse } from '../../types';
 
@@ -78,7 +78,7 @@ export const searchQuery: any = controller.register('query', {
           'Tenant scope violation',
         );
       }
-      if (err instanceof PermissionDeniedError) {
+      if (err instanceof ForbiddenError) {
         throw new APIError(ResponseCode.FORBIDDEN__INSUFFICIENT_RIGHTS, undefined, err.message);
       }
       if (err instanceof Error && err.message === 'Search query must be non-empty') {
