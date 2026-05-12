@@ -89,15 +89,21 @@ function parseBurst(): number {
 }
 
 /**
- * Module-level lazy singleton. One {@link RestRequestManager} per embedder
- * class (not per instance) — circuit-breaker / rate-limiter state is shared
- * across all OllamaEmbedder instances pointing at the same daemon, which is
- * the desired behaviour for a single-process worker.
+ * Per-hostname lazy manager cache. One {@link RestRequestManager} per
+ * distinct Ollama daemon host — circuit-breaker / rate-limiter state is
+ * shared across all OllamaEmbedder instances pointing at the same host.
+ *
+ * Wave 8.2 audit Sec#1 (CWE-918): the manager's SSRF allowlist is now
+ * tightened to `allowedHostnames: [hostname]` per parsed `opts.url`,
+ * so even with `allowLocalhost: true / allowPrivateNetworks: true`
+ * the embedder can only reach the configured target host — not arbitrary
+ * RFC1918 / loopback services like AWS metadata, internal Consul, etc.
  */
-let _manager: RestRequestManager | undefined;
-function getManager(): RestRequestManager {
-  if (_manager === undefined) {
-    _manager = new RestRequestManager({
+const _managers = new Map<string, RestRequestManager>();
+function getManager(hostname: string): RestRequestManager {
+  let mgr = _managers.get(hostname);
+  if (mgr === undefined) {
+    mgr = new RestRequestManager({
       retry: { maxAttempts: 3, baseMs: 250, jitter: 'full' },
       rateLimit: { tokensPerSecond: parseRps(), burst: parseBurst() },
       circuitBreaker: {
@@ -105,24 +111,26 @@ function getManager(): RestRequestManager {
         resetTimeoutMs: 30_000,
         maxHosts: 1000,
       },
-      logger: log.child({ subsystem: 'http' }),
-      // Ollama is local by design — Wave 8.1 explicitly relaxes SSRF
-      // localhost / private-network allowlist (parity with the legacy
-      // pre-manager call site). The manager still enforces the SSRF
-      // validator; we only widen the host allowlist.
+      logger: log.child({ subsystem: 'http', host: hostname }),
+      // Wave 8.1 relaxed SSRF allowlist for local Ollama; Wave 8.2 (audit
+      // Sec#1) narrows it back to ONLY the configured hostname so that
+      // attacker-controlled EMBEDDER_URL cannot pivot to other RFC1918 /
+      // loopback services.
       security: {
         ssrfProtection: true,
         allowLocalhost: true,
         allowPrivateNetworks: true,
+        allowedHostnames: [hostname],
       },
     });
+    _managers.set(hostname, mgr);
   }
-  return _manager;
+  return mgr;
 }
 
-/** @internal — test seam: reset the lazy manager so tests get fresh state. */
+/** @internal — test seam: reset all lazy managers so tests get fresh state. */
 export function __resetOllamaManagerForTests(): void {
-  _manager = undefined;
+  _managers.clear();
 }
 
 export class OllamaEmbedder implements IEmbedder {
@@ -135,6 +143,13 @@ export class OllamaEmbedder implements IEmbedder {
   private dimensionsLatched = false;
   private warnedMismatch = false;
 
+  /**
+   * Hostname parsed from `opts.url` in the constructor. Reused on every
+   * `embed()` call to pick the per-host {@link RestRequestManager} and
+   * to inform the SSRF allowlist (Wave 8.2 audit Sec#1, CWE-918).
+   */
+  private readonly _hostname: string;
+
   constructor(private readonly opts: OllamaEmbedderOptions) {
     if (!opts.url || opts.url.trim().length === 0) {
       throw new Error('OllamaEmbedder: url is required');
@@ -142,6 +157,20 @@ export class OllamaEmbedder implements IEmbedder {
     if (!opts.model || opts.model.trim().length === 0) {
       throw new Error('OllamaEmbedder: model is required');
     }
+    // Validate URL early — reject bad protocol / unparseable input rather
+    // than letting it surface as a runtime SSRF reject deep in @gertsai/fetch.
+    let parsed: URL;
+    try {
+      parsed = new URL(opts.url);
+    } catch {
+      throw new Error(`OllamaEmbedder: invalid url '${opts.url}' — must be a valid http(s) URL`);
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new Error(
+        `OllamaEmbedder: unsupported protocol '${parsed.protocol}' in '${opts.url}' — must be http or https`,
+      );
+    }
+    this._hostname = parsed.hostname;
   }
 
   get dimensions(): number {
@@ -149,6 +178,10 @@ export class OllamaEmbedder implements IEmbedder {
   }
 
   async embed(texts: ReadonlyArray<string>): Promise<number[][]> {
+    // Wave 8.2 audit Logic#1 — symmetry with OpenAIEmbedder.embed().
+    // Short-circuits before any manager/network setup, and prevents a
+    // future post-loop access of `out[0]!` from crashing on the empty case.
+    if (texts.length === 0) return [];
     const out: number[][] = [];
     for (const text of texts) {
       out.push(await this.embedOne(text));
@@ -162,7 +195,7 @@ export class OllamaEmbedder implements IEmbedder {
 
     let res: RestResponse<unknown>;
     try {
-      res = await getManager().request({
+      res = await getManager(this._hostname).request({
         url,
         method: 'POST',
         headers: { 'content-type': 'application/json' },

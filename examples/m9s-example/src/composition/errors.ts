@@ -39,12 +39,60 @@ export {
   wrapUnknownError,
 } from '@gertsai/errors';
 
-export {
-  appErrorToHttpResponse,
+export type { ProblemDetails } from '@gertsai/errors/http';
+
+import { AppError, ForbiddenError } from '@gertsai/errors';
+import {
+  appErrorToHttpResponse as _appErrorToHttpResponse,
   type ProblemDetails,
 } from '@gertsai/errors/http';
 
-import { ForbiddenError } from '@gertsai/errors';
+/**
+ * Wave 8.2 audit Sec#3+#4 — keys scrubbed from `ProblemDetails.details`
+ * before crossing the HTTP boundary (CWE-209). The full payload remains
+ * visible in server logs via the originating `AppError.details` and its
+ * `.cause` chain, but the outbound body is shrunk to (a) avoid user
+ * enumeration via 403 responses (`userId`), (b) avoid leaking internal
+ * upstream hostnames over 5xx responses (`url`, `originalKind`).
+ */
+const HTTP_BOUNDARY_DETAILS_DENYLIST: readonly string[] = Object.freeze([
+  'userId',
+  'url',
+  'originalKind',
+] as const);
+
+function scrubDetails(
+  details: Readonly<Record<string, unknown>> | undefined,
+): Readonly<Record<string, unknown>> | undefined {
+  if (details === undefined) return undefined;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(details)) {
+    if (HTTP_BOUNDARY_DETAILS_DENYLIST.includes(k)) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+/**
+ * Wave 8.2 audit Sec#3+#4 — wraps `@gertsai/errors/http.appErrorToHttpResponse`
+ * and strips PII / internal-topology hints from the outbound ProblemDetails
+ * body. Server-side logs still receive the unredacted error via the original
+ * `AppError`.
+ */
+export function appErrorToHttpResponse(
+  err: AppError,
+): { readonly status: number; readonly body: ProblemDetails } {
+  const { status, body } = _appErrorToHttpResponse(err);
+  const scrubbed = scrubDetails(body.details);
+  if (scrubbed === body.details) return { status, body };
+  return {
+    status,
+    body: {
+      ...body,
+      ...(scrubbed !== undefined && { details: scrubbed }),
+    },
+  };
+}
 
 /**
  * Build a `ForbiddenError` that preserves the legacy `PermissionDeniedError`

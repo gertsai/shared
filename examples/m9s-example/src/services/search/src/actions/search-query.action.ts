@@ -20,7 +20,7 @@ import {
 import typia from 'typia';
 
 import { resolveExampleController } from '../../../../lib/example-controller';
-import { ForbiddenError } from '../../../../composition/errors.js';
+import { ForbiddenError, ValidationError } from '../../../../composition/errors.js';
 import { tryGetRequestContextFromCtx } from '../../../../composition/wave5-middlewares';
 import type { SearchServiceContext, SearchQueryRequest, SearchQueryResponse } from '../../types';
 
@@ -81,7 +81,9 @@ export const searchQuery: any = controller.register('query', {
       if (err instanceof ForbiddenError) {
         throw new APIError(ResponseCode.FORBIDDEN__INSUFFICIENT_RIGHTS, undefined, err.message);
       }
-      if (err instanceof Error && err.message === 'Search query must be non-empty') {
+      // Wave 8.2 audit Logic#10 — switched from brittle message-string
+      // match to discriminator check; resilient to message wording changes.
+      if (err instanceof ValidationError) {
         throw new APIError(ResponseCode.BAD_REQUEST__INVALID_PARAMS, undefined, err.message);
       }
       throw err;

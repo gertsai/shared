@@ -196,4 +196,58 @@ describe('RestRequestManager', () => {
     expect(httpCallerMock).not.toHaveBeenCalled();
     expect(mgr.getStats().circuitOpens).toBeGreaterThanOrEqual(1);
   });
+
+  // Wave 8.2 audit Tests#3 — regression guard for the Wave 8.1 SSRF
+  // plumbing in `manager.invoke()`. If a refactor removed the
+  // `...(this.opts.security !== undefined && { security: this.opts.security })`
+  // spread, OllamaEmbedder would silently lose its `allowLocalhost: true`
+  // override and real-infra tests would break with `SSRF blocked`.
+  describe('security pass-through (Wave 8.1 SSRF plumbing)', () => {
+    it('forwards `security` opt verbatim to httpCaller when set', async () => {
+      httpCallerMock.mockResolvedValueOnce(mockResponse({ body: { ok: true } }));
+      const mgr = new RestRequestManager({
+        security: {
+          ssrfProtection: true,
+          allowLocalhost: true,
+          allowPrivateNetworks: true,
+          allowedHostnames: ['localhost'],
+        },
+      });
+      await mgr.get('http://localhost:11434/probe');
+      expect(httpCallerMock).toHaveBeenCalledWith(
+        'http://localhost:11434/probe',
+        expect.objectContaining({
+          security: {
+            ssrfProtection: true,
+            allowLocalhost: true,
+            allowPrivateNetworks: true,
+            allowedHostnames: ['localhost'],
+          },
+        }),
+      );
+    });
+
+    it('omits `security` from httpCaller init when not configured (default-safe)', async () => {
+      httpCallerMock.mockResolvedValueOnce(mockResponse({ body: { ok: true } }));
+      const mgr = new RestRequestManager();
+      await mgr.get('https://api.example.com/health');
+      const callInit = httpCallerMock.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(callInit).toBeDefined();
+      expect('security' in callInit).toBe(false);
+    });
+
+    it('partial `security` opts pass through (e.g. only blockedHostnames)', async () => {
+      httpCallerMock.mockResolvedValueOnce(mockResponse({ body: { ok: true } }));
+      const mgr = new RestRequestManager({
+        security: { blockedHostnames: ['evil.example.com'] },
+      });
+      await mgr.get('https://safe.example.com/x');
+      expect(httpCallerMock).toHaveBeenCalledWith(
+        'https://safe.example.com/x',
+        expect.objectContaining({
+          security: { blockedHostnames: ['evil.example.com'] },
+        }),
+      );
+    });
+  });
 });

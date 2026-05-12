@@ -52,7 +52,7 @@ try {
 
 | Method | Purpose |
 |---|---|
-| `new RestRequestManager(opts?)` | Construct with `baseUrl`, `retry`, `rateLimit`, `circuitBreaker`, `logger`, redaction lists. |
+| `new RestRequestManager(opts?)` | Construct with `baseUrl`, `retry`, `rateLimit`, `circuitBreaker`, `logger`, redaction lists, `security` (Wave 8.1). |
 | `request(req)` | Full control over method/url/headers/body/timeoutMs. |
 | `get<T>(url, opts?)` | Convenience GET. |
 | `post<TBody, TResponse>(url, body, opts?)` | Convenience POST (JSON-serialized). |
@@ -109,6 +109,17 @@ try {
   `rejectUnauthorized: false` or any equivalent override. Callers must
   use `@gertsai/fetch` directly with explicit security if they
   genuinely need to relax TLS — and document why.
+- **SSRF posture forwarding (Wave 8.1).** `RestRequestManagerOpts`
+  exposes `security?: FetchSecurityConfig` and forwards it verbatim
+  to `httpCaller` on every dispatch. The field is optional — when
+  unset, `@gertsai/fetch` defaults apply (`ssrfProtection: true`,
+  `allowLocalhost: false`, `allowPrivateNetworks: false`). Callers
+  that need to talk to a known internal target should narrow the
+  allowlist via `allowedHostnames` rather than blanket-allow private
+  networks; see `examples/m9s-example/src/infrastructure/ollama-embedder.ts`
+  for the canonical local-Ollama precedent. Wave 8.2 audit Sec#1
+  hardened this pattern by binding `allowedHostnames` per parsed
+  `EMBEDDER_URL` host (CWE-918 protection).
 - **Default `jitter: 'full'` from `@gertsai/async-utils.retry`**
   (thundering-herd protection, CWE-409).
 

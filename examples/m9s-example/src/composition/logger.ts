@@ -26,16 +26,41 @@ import {
  * m9s-example-specific redaction additions on top of `@gertsai/errors`
  * built-in REDACTION_KEYS. Case-insensitive match per logger-factory I-17.
  *
- * Keys already redacted by default (do NOT need to be listed here):
- *   - apiToken, password, secret, bearer, accessToken (and case variants)
+ * Built-in keys ALREADY redacted (no need to list here):
+ *   `password`, `token`, `secret`, `apiKey`, `api_key`, `authorization`,
+ *   `cookie`, `set-cookie`, `pwd`, `passwd`, `private_key`, `privateKey`,
+ *   `connection_string`, `connectionString`.
+ *
+ * Wave 8.2 audit Sec#5 (CWE-532): closed gaps for connection strings
+ * (`POSTGRES_URL`, `REDIS_URL`) that embed credentials but whose key
+ * names do not match any built-in. Also expanded coverage for JWT /
+ * OAuth2 bearer / session shapes.
  */
 export const REDACT_KEYS: readonly string[] = Object.freeze([
+  // Embedding payloads — bulk, expensive to log, sometimes PII-derived.
   'embedding',
   'embeddings',
   'vector',
   'vectors',
+  // Project-specific API tokens (key-name based — case-insensitive match).
   'OPENAI_API_KEY',
   'FGA_API_TOKEN',
+  // Wave 8.2 — connection strings with embedded auth (CWE-532).
+  'POSTGRES_URL',
+  'REDIS_URL',
+  'DATABASE_URL',
+  // Wave 8.2 — JWT / OAuth2 / session shapes (CWE-532).
+  'bearer',
+  'x-api-key',
+  'refresh_token',
+  'refreshToken',
+  'client_secret',
+  'clientSecret',
+  'jwt',
+  'session',
+  'sessionId',
+  'sessionid',
+  'session_id',
 ] as const);
 
 const VALID_LEVELS: ReadonlySet<LogLevel> = new Set<LogLevel>([

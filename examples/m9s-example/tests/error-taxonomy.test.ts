@@ -42,7 +42,7 @@ describe('m9s-example error taxonomy (Wave 8.1)', () => {
     });
   });
 
-  it('appErrorToHttpResponse() emits RFC 9457 ProblemDetails (status 403, permission type)', () => {
+  it('appErrorToHttpResponse() emits RFC 9457 ProblemDetails with userId scrubbed (Wave 8.2 Sec#3)', () => {
     const err = permissionDenied('alice', 'ingest', 'doc-123');
     const { status, body } = appErrorToHttpResponse(err);
 
@@ -50,7 +50,18 @@ describe('m9s-example error taxonomy (Wave 8.1)', () => {
     expect(body.type).toBe('urn:gertsai:errors:permission');
     expect(body.status).toBe(403);
     expect(body.title).toBe(err.message);
+    // Wave 8.2 audit Sec#3 (CWE-209): `userId` is stripped from the HTTP
+    // boundary `details` to prevent user enumeration via 403 responses;
+    // `action` and `resource` remain (operational signal, not PII).
     expect(body.details).toEqual({
+      action: 'ingest',
+      resource: 'doc-123',
+    });
+    expect(body.details).not.toHaveProperty('userId');
+    // The server-side AppError still carries the full payload — only the
+    // HTTP body is scrubbed. Logs / cause chain remain unredacted by
+    // intent (they go through logger redaction independently).
+    expect(err.details).toEqual({
       userId: 'alice',
       action: 'ingest',
       resource: 'doc-123',
