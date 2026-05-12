@@ -12,7 +12,7 @@ import type { IDocumentStore } from '../domain/ports/IDocumentStore';
 import type { IChunkStore } from '../domain/ports/IChunkStore';
 import type { IEmbedder } from '../domain/ports/IEmbedder';
 import type { IPermissionGate } from '../domain/ports/IPermissionGate';
-import { PermissionDeniedError } from './errors/permission-denied.error';
+import { permissionDenied } from '../composition/errors.js';
 
 /**
  * Dependencies injected at composition time.
@@ -109,7 +109,7 @@ export class IngestDocumentUseCase {
     // 1. AuthZ — fail closed
     const allowed = await gate.can(userId, 'ingest', docId);
     if (!allowed) {
-      throw new PermissionDeniedError(userId, 'ingest', docId);
+      throw permissionDenied(userId, 'ingest', docId);
     }
 
     // 2. Build the domain entity (validates invariants)

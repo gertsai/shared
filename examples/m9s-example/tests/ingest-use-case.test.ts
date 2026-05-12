@@ -4,7 +4,7 @@ import {
   IngestDocumentUseCase,
   splitIntoChunks,
 } from '../src/application/IngestDocumentUseCase';
-import { PermissionDeniedError } from '../src/application/errors/permission-denied.error';
+import { ForbiddenError } from '../src/composition/errors.js';
 import type { IDocumentStore } from '../src/domain/ports/IDocumentStore';
 import type { IChunkStore } from '../src/domain/ports/IChunkStore';
 import type { IEmbedder } from '../src/domain/ports/IEmbedder';
@@ -86,14 +86,14 @@ describe('IngestDocumentUseCase', () => {
     expect(result).toEqual({ docId: 'd1', chunkCount: 2 });
   });
 
-  it('throws PermissionDeniedError when gate denies', async () => {
+  it('throws ForbiddenError when gate denies', async () => {
     const deps = makeDeps();
     (deps.gate.can as ReturnType<typeof vi.fn>).mockResolvedValueOnce(false);
     const useCase = new IngestDocumentUseCase(deps);
 
     await expect(
       useCase.execute({ userId: 'u1', docId: 'd1', text: 'hello.' }),
-    ).rejects.toBeInstanceOf(PermissionDeniedError);
+    ).rejects.toBeInstanceOf(ForbiddenError);
 
     expect(deps.embedder.embed).not.toHaveBeenCalled();
     expect(deps.docStore.save).not.toHaveBeenCalled();

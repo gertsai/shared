@@ -10,7 +10,7 @@ import type { ChunkSearchHit } from '../domain/chunk';
 import type { IChunkStore } from '../domain/ports/IChunkStore';
 import type { IEmbedder } from '../domain/ports/IEmbedder';
 import type { IPermissionGate } from '../domain/ports/IPermissionGate';
-import { PermissionDeniedError } from './errors/permission-denied.error';
+import { permissionDenied } from '../composition/errors.js';
 
 /**
  * Dependencies for the Search use case (constructor-injected).
@@ -94,7 +94,7 @@ export class SearchDocumentsUseCase {
 
     const allowed = await gate.can(userId, 'search', '*');
     if (!allowed) {
-      throw new PermissionDeniedError(userId, 'search', '*');
+      throw permissionDenied(userId, 'search', '*');
     }
 
     const [queryVector] = await embedder.embed([query.trim()]);

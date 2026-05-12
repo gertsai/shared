@@ -21,6 +21,13 @@ import { ApiController, type BullMQConnectionOptions } from '@gertsai/api-core/m
 import { defaultSession, UserType } from '@gertsai/core';
 
 import config from '../../project.config';
+import { createAppLogger } from '../composition/logger.js';
+
+// Module-scoped logger (Wave 8.1) — `module: 'm9s-services'` baseContext
+// carries through every emitted line; redaction is default-on per
+// logger-factory I-17 (passwords inside Redis URLs are matched only by key
+// name, not by URL substring — the literal string value is logged unredacted).
+const log = createAppLogger('m9s-services');
 
 // =============================================================================
 // 1. Optional BullMQ connection (only when REDIS_URL is configured).
@@ -49,14 +56,11 @@ const queueConfig: BullMQConnectionOptions | undefined = config.REDIS_URL
   : undefined;
 
 if (queueConfig) {
-  // eslint-disable-next-line no-console
-  console.log(`[m9s-example] BullMQ connection ready (REDIS_URL=${config.REDIS_URL})`);
+  log.info('BullMQ connection ready', { redisUrl: config.REDIS_URL });
 } else {
-  // eslint-disable-next-line no-console
-  console.log(
-    '[m9s-example] REDIS_URL not set — running without BullMQ. ' +
-      'Action handlers fall back to synchronous use-case execution.',
-  );
+  log.info('REDIS_URL not set, BullMQ disabled', {
+    fallback: 'synchronous use-case execution',
+  });
 }
 
 // =============================================================================

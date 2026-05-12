@@ -5,7 +5,7 @@ import {
   DEFAULT_TOP_K,
   MAX_TOP_K,
 } from '../src/application/SearchDocumentsUseCase';
-import { PermissionDeniedError } from '../src/application/errors/permission-denied.error';
+import { ForbiddenError } from '../src/composition/errors.js';
 import type { IChunkStore } from '../src/domain/ports/IChunkStore';
 import type { IEmbedder } from '../src/domain/ports/IEmbedder';
 import type { IPermissionGate } from '../src/domain/ports/IPermissionGate';
@@ -70,14 +70,14 @@ describe('SearchDocumentsUseCase', () => {
     );
   });
 
-  it('throws PermissionDeniedError when gate denies', async () => {
+  it('throws ForbiddenError when gate denies', async () => {
     const deps = makeDeps();
     (deps.gate.can as ReturnType<typeof vi.fn>).mockResolvedValueOnce(false);
     const useCase = new SearchDocumentsUseCase(deps);
 
     await expect(
       useCase.execute({ userId: 'u1', query: 'x' }),
-    ).rejects.toBeInstanceOf(PermissionDeniedError);
+    ).rejects.toBeInstanceOf(ForbiddenError);
     expect(deps.embedder.embed).not.toHaveBeenCalled();
     expect(deps.chunkStore.search).not.toHaveBeenCalled();
   });

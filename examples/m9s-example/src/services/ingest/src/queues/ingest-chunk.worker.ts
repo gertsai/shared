@@ -28,7 +28,7 @@ import type Moleculer from 'moleculer';
 
 import { resolveExampleController } from '../../../../lib/example-controller';
 import config from '../../../../../project.config';
-import { PermissionDeniedError } from '../../../../application/errors/permission-denied.error';
+import { ForbiddenError } from '../../../../composition/errors.js';
 import { DOCUMENT_INDEXED_CHANNEL } from '../../../channels/document-events.channel';
 import type { IngestServiceContext } from '../../types';
 
@@ -138,7 +138,7 @@ controller.registerWorker(INGEST_QUEUE_NAME, [
         // Convert domain errors to standard errors so BullMQ records them.
         // Pipeline-style: the action layer maps to APIError; the worker
         // layer just throws and lets BullMQ's retry policy handle it.
-        if (err instanceof PermissionDeniedError) {
+        if (err instanceof ForbiddenError) {
           throw new Error(`[permission-denied] ${err.message}`, { cause: err });
         }
         throw err;

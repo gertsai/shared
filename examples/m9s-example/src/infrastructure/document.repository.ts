@@ -27,7 +27,10 @@ import type {
   MutationMarks,
   UpdateAction,
 } from '@gertsai/entity-audit';
-import type { StorageMetadata } from '@gertsai/storage-core';
+import type {
+  StorageCapabilities,
+  StorageMetadata,
+} from '@gertsai/storage-core';
 
 import type { Document, DocumentMetadata } from '../domain/document';
 import type { IDocumentStore } from '../domain/ports/IDocumentStore';
@@ -93,6 +96,26 @@ export class DocumentRepository
 {
   constructor(provider: IStorageProvider<DocumentMeta>, session: Session) {
     super({ provider, session, path: 'documents' });
+  }
+
+  /**
+   * Wave 8.1 / PRD-013 G-1 + FR-1 — explicit capability declaration.
+   *
+   * Both shipped providers handle audit-aware upsert per ADR-013
+   * §Decision-A1: `InMemoryStorageProvider` pre-checks `Map.has(id)`
+   * before stamping create-time fields, and `PgStorageProvider` uses a
+   * surgical jsonb merge
+   * (`data || (EXCLUDED.data - 'creator_uuid' - 'created_at')`) that
+   * preserves the original creator on conflict. Advertising
+   * `preservesCreatorAudit: true` is therefore a contract guarantee
+   * across mock and real-infra modes — it lets
+   * `BaseEntityStorageService.upsert()` take the 1-RTT fast path.
+   */
+  override get capabilities(): StorageCapabilities {
+    return {
+      ...super.capabilities,
+      upsert: { supported: true, preservesCreatorAudit: true },
+    };
   }
 
   /**
