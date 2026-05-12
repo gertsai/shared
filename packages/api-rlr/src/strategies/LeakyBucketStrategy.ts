@@ -66,7 +66,7 @@ export class LeakyBucketStrategy implements RateLimitStrategy {
       totalHits,
       remainingHits,
       expiryTime,
-      retryAfter: retryAfter > 0 ? retryAfter : undefined,
+      ...(retryAfter > 0 && { retryAfter }),
     };
   }
 }

@@ -74,9 +74,7 @@ export const createOpenApiService = (schema: OpenApiV3_1.IDocument): ServiceSche
             this.broker.call(
               `${service.fullName}.schema`,
               {},
-              {
-                nodeID: service.nodes[0],
-              },
+              service.nodes[0] !== undefined ? { nodeID: service.nodes[0] } : {},
             ),
           ),
         );

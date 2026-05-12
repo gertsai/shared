@@ -39,8 +39,12 @@ export class WeakCollection<K extends object, V, M = unknown> implements IWeakCo
 
   constructor(entries?: Iterable<[K, V]>) {
     this.weakMap = new WeakMap();
-    this.metadata = typeof WeakMap !== 'undefined' ? new WeakMap() : undefined;
-    this.keyRefs = typeof WeakRef !== 'undefined' ? [] : undefined;
+    if (typeof WeakMap !== 'undefined') {
+      this.metadata = new WeakMap();
+    }
+    if (typeof WeakRef !== 'undefined') {
+      this.keyRefs = [];
+    }
 
     if (entries) {
       for (const [key, value] of entries) {

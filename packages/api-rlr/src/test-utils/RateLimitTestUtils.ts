@@ -266,7 +266,8 @@ export class RateLimitTestUtils {
       return { request, response, next, error: error as Error };
     }
 
-    return { request, response, next, error: next.getError() || undefined };
+    const lastErr = next.getError();
+    return { request, response, next, ...(lastErr !== undefined && { error: lastErr }) };
   }
 
   /**

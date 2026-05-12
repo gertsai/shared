@@ -291,13 +291,13 @@ export class RedisDenyLedgerAdapter implements DenyLedger {
       resourceType: entry.resourceType,
       resourceId: entry.resourceId,
       reason: 'revoked', // Map from string reason to DenyReason
+      ...(entry.expiresAt instanceof Date && { expiresAt: entry.expiresAt }),
+      createdBy: entry.deniedBy,
       metadata: {
         relation: entry.relation,
         reason: entry.reason,
         deniedBy: entry.deniedBy,
       },
-      expiresAt: entry.expiresAt ?? undefined,
-      createdBy: entry.deniedBy,
     });
   }
 

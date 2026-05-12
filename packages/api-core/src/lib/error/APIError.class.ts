@@ -113,13 +113,13 @@ export class APIError<CODE extends ResponseCode = ResponseCode> extends GertsErr
       severity,
       retryable,
       kind,
-      details: data as Record<string, unknown> | undefined,
+      ...(data !== undefined && { details: data as Record<string, unknown> }),
     });
 
     this.name = 'APIError';
-    this.data = data;
-    this.additionalMessage = additionalMessage;
-    this.domain = options?.domain;
+    if (data !== undefined) this.data = data;
+    if (additionalMessage !== undefined) this.additionalMessage = additionalMessage;
+    if (options?.domain !== undefined) this.domain = options.domain;
 
     // Expose 4xx errors by default, hide 5xx details
     this.expose = options?.expose ?? httpCode < 500;

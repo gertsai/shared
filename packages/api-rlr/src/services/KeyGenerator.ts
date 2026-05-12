@@ -97,14 +97,14 @@ export class KeyGenerator {
       case 'sw':
         return {
           type: 'sw',
-          subject: parts[1],
+          ...(parts[1] !== undefined && { subject: parts[1] }),
         };
 
       case 'bucket':
       case 'gcra':
         return {
           type: type as 'bucket' | 'gcra',
-          subject: parts[1],
+          ...(parts[1] !== undefined && { subject: parts[1] }),
           bucketId: parts.slice(2).join(':'),
         };
 

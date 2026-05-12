@@ -362,7 +362,12 @@ export function createInvalidationHandler(): (payload: Record<string, unknown>) 
     const resourceId = payload.resourceId as string | undefined;
     const relation = payload.relation as string | undefined;
 
-    cache.invalidate({ userId, resourceType, resourceId, relation });
+    cache.invalidate({
+      ...(userId !== undefined && { userId }),
+      ...(resourceType !== undefined && { resourceType }),
+      ...(resourceId !== undefined && { resourceId }),
+      ...(relation !== undefined && { relation }),
+    });
   };
 }
 

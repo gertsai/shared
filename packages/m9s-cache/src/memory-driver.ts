@@ -64,7 +64,7 @@ export class MemoryCacheDriver implements CacheDriver {
   readonly supportsAtomic = false;
 
   constructor(options: MemoryCacheDriverOptions = {}) {
-    this.maxEntries = options.maxEntries;
+    if (options.maxEntries !== undefined) this.maxEntries = options.maxEntries;
 
     if (options.enableCleanup) {
       const interval = options.cleanupIntervalMs ?? 60000;
@@ -158,7 +158,7 @@ export class MemoryCacheDriver implements CacheDriver {
 
     this.hashStore.set(key, {
       fields,
-      expiresAt: existing?.expiresAt,
+      ...(existing?.expiresAt !== undefined && { expiresAt: existing.expiresAt }),
     });
   }
 
@@ -299,7 +299,7 @@ export class MemoryCacheDriver implements CacheDriver {
   async quit(): Promise<void> {
     if (this.cleanupTimer) {
       clearInterval(this.cleanupTimer);
-      this.cleanupTimer = undefined;
+      delete this.cleanupTimer;
     }
     this.store.clear();
     this.hashStore.clear();

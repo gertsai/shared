@@ -119,7 +119,9 @@ export class M9sCacheCacher extends BaseCacherClass {
   constructor(options: M9sCacheCacherOptions) {
     super(options);
     this._driver = options.driver;
-    this._lockProvider = options.lockProvider;
+    if (options.lockProvider !== undefined) {
+      this._lockProvider = options.lockProvider;
+    }
   }
 
   /**
@@ -181,7 +183,7 @@ export class M9sCacheCacher extends BaseCacherClass {
     const timeEnd = this.metrics.timer(METRIC.MOLECULER_CACHER_SET_TIME);
 
     try {
-      await this._store.set(key, data, { ttlSeconds: ttl ?? undefined });
+      await this._store.set(key, data, ttl !== undefined ? { ttlSeconds: ttl } : {});
     } finally {
       timeEnd();
     }
@@ -204,7 +206,7 @@ export class M9sCacheCacher extends BaseCacherClass {
         }
       } else {
         // Fallback for drivers without hash support
-        await this._store.set(key, data, { ttlSeconds: ttl ?? undefined });
+        await this._store.set(key, data, ttl !== undefined ? { ttlSeconds: ttl } : {});
       }
     } finally {
       timeEnd();
@@ -616,11 +618,14 @@ export class M9sCacheCacher extends BaseCacherClass {
    * Deserialize envelope from raw hash data.
    */
   private deserializeEnvelope<T>(raw: Record<string, CachePayload>): CacheEnvelope<T> {
-    return {
+    const result: CacheEnvelope<T> = {
       data: raw.data ? this._serializer.deserialize<T>(raw.data) : (undefined as T),
-      tags: raw.tags ? this._serializer.deserialize<TagVersionMap>(raw.tags) : undefined,
       created_at: raw.created_at ? Number(raw.created_at) : Date.now(),
     };
+    if (raw.tags) {
+      result.tags = this._serializer.deserialize<TagVersionMap>(raw.tags);
+    }
+    return result;
   }
 }
 
@@ -633,9 +638,9 @@ function normalizeCacheOptions(cache?: boolean | MoleculerCacheOptions): Normali
 
   return {
     enabled: cacheOpts.enabled ?? true,
-    ttl: cacheOpts.ttl ?? undefined,
-    keys: cacheOpts.keys ?? undefined,
-    tags: cacheOpts.tags ?? undefined,
+    ...(cacheOpts.ttl !== undefined && { ttl: cacheOpts.ttl }),
+    ...(cacheOpts.keys !== undefined && { keys: cacheOpts.keys }),
+    ...(cacheOpts.tags !== undefined && { tags: cacheOpts.tags }),
     lock: {
       enabled: lock.enabled ?? false,
       ttl: lock.ttl ?? 15000,

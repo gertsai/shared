@@ -139,8 +139,8 @@ export class RestRequestManager {
     return this.request<undefined, TResponse>({
       url,
       method: 'GET',
-      headers: opts?.headers,
-      timeoutMs: opts?.timeoutMs,
+      ...(opts?.headers !== undefined && { headers: opts.headers }),
+      ...(opts?.timeoutMs !== undefined && { timeoutMs: opts.timeoutMs }),
     });
   }
 
@@ -153,8 +153,8 @@ export class RestRequestManager {
       url,
       method: 'POST',
       body,
-      headers: opts?.headers,
-      timeoutMs: opts?.timeoutMs,
+      ...(opts?.headers !== undefined && { headers: opts.headers }),
+      ...(opts?.timeoutMs !== undefined && { timeoutMs: opts.timeoutMs }),
     });
   }
 
@@ -167,8 +167,8 @@ export class RestRequestManager {
       url,
       method: 'PUT',
       body,
-      headers: opts?.headers,
-      timeoutMs: opts?.timeoutMs,
+      ...(opts?.headers !== undefined && { headers: opts.headers }),
+      ...(opts?.timeoutMs !== undefined && { timeoutMs: opts.timeoutMs }),
     });
   }
 
@@ -176,8 +176,8 @@ export class RestRequestManager {
     return this.request<undefined, TResponse>({
       url,
       method: 'DELETE',
-      headers: opts?.headers,
-      timeoutMs: opts?.timeoutMs,
+      ...(opts?.headers !== undefined && { headers: opts.headers }),
+      ...(opts?.timeoutMs !== undefined && { timeoutMs: opts.timeoutMs }),
     });
   }
 
@@ -190,8 +190,8 @@ export class RestRequestManager {
       url,
       method: 'PATCH',
       body,
-      headers: opts?.headers,
-      timeoutMs: opts?.timeoutMs,
+      ...(opts?.headers !== undefined && { headers: opts.headers }),
+      ...(opts?.timeoutMs !== undefined && { timeoutMs: opts.timeoutMs }),
     });
   }
 
@@ -228,7 +228,7 @@ export class RestRequestManager {
     return httpCaller(url, {
       method: request.method,
       headers,
-      body: bodyInit,
+      ...(bodyInit !== undefined && { body: bodyInit }),
     });
   }
 

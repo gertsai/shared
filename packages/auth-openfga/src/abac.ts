@@ -117,9 +117,10 @@ export function buildNetworkContext(
 ): Pick<ABACContext, 'user_ip' | 'allowed_cidrs'> {
   const ip = extractClientIp(request);
 
+  const allowedCidrs = policy?.allowedCidrs ?? DEFAULT_ABAC_POLICY.allowedCidrs;
   return {
     user_ip: ip,
-    allowed_cidrs: policy?.allowedCidrs ?? DEFAULT_ABAC_POLICY.allowedCidrs,
+    ...(allowedCidrs !== undefined && { allowed_cidrs: allowedCidrs }),
   };
 }
 
@@ -141,10 +142,11 @@ export function buildGeoContext(
 ): Pick<ABACContext, 'user_country' | 'allowed_countries' | 'blocked_countries'> {
   const country = extractCountryCode(request);
 
+  const blockedCountries = policy?.blockedCountries ?? DEFAULT_ABAC_POLICY.blockedCountries;
   return {
     user_country: country,
-    allowed_countries: policy?.allowedCountries,
-    blocked_countries: policy?.blockedCountries ?? DEFAULT_ABAC_POLICY.blockedCountries,
+    ...(policy?.allowedCountries !== undefined && { allowed_countries: policy.allowedCountries }),
+    ...(blockedCountries !== undefined && { blocked_countries: blockedCountries }),
   };
 }
 
@@ -165,9 +167,9 @@ export function buildResourceContext(
   resource: ABACResourceInfo,
 ): Pick<ABACContext, 'user_clearance' | 'resource_sensitivity' | 'resource_status'> {
   return {
-    user_clearance: user.clearance,
-    resource_sensitivity: resource.sensitivity,
-    resource_status: resource.status,
+    ...(user.clearance !== undefined && { user_clearance: user.clearance }),
+    ...(resource.sensitivity !== undefined && { resource_sensitivity: resource.sensitivity }),
+    ...(resource.status !== undefined && { resource_status: resource.status }),
   };
 }
 

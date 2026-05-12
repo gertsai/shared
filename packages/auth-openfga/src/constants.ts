@@ -195,7 +195,7 @@ export function parseUserString(user: string): { type: string; id: string; relat
   if (user.includes('#')) {
     const [typeId = '', relation] = user.split('#');
     const { type, id } = parseObjectString(typeId);
-    return { type, id, relation };
+    return { type, id, ...(relation !== undefined && { relation }) };
   }
   return parseObjectString(user);
 }

@@ -84,7 +84,7 @@ export class CacheStore {
     try {
       const value = this.serializer.deserialize<T>(payload);
       const ttl = this.driver.ttl ? await this.driver.ttl(formattedKey) : undefined;
-      return { found: true, value, ttl };
+      return { found: true, value, ...(ttl !== undefined && { ttl }) };
     } catch (error) {
       this.handleDeserializationError(key, error);
       return { found: false, value: null };

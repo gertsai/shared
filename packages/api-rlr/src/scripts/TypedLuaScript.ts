@@ -33,7 +33,7 @@ export class TypedLuaScript<
 
     if (this.loadPromise) {
       this.sha = await this.loadPromise;
-      this.loadPromise = undefined;
+      delete this.loadPromise;
     }
 
     try {

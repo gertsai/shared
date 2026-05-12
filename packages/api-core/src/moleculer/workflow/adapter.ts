@@ -72,7 +72,7 @@ export function adaptWorkflowDefinition<I, O>(
   return {
     name,
     version: def.version,
-    params: def.params,
+    ...(def.params !== undefined && { params: def.params }),
     handler: async function moleculerHandler(this: unknown, ctx: Context) {
       const meta = extractWorkflowMeta(ctx);
       const signal: WorkflowSignal = {

@@ -130,11 +130,13 @@ export class GertsFgaClient {
   constructor(config?: FgaClientConfig) {
     this.config = {
       apiUrl: config?.apiUrl ?? FGA_DEFAULT_CONFIG.apiUrl,
-      storeId: config?.storeId,
-      authorizationModelId: config?.authorizationModelId,
-      apiToken: config?.apiToken,
       timeout: config?.timeout ?? FGA_DEFAULT_CONFIG.timeout,
       retry: config?.retry ?? FGA_DEFAULT_CONFIG.retry,
+      ...(config?.storeId !== undefined && { storeId: config.storeId }),
+      ...(config?.authorizationModelId !== undefined && {
+        authorizationModelId: config.authorizationModelId,
+      }),
+      ...(config?.apiToken !== undefined && { apiToken: config.apiToken }),
     };
   }
 
@@ -217,14 +219,20 @@ export class GertsFgaClient {
     }
 
     // Create final client (token re-applied via buildSdkConfig)
-    this.client = new OpenFgaClient(this.buildSdkConfig({ storeId, authorizationModelId }));
+    this.client = new OpenFgaClient(
+      this.buildSdkConfig(
+        authorizationModelId !== undefined
+          ? { storeId, authorizationModelId }
+          : { storeId },
+      ),
+    );
 
     this.resolvedConfig = {
       apiUrl: this.config.apiUrl!,
       storeId,
       authorizationModelId: authorizationModelId ?? '',
       timeout: this.config.timeout!,
-      apiToken: this.config.apiToken,
+      ...(this.config.apiToken !== undefined && { apiToken: this.config.apiToken }),
     };
   }
 
@@ -530,7 +538,7 @@ export class GertsFgaClient {
       const computed = t.computed as { userset?: string };
       return {
         type: 'leaf',
-        computed: computed.userset,
+        ...(computed.userset !== undefined && { computed: computed.userset }),
       };
     }
 
@@ -577,8 +585,8 @@ export class GertsFgaClient {
     const client = await this.getClient();
     await this.withRetry(() =>
       client.write({
-        writes: options.writes,
-        deletes: options.deletes,
+        ...(options.writes !== undefined && { writes: options.writes }),
+        ...(options.deletes !== undefined && { deletes: options.deletes }),
       }),
     );
   }
