@@ -77,10 +77,10 @@ export class RecursiveCharacterTextSplitter extends BaseTextSplitter {
   ) {
     super({
       chunkSize: options.chunkSize,
-      chunkOverlap: options.chunkOverlap,
       chunkMethod: 'recursive',
       keepSeparator: options.keepSeparator ?? false,
       addStartIndex: true,
+      ...(options.chunkOverlap !== undefined && { chunkOverlap: options.chunkOverlap }),
     });
     this.separators = options.separators ?? DEFAULT_SEPARATORS;
     this.keepSeparatorMode = options.keepSeparator ?? false;

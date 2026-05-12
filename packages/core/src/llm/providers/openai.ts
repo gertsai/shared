@@ -137,18 +137,19 @@ export class OpenAIProvider extends BaseLLM {
   private isO1Model: boolean;
 
   constructor(config: OpenAIConfig, eventBus?: EventBus) {
+    const resolvedApiKey = config.apiKey ?? process.env.OPENAI_API_KEY;
     super(
       {
         ...config,
         provider: 'openai',
-        apiKey: config.apiKey ?? process.env.OPENAI_API_KEY,
+        ...(resolvedApiKey !== undefined && { apiKey: resolvedApiKey }),
       },
       eventBus,
     );
 
-    this.organization = config.organization;
-    this.project = config.project;
-    this.reasoningEffort = config.reasoningEffort;
+    if (config.organization !== undefined) this.organization = config.organization;
+    if (config.project !== undefined) this.project = config.project;
+    if (config.reasoningEffort !== undefined) this.reasoningEffort = config.reasoningEffort;
     this.isO1Model =
       config.model.toLowerCase().includes('o1') || config.model.toLowerCase().includes('o3');
   }
@@ -199,19 +200,21 @@ export class OpenAIProvider extends BaseLLM {
 
       this.trackTokenUsage(usage);
 
+      const mappedFinishReason = this.mapFinishReason(response.choices[0]?.finish_reason);
+      const mappedToolCalls = response.choices[0]?.message?.tool_calls?.map((tc) => ({
+        id: tc.id,
+        type: tc.type,
+        function: {
+          name: tc.function.name,
+          arguments: tc.function.arguments,
+        },
+      }));
       const llmResponse: LLMResponse = {
         content: processedContent,
         usage,
         model: response.model,
-        finishReason: this.mapFinishReason(response.choices[0]?.finish_reason),
-        toolCalls: response.choices[0]?.message?.tool_calls?.map((tc) => ({
-          id: tc.id,
-          type: tc.type,
-          function: {
-            name: tc.function.name,
-            arguments: tc.function.arguments,
-          },
-        })),
+        ...(mappedFinishReason !== undefined && { finishReason: mappedFinishReason }),
+        ...(mappedToolCalls !== undefined && { toolCalls: mappedToolCalls }),
       };
 
       // Handle tool calls if present and available functions provided

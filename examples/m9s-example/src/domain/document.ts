@@ -52,6 +52,6 @@ export const createDocument = (input: Document): Document => {
   return {
     id: input.id,
     text: input.text,
-    metadata: input.metadata,
+    ...(input.metadata !== undefined && { metadata: input.metadata }),
   };
 };

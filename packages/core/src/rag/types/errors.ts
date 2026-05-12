@@ -263,7 +263,8 @@ export const RAGErrors = {
       message,
       type: 'validation_error',
       code: 'INVALID_REQUEST',
-      param,
+      // Conditional spread for optional `param` under EOPT
+      ...(param !== undefined && { param }),
     },
     stage: 'validation',
     retryable: false,

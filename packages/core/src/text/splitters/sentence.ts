@@ -101,9 +101,9 @@ export class SentenceSplitter extends BaseTextSplitter {
   ) {
     super({
       chunkSize: options.chunkSize,
-      chunkOverlap: options.chunkOverlap,
       chunkMethod: 'sentence',
       addStartIndex: true,
+      ...(options.chunkOverlap !== undefined && { chunkOverlap: options.chunkOverlap }),
     });
     this.abbreviations = getAbbreviationSet(options);
   }

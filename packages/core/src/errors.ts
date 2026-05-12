@@ -210,8 +210,9 @@ export class GertsError extends Error implements RetryableError {
     this.name = 'GertsError';
     this.code = context.code;
     this.severity = context.severity ?? 'error';
-    this.details = context.details;
-    this.kind = context.kind;
+    // Conditional assignment for optional class fields under EOPT
+    if (context.details !== undefined) this.details = context.details;
+    if (context.kind !== undefined) this.kind = context.kind;
     this._retryable = context.retryable ?? (context.kind ? isRetryableKind(context.kind) : false);
     if (context.cause instanceof Error && context.cause.stack) {
       this.stack += `\nCaused by: ${context.cause.stack}`;
@@ -240,22 +241,29 @@ export class GertsError extends Error implements RetryableError {
    * Serialize error for logging/transport.
    */
   toJSON(): SerializedError {
-    return {
+    // Mutable-build for readonly target with optional fields under EOPT
+    const out: { -readonly [K in keyof SerializedError]: SerializedError[K] } = {
       name: this.name,
       code: this.code,
       message: this.message,
       severity: this.severity,
       isRetryable: this.isRetryable(),
-      details: this.details,
-      stack: this.stack,
-      kind: this.kind,
     };
+    if (this.details !== undefined) out.details = this.details;
+    if (this.stack !== undefined) out.stack = this.stack;
+    if (this.kind !== undefined) out.kind = this.kind;
+    return out;
   }
 }
 
 export class NotFoundError extends GertsError {
   constructor(message: string, details?: Record<string, unknown>) {
-    super(message, { code: 'NOT_FOUND', details, retryable: false, kind: ErrorKind.NotFound });
+    super(message, {
+      code: 'NOT_FOUND',
+      ...(details !== undefined && { details }),
+      retryable: false,
+      kind: ErrorKind.NotFound,
+    });
     this.name = 'NotFoundError';
   }
 }
@@ -264,7 +272,7 @@ export class ValidationError extends GertsError {
   constructor(message: string, details?: Record<string, unknown>) {
     super(message, {
       code: 'VALIDATION_FAILED',
-      details,
+      ...(details !== undefined && { details }),
       severity: 'warn',
       retryable: false,
       kind: ErrorKind.InvalidArgument,
@@ -305,7 +313,7 @@ export class ConnectionError extends GertsError {
   constructor(message: string, details?: Record<string, unknown>) {
     super(message, {
       code: 'CONNECTION_FAILED',
-      details,
+      ...(details !== undefined && { details }),
       retryable: true,
       kind: ErrorKind.Unavailable,
     });
@@ -327,7 +335,7 @@ export class RateLimitError extends GertsError {
       kind: ErrorKind.ResourceExhausted,
     });
     this.name = 'RateLimitError';
-    this.retryAfterMs = retryAfterMs;
+    if (retryAfterMs !== undefined) this.retryAfterMs = retryAfterMs;
   }
 
   override getRetryDelay(_attempt: number): number | undefined {
@@ -342,7 +350,7 @@ export class AuthenticationError extends GertsError {
   constructor(message: string, details?: Record<string, unknown>) {
     super(message, {
       code: 'AUTHENTICATION_FAILED',
-      details,
+      ...(details !== undefined && { details }),
       retryable: false,
       kind: ErrorKind.Unauthenticated,
     });
@@ -357,7 +365,7 @@ export class AuthorizationError extends GertsError {
   constructor(message: string, details?: Record<string, unknown>) {
     super(message, {
       code: 'AUTHORIZATION_FAILED',
-      details,
+      ...(details !== undefined && { details }),
       retryable: false,
       kind: ErrorKind.PermissionDenied,
     });
@@ -422,25 +430,28 @@ export class ConnectorError extends GertsError {
     const kind =
       context.kind ?? (context.httpStatus ? errorKindFromHttp(context.httpStatus) : undefined);
 
-    super(message, { ...context, kind });
+    super(message, { ...context, ...(kind !== undefined && { kind }) });
     this.name = 'ConnectorError';
-    this.source = context.source;
-    this.documentId = context.documentId;
-    this.httpStatus = context.httpStatus;
+    // Conditional assignment for optional class fields under EOPT
+    if (context.source !== undefined) this.source = context.source;
+    if (context.documentId !== undefined) this.documentId = context.documentId;
+    if (context.httpStatus !== undefined) this.httpStatus = context.httpStatus;
   }
 
   /**
    * Convert to ConnectorFailure format for sync tracking.
    */
   toConnectorFailure(): ConnectorFailure {
-    return {
+    // Mutable-build for optional fields under EOPT
+    const out: { -readonly [K in keyof ConnectorFailure]: ConnectorFailure[K] } = {
       type: this.inferFailureType(),
       message: this.message,
-      documentId: this.documentId,
       retryable: this.isRetryable(),
       timestamp: new Date(),
       originalError: this,
     };
+    if (this.documentId !== undefined) out.documentId = this.documentId;
+    return out;
   }
 
   /**
@@ -477,8 +488,8 @@ export class HttpConnectorError extends ConnectorError {
   ) {
     super(message, {
       code: 'HTTP_ERROR',
-      source,
-      documentId,
+      ...(source !== undefined && { source }),
+      ...(documentId !== undefined && { documentId }),
       httpStatus: status,
       retryable: status >= 500 || status === 429 || status === 408,
     });
@@ -526,14 +537,16 @@ export function createConnectorFailure(
   }
 
   const isError = error instanceof Error;
-  return {
+  // Mutable-build for optional fields under EOPT
+  const out: { -readonly [K in keyof ConnectorFailure]: ConnectorFailure[K] } = {
     type,
     message: isError ? error.message : String(error),
-    documentId,
     retryable: retryable ?? (isError ? isRetryableError(error) : false),
     timestamp: new Date(),
-    originalError: isError ? error : undefined,
   };
+  if (documentId !== undefined) out.documentId = documentId;
+  if (isError) out.originalError = error;
+  return out;
 }
 
 /**

@@ -179,14 +179,18 @@ export class OpenFgaPermissionGate implements IPermissionGate {
       // applicable to gates with explicit configs — different configs
       // resolve to different fingerprints, so the upstream cache Map
       // returns distinct cached entries.
-      const gateConfig =
-        this.clientConfig?.apiUrl !== undefined ||
-        this.clientConfig?.storeId !== undefined ||
-        this.clientConfig?.apiToken !== undefined
+      //
+      // EOPT note: build the gate config via conditional spread so unset
+      // fields are omitted entirely (no `undefined` reaches FgaClientConfig).
+      const cfgApiUrl = this.clientConfig?.apiUrl;
+      const cfgStoreId = this.clientConfig?.storeId;
+      const cfgApiToken = this.clientConfig?.apiToken;
+      const gateConfig: FgaClientConfig | undefined =
+        cfgApiUrl !== undefined || cfgStoreId !== undefined || cfgApiToken !== undefined
           ? {
-              apiUrl: this.clientConfig?.apiUrl,
-              storeId: this.clientConfig?.storeId,
-              apiToken: this.clientConfig?.apiToken,
+              ...(cfgApiUrl !== undefined && { apiUrl: cfgApiUrl }),
+              ...(cfgStoreId !== undefined && { storeId: cfgStoreId }),
+              ...(cfgApiToken !== undefined && { apiToken: cfgApiToken }),
             }
           : undefined;
 
@@ -211,7 +215,7 @@ export class OpenFgaPermissionGate implements IPermissionGate {
         this.cacheScope = mod.fingerprint(gateConfig);
       }
       const result = await mod.checkPermission(checkRequest, {
-        client: scopedClient,
+        ...(scopedClient !== undefined && { client: scopedClient }),
         cacheScope: this.cacheScope,
       });
       return result.allowed;

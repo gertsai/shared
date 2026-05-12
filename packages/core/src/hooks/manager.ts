@@ -136,7 +136,11 @@ export class HookManager {
     filters?: HookFilters,
     priority: number = 0
   ): void {
-    this.beforeLLMHooks.push({ hook, filters, priority });
+    this.beforeLLMHooks.push({
+      hook,
+      priority,
+      ...(filters !== undefined && { filters }),
+    });
     this.sortByPriority(this.beforeLLMHooks);
   }
 
@@ -152,7 +156,11 @@ export class HookManager {
     filters?: HookFilters,
     priority: number = 0
   ): void {
-    this.afterLLMHooks.push({ hook, filters, priority });
+    this.afterLLMHooks.push({
+      hook,
+      priority,
+      ...(filters !== undefined && { filters }),
+    });
     this.sortByPriority(this.afterLLMHooks);
   }
 
@@ -226,7 +234,11 @@ export class HookManager {
     filters?: HookFilters,
     priority: number = 0
   ): void {
-    this.beforeToolHooks.push({ hook, filters, priority });
+    this.beforeToolHooks.push({
+      hook,
+      priority,
+      ...(filters !== undefined && { filters }),
+    });
     this.sortByPriority(this.beforeToolHooks);
   }
 
@@ -238,7 +250,11 @@ export class HookManager {
     filters?: HookFilters,
     priority: number = 0
   ): void {
-    this.afterToolHooks.push({ hook, filters, priority });
+    this.afterToolHooks.push({
+      hook,
+      priority,
+      ...(filters !== undefined && { filters }),
+    });
     this.sortByPriority(this.afterToolHooks);
   }
 
@@ -298,9 +314,9 @@ export class HookManager {
   ): void {
     this.agentPreHooks.push({
       hook,
-      filters,
       priority: options?.priority ?? 0,
       runInBackground: options?.runInBackground ?? false,
+      ...(filters !== undefined && { filters }),
     });
     this.sortByPriority(this.agentPreHooks);
   }
@@ -315,9 +331,9 @@ export class HookManager {
   ): void {
     this.agentPostHooks.push({
       hook,
-      filters,
       priority: options?.priority ?? 0,
       runInBackground: options?.runInBackground ?? false,
+      ...(filters !== undefined && { filters }),
     });
     this.sortByPriority(this.agentPostHooks);
   }

@@ -110,7 +110,7 @@ controller.registerWorker(INGEST_QUEUE_NAME, [
           userId: payload.userId,
           docId: payload.docId,
           text: payload.text,
-          metadata: payload.metadata,
+          ...(payload.metadata !== undefined && { metadata: payload.metadata }),
         });
 
         // Publish a durable cross-service event via @moleculer/channels.

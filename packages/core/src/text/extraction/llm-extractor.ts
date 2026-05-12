@@ -14,7 +14,7 @@
 import typia from 'typia';
 import type { IEntityExtractor, ExtractionOptions, BatchOptions } from './entity-extractor';
 import type { ExtractionResult } from './types';
-import type { Entity, Triplet } from './schemas';
+import type { Entity, Triplet, Predicate } from './schemas';
 import { normalizeEntityType } from './schemas';
 import type { TextNode } from '../nodes/text-node';
 import type { BaseLLM } from '../../llm/base';
@@ -380,14 +380,20 @@ export class LLMEntityExtractor implements IEntityExtractor {
         continue;
       }
 
+      // EOPT-canonical predicate build: build optional `evidence` separately
+      // before the literal so the literal stays free of conditional spreads
+      // (the surrounding typia.createValidate transform is sensitive to that).
+      const predicate: { -readonly [K in keyof Predicate]: Predicate[K] } = {
+        type: r.predicate.toUpperCase(),
+        properties: {},
+        confidence: r.confidence,
+      };
+      if (options.includeEvidence && r.evidence !== undefined) {
+        predicate.evidence = r.evidence;
+      }
       const triplet: Triplet = {
         subject,
-        predicate: {
-          type: r.predicate.toUpperCase(),
-          properties: {},
-          confidence: r.confidence,
-          evidence: options.includeEvidence ? r.evidence : undefined,
-        },
+        predicate,
         object,
         sourceChunkId: chunkId,
         confidence: r.confidence * subject.confidence * object.confidence,

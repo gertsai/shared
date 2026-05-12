@@ -61,6 +61,13 @@ export class CachedTokenizer implements IUniversalTokenizer {
   private hits = 0;
   private misses = 0;
 
+  /**
+   * Encoding from wrapped tokenizer (declared as own readonly property so it
+   * is only present when the inner tokenizer has one — required under EOPT
+   * because `encoding?: TokenizerEncoding` cannot accept `undefined` values).
+   */
+  readonly encoding?: TokenizerEncoding;
+
   constructor(inner: IUniversalTokenizer, config: CachedTokenizerConfig = {}) {
     this.inner = inner;
 
@@ -70,16 +77,15 @@ export class CachedTokenizer implements IUniversalTokenizer {
       maxSize,
       defaultTTL: ttlMs,
     });
+
+    if (inner.encoding !== undefined) {
+      this.encoding = inner.encoding;
+    }
   }
 
   /** Provider from wrapped tokenizer */
   get provider(): TokenizerProvider {
     return this.inner.provider;
-  }
-
-  /** Encoding from wrapped tokenizer */
-  get encoding(): TokenizerEncoding | undefined {
-    return this.inner.encoding;
   }
 
   /** Exactness from wrapped tokenizer */

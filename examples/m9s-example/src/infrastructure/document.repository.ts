@@ -103,13 +103,16 @@ export class DocumentRepository
   async save(doc: Document): Promise<void> {
     const existing = await this.get(doc.id);
     if (existing) {
-      await this.update(doc.id, { text: doc.text, metadata: doc.metadata });
+      await this.update(doc.id, {
+        text: doc.text,
+        ...(doc.metadata !== undefined && { metadata: doc.metadata }),
+      });
       return;
     }
     await this.set({
       _uid: doc.id,
       text: doc.text,
-      metadata: doc.metadata,
+      ...(doc.metadata !== undefined && { metadata: doc.metadata }),
     });
   }
 
@@ -123,7 +126,7 @@ export class DocumentRepository
     return {
       id: stored._uid,
       text: stored.text,
-      metadata: stored.metadata,
+      ...(stored.metadata !== undefined && { metadata: stored.metadata }),
     };
   }
 }

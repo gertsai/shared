@@ -76,7 +76,11 @@ export const storeChunks: any = controller.register('_store', {
     // place where the document invariants are validated. The workflow
     // already validated `text` length, but `createDocument` enforces
     // domain rules (non-empty, etc.).
-    const doc = createDocument({ id: docId, text, metadata });
+    const doc = createDocument({
+      id: docId,
+      text,
+      ...(metadata !== undefined && { metadata }),
+    });
 
     const chunkRows: Chunk[] = chunks.map((chunkText, idx) => ({
       docId: doc.id,

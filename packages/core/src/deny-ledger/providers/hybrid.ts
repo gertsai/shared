@@ -96,18 +96,20 @@ export class HybridDenyLedger implements DenyLedgerProvider {
     // Slow path: check PostgreSQL (in case cache miss or eviction)
     const dbResult = await this.postgres.isDenied(request);
     if (dbResult.denied && dbResult.entry) {
-      // Warm cache with the found entry
+      // Warm cache with the found entry. Use conditional spread for optional
+      // fields so EOPT-strict targets accept the payload.
+      const entry = dbResult.entry;
       await this.memory.deny({
-        tenantId: dbResult.entry.tenantId,
-        subjectType: dbResult.entry.subjectType,
-        subjectId: dbResult.entry.subjectId,
-        resourceType: dbResult.entry.resourceType,
-        resourceId: dbResult.entry.resourceId,
-        reason: dbResult.entry.reason,
-        expiresAt: dbResult.entry.expiresAt,
-        metadata: dbResult.entry.metadata,
-        createdBy: dbResult.entry.createdBy,
-        incidentId: dbResult.entry.incidentId,
+        tenantId: entry.tenantId,
+        subjectType: entry.subjectType,
+        subjectId: entry.subjectId,
+        reason: entry.reason,
+        ...(entry.resourceType !== undefined && { resourceType: entry.resourceType }),
+        ...(entry.resourceId !== undefined && { resourceId: entry.resourceId }),
+        ...(entry.expiresAt !== undefined && { expiresAt: entry.expiresAt }),
+        ...(entry.metadata !== undefined && { metadata: entry.metadata }),
+        ...(entry.createdBy !== undefined && { createdBy: entry.createdBy }),
+        ...(entry.incidentId !== undefined && { incidentId: entry.incidentId }),
       });
     }
 
@@ -232,9 +234,9 @@ export class HybridDenyLedger implements DenyLedgerProvider {
 
     return {
       ...pgStats,
-      cacheHitRate: memStats.cacheHitRate,
-      cacheSize: memStats.cacheSize,
-      lastSyncAt: this.lastSyncAt,
+      ...(memStats.cacheHitRate !== undefined && { cacheHitRate: memStats.cacheHitRate }),
+      ...(memStats.cacheSize !== undefined && { cacheSize: memStats.cacheSize }),
+      ...(this.lastSyncAt !== undefined && { lastSyncAt: this.lastSyncAt }),
     };
   }
 
@@ -303,7 +305,7 @@ export class HybridDenyLedger implements DenyLedgerProvider {
     return {
       hitRate: 0, // Would need to track hits/misses
       size: stats.length,
-      lastSyncAt: this.lastSyncAt,
+      ...(this.lastSyncAt !== undefined && { lastSyncAt: this.lastSyncAt }),
     };
   }
 

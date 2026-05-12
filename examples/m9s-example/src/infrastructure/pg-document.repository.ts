@@ -107,10 +107,11 @@ export class PgDocumentRepository implements IDocumentStore {
     `;
     if (rows.length === 0) return null;
     const row = rows[0]!;
+    const rowMetadata = row.metadata as Document['metadata'];
     return {
       id: row.id,
       text: row.text,
-      metadata: row.metadata as Document['metadata'],
+      ...(rowMetadata !== undefined && { metadata: rowMetadata }),
     };
   }
 

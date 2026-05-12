@@ -129,20 +129,21 @@ export class AnthropicProvider extends BaseLLM {
   private previousThinkingBlocks: AnthropicContentBlock[] = [];
 
   constructor(config: AnthropicConfig, eventBus?: EventBus) {
+    const resolvedApiKey = config.apiKey ?? process.env.ANTHROPIC_API_KEY;
     super(
       {
         ...config,
         provider: 'anthropic',
-        apiKey: config.apiKey ?? process.env.ANTHROPIC_API_KEY,
+        ...(resolvedApiKey !== undefined && { apiKey: resolvedApiKey }),
         // Anthropic requires max_tokens, default to 4096
         maxTokens: config.maxTokens ?? 4096,
       },
       eventBus
     );
 
-    this.topP = config.topP;
-    this.topK = config.topK;
-    this.thinking = config.thinking;
+    if (config.topP !== undefined) this.topP = config.topP;
+    if (config.topK !== undefined) this.topK = config.topK;
+    if (config.thinking !== undefined) this.thinking = config.thinking;
   }
 
   /**
@@ -409,7 +410,7 @@ export class AnthropicProvider extends BaseLLM {
           content: [
             {
               type: 'tool_result',
-              tool_use_id: message.toolCallId,
+              ...(message.toolCallId !== undefined && { tool_use_id: message.toolCallId }),
               content: typeof message.content === 'string' ? message.content : '',
             },
           ],
@@ -524,7 +525,7 @@ export class AnthropicProvider extends BaseLLM {
     }
   }
 
-  private mapStopReason(reason: string): LLMResponse['finishReason'] {
+  private mapStopReason(reason: string): Exclude<LLMResponse['finishReason'], undefined> {
     switch (reason) {
       case 'end_turn':
       case 'stop_sequence':

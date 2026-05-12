@@ -137,13 +137,13 @@ export abstract class BaseLLM {
 
     this.model = config.model;
     this.provider = config.provider;
-    this.temperature = config.temperature;
-    this.maxTokens = config.maxTokens;
+    if (config.temperature !== undefined) this.temperature = config.temperature;
+    if (config.maxTokens !== undefined) this.maxTokens = config.maxTokens;
     this.timeout = config.timeout ?? 60000;
     this.maxRetries = config.maxRetries ?? 2;
-    this.apiKey = config.apiKey;
-    this.baseUrl = config.baseUrl;
-    this.eventBus = eventBus;
+    if (config.apiKey !== undefined) this.apiKey = config.apiKey;
+    if (config.baseUrl !== undefined) this.baseUrl = config.baseUrl;
+    if (eventBus !== undefined) this.eventBus = eventBus;
 
     // Normalize stop sequences
     if (config.stop === undefined || config.stop === null) {
@@ -304,7 +304,7 @@ export abstract class BaseLLM {
       timestamp: new Date(),
       model: this.model,
       messages,
-      tools,
+      ...(tools !== undefined && { tools }),
     };
 
     this.eventBus.emit('llm.call.started', event);

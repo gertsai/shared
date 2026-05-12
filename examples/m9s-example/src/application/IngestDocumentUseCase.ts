@@ -113,7 +113,11 @@ export class IngestDocumentUseCase {
     }
 
     // 2. Build the domain entity (validates invariants)
-    const doc = createDocument({ id: docId, text, metadata });
+    const doc = createDocument({
+      id: docId,
+      text,
+      ...(metadata !== undefined && { metadata }),
+    });
 
     // 3. Chunk + embed
     const chunkTexts = splitIntoChunks(doc.text);
