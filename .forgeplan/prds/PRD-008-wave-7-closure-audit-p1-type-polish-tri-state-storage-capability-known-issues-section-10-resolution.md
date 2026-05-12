@@ -154,3 +154,5 @@ The Forgeplan ID allocator already exhibited duplicate-ID behaviour during this 
 - **EVID `## Structured Fields`** must have `verdict`, `congruence_level`, `evidence_type` literally as bullet list `- **field:** value` — schema parser is keyword-strict and prefers EVID-022 format.
 - **No speculative scope** — if a claim is not anchored in a commit or test result, drop it.
 
+
+
