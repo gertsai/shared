@@ -45,6 +45,11 @@ const IDENTITY_FIELDS = [
   'storeId',
   'authorizationModelId',
   'apiToken',
+  // Wave 7.5 / RFC-008 — OAuth2 credentials nested object. Distinct
+  // OAuth2 configs must produce distinct cache scopes (same SEC-class
+  // reasoning as `apiToken`). Inner-field coverage is asserted in
+  // `__tests__/fingerprint.oauth2.test.ts`.
+  'oauth2',
 ] as const;
 
 /**
@@ -84,6 +89,17 @@ describe('fingerprint() — fitness function (Wave 6.3 ARCH-P1-3)', () => {
       storeId: 's',
       authorizationModelId: 'm',
       apiToken: 't',
+      // Wave 7.5: OAuth2 is mutually exclusive with `apiToken` at the
+      // `GertsFgaClient` constructor; for the purpose of the fitness
+      // function — which asserts schema completeness — both fields are
+      // populated. The constructor-level exclusivity is covered by
+      // companion integration tests.
+      oauth2: {
+        clientId: 'cid',
+        clientSecret: 'cs',
+        issuer: 'https://idp.example.com',
+        audience: 'https://api.fga.example.com/',
+      },
       timeout: 1000,
       retry: { maxAttempts: 1, initialDelay: 1, maxDelay: 1 },
     };

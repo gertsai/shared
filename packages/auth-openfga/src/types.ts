@@ -516,6 +516,45 @@ export interface FgaExpandNode {
  * external mutation after construction was never intended; tightening
  * the input shape eliminates a silent footgun.
  */
+/**
+ * OAuth2 client-credentials configuration for `--authn-method=oidc`
+ * OpenFGA deployments (Wave 7.5 / RFC-008).
+ *
+ * When `FgaClientConfig.oauth2` is set, our wrapper plumbs these fields
+ * to the underlying `@openfga/sdk` as
+ * `credentials: { method: ClientCredentials, config: { clientId, clientSecret, apiTokenIssuer, apiAudience } }`.
+ * The SDK handles token acquisition (POST to `{issuer}/oauth/token` with
+ * `grant_type=client_credentials`), caching, and proactive refresh
+ * internally (see SDK `Credentials` class).
+ *
+ * Mutually exclusive with `FgaClientConfig.apiToken`. `GertsFgaClient`
+ * constructor rejects when both are set.
+ *
+ * Field naming differs from SDK's `ClientCredentialsConfig` for ergonomic
+ * clarity (`issuer` / `audience` vs SDK's `apiTokenIssuer` / `apiAudience`).
+ * The mapping is internal to `buildSdkConfig()`.
+ *
+ * SECURITY: `clientSecret` is hashed (SHA-256) via `fingerprint()` before
+ * use as a cache key (Wave 6.3 ADR-012 invariant I-2). Never logged.
+ */
+export interface FgaOAuth2Config {
+  /** OAuth2 client ID (machine-to-machine app identifier). */
+  readonly clientId: string;
+  /** OAuth2 client secret. Treat as secret; never log. */
+  readonly clientSecret: string;
+  /**
+   * OAuth2 token issuer URL (e.g. `https://your-tenant.auth0.com`).
+   * SDK appends `/oauth/token` for the token endpoint.
+   */
+  readonly issuer: string;
+  /**
+   * OAuth2 audience claim — typically the FGA API URL (e.g.
+   * `https://api.us1.fga.dev/`). Required by Auth0 / OpenFGA Cloud;
+   * other IdPs may use as a resource indicator.
+   */
+  readonly audience: string;
+}
+
 export interface FgaClientConfig {
   /** API URL (default: http://localhost:8080) */
   readonly apiUrl?: string;
@@ -535,8 +574,17 @@ export interface FgaClientConfig {
    *
    * SECURITY: never log this value. The SDK includes it in
    * `Authorization: Bearer ...` headers; treat as secret in transit.
+   *
+   * Mutually exclusive with `oauth2` — set one or the other, not both.
    */
   readonly apiToken?: string;
+  /**
+   * OAuth2 client-credentials flow for `--authn-method=oidc`
+   * deployments (Wave 7.5 / RFC-008). See {@link FgaOAuth2Config}.
+   *
+   * Mutually exclusive with `apiToken`.
+   */
+  readonly oauth2?: FgaOAuth2Config;
   /** Request timeout in ms */
   readonly timeout?: number;
   /** Retry configuration */

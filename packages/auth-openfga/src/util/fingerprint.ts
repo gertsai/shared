@@ -47,16 +47,40 @@ export const DEFAULT_FINGERPRINT = '__default__' as const;
  *                 {@link DEFAULT_FINGERPRINT}.
  * @returns SHA-256 hex digest (64 chars) when `config` is present;
  *          `'__default__'` when absent.
+ *
+ * Wave 7.5 (RFC-008): `oauth2` is identity-affecting — distinct OAuth2
+ * credentials MUST produce distinct cache scopes, so all 4 fields
+ * (`clientId`, `clientSecret`, `issuer`, `audience`) participate in the
+ * canonical input. Like `apiToken`, `clientSecret` is consumed by the
+ * SHA-256 hash and is NEVER stored as a plaintext substring of any
+ * long-lived data structure outside the per-instance config field
+ * (invariant I-2, extended to OAuth2 credentials).
  */
 export function fingerprint(config?: FgaClientConfig): string {
   if (!config) return DEFAULT_FINGERPRINT;
   // Canonical JSON — keys hardcoded in alphabetical order. Do not
   // refactor to `JSON.stringify(config, sortReplacer)` — explicit is
   // safer than clever; future field additions are visible in this diff.
+  //
+  // Wave 7.5: `oauth2` is encoded as a nested object with the 4 OAuth2
+  // fields in hardcoded alphabetical order (audience, clientId,
+  // clientSecret, issuer). When `oauth2` is unset, we emit `null` to
+  // preserve the SHA-256 collision-resistance between
+  // `{ oauth2: undefined }` and `{ oauth2: { clientId: '', ... } }`
+  // shapes — `JSON.stringify` would otherwise drop an explicit
+  // `undefined` and silently collide.
   const canonical = JSON.stringify({
     apiUrl: config.apiUrl ?? '',
     apiToken: config.apiToken ?? '',
     authorizationModelId: config.authorizationModelId ?? '',
+    oauth2: config.oauth2
+      ? {
+          audience: config.oauth2.audience,
+          clientId: config.oauth2.clientId,
+          clientSecret: config.oauth2.clientSecret,
+          issuer: config.oauth2.issuer,
+        }
+      : null,
     storeId: config.storeId ?? '',
   });
   return createHash('sha256').update(canonical).digest('hex');

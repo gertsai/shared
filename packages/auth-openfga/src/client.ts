@@ -20,6 +20,7 @@ import type {
   FgaResourceType,
   FgaExpandRequest,
   FgaExpandNode,
+  FgaOAuth2Config,
 } from './types.js';
 import { FGA_DEFAULT_CONFIG, userString, objectString } from './constants.js';
 import { fingerprint } from './util/fingerprint.js';
@@ -36,10 +37,20 @@ type SdkClientOptions = {
   apiUrl: string;
   storeId?: string;
   authorizationModelId?: string;
-  credentials?: {
-    method: CredentialsMethod.ApiToken;
-    config: { token: string };
-  };
+  credentials?:
+    | {
+        method: CredentialsMethod.ApiToken;
+        config: { token: string };
+      }
+    | {
+        method: CredentialsMethod.ClientCredentials;
+        config: {
+          clientId: string;
+          clientSecret: string;
+          apiTokenIssuer: string;
+          apiAudience: string;
+        };
+      };
 };
 
 // =============================================================================
@@ -163,6 +174,16 @@ export class GertsFgaClient {
   private initPromise: Promise<void> | null = null;
 
   constructor(config?: FgaClientConfig) {
+    // Wave 7.5 (RFC-008): `apiToken` (preshared) and `oauth2` (OIDC
+    // client-credentials) are mutually exclusive auth methods on the
+    // underlying `@openfga/sdk` `OpenFgaClient`. Setting both at once
+    // would silently pick one and discard the other depending on the
+    // branch order in `buildSdkConfig`; fail fast at construction so
+    // the misconfiguration surfaces immediately rather than at first
+    // RPC.
+    if (config?.apiToken !== undefined && config?.oauth2 !== undefined) {
+      throw new Error('FgaClientConfig: apiToken and oauth2 are mutually exclusive');
+    }
     this.config = {
       apiUrl: config?.apiUrl ?? FGA_DEFAULT_CONFIG.apiUrl,
       timeout: config?.timeout ?? FGA_DEFAULT_CONFIG.timeout,
@@ -172,6 +193,7 @@ export class GertsFgaClient {
         authorizationModelId: config.authorizationModelId,
       }),
       ...(config?.apiToken !== undefined && { apiToken: config.apiToken }),
+      ...(config?.oauth2 !== undefined && { oauth2: config.oauth2 }),
     };
   }
 
@@ -184,13 +206,38 @@ export class GertsFgaClient {
    * `{ method: ApiToken, config: { token } }`; when unset, `credentials`
    * is omitted entirely so the existing anonymous flow is preserved
    * (backwards-compat invariant I-1).
+   *
+   * Wave 7.5 (RFC-008): when `oauth2` is set, the SDK is given
+   * `{ method: ClientCredentials, config: { clientId, clientSecret, apiTokenIssuer, apiAudience } }`.
+   * The SDK handles token acquisition, caching, and refresh internally
+   * (delegation pattern — we never touch the bearer token). `oauth2` is
+   * mutually exclusive with `apiToken` (enforced in the constructor),
+   * so the branch order below is purely cosmetic; `oauth2` is checked
+   * first because it is the more production-grade auth method for
+   * OpenFGA Cloud / Auth0-backed deployments.
+   *
+   * Field mapping (ergonomic → SDK):
+   *   - `issuer`   → `apiTokenIssuer`
+   *   - `audience` → `apiAudience`
+   * (`clientId` / `clientSecret` pass through verbatim.)
    */
   private buildSdkConfig(extra?: Pick<SdkClientOptions, 'storeId' | 'authorizationModelId'>): SdkClientOptions {
     const opts: SdkClientOptions = {
       apiUrl: this.config.apiUrl!,
       ...extra,
     };
-    if (this.config.apiToken) {
+    const oauth2: FgaOAuth2Config | undefined = this.config.oauth2;
+    if (oauth2) {
+      opts.credentials = {
+        method: CredentialsMethod.ClientCredentials,
+        config: {
+          clientId: oauth2.clientId,
+          clientSecret: oauth2.clientSecret,
+          apiTokenIssuer: oauth2.issuer,
+          apiAudience: oauth2.audience,
+        },
+      };
+    } else if (this.config.apiToken) {
       opts.credentials = {
         method: CredentialsMethod.ApiToken,
         config: { token: this.config.apiToken },

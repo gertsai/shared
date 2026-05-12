@@ -74,6 +74,7 @@ export type {
   FgaExpandRequest,
   FgaExpandNode,
   FgaClientConfig,
+  FgaOAuth2Config,
   FgaResolvedConfig,
   IamEventType,
   MembershipEventPayload,
