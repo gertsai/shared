@@ -1,7 +1,7 @@
 artifact_id: RFC-009
 workflow_type: greenfield
-current_phase: done
-advanced_at: 2026-05-12T21:17:47.145056Z
+current_phase: validate
+advanced_at: 2026-05-13T08:40:55.868216Z
 history:
 - to: shape
   at: 2026-05-12T20:32:49.023707Z
@@ -14,4 +14,8 @@ history:
   to: done
   at: 2026-05-12T21:17:47.145056Z
   reason: 'auto: forgeplan_activate'
+- from: done
+  to: validate
+  at: 2026-05-13T08:40:55.868216Z
+  reason: 'auto: forgeplan_validate PASS'
 schema_version: 1
