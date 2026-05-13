@@ -8,6 +8,8 @@ const config = {
     adapter: adapter(),
     alias: {
       $lib: 'src/lib',
+      // Wave 10.A — paraglide compile-time codegen output (see vite.config.ts).
+      $paraglide: 'src/paraglide',
     },
   },
 };

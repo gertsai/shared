@@ -1,0 +1,59 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+
+  "nav_link_home": "Home",
+  "nav_link_ingest": "Ingest",
+  "nav_link_search": "Search",
+  "nav_link_docs": "Docs",
+  "nav_user_signed_in_as": "Signed in as",
+
+  "footer_tagline": "m9s-example reference · Apache 2.0",
+  "footer_meta": "tenant-acme · @gertsai/* monorepo",
+
+  "home_hero_eyebrow": "Reference application",
+  "home_hero_title": "Full-stack @gertsai/* demo",
+  "home_hero_subtitle": "SvelteKit frontend + Moleculer backend, wired through an auto-generated OpenAPI 3.1 contract. End-to-end typed: every request body, response shape, and error variant is validated.",
+  "home_cta_ingest": "Ingest a document",
+  "home_cta_search": "Run a search",
+
+  "home_stat_docs_title": "Total docs",
+  "home_stat_docs_subtitle": "Wave 10 wires listing endpoint",
+  "home_stat_chunks_title": "Chunks indexed",
+  "home_stat_chunks_subtitle": "Embeddings via Ollama / pgvector",
+  "home_stat_last_search_title": "Last search",
+  "home_stat_last_search_subtitle": "Recorded per tenant",
+
+  "home_wavemap_heading": "What's wired in this wave",
+  "home_wavemap_item_openapi": "OpenAPI 3.1 contract auto-generated from typia types",
+  "home_wavemap_item_typed_fetch": "Frontend typed via openapi-fetch",
+  "home_wavemap_item_round_trip": "Ingest + search round-trip with vector similarity",
+  "home_wavemap_item_tenant": "Tenant scoping via X-Tenant-ID header",
+
+  "ingest_page_title": "Ingest a document",
+  "ingest_page_subtitle": "Submit a document to the backend ingest pipeline. The text is chunked, embedded via Ollama, and persisted with pgvector indexing.",
+  "ingest_form_doc_id_label": "Document ID",
+  "ingest_form_doc_id_hint": "Stable identifier — re-ingesting the same id replaces prior chunks.",
+  "ingest_form_text_label": "Body text",
+  "ingest_form_submit": "Ingest",
+  "ingest_link_to_search": "→ Search after ingesting",
+  "ingest_success_toast": "Document ingested successfully.",
+
+  "search_page_title": "Search",
+  "search_page_subtitle": "Cosine-similarity search over ingested chunks. The backend embeds the query and returns the top hits per tenant, ordered by similarity.",
+  "search_form_query_label": "Query",
+  "search_form_submit": "Search",
+  "search_empty_state": "No matches found. Try ingesting documents from the Ingest page first.",
+  "search_results_count_one": "result for",
+  "search_results_count_many": "results for",
+  "search_result_similarity_label": "similarity:",
+
+  "docs_page_title": "Documents",
+  "docs_page_subtitle": "Static demo list (Wave 9). The real listing endpoint lands in Wave 10 — this page will swap its data source without visual changes.",
+
+  "login_page_title": "Sign in",
+  "login_form_email_label": "Email",
+  "login_form_password_label": "Password",
+  "login_form_submit": "Sign in",
+  "login_error_invalid": "Invalid credentials",
+  "logout_action": "Sign out"
+}

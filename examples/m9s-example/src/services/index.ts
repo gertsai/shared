@@ -87,8 +87,10 @@ ApiController.configure({
 
 import './ingest';
 import './search';
+import './auth';
 
 // Namespace re-exports for OpenAPI generators / typed clients.
 // oxlint-disable import/no-namespace
 export * as ingest from './ingest';
 export * as search from './search';
+export * as auth from './auth';

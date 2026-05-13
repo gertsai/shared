@@ -51,6 +51,7 @@
     "@openfga/sdk": "^0.8.1",
     "dotenv": "^16.6.1",
     "ioredis": "^5.8.0",
+    "jsonwebtoken": "^9.0.2",
     "moleculer": "^0.14.35",
     "moleculer-web": "^0.10.6",
     "nats": "^2.29.3",
@@ -60,6 +61,7 @@
   },
   "devDependencies": {
     "@openfga/syntax-transformer": "^0.2.0",
+    "@types/jsonwebtoken": "^9.0.6",
     "@standard-schema/spec": "^1.1.0",
     "@types/node": "^22.10.0",
     "@types/pg": "^8.11.10",
