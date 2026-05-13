@@ -794,6 +794,63 @@ const { status, body } = appErrorToHttpResponse(err);
   / [RFC-010](https://github.com/gertsai/shared/blob/main/.forgeplan/rfcs/RFC-010-wave-8-3-strategy-chain-on-8-2-3-parallel-teammates-with-disjoint-ownership-shared-errors-kernel-relocation.md)
   / EVID-030 — Wave 8.3 ship (EVID-030 link added post-activation).
 
+## Full-stack reference (Wave 9+)
+
+Wave 9 ships a complete frontend + typed-contract layer alongside this backend
+so adopters can copy a working end-to-end reference instead of stitching one
+together from individual examples:
+
+- [`examples/m9s-example-api-types/`](../m9s-example-api-types/) — generated
+  OpenAPI 3.1 contract (`paths`, `components`) consumed via `openapi-fetch`.
+  The `generate-openapi-contract.mjs` script snapshots the live backend
+  `/openapi/schema.json` endpoint into a checked-in `.d.ts`, so frontend
+  builds do not depend on a running backend.
+- [`examples/m9s-example-web/`](../m9s-example-web/) — SvelteKit 2 + Svelte 5
+  runes + Tailwind v4 web app with `/`, `/ingest`, `/search`, `/docs` routes.
+  Type-safe end-to-end: a backend action signature change surfaces as a TS
+  error in the frontend after `pnpm generate:openapi`.
+
+### Quick start (3 terminals)
+
+```bash
+# Terminal 1 — infra
+pnpm --filter @gertsai-examples/m9s-example infra:up
+
+# Terminal 2 — backend (this package)
+cp .env.example .env       # one-time
+pnpm --filter @gertsai-examples/m9s-example dev    # → http://localhost:3031
+
+# Terminal 3 — frontend
+pnpm --filter @gertsai-examples/m9s-example-web dev    # → http://localhost:5173
+```
+
+The web app reads `PUBLIC_API_BASE_URL` (default `http://localhost:3031`) and
+`PUBLIC_TENANT_ID` (default `tenant-acme`). Backend CORS is permissive in dev
+(moleculer-web defaults) — no extra flags required on this side.
+
+### Why SvelteKit 2 + openapi-fetch
+
+Framework rationale captured in
+[ADR-014](https://github.com/gertsai/shared/blob/main/.forgeplan/adrs/ADR-014-sveltekit-2-openapi-fetch-as-the-full-stack-reference-pattern-for-gertsai-example-applications.md).
+TLDR: smallest interactive bundle + form actions + server load + Svelte 5
+runes give the best DX/perf ratio for a SaaS-like reference in 2026.
+`openapi-fetch` keeps the runtime ~5 KB while delivering compile-time
+request/response types straight from the backend contract.
+
+### Cross-references
+
+- [PRD-015](https://github.com/gertsai/shared/blob/main/.forgeplan/prds/PRD-015-wave-9-full-stack-reference-auto-openapi-emission-api-types-pkg-sveltekit-web.md)
+  — Wave 9 requirements + acceptance.
+- [RFC-011](https://github.com/gertsai/shared/blob/main/.forgeplan/rfcs/RFC-011-wave-9-strategy-pre-seed-monorepo-skeleton-4-parallel-teammates-with-disjoint-ownership.md)
+  — 4-teammate parallel-execution strategy.
+- [SPEC-019](https://github.com/gertsai/shared/blob/main/.forgeplan/specs/SPEC-019-wave-9-openapi-contract-path-map-problemdetails-request-response-schemas.md)
+  — OpenAPI contract shape + path map.
+- [EVID-029](https://github.com/gertsai/shared/blob/main/.forgeplan/evidence/EVID-029-code-audit-audit-2026-05-12-215927-verdict-fail-1-crit-12-high-wave-8-2-patch-closes-all-crit-high.md)
+  — Wave 8.2 audit + closure narrative (pre-Wave-9 baseline).
+- [PRD-016](https://github.com/gertsai/shared/blob/main/.forgeplan/prds/PRD-016-wave-10-production-grade-web-ui-auth-ui-cms-file-upload-sse-i18n-storybook-error-ui.md)
+  — Wave 10 deferred scope: auth UI, CMS/admin, file upload, SSE streaming,
+  i18n, Storybook, production-grade error UI.
+
 ## Production Setup
 
 Sprint 3.11 elevates this example from "mock-by-default" demo to a **real-infra

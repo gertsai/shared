@@ -38,6 +38,23 @@ Apache 2.0 licensed, published to npm under the `@gertsai/*` scope.
 | [`@gertsai/api-core`](./packages/api-core) | API primitives, Moleculer mixins, OpenAPI merge | 4 |
 | [`@gertsai/api-rlr`](./packages/api-rlr) | Rate limiter / retry loop runtime over api-core | 5 |
 
+## Reference applications
+
+End-to-end examples wiring the packages above into runnable apps. Useful for
+adopters who want a working starting point rather than a snippet.
+
+| Path | Purpose |
+|---|---|
+| [`examples/m9s-example`](./examples/m9s-example) | Moleculer broker with hex layering, Wave 5–8 composition facade, real-infra Postgres + pgvector + OpenFGA + Redis + Ollama (Sprint 3.11). |
+| [`examples/m9s-example-api-types`](./examples/m9s-example-api-types) | OpenAPI 3.1 contract snapshot generated from the m9s-example backend (Wave 9). |
+| [`examples/m9s-example-web`](./examples/m9s-example-web) | SvelteKit 2 + Svelte 5 + Tailwind v4 + `openapi-fetch` frontend for m9s-example (Wave 9). |
+
+The Wave 9 trio (`m9s-example` + `m9s-example-api-types` + `m9s-example-web`)
+demonstrates a complete type-safe stack: backend action change → regenerate
+contract → frontend typecheck flags the affected call sites. See
+[ADR-014](./.forgeplan/adrs/ADR-014-sveltekit-2-openapi-fetch-as-the-full-stack-reference-pattern-for-gertsai-example-applications.md)
+for the framework choice rationale.
+
 ## Install
 
 ```sh

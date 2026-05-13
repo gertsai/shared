@@ -52,6 +52,11 @@ export default [
       '.moon/cache/**',
       '.changeset/**',
       '.forgeplan-web/**',
+      // Wave 9 — SvelteKit build artifacts (generated, not source)
+      '**/.svelte-kit/**',
+      '**/build/**',
+      // Wave 9 — api-types generated OpenAPI snapshot (committed but not lintable as source)
+      '**/src/generated/openapi-schema.d.ts',
     ],
   },
   // Workspace-wide rules for JS/CJS/MJS files (preserves Sprint 3.0 §U-9 scope).

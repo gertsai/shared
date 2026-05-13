@@ -1,0 +1,4 @@
+# Placeholder — Teammate B will land:
+#   - generator.ts  (vendor-ported from gertsai_codex/packages/api-types/src/openapi/generator.ts)
+#   - types.ts      (OpenApiMapper + ApiEndpointsGenerator helper types)
+#   - index.ts      (barrel)

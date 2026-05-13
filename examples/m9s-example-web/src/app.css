@@ -1,0 +1,9 @@
+@import 'tailwindcss';
+
+/* Wave 9 design tokens — minimal palette, Teammate C in Phase 1 may expand. */
+:root {
+  --color-brand: #2563eb;
+  --color-brand-fg: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f8fafc;
+}
