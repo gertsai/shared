@@ -184,3 +184,4 @@ Wave 10 additions are designed to be **additive only** (do not break Wave 9 clie
 | ADR-014 | informs — framework choice that drives this client-shape decision |
 | PRD-016 | informs — Wave 10 additive contract extensions documented above
 
+
