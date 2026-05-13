@@ -27,7 +27,7 @@ import typia from 'typia';
 
 import config from '../../../../../project.config';
 import { resolveExampleController } from '../../../../lib/example-controller';
-import { ForbiddenError } from '../../../../shared/errors.js';
+import { ForbiddenError } from '../../../../shared/errors';
 import { tryGetRequestContextFromCtx } from '../../../../composition/wave5-middlewares';
 import { INGEST_QUEUE_NAME, JOB_PROCESS_DOCUMENT } from '../queues';
 import type {

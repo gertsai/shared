@@ -28,7 +28,7 @@ import type Moleculer from 'moleculer';
 
 import { resolveExampleController } from '../../../../lib/example-controller';
 import config from '../../../../../project.config';
-import { ForbiddenError } from '../../../../shared/errors.js';
+import { ForbiddenError } from '../../../../shared/errors';
 import { DOCUMENT_INDEXED_CHANNEL } from '../../../channels/document-events.channel';
 import type { IngestServiceContext } from '../../types';
 

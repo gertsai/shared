@@ -12,7 +12,7 @@ import type { IDocumentStore } from '../domain/ports/IDocumentStore';
 import type { IChunkStore } from '../domain/ports/IChunkStore';
 import type { IEmbedder } from '../domain/ports/IEmbedder';
 import type { IPermissionGate } from '../domain/ports/IPermissionGate';
-import { permissionDenied } from '../shared/errors.js';
+import { permissionDenied } from '../shared/errors';
 
 /**
  * Dependencies injected at composition time.

@@ -20,7 +20,7 @@ import {
 import typia from 'typia';
 
 import { resolveExampleController } from '../../../../lib/example-controller';
-import { ForbiddenError, ValidationError } from '../../../../shared/errors.js';
+import { ForbiddenError, ValidationError } from '../../../../shared/errors';
 import { tryGetRequestContextFromCtx } from '../../../../composition/wave5-middlewares';
 import type { SearchServiceContext, SearchQueryRequest, SearchQueryResponse } from '../../types';
 
