@@ -5,7 +5,7 @@ import {
   DEFAULT_TOP_K,
   MAX_TOP_K,
 } from '../src/application/SearchDocumentsUseCase';
-import { ForbiddenError } from '../src/composition/errors.js';
+import { ForbiddenError } from '../src/shared/errors.js';
 import type { IChunkStore } from '../src/domain/ports/IChunkStore';
 import type { IEmbedder } from '../src/domain/ports/IEmbedder';
 import type { IPermissionGate } from '../src/domain/ports/IPermissionGate';

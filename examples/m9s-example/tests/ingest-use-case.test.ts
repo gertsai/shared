@@ -4,7 +4,7 @@ import {
   IngestDocumentUseCase,
   splitIntoChunks,
 } from '../src/application/IngestDocumentUseCase';
-import { ForbiddenError } from '../src/composition/errors.js';
+import { ForbiddenError } from '../src/shared/errors.js';
 import type { IDocumentStore } from '../src/domain/ports/IDocumentStore';
 import type { IChunkStore } from '../src/domain/ports/IChunkStore';
 import type { IEmbedder } from '../src/domain/ports/IEmbedder';

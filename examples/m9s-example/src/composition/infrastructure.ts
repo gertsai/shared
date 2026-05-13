@@ -33,8 +33,10 @@
 import config from '../../project.config';
 
 import { InMemoryStorageProvider } from '@gertsai/entity-storage';
+import { RestRequestManager } from '@gertsai/rest-request-manager';
 import { Session } from '@gertsai/session';
 
+import { createAppLogger } from './logger';
 import { DocumentRepository } from '../infrastructure/document.repository';
 import type { DocumentMeta as MemoryDocumentMeta } from '../infrastructure/document.repository';
 import { MemoryVectorStore } from '../infrastructure/memory-vector.store';
@@ -179,14 +181,49 @@ function pickStores(): {
 /**
  * Choose an embedder based on `EMBEDDER_PROVIDER`. Falls back to the
  * deterministic mock so the example boots with zero env vars.
+ *
+ * Wave 8.3 audit Arch#4: for both Ollama and OpenAI branches we now BUILD
+ * a {@link RestRequestManager} here (in the composition root) and inject
+ * it via the embedder's `manager:` ctor opt. The embedders' previous
+ * module-level lazy Map / singleton paths remain as fallback for legacy
+ * callers, but the production startup path no longer touches them — the
+ * embedder no longer reaches into env-driven globals for its transport
+ * policy. Each manager is scoped to its embedder instance so multi-host
+ * deployments (e.g. dual-provider failover) don't share state.
  */
 function pickEmbedder(): IEmbedder {
   switch (config.EMBEDDER_PROVIDER) {
-    case 'ollama':
+    case 'ollama': {
+      // Parse the URL once here so the SSRF allowlist can be tightened to
+      // the configured hostname (Wave 8.2 audit Sec#1, CWE-918 — even with
+      // `allowLocalhost: true / allowPrivateNetworks: true` the embedder
+      // can only reach the configured target host).
+      const ollamaUrl = new URL(config.EMBEDDER_URL);
+      const ollamaManager = new RestRequestManager({
+        retry: { maxAttempts: 3, baseMs: 250, jitter: 'full' },
+        rateLimit: { tokensPerSecond: 10, burst: 20 },
+        circuitBreaker: {
+          failureThreshold: 5,
+          resetTimeoutMs: 30_000,
+          maxHosts: 1000,
+        },
+        logger: createAppLogger('ollama-embedder').child({
+          subsystem: 'http',
+          host: ollamaUrl.hostname,
+        }),
+        security: {
+          ssrfProtection: true,
+          allowLocalhost: true,
+          allowPrivateNetworks: true,
+          allowedHostnames: [ollamaUrl.hostname],
+        },
+      });
       return new OllamaEmbedder({
         url: config.EMBEDDER_URL,
         model: config.EMBEDDER_MODEL,
+        manager: ollamaManager,
       });
+    }
 
     case 'openai': {
       if (!config.EMBEDDER_API_KEY || config.EMBEDDER_API_KEY.trim().length === 0) {
@@ -194,10 +231,25 @@ function pickEmbedder(): IEmbedder {
           "EMBEDDER_PROVIDER='openai' requires EMBEDDER_API_KEY to be set.",
         );
       }
+      const openaiManager = new RestRequestManager({
+        retry: { maxAttempts: 3, baseMs: 250, jitter: 'full' },
+        rateLimit: { tokensPerSecond: 1, burst: 5 },
+        circuitBreaker: {
+          failureThreshold: 5,
+          resetTimeoutMs: 30_000,
+          maxHosts: 1000,
+        },
+        logger: createAppLogger('openai-embedder').child({ subsystem: 'http' }),
+        // `authorization` is already in built-in REDACTION_KEYS but list it
+        // explicitly so the manager's dispatch-log emits `[REDACTED]` even
+        // if the upstream redaction set ever shrinks.
+        redactRequestKeys: ['authorization'],
+      });
       return new OpenAIEmbedder({
         apiKey: config.EMBEDDER_API_KEY,
         // OpenAI's smallest current generation. Override via EMBEDDER_MODEL.
         model: config.EMBEDDER_MODEL || 'text-embedding-3-small',
+        manager: openaiManager,
       });
     }
 
