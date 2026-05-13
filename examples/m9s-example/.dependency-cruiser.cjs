@@ -70,6 +70,25 @@ module.exports = {
         'Services must wire infrastructure через composition root, not direct import. ADR-002.',
     },
     {
+      name: 'no-application-to-composition',
+      severity: 'error',
+      from: { path: '^src/application/' },
+      to: { path: '^src/composition/' },
+      comment:
+        'Application layer must import error/types from src/shared/, never from src/composition/. Composition is wiring; shared is the neutral kernel. Wave 8.3 audit Arch#1.',
+    },
+    {
+      name: 'no-services-to-composition-errors',
+      severity: 'error',
+      from: { path: '^src/services/' },
+      // Allow services → composition/wave5-middlewares (existing pattern; that's
+      // request-context wiring that services legitimately need). Block only the
+      // errors module which has a kernel sibling now.
+      to: { path: '^src/composition/errors\\.ts$' },
+      comment:
+        'Services layer must import error types from src/shared/errors, not the composition HTTP scrubber. Wave 8.3 audit Arch#1.',
+    },
+    {
       name: 'no-domain-to-infrastructure',
       severity: 'error',
       from: { path: '^src/domain/' },

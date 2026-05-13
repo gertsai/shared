@@ -36,7 +36,7 @@ import {
   UnauthorizedError,
   UpstreamFailureError,
   isAppError,
-} from '../composition/errors.js';
+} from '@gertsai/errors';
 import type { IEmbedder } from '../domain/ports/IEmbedder';
 
 const log = createAppLogger('openai-embedder');
@@ -48,6 +48,19 @@ export interface OpenAIEmbedderOptions {
   readonly baseUrl?: string;
   /** Per-request timeout in ms. Default 30s. */
   readonly timeoutMs?: number;
+  /**
+   * Wave 8.3 audit Arch#4 — optional injected {@link RestRequestManager}.
+   *
+   * When provided, the embedder routes its single batched POST through
+   * this instance instead of the module-level lazy singleton. The
+   * composition root builds a manager with `redactRequestKeys:
+   * ['authorization']` and the appropriate OpenAI rate-limit budgets, so
+   * the embedder no longer reads `EMBEDDER_RATE_LIMIT_RPS` directly.
+   *
+   * When absent, falls back to the existing lazy singleton for
+   * backwards-compat with legacy callers.
+   */
+  readonly manager?: RestRequestManager;
 }
 
 interface OpenAIEmbeddingsResponse {
@@ -75,9 +88,16 @@ function parseBurst(): number {
  * Module-level lazy singleton — one manager per embedder class shares
  * circuit-breaker / rate-limiter state across all `OpenAIEmbedder`
  * instances in a single process.
+ *
+ * Wave 8.3 audit Arch#4: this singleton is now a FALLBACK for legacy
+ * callers that don't pass `opts.manager`. The composition root injects
+ * a fully-configured manager so this singleton stays undefined in the
+ * normal startup path.
  */
 let _manager: RestRequestManager | undefined;
-function getManager(): RestRequestManager {
+function getManager(override?: RestRequestManager): RestRequestManager {
+  // Wave 8.3 audit Arch#4 — DI ctor opt wins over the lazy singleton.
+  if (override !== undefined) return override;
   if (_manager === undefined) {
     _manager = new RestRequestManager({
       retry: { maxAttempts: 3, baseMs: 250, jitter: 'full' },
@@ -128,7 +148,7 @@ export class OpenAIEmbedder implements IEmbedder {
 
     let res: RestResponse<unknown>;
     try {
-      res = await getManager().request({
+      res = await getManager(this.opts.manager).request({
         url,
         method: 'POST',
         headers: {

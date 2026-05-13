@@ -267,6 +267,41 @@ Total ≤ 325 LOC including tests. Production code at 205 LOC fits PRD-013 NFR-3
 | RFC-R-3 | Pre-seed `composition/errors.ts` re-export from `@gertsai/errors/http` requires subpath `node16` resolution — m9s-example tsconfig must support it | `examples/m9s-example/tsconfig.json` inherits workspace base which uses `moduleResolution: bundler` — verified supports subpaths |
 | RFC-R-4 | Existing console.error in index.ts catches startup failure; switching to logger.error means startup errors might not flush before process.exit | Use `logger.error(...)` followed by `await logger.flush()` if backend supports it; otherwise instantiate consoleBackend with `flushSync: true` option |
 
+## Implementation differences from spec (Wave 8.3 audit Docs#9 fix)
+
+The pre-seed code blocks in this RFC were drafted **before** the real
+package API surfaces were locked. The Wave 8.2 audit (EVID-029, Docs#9)
+flagged the drift; this section captures the deltas so a future reader
+copy-pasting from RFC-009 lands on shipped reality, not draft intent.
+
+### `createAppLogger` (composition/logger.ts)
+
+- **Spec drafted (above)**: `createAppLogger(name: string)` and option keys `name`, `backend: consoleBackend()`, `level`, `redactKeys`.
+- **Shipped**: `createAppLogger(moduleName: string)` and option keys per `@gertsai/logger-factory` real interface — `baseContext: { module: moduleName }`, `backend: consoleBackend` (singleton import — NOT a factory call), `level`, **`redact`** (NOT `redactKeys`).
+- Verify against `examples/m9s-example/src/composition/logger.ts` and `packages/logger-factory/src/logger.ts:46-51` (`LoggerFactoryOpts`).
+
+### `permissionDenied()` return type (composition/errors.ts → shared/errors.ts in Wave 8.3)
+
+- **Spec drafted**: returns `AppError` with `ErrorKind.PermissionDenied`.
+- **Shipped**: returns `ForbiddenError<{ userId: string; action: string; resource: string }>` (the typed subclass of `AppError`); the canonical kind is `ErrorKind.FORBIDDEN` (the `@gertsai/errors` taxonomy uses HTTP-aligned upper-snake-case values).
+- The HTTP-boundary status remains 403 with type `urn:gertsai:errors:permission` (RFC 9457 ProblemDetails). Wave 8.3 also moved this factory to `src/shared/errors.ts` to fix the hex inversion flagged by audit Arch#1.
+
+### `RestRequestManagerOpts` field names
+
+- **Spec drafted (Teammate D prompt)**: `retry: { attempts: 3, baseDelayMs: 250, jitter: 'full' }`, `rateLimit: { rps: 1, burst: 5 }`, `circuitBreaker: { threshold: 5, windowMs: 30_000, maxHosts: 1000 }`.
+- **Shipped**: field names per `@gertsai/rest-request-manager` real types — `retry: { maxAttempts: 3, baseMs: 250, jitter: 'full' }` (extends `RetryOpts` from `@gertsai/async-utils`), `rateLimit: { tokensPerSecond: N, burst: N }`, `circuitBreaker: { failureThreshold: N, resetTimeoutMs: N, maxHosts: N }`.
+- Verify against `packages/rest-request-manager/src/types.ts:34-66`.
+
+### Wave 8.1 → 8.3 evolution snapshot
+
+| Subject | Wave 8.1 | Wave 8.2 | Wave 8.3 |
+|---|---|---|---|
+| Error kernel | `composition/errors.ts` (all re-exports + factory + scrubber) | unchanged | split: `shared/errors.ts` (kernel) + `composition/errors.ts` (HTTP scrubber only) |
+| Embedder transport | `httpCaller` + module-level `_manager` singleton | per-hostname `Map<hostname, RestRequestManager>` + `allowedHostnames: [hostname]` SSRF tightening | optional ctor `manager?: RestRequestManager` DI from composition root + bounded `pLimit(EMBEDDER_CONCURRENCY)` concurrency |
+| HTTP boundary | bare `appErrorToHttpResponse` from `@gertsai/errors/http` | scrubber strips `userId`/`url`/`originalKind` from outbound ProblemDetails (CWE-209) | unchanged (composition/errors.ts) |
+| `REDACT_KEYS` | embedding/vector/OPENAI_API_KEY/FGA_API_TOKEN | + POSTGRES_URL, REDIS_URL, DATABASE_URL, bearer, x-api-key, refresh_token, client_secret, jwt, session* (CWE-532) | unchanged |
+| depcruise | composition is free-form | unchanged | new `no-application-to-composition` + `no-services-to-composition-errors` rules |
+
 ## Related Artifacts
 
 | Artifact | Relation |
@@ -276,5 +311,6 @@ Total ≤ 325 LOC including tests. Production code at 205 LOC fits PRD-013 NFR-3
 | ADR-013 | informs (Wave 7.2 tri-state capability contract being adopted) |
 | RFC-006 | informs (Wave 7.3b canonical EOPT patterns for teammates) |
 | RFC-007 | informs (Wave 7.4 LruTtlMap CB pattern referenced by Teammate D) |
-| EVID-XXX (next) | informs (Wave 8.1 ship evidence)
-
+| EVID-028 | informs (Wave 8.1 ship evidence) |
+| EVID-029 | informs (Wave 8.2 audit findings — Docs#9 drift flagged here) |
+| RFC-010 / EVID-030 | informs (Wave 8.3 closure that fixed this drift) |

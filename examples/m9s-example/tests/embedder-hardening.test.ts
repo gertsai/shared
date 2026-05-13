@@ -120,6 +120,36 @@ describe('Wave 8.1 — Ollama embedder hardening', () => {
     }
   });
 
+  it('uses injected manager when provided, bypassing the lazy Map (Wave 8.3 audit Arch#4)', async () => {
+    // Wave 8.3: the embedder accepts an optional `manager:` ctor opt that
+    // overrides the module-level per-hostname Map. This test wires a
+    // counting mock manager and asserts:
+    //   1. the mock.request is invoked exactly once for embed(['x'])
+    //   2. the embedder returns the vector the mock supplied
+    //   3. the lazy Map was NOT consulted — we do NOT call
+    //      __resetOllamaManagerForTests() before the test, and we also
+    //      do NOT stub RestRequestManager.prototype.request. Any
+    //      accidental fallback to the Map path would either fail (the
+    //      manager would try to do a real network call) or land in a
+    //      DIFFERENT request fn than our mock.
+    const mockRequest = vi.fn(async () =>
+      okJson({ embedding: [0.42, 0.43, 0.44] }),
+    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mockManager: any = { request: mockRequest };
+
+    const embedder = new OllamaEmbedder({
+      url: 'http://localhost:11434',
+      model: 'nomic-embed-text',
+      manager: mockManager as RestRequestManager,
+    });
+
+    const result = await embedder.embed(['x']);
+    expect(result).toEqual([[0.42, 0.43, 0.44]]);
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    expect(embedder.dimensions).toBe(3);
+  });
+
   it('warns on dimension drift with firstDims + thisDims in log context', async () => {
     // Two responses with different vector lengths. The second response
     // should trigger a single `log.warn('dimension drift', ...)` call.

@@ -123,3 +123,5 @@ These were flagged HIGH or below but require architectural decisions:
 R_eff impact: EVID-029 evidence on Wave 8.1 ship target (PRD-013). When linked back, PRD-013 R_eff remains 1.00 (the audit weakens by surfacing fixable issues but the underlying capability adoption was sound and the patch closed all CRIT/HIGH).
 
 
+
+
