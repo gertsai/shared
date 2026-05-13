@@ -49,6 +49,7 @@
     "@moleculer/channels": "^0.1.8",
     "@moleculer/workflows": "^0.1.2",
     "@openfga/sdk": "^0.8.1",
+    "dotenv": "^16.6.1",
     "ioredis": "^5.8.0",
     "moleculer": "^0.14.35",
     "moleculer-web": "^0.10.6",

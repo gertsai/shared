@@ -29,7 +29,7 @@
 import { RestRequestManager } from '@gertsai/rest-request-manager';
 import type { RestResponse } from '@gertsai/rest-request-manager';
 
-import { createAppLogger } from '../composition/logger';
+import { createAppLogger } from '../shared/logger';
 import {
   ErrorKind,
   RateLimitedError,

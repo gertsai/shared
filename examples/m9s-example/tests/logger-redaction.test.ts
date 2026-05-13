@@ -25,7 +25,7 @@ import {
   type LogContext,
 } from '@gertsai/logger-factory';
 
-import { createAppLogger, REDACT_KEYS } from '../src/composition/logger';
+import { createAppLogger, REDACT_KEYS } from '../src/shared/logger';
 
 interface CapturedCall {
   readonly level: LogLevel;

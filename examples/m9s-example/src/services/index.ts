@@ -21,7 +21,7 @@ import { ApiController, type BullMQConnectionOptions } from '@gertsai/api-core/m
 import { defaultSession, UserType } from '@gertsai/core';
 
 import config from '../../project.config';
-import { createAppLogger } from '../composition/logger';
+import { createAppLogger } from '../shared/logger';
 
 // Module-scoped logger (Wave 8.1) — `module: 'm9s-services'` baseContext
 // carries through every emitted line; redaction is default-on per
