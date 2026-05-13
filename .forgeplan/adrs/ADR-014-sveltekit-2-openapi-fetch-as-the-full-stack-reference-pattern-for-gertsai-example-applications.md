@@ -156,3 +156,4 @@ Trade-off: one extra package boundary. Acceptable.
 2026-05-13 (draft). To be activated alongside PRD-015 / SPEC-019 / RFC-011 / EVID-031 after Wave 9 ships.
 
 
+

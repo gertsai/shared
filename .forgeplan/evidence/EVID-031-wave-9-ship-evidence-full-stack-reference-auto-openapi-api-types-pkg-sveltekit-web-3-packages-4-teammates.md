@@ -9,6 +9,10 @@ links:
   relation: informs
 - target: RFC-011
   relation: informs
+- target: ADR-014
+  relation: informs
+- target: SPEC-019
+  relation: informs
 status: active
 title: Wave 9 ship evidence — full-stack reference (auto-OpenAPI + api-types pkg + SvelteKit web), 3 packages, 4 teammates
 ---
@@ -168,6 +172,9 @@ EVID-031 informs PRD-015. Internal evidence (own test suite + own typecheck + ow
 | 2 pre-existing e2e session-guard test failures | Pre-existing main | Wave 9.0.1 |
 | Auth UI flow, CMS admin, file upload, SSE, i18n, Storybook, error UI | PRD-016 | Wave 10 |
 | Remove `PlaceholderPaths` alias once all consumers migrate | Phase 2 backward-compat | Wave 10 |
+
+
+
 
 
 

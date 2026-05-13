@@ -4,10 +4,12 @@ id: PRD-016
 kind: prd
 last_modified_at: 2026-05-13T21:57:56.809795+00:00
 last_modified_by: claude-code/2.1.139
+links:
+- target: PRD-015
+  relation: based_on
 status: draft
 title: Wave 10 — production-grade web UI (auth UI / CMS / file upload / SSE / i18n / Storybook / error UI)
 ---
-
 
 # PRD-016: Wave 10 — production-grade web UI (auth UI / CMS / file upload / SSE / i18n / Storybook / error UI)
 
@@ -159,3 +161,4 @@ To be filled when Wave 10 sprint planning begins. PRD-016 must be expanded with 
 ## Status
 
 **DRAFT** as of 2026-05-13. Will be promoted to full PRD content (Standard or Deep depth — likely Deep given scope size) at the start of Wave 10 sprint planning. The 7 slices are captured here so they don't get lost between Wave 9 ship and Wave 10 kickoff.
+
