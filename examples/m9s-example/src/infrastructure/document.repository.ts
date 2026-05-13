@@ -94,8 +94,23 @@ export class DocumentRepository
   extends BaseEntityStorageService<DocumentMeta>
   implements IDocumentStore
 {
+  /**
+   * Memoised capability object — built once at construction time and
+   * frozen. Wave 8.2 audit Perf#2: previous implementation allocated a
+   * fresh `{ ...super.capabilities, upsert: {...} }` on every read,
+   * which `BaseEntityStorageService.upsert()` may consult on every call.
+   */
+  private readonly _capabilities: StorageCapabilities;
+
   constructor(provider: IStorageProvider<DocumentMeta>, session: Session) {
     super({ provider, session, path: 'documents' });
+    // Snapshot the base capabilities here so any future provider that
+    // computes capabilities dynamically still sees a consistent value
+    // through this repository's lifetime.
+    this._capabilities = Object.freeze({
+      ...super.capabilities,
+      upsert: Object.freeze({ supported: true, preservesCreatorAudit: true }),
+    });
   }
 
   /**
@@ -110,12 +125,12 @@ export class DocumentRepository
    * `preservesCreatorAudit: true` is therefore a contract guarantee
    * across mock and real-infra modes — it lets
    * `BaseEntityStorageService.upsert()` take the 1-RTT fast path.
+   *
+   * Wave 8.2 audit Perf#2: getter returns the frozen `_capabilities`
+   * computed in the constructor (no per-read allocation).
    */
   override get capabilities(): StorageCapabilities {
-    return {
-      ...super.capabilities,
-      upsert: { supported: true, preservesCreatorAudit: true },
-    };
+    return this._capabilities;
   }
 
   /**
