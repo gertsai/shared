@@ -42,12 +42,24 @@
 // 1. Side-effect: register all domain controllers + lifecycle handlers.
 import './services';
 
-import { ApiController } from '@gertsai/api-core/moleculer';
+import { ApiController, createOpenApiService } from '@gertsai/api-core/moleculer';
 
 import config from '../project.config';
 import brokerConfig from '../moleculer.config';
 import { createAppLogger } from './shared/logger';
 import ApiService from './mol-services/api.service';
+// Wave 9 PRD-015 / SPEC-019: hand-curated OpenAPI 3.1 spec wired into
+// the broker as a Moleculer service via `createOpenApiService(schema)`.
+// The service registers `GET /schema.json` + `GET /schema.local.json`
+// + a broker-callable `schema` action (for `aggregateSchema()` merges
+// across multi-node deployments). HTTP route exposure is bound by the
+// api-gateway route whitelist (api.service.ts) — currently `v1.**`,
+// so the openapi (`v2`) service is reachable via broker.call but not
+// auto-aliased on `/openapi/schema.json` yet. Full HTTP wiring lands
+// alongside Teammate B's `m9s-example-api-types` generator package in
+// the same wave; this teammate's slice ships the broker-side service +
+// the canonical schema source so the wiring contract is stable.
+import { buildOpenApiSchema } from './openapi';
 // Sprint 3.1 §W-7: the `ingest.process` workflow is now registered onto
 // the `v1.ingest` controller via `setWorkflows(...)` in
 // `services/ingest/lifecycle.ts` (api-core attaches it to the synthesized
@@ -133,9 +145,19 @@ async function main(): Promise<void> {
     log.info('workers enabled', { concurrency: config.WORKER_CONCURRENCY });
   }
 
+  // Wave 9: build the hand-curated OpenAPI 3.1 document and pass it to
+  // `createOpenApiService(schema)`. The schema literal is structurally
+  // compatible with `OpenApiV3_1.IDocument` (from `@samchon/openapi`,
+  // transitively required via `@gertsai/api-core`); we deliberately
+  // do not import the type here to avoid pulling a transitive dep
+  // into the m9s-example surface.
+  const openApiService = createOpenApiService(
+    buildOpenApiSchema() as Parameters<typeof createOpenApiService>[0],
+  );
+
   await ApiController.Start({
     brokerConfig,
-    services: [ApiService, DocumentEventsChannelService],
+    services: [ApiService, DocumentEventsChannelService, openApiService],
     repl: replEnabled,
     workersEnabled,
     ...(enabledServices !== undefined && { enabledServices }),

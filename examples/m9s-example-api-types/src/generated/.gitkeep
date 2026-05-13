@@ -1,0 +1,4 @@
+# Placeholder — populated by `pnpm generate:openapi` (Teammate B in Wave 9).
+# Files emitted here:
+#   - openapi-schema.d.ts  (TypeScript `paths` type for openapi-fetch)
+#   - openapi.json          (Raw OpenAPI 3.1 spec snapshot for tooling)

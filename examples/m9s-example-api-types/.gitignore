@@ -1,0 +1,8 @@
+# Build artifacts
+dist/
+node_modules/
+*.tsbuildinfo
+
+# Env
+.env
+.env.local
