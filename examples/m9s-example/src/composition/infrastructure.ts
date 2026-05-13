@@ -36,7 +36,7 @@ import { InMemoryStorageProvider } from '@gertsai/entity-storage';
 import { RestRequestManager } from '@gertsai/rest-request-manager';
 import { Session } from '@gertsai/session';
 
-import { createAppLogger } from './logger';
+import { createAppLogger } from '../shared/logger';
 import { DocumentRepository } from '../infrastructure/document.repository';
 import type { DocumentMeta as MemoryDocumentMeta } from '../infrastructure/document.repository';
 import { MemoryVectorStore } from '../infrastructure/memory-vector.store';

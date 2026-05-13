@@ -45,7 +45,7 @@ import pLimit from 'p-limit';
 import { RestRequestManager } from '@gertsai/rest-request-manager';
 import type { RestResponse } from '@gertsai/rest-request-manager';
 
-import { createAppLogger } from '../composition/logger.js';
+import { createAppLogger } from '../shared/logger';
 import { UpstreamFailureError, isAppError } from '@gertsai/errors';
 import type { IEmbedder } from '../domain/ports/IEmbedder';
 

@@ -46,7 +46,7 @@ import { ApiController } from '@gertsai/api-core/moleculer';
 
 import config from '../project.config';
 import brokerConfig from '../moleculer.config';
-import { createAppLogger } from './composition/logger.js';
+import { createAppLogger } from './shared/logger';
 import ApiService from './mol-services/api.service';
 // Sprint 3.1 §W-7: the `ingest.process` workflow is now registered onto
 // the `v1.ingest` controller via `setWorkflows(...)` in
