@@ -128,6 +128,9 @@ importers:
       nats:
         specifier: ^2.29.3
         version: 2.29.3
+      p-limit:
+        specifier: ^3.1.0
+        version: 3.1.0
       pg:
         specifier: ^8.13.1
         version: 8.20.0
@@ -159,6 +162,9 @@ importers:
       ts-patch:
         specifier: ^3.3.0
         version: 3.3.0
+      tsx:
+        specifier: ^4.19.0
+        version: 4.21.0
       typescript:
         specifier: ^5.9.0
         version: 5.9.3

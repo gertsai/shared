@@ -4,7 +4,9 @@
  *
  * Asserts the canonical contract of the m9s-example error facade after
  * the legacy `PermissionDeniedError` class was deleted in favour of the
- * `@gertsai/errors` taxonomy (re-exported via `src/composition/errors.ts`).
+ * `@gertsai/errors` taxonomy. Wave 8.3 split the facade into two modules:
+ *   - `src/shared/errors.ts` — neutral kernel (re-exports + `permissionDenied`)
+ *   - `src/composition/errors.ts` — HTTP-boundary scrubber (`appErrorToHttpResponse`)
  *
  * What's covered:
  *   1. `permissionDenied()` returns a `ForbiddenError` with the legacy
@@ -24,8 +26,8 @@ import {
   ForbiddenError,
   ErrorKind,
   isAppError,
-  appErrorToHttpResponse,
-} from '../src/composition/errors.js';
+} from '../src/shared/errors.js';
+import { appErrorToHttpResponse } from '../src/composition/errors.js';
 
 describe('m9s-example error taxonomy (Wave 8.1)', () => {
   it('permissionDenied() returns a ForbiddenError with legacy message + details shape', () => {

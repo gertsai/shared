@@ -41,11 +41,12 @@
  * directly. The composition root in `src/composition/infrastructure.ts`
  * is the only place that constructs it.
  */
+import pLimit from 'p-limit';
 import { RestRequestManager } from '@gertsai/rest-request-manager';
 import type { RestResponse } from '@gertsai/rest-request-manager';
 
 import { createAppLogger } from '../composition/logger.js';
-import { UpstreamFailureError, isAppError } from '../composition/errors.js';
+import { UpstreamFailureError, isAppError } from '@gertsai/errors';
 import type { IEmbedder } from '../domain/ports/IEmbedder';
 
 const log = createAppLogger('ollama-embedder');
@@ -60,6 +61,21 @@ export interface OllamaEmbedderOptions {
    * fast but a cold model load on the first call can take a while.
    */
   readonly timeoutMs?: number;
+  /**
+   * Wave 8.3 audit Arch#4 — optional injected {@link RestRequestManager}.
+   *
+   * When provided, the embedder routes ALL HTTP traffic through this
+   * instance, bypassing the module-level lazy per-hostname Map. The
+   * composition root builds a configured manager (retry + rate-limit +
+   * circuit-breaker + SSRF allowlist scoped to the parsed URL hostname)
+   * and injects it here, so the embedder no longer reaches into
+   * environment-driven globals for its transport policy.
+   *
+   * When absent, the embedder falls back to the existing per-hostname
+   * lazy Map — preserving backwards compatibility for callers that have
+   * not yet migrated to constructor-injection.
+   */
+  readonly manager?: RestRequestManager;
 }
 
 interface OllamaEmbeddingsResponse {
@@ -89,6 +105,21 @@ function parseBurst(): number {
 }
 
 /**
+ * Wave 8.3 audit Perf#1 — bounded concurrency parser for `embed()`.
+ *
+ * Default 4 matches a warm `nomic-embed-text` model on commodity hardware
+ * (each call ≈10–80ms, so 4 in flight saturates one model worker without
+ * fighting). Raise via `EMBEDDER_CONCURRENCY` for batched workloads with
+ * low per-call latency; lower for cold-start scenarios where parallel
+ * calls would otherwise fight for model load.
+ */
+function parseConcurrency(): number {
+  const raw = process.env['EMBEDDER_CONCURRENCY'];
+  const parsed = raw === undefined ? NaN : Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 4;
+}
+
+/**
  * Per-hostname lazy manager cache. One {@link RestRequestManager} per
  * distinct Ollama daemon host — circuit-breaker / rate-limiter state is
  * shared across all OllamaEmbedder instances pointing at the same host.
@@ -98,9 +129,17 @@ function parseBurst(): number {
  * so even with `allowLocalhost: true / allowPrivateNetworks: true`
  * the embedder can only reach the configured target host — not arbitrary
  * RFC1918 / loopback services like AWS metadata, internal Consul, etc.
+ *
+ * Wave 8.3 audit Arch#4: this Map is now a FALLBACK for legacy callers
+ * that don't pass `opts.manager`. The composition root is expected to
+ * inject a fully-configured manager so this Map stays empty in the
+ * normal startup path.
  */
 const _managers = new Map<string, RestRequestManager>();
-function getManager(hostname: string): RestRequestManager {
+function getManager(hostname: string, override?: RestRequestManager): RestRequestManager {
+  // Wave 8.3 audit Arch#4 — DI ctor opt wins over the lazy Map. This is
+  // the path exercised by the production composition root.
+  if (override !== undefined) return override;
   let mgr = _managers.get(hostname);
   if (mgr === undefined) {
     mgr = new RestRequestManager({
@@ -182,11 +221,18 @@ export class OllamaEmbedder implements IEmbedder {
     // Short-circuits before any manager/network setup, and prevents a
     // future post-loop access of `out[0]!` from crashing on the empty case.
     if (texts.length === 0) return [];
-    const out: number[][] = [];
-    for (const text of texts) {
-      out.push(await this.embedOne(text));
-    }
-    return out;
+
+    // Wave 8.3 audit Perf#1 — bounded parallelism replaces the previous
+    // serial `for ... await embedOne(text)` loop. Ollama's `/api/embeddings`
+    // is per-prompt, but the daemon happily services several in flight
+    // (one model worker per process can interleave CPU/GPU). `p-limit`
+    // guarantees that the i-th promise in the returned array resolves to
+    // the embedding of `texts[i]`, so order is preserved without an
+    // explicit `index` field round-trip.
+    const limit = pLimit(parseConcurrency());
+    return Promise.all(
+      texts.map((text) => limit(() => this.embedOne(text))),
+    );
   }
 
   private async embedOne(prompt: string): Promise<number[]> {
@@ -195,7 +241,7 @@ export class OllamaEmbedder implements IEmbedder {
 
     let res: RestResponse<unknown>;
     try {
-      res = await getManager(this._hostname).request({
+      res = await getManager(this._hostname, this.opts.manager).request({
         url,
         method: 'POST',
         headers: { 'content-type': 'application/json' },

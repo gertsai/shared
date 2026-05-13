@@ -625,6 +625,175 @@ for the matching constraints.
   - `tests/wave5-integration.test.ts` — exercises the four packages end to
     end (resolver + RequestContext + Session + assertions).
 
+## Wave 8.1+ — composition facade + hardened HTTP modernisation
+
+Waves 8.1–8.3 modernise this example's HTTP plumbing and error surface so
+adopters get a copy-paste-ready production pattern for logging, error
+translation, and outbound HTTP — without bleeding sensitive context into
+clients or external services.
+
+### Composition facade pattern
+
+Three small files at the composition seam keep cross-cutting policy in one
+place instead of scattered across modules:
+
+- `src/composition/logger.ts` (Wave 8.1) — module-scoped logger factory
+  with project-wide `REDACT_KEYS` (auth tokens, DB URLs, session cookies)
+  and a `LOG_LEVEL` env override. Returns a `consoleBackend`-backed
+  logger via `@gertsai/logger-factory`.
+- `src/shared/errors.ts` (Wave 8.3) — neutral error kernel that re-exports
+  the `@gertsai/errors` taxonomy and exposes the `permissionDenied()`
+  factory. Importable from ALL layers (domain, application, infrastructure,
+  services) without creating a hex inversion.
+- `src/composition/errors.ts` (Wave 8.1 → 8.3) — HTTP-boundary scrubber
+  ONLY. Wraps `appErrorToHttpResponse` from `@gertsai/errors/http` and
+  strips `userId` / `url` / `originalKind` from outbound RFC 9457
+  ProblemDetails (CWE-209 protection per Wave 8.2 audit Sec#3). Server-side
+  logs are unaffected — only the wire body is sanitised.
+
+Why a facade instead of importing packages directly? Centralises log level,
+redaction keys, backend choice, and HTTP boundary policy so adopters do
+not drift across modules.
+
+Canonical import lines:
+
+```ts
+// Application layer — imports from shared (the neutral kernel)
+import { permissionDenied, ForbiddenError } from '../shared/errors.js';
+
+// HTTP boundary — imports from composition (the wiring)
+import { appErrorToHttpResponse } from '../composition/errors.js';
+
+// Module logging — imports from composition (the wiring)
+import { createAppLogger } from '../composition/logger.js';
+```
+
+### RestRequestManager-fronted HTTP
+
+Both embedders (`OllamaEmbedder`, `OpenAIEmbedder`) call out via
+`@gertsai/rest-request-manager` instead of `httpCaller` directly:
+
+- Wave 8.1: replaced direct `httpCaller` calls with
+  `RestRequestManager.request()`, gaining retry + token-bucket rate-limit
+  + LRU circuit-breaker.
+- Wave 8.2: `security?: FetchSecurityConfig` plumbing extension on
+  `@gertsai/rest-request-manager` (audit Sec#1) — `allowedHostnames:
+  [hostname]` binding per parsed `EMBEDDER_URL` closes CWE-918 (SSRF).
+- Wave 8.3: composition root constructs ONE `RestRequestManager` per
+  embedder type with full SSRF config and injects via an optional
+  `manager?:` ctor opt. Embedders fall back to a per-hostname Map when no
+  manager is injected (backwards-compatible).
+
+Tunable knobs:
+
+| Env var | Default | Notes |
+|---|---|---|
+| `EMBEDDER_RATE_LIMIT_RPS` | 10 (Ollama) / 1 (OpenAI) | Token-bucket rps |
+| `EMBEDDER_BURST` | 20 (Ollama) / 5 (OpenAI) | Bucket size |
+| `EMBEDDER_CONCURRENCY` | 4 | Bounded parallel `embed()` — Ollama only (OpenAI batches) |
+| `LOG_LEVEL` | `info` | `trace`, `debug`, `info`, `warn`, `error`, `fatal` |
+
+Defaults differ by provider: Ollama is local/unmetered (high rps + burst),
+OpenAI is paid/metered (conservative rps + burst).
+
+### Audit closure history (Wave 8.2 + 8.3)
+
+After Wave 8.1 shipped, a multi-expert audit ran in Wave 8.2 (six
+reviewers — Logic, Architecture, Security, Tests, Performance,
+Documentation). It surfaced 57 findings (1 CRIT + 14 HIGH + 25 MED + 17
+LOW). Wave 8.2 closed 1 CRIT + 12 HIGH inline (test-config divergence,
+SSRF allowlist, PII scrub at HTTP boundary, REDACT_KEYS gaps, capabilities
+allocation, brittle message match, etc.). Wave 8.3 closes the 5 deferred
+items: hex inversion (`shared/errors.ts` relocation), embedder DI
+(composition-root injection), bounded concurrency (`EMBEDDER_CONCURRENCY`),
+this README section, and RFC-009 signature drift.
+
+Full inventory + verdict: [EVID-029](https://github.com/gertsai/shared/blob/main/.forgeplan/evidence/EVID-029-code-audit-audit-2026-05-12-215927-verdict-fail-1-crit-12-high-wave-8-2-patch-closes-all-crit-high.md).
+Wave 8.3 ship evidence: [EVID-030](https://github.com/gertsai/shared/blob/main/.forgeplan/evidence/) (created post-activation).
+
+### Adoption checklist for downstream apps
+
+**Copy verbatim** (patterns work as-is):
+
+- `src/composition/logger.ts` factory + `REDACT_KEYS` extension shape
+- `src/composition/errors.ts` HTTP-boundary scrubber (the
+  `appErrorToHttpResponse` wrapper)
+- `src/shared/errors.ts` neutral kernel re-export pattern
+- Embedder ctor `manager?:` opt + composition-root injection
+
+**Copy with tuning** (defaults are demo-grade):
+
+- `EMBEDDER_RATE_LIMIT_RPS` / `EMBEDDER_BURST` — match upstream's metering
+  posture
+- `EMBEDDER_CONCURRENCY` — match worker hardware + cold-start tolerance
+- `REDACT_KEYS` — extend with project-specific sensitive keys
+- `allowedHostnames` — narrow per actual deployment
+
+**Do NOT copy** (intentionally demo-specific):
+
+- `STORAGE_PROVIDER=memory` mock fallback (production uses real Postgres)
+- `AUTH_GATE=allow-all` (production wires OpenFGA)
+- `MockEmbedder` (use Ollama or OpenAI in production)
+
+### Migration recipe — `PermissionDeniedError` → modern taxonomy
+
+Throw site (use case):
+
+```ts
+// Before (≤ Wave 8.0):
+import { PermissionDeniedError } from './errors/permission-denied.error';
+throw new PermissionDeniedError(userId, 'ingest', docId);
+
+// After (Wave 8.1+):
+import { permissionDenied } from '../shared/errors.js';
+throw permissionDenied(userId, 'ingest', docId);
+```
+
+Catch site (inbound adapter / action):
+
+```ts
+// Before:
+} catch (err) {
+  if (err instanceof PermissionDeniedError) {
+    return APIError(403, err.message);
+  }
+}
+
+// After:
+import { ForbiddenError } from '../../../../shared/errors.js';
+} catch (err) {
+  if (err instanceof ForbiddenError) {
+    return APIError(403, err.message);
+  }
+  // OR: discriminated union
+  if (isAppError(err) && err.kind === ErrorKind.FORBIDDEN) { /* ... */ }
+}
+```
+
+HTTP boundary (one-time wiring per app):
+
+```ts
+import { appErrorToHttpResponse } from './composition/errors.js';
+const { status, body } = appErrorToHttpResponse(err);
+// body is RFC 9457 ProblemDetails with userId/url/originalKind scrubbed (Wave 8.2 Sec#3).
+```
+
+### Cross-references
+
+- [ADR-011](https://github.com/gertsai/shared/blob/main/.forgeplan/adrs/ADR-011-sprint-3-11-production-grade-m9s-example-storage-authorization-async-lint-migration-choices.md)
+  — Sprint 3.11 production-grade reference baseline.
+- [ADR-013](https://github.com/gertsai/shared/blob/main/.forgeplan/adrs/ADR-013-tri-state-storage-capability-flag-boolean-to-structured-object-reshape-wave-7-2.md)
+  — Wave 7.2 tri-state storage capability flag.
+- [PRD-013](https://github.com/gertsai/shared/blob/main/.forgeplan/prds/PRD-013-m9s-example-modernization-to-wave-5-6-7-reference-baseline.md)
+  / [RFC-009](https://github.com/gertsai/shared/blob/main/.forgeplan/rfcs/RFC-009-wave-8-1-m9s-example-modernization-implementation-strategy.md)
+  / [EVID-028](https://github.com/gertsai/shared/blob/main/.forgeplan/evidence/EVID-028-wave-8-1-ship-evidence-m9s-example-modernization-58-tests-0-regressions-195-loc-net.md)
+  — Wave 8.1 ship.
+- [EVID-029](https://github.com/gertsai/shared/blob/main/.forgeplan/evidence/EVID-029-code-audit-audit-2026-05-12-215927-verdict-fail-1-crit-12-high-wave-8-2-patch-closes-all-crit-high.md)
+  — Wave 8.2 audit + closure inventory.
+- [PRD-014](https://github.com/gertsai/shared/blob/main/.forgeplan/prds/PRD-014-wave-8-3-audit-deferred-closure-hex-inversion-embedder-di-concurrency-readme-rfc-009-drift.md)
+  / [RFC-010](https://github.com/gertsai/shared/blob/main/.forgeplan/rfcs/RFC-010-wave-8-3-strategy-chain-on-8-2-3-parallel-teammates-with-disjoint-ownership-shared-errors-kernel-relocation.md)
+  / EVID-030 — Wave 8.3 ship (EVID-030 link added post-activation).
+
 ## Production Setup
 
 Sprint 3.11 elevates this example from "mock-by-default" demo to a **real-infra
