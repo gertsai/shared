@@ -118,30 +118,27 @@ export function createDocumentsApiService() {
             authorization: false,
           },
           {
-            // Placeholder: serves a static OpenAPI shell. Replace once
-            // typia.json.schema<OpenApiMapper<...>>() is wired in (the
-            // pipeline app does this via `@gerts/api-types`, which is not
-            // yet extracted into this monorepo).
+            // Wave 9.0.1: route the broker-registered `v2.openapi.*` service
+            // over HTTP via autoAliases. Replaces the static placeholder.
+            // `createOpenApiService` (registered in src/index.ts) declares:
+            //   - `v2.openapi.schema.aggregated` with rest: 'GET /schema.json'
+            //   - `v2.openapi.schema.local`      with rest: 'GET /schema.local.json'
+            // moleculer-web `autoAliases: true` picks up the rest field and
+            // maps both into this `/openapi/*` route prefix.
+            //
+            // Full typia auto-derive (replacing the hand-curated
+            // src/openapi/schema.ts literal) is deferred to Wave 9.0.2 —
+            // it requires removing `: any` annotations from every action
+            // export so typia can introspect their handler param/response
+            // shapes (scope creep beyond Wave 9.0.1 maintenance).
             path: '/openapi',
-            aliases: {
-              'GET /'(_req: unknown, res: { setHeader: (k: string, v: string) => void; end: (b: string) => void }) {
-                res.setHeader('content-type', 'application/json');
-                res.end(
-                  JSON.stringify({
-                    openapi: '3.1.0',
-                    info: { title: 'm9s-example', version: '0.0.1' },
-                    paths: {
-                      '/api/v1/ingest/document': {
-                        post: { summary: 'Ingest a document', responses: { 201: { description: 'Created' } } },
-                      },
-                      '/api/v1/search/query': {
-                        post: { summary: 'Search documents', responses: { 200: { description: 'OK' } } },
-                      },
-                    },
-                  }),
-                );
-              },
+            autoAliases: true,
+            bodyParsers: {
+              json: { strict: false, limit: '1MB' },
             },
+            whitelist: ['v2.openapi.**'],
+            authentication: false,
+            authorization: false,
           },
         ],
       },

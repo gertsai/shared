@@ -152,6 +152,36 @@ export interface Wave5ContextSnapshot {
 export function tryGetRequestContextFromCtx(
   ctx: Context,
 ): Wave5ContextSnapshot {
+  // Wave 9.0.1 test seam — `broker.call(..., { meta: { testSession, headers } })`
+  // bypasses the HTTP sessionMiddleware pipeline (direct broker call, no
+  // Express path). e2e tests use this to drive action handlers with
+  // pre-composed sessions. When `meta.testSession` is set, treat it as the
+  // session-of-record and pull `expectedTenantId` from the same headers the
+  // sessionMiddleware would have processed.
+  //
+  // Production code path (Wave 5 sessionMiddleware composed at HTTP entry)
+  // never sets `meta.testSession`, so this branch is a no-op in real
+  // deployments. Documented as test-only in the meta shape.
+  const meta = ctx.meta as
+    | {
+        testSession?: unknown;
+        headers?: Record<string, string | undefined>;
+      }
+    | undefined;
+  if (
+    meta !== undefined &&
+    meta.testSession !== null &&
+    typeof meta.testSession === 'object' &&
+    meta.testSession !== undefined
+  ) {
+    const headerTenantId = meta.headers?.['x-tenant-id'];
+    return {
+      session: meta.testSession as Wave5ContextSnapshot['session'],
+      expectedTenantId:
+        typeof headerTenantId === 'string' ? headerTenantId : undefined,
+    };
+  }
+
   const locals = (ctx as unknown as { locals?: Record<string, unknown> })
     .locals;
   const value = locals?.[REQUEST_CONTEXT_LOCALS_KEY];

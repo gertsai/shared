@@ -22,6 +22,8 @@ import { APIError, ResponseCode } from '@gertsai/api-core/contracts';
 import {
   AuthenticationRequiredError,
   TenantScopeViolationError,
+  assertAuthenticated,
+  assertSessionInTenant,
 } from '@gertsai/session-guard';
 import typia from 'typia';
 
@@ -81,6 +83,28 @@ export const ingestDocument: any = controller.register('document', {
     });
 
     try {
+      // Wave 9.0.1 fix — assert session-guard invariants BEFORE deciding the
+      // queue vs inline path. Pre-fix, the action enqueued first and the
+      // worker ran assertions later, so an unauthenticated/wrong-tenant
+      // request still received `mode: 'queued'` success (silent acceptance)
+      // and the job failed downstream where the caller could no longer see
+      // the rejection. Asserting early surfaces 401/403 synchronously on the
+      // request that triggered it — the correct REST semantic.
+      //
+      // Sprint 3.10 Addendum 2 — wire Wave 5 RequestContext through to use
+      // case. tryGetRequestContextFromCtx returns `{ session, expectedTenantId
+      // }` populated when sessionMiddleware composed an authenticated
+      // RequestContext (or when an e2e test passed `meta.testSession` —
+      // Wave 9.0.1 test seam). Use case treats the fields as additive
+      // optional per ADR-010 I-2/I-3 (16-test regression invariant).
+      const { session, expectedTenantId } = tryGetRequestContextFromCtx(ctx);
+      if (session !== undefined) {
+        assertAuthenticated(session);
+        if (expectedTenantId !== undefined) {
+          assertSessionInTenant(session, expectedTenantId);
+        }
+      }
+
       // Pipeline-style: when api-core has queue config, the service has
       // `addJob` injected automatically. Action just enqueues — the worker
       // registered in `queues/ingest-chunk.worker.ts` runs asynchronously.
@@ -101,17 +125,6 @@ export const ingestDocument: any = controller.register('document', {
         logger.info('[v1.ingest.document] enqueued', response);
         return respond(response, 'Document accepted for ingestion', ResponseCode.SUCCESS_CREATED);
       }
-
-      // Inline fallback — no Redis configured. Same code path as the
-      // worker handler, just executed in the request thread.
-      //
-      // Sprint 3.10 Addendum 2 — wire Wave 5 RequestContext through to use
-      // case. tryGetRequestContextFromCtx returns `{ session, expectedTenantId
-      // }` populated when sessionMiddleware composed an authenticated
-      // RequestContext, or both undefined for anonymous / pre-Wave-5 callers.
-      // Use case treats the fields as additive optional per ADR-010 I-2/I-3
-      // (16-test regression invariant).
-      const { session, expectedTenantId } = tryGetRequestContextFromCtx(ctx);
 
       const { chunkCount } = await service.useCase.execute({
         docId,
