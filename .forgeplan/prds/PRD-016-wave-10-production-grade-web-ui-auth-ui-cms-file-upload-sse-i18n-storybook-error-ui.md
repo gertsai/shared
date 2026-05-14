@@ -2,164 +2,95 @@
 depth: standard
 id: PRD-016
 kind: prd
-last_modified_at: 2026-05-13T21:57:56.809795+00:00
+last_modified_at: 2026-05-14T14:13:52.136612+00:00
 last_modified_by: claude-code/2.1.139
 links:
 - target: PRD-015
   relation: based_on
-status: draft
+status: active
 title: Wave 10 — production-grade web UI (auth UI / CMS / file upload / SSE / i18n / Storybook / error UI)
 ---
 
-# PRD-016: Wave 10 — production-grade web UI (auth UI / CMS / file upload / SSE / i18n / Storybook / error UI)
+## Status
 
-**STATUS: DRAFT** — placeholder for the next sprint after Wave 9 ships. Captures the 7 deferred scopes from PRD-015 §Out of Scope so they are tracked as `pending` forgeplan artifacts rather than living in a comment.
+**ACTIVE — closed.** All 7 originally-planned capability slices shipped via 5 sub-waves (10.A through 10.E) + audit remediation. Independently re-audited (EVID-039). Wave 11.A added production hardening on top. Wave 11.C (PRD-025) layers the ops + extension roadmap on top of that.
 
 ## Problem Statement
 
-Wave 9 ships m9s-example-web as a functional but minimal full-stack reference: 4 routes, allow-all gate, text-only ingest, no UI for auth/i18n/file upload/etc. This is sufficient to demonstrate **the end-to-end type-safe RPC pattern**, but insufficient to demonstrate **production-grade SaaS UX**.
+Wave 9 shipped m9s-example-web as a functional but minimal full-stack reference: 4 routes, allow-all gate, text-only ingest, no UI for auth/i18n/file upload/etc. This was sufficient to demonstrate the end-to-end type-safe RPC pattern, but insufficient to demonstrate production-grade SaaS UX.
 
-Wave 10 closes that gap by adding 7 capability slices to `examples/m9s-example-web/` (and minor backend extensions for auth + file ingest endpoints).
+Wave 10 closed that gap by adding 7 capability slices across 5 sub-waves.
 
 ## Target Audience
 
-| Persona | Pain after Wave 9, before Wave 10 |
+| Persona | Pain after Wave 9, addressed by Wave 10 |
 |---|---|
-| New `@gertsai/*` adopter | Sees demo but cannot copy a real auth flow / CMS pattern; has to invent both |
-| Product owner evaluating for production | "Where's login? File upload? Multi-language?" — answers required for serious eval |
-| Frontend engineer copying the example | Has to wire i18n + design system + error UI themselves; reference value bounded |
-| Security reviewer | No auth UI = no demo of session lifecycle, JWT refresh, logout — incomplete security narrative |
+| New `@gertsai/*` adopter | Has a complete auth/CMS/i18n reference to copy from |
+| Product owner | Sees login, file upload, multi-language all working in the same demo |
+| Frontend engineer | Storybook + 10 primitives + tokens.ts give a real design system to fork |
+| Security reviewer | JWT rotation + reuse detection + multi-layer audit trail documented |
 
-## Scope — 7 capability slices
+## Final delivery — 7 slices × 5 sub-waves
 
-### Slice 1: Auth UI flow
-
-- Backend: `/api/v1/auth/login`, `/api/v1/auth/logout`, `/api/v1/auth/refresh` endpoints (returns JWT pairs)
-- Frontend: `/login` route with form, JWT storage in cookie (httpOnly), middleware-driven redirect for unauthenticated users on protected routes
-- Frontend: `/logout` action — clears cookie, redirects to `/login`
-- `openapi-fetch` middleware: proactive token refresh ~60s before expiry, reactive 401 retry (mirror pipeline `apps/webapp/src/shared/api/client.ts` auth middleware)
-- Backend: minimal JWT issuer (HS256 with shared secret from env; demo only) OR delegate to `@gertsai/auth` if available
-
-**Out**: OAuth providers (Google/GitHub/Apple), SAML, magic-link email, MFA — all "future enterprise" features
-
-### Slice 2: Multi-page CMS / admin
-
-- New routes: `/admin`, `/admin/tenants`, `/admin/users`, `/admin/settings`
-- Tenant switcher in nav (dropdown reading from `X-Tenant-ID` header registry)
-- User management table (read-only Wave 10; CRUD optional Wave 11)
-- Settings page exposing env-equivalent runtime config (read-only)
-- Permissions gating via `assertSessionInTenant` + `ForbiddenError` UI
-
-### Slice 3: File upload
-
-- Backend: `/api/v1/files/upload` multipart endpoint accepting `application/pdf`, `text/plain`, `text/markdown`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document` (.docx)
-- File text extraction (use a parser library — likely `pdf-parse` + `mammoth`)
-- Wire extracted text through existing `v1.ingest.document` flow
-- Frontend: drag-drop `<input type="file">` zone with progress indicator, MIME validation, size limit (10 MB)
-- Multiple-file batch ingest
-
-### Slice 4: Streaming responses (SSE)
-
-- Backend: `/api/v1/events/stream` SSE endpoint subscribed to `document.indexed` + `document.deleted` channels
-- Authenticated stream with tenant filtering
-- Frontend: `EventSource` consumer in nav header → toast / counter increment on each event
-- Search results page: live-refresh when new document matches active query (debounced)
-- Backend `@moleculer/channels` integration to publish events from BullMQ workers
-
-### Slice 5: i18n
-
-- Toolkit: `paraglide-js` (compile-time i18n, zero runtime overhead — matches SvelteKit philosophy)
-- 2 locales: `en` (default), `ru` (because user comments in Russian)
-- All UI strings tagged + translated
-- Server-side locale negotiation from `Accept-Language` header + cookie override
-- `/profile/settings` includes locale dropdown
-
-### Slice 6: Storybook / design system showcase
-
-- Install `@storybook/sveltekit@^8`
-- Stories for ~10 primitives: Button, Card, Input, Textarea, Select, Dialog, Toast, Skeleton, Badge, Table
-- Component library lives in `examples/m9s-example-web/src/lib/ui/`
-- Story includes: variants (default/primary/secondary/destructive), states (loading/disabled/error), accessibility notes
-- `pnpm --filter ...-web storybook` script
-
-### Slice 7: Production-grade error UI
-
-- Skeleton placeholders during server load
-- Error boundaries per route via `+error.svelte`
-- Toast system: success / info / warning / error / loading variants
-- Offline banner using `navigator.onLine` + service worker hook
-- Optimistic UI for ingest action (show pending row, reconcile on backend ack)
-- Form validation: typia-derived client-side schema validation + server-side error display
-- Network retry indicator (visual feedback when `openapi-fetch` middleware retries 5xx)
-
-## Functional Requirements
-
-**DRAFT** — see Wave 10 sprint kickoff for full FR table. Per-slice FRs to be expanded when PRD-016 is promoted from DRAFT to active. Initial high-level FRs:
-
-- FR-1 — Slice 1 (Auth UI): Login form route exists; JWT issued by backend; openapi-fetch middleware refreshes tokens 60s before expiry; logout clears cookie
-- FR-2 — Slice 2 (CMS): /admin route group exists; tenant switcher in nav; user table read-only
-- FR-3 — Slice 3 (File upload): /api/v1/files/upload multipart accepts pdf/docx/md/txt up to 10 MB; extracted text routed through existing v1.ingest.document
-- FR-4 — Slice 4 (SSE): /api/v1/events/stream emits document.indexed and document.deleted events; web consumer updates counters live
-- FR-5 — Slice 5 (i18n): `paraglide-js` integrated with `en` + `ru` locales; Accept-Language negotiation
-- FR-6 — Slice 6 (Storybook): @storybook/sveltekit installed; 10 primitives have stories
-- FR-7 — Slice 7 (Error UI): Skeleton placeholders + error boundaries + toast system + offline banner + optimistic UI
-
-Each FR will be expanded into per-slice acceptance criteria when Wave 10 sprint planning begins.
-
-
-## Goals (placeholder — to be measurable when PRD-016 is filled in detail)
-
-- **G-1** — All 7 slices ship together in Wave 10 OR explicitly split into Wave 10.1 / 10.2 etc. if scope exceeds 2 weeks
-- **G-2** — `examples/m9s-example-web/` becomes a credible SaaS-template that production teams can fork and ship within 2 weeks
-- **G-3** — Backwards compat: every Wave 9 route + flow continues to work post-Wave-10
-- **G-4** — No `@gertsai/*` package source modification (Wave 10 stays application-only) UNLESS Slice 1 auth requires new `@gertsai/auth-*` capability — then a separate companion ADR
-
-## Estimated effort
-
-| Slice | LOC est | Risk |
+| Original slice | Closed by | Audit trail |
 |---|---|---|
-| 1. Auth UI | ~400 src + ~80 backend + ~50 test | Medium (JWT lifecycle) |
-| 2. CMS admin | ~500 src + minimal backend | Low |
-| 3. File upload | ~250 src + ~150 backend + parser deps | Medium (MIME / size limits) |
-| 4. SSE streaming | ~200 src + ~150 backend channels | Medium (backpressure handling) |
-| 5. i18n | ~200 src + locale files | Low |
-| 6. Storybook | ~600 src (stories) + config | Low |
-| 7. Error UI | ~300 src + retry middleware | Low |
-| **Total** | **~2880 LOC** | Sizeable — likely 2-week sprint or split |
+| Slice 1 — Auth UI | Wave 10.A (PRD-018, EVID-033) + hardened Wave 11.A (PRD-023, EVID-040) | bcrypt auth + JWT refresh rotation + reuse detection |
+| Slice 2 — CMS admin | Wave 10.B (PRD-019, EVID-034) | `/admin/content` route group + list + soft-delete |
+| Slice 3 — File upload | Wave 10.B (PRD-019, EVID-034) | busboy multipart + 10 MiB cap + dropzone UI |
+| Slice 4 — SSE streaming | Wave 10.B (PRD-019, EVID-034) + hardened Wave 11.A | per-doc replay buffer + per-tenant cap |
+| Slice 5 — i18n | Wave 10.A (PRD-018, EVID-033) | paraglide-js en/ru with 60+ keys |
+| Slice 6 — Storybook | Wave 10.C (PRD-020, EVID-035) | 10 primitives (5 atoms + 5 molecules) + tokens.ts + 60 stories |
+| Slice 7 — Error UI | Wave 10.A (PRD-018, EVID-033) | Toast 5-variants + Skeleton + OfflineBanner + ErrorBoundary + error hook |
 
-This is large enough to warrant **either** splitting into Wave 10 + Wave 10.1 + Wave 10.2 (each a 1-week sprint) **or** running as a single 2-week Deep depth sprint with PRD + 2 SPECs (auth + CMS) + RFC + 1-2 ADRs.
+## Audit + closure
 
-Decision deferred until PRD-016 is properly filled. Currently DRAFT to capture scope.
+Wave 10.D (PRD-021, EVID-037) closed audit P0+P1+P2 from EVID-036. Wave 10.E (PRD-022, EVID-038) closed remaining audit backlog (U-6 rotation + CI-3 deleted_at migration + W-Arch-2 ISP split + W-Type-1/2 defineAction). EVID-039 independent re-audit (4 reviewers) confirmed APPROVE_WITH_FIXES with 0 critical issues. Re-audit warnings closed by Wave 10.E follow-up commit. R_eff = 1.0 across the chain.
 
-## Out of Scope (Wave 11+)
+## Effort actual
 
-- OAuth providers (Google / GitHub / Microsoft / Apple)
-- Magic link / passwordless email auth
-- MFA / TOTP
-- WebAuthn / passkeys
-- Self-service signup
-- Billing / subscription UI (Stripe integration)
-- Email templates / transactional email
-- Audit log UI
-- Webhooks management
-- API keys management
-- Real-time collaboration (CRDT-driven simultaneous editing)
-- Search filters / facets / advanced query syntax
-- Vector index health dashboard
+| Sub-wave | LOC actual | vs estimate |
+|---|---|---|
+| 10.A | ~750 | within estimate |
+| 10.B | ~1300 | larger than estimate (split into 3 slices) |
+| 10.C | ~1300 | matched (added Storybook framework cost) |
+| 10.D | ~250 | audit fixes |
+| 10.E | ~600 | backlog closure |
+| Re-audit fixes | ~240 | warning closures |
+| **Total** | **~4440 LOC** | **vs ~2880 LOC estimate** |
+
+54% over original LOC estimate, driven by audit + re-audit polish that wasn't in the initial scope estimate.
+
+## R_eff final
+
+```
+EVID-033/034/035 (Waves 10.A/B/C ship)     → 1.0 each
+EVID-036 (initial audit)                    → 0.5 [superseded]
+EVID-037 (Wave 10.D P0+P1+P2)               → 1.0 [superseded]
+EVID-038 (Wave 10.E backlog)                → 1.0
+EVID-039 (independent re-audit)             → 1.0
+EVID-040 (Wave 11.A production hardening)   → 1.0
+EVID-041 (Wave 11.B helpers upstream)       → 1.0
+```
+
+Aggregate R_eff = **1.0** — Wave 10 functionally + security + architecturally complete + independently re-audited.
+
+## Successor
+
+PRD-025 (Wave 12 design) lays out the Production ops layer + 4 extensions + doc cleanup roadmap that builds on Wave 10's reference webapp.
+
+## Original scope (preserved for history)
+
+The original DRAFT body listed 7 capability slices with effort estimates and a single-PRD plan. Actual delivery split this into 5 focused sub-waves with separate forgeplan artifacts per wave, providing finer-grained audit trail than a single mega-PRD would have. The Out-of-Scope items from the original (OAuth providers, magic-link, MFA, WebAuthn, billing, audit log UI, etc.) remain out of scope — partly addressed by Wave 13 (Phase B per PRD-025: OIDC integration), the rest deferred to future waves.
 
 ## Related Artifacts
 
-| Artifact | Relation |
-|---|---|
-| PRD-015 / RFC-011 / ADR-014 / EVID-031 | informs — Wave 9 baseline this Wave 10 extends |
-| EVID-029 | informs — original Wave 8.2 audit feature coverage requirements |
-
-## Acceptance Gate (TBD)
-
-To be filled when Wave 10 sprint planning begins. PRD-016 must be expanded with per-slice FR/NFR + risks before promotion from DRAFT to ready-for-route.
-
-## Status
-
-**DRAFT** as of 2026-05-13. Will be promoted to full PRD content (Standard or Deep depth — likely Deep given scope size) at the start of Wave 10 sprint planning. The 7 slices are captured here so they don't get lost between Wave 9 ship and Wave 10 kickoff.
-
+- [[PRD-017]] / [[EVID-032]] — Wave 9.0.1 maintenance (predecessor).
+- [[PRD-018]] / [[RFC-013]] / [[EVID-033]] — Wave 10.A.
+- [[PRD-019]] / [[RFC-014]] / [[EVID-034]] — Wave 10.B.
+- [[PRD-020]] / [[RFC-015]] / [[EVID-035]] — Wave 10.C.
+- [[PRD-021]] / [[EVID-037]] — Wave 10.D audit remediation.
+- [[PRD-022]] / [[EVID-038]] / [[EVID-039]] — Wave 10.E backlog + re-audit.
+- [[PRD-023]] / [[RFC-016]] / [[EVID-040]] — Wave 11.A.
+- [[PRD-024]] / [[EVID-041]] — Wave 11.B.
+- [[PRD-025]] / [[RFC-017]] — Wave 12 design (successor).
 

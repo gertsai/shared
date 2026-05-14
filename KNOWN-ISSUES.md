@@ -1,8 +1,33 @@
-# Known Issues — v0.1.0
+# Known Issues — v0.1.0 / Wave 11 closure status
 
 This file tracks issues we are aware of in the initial release. None block
 build, install, or runtime use of the documented public API. They are
 documented here for transparency and to be addressed in v0.1.x patch releases.
+
+## Closed in Waves 10-11
+
+The following items from earlier Wave 7/9 limitations are now **closed** —
+the bullets below describe what was fixed and where to read the audit trail:
+
+- ✅ **JWT_SECRET hardcoded fallback** (Wave 11.A FR-002 / EVID-040) — `DEFAULT_SECRET` constant + `M9S_ALLOW_DEMO_SECRET` env escape are deleted from both `examples/m9s-example/src/services/auth/src/jwt.ts` and `examples/m9s-example-web/src/lib/server/jwt.ts`. `getSecret()` throws unconditionally on empty `JWT_SECRET`.
+- ✅ **Open-login (any-password)** (Wave 11.A FR-001 / EVID-040) — `M9S_DEMO_AUTH=true` env gate removed; real `IUserRepo` + bcrypt verify + dummy-hash compare on unknown email (anti-enumeration CWE-204/208).
+- ✅ **In-memory refresh rotation only** (Wave 11.A FR-003 / EVID-040) — `IRotationStore` port + `RedisRotationStore` (Lua EVAL atomic consume) lands alongside `InMemoryRotationStore`. Composition root picks Redis when `REDIS_URL` set.
+- ✅ **`defineAction` local shim** (Wave 11.B / EVID-041) — upstreamed to `@gertsai/api-core/moleculer` with changeset minor bump (next release = v0.2.0).
+- ✅ **JwtClaims drift between web/backend** (Wave 11.B / EVID-041) — extracted to shared `@gertsai-examples/m9s-example-api-types` package; both consumers `import type` from there.
+- ✅ **CORS wildcard in prod** (Wave 11.A FR-005 / EVID-040) — `CORS_ALLOWED_ORIGINS` env-driven allowlist; production fail-fast on unset.
+- ✅ **Per-tenant SSE caps** (Wave 11.A FR-004 / EVID-040) — `MAX_SUBSCRIBERS_PER_TENANT = 10`, sentinel-error event on overflow.
+- ✅ **Wave 10 audit findings** (PRD-016 super-PRD via PRDs 017-022) — all P0/P1/P2 + selected P3 closed; re-audited independently (EVID-039 supports CL3, R_eff = 1.0).
+
+## Still acceptable for v0.1.0 → v0.2.0 (documented residual risk)
+
+- **In-memory rotation store is the default** when `REDIS_URL` unset — restart wipes active refresh tokens, forces re-login. Acceptable for single-process demos; production deploys MUST set `REDIS_URL` to persist tokens across restarts.
+- **2-user demo seed** in `services/auth/src/user-repo.ts` — `admin@m9s.example` / `user@m9s.example` with bcrypt-hashed passwords from `DEMO_ADMIN_PASSWORD` / `DEMO_USER_PASSWORD` env. Replace `InMemoryUserRepo` with a real adapter (OIDC, Prisma, etc.) for any non-demo deploy. The IUserRepo port stays; only the adapter swaps.
+- **No auto-migrate on boot** — `pnpm migrate:up` is manual. Wave 12 (Phase A per PRD-025) adds `AUTO_MIGRATE=true` env opt-in with PG advisory-lock + boot-time apply.
+- **No `/health` + `/ready` endpoints, no graceful shutdown, no observability** — Wave 12 (Phase A) adds these.
+- **OIDC integration TBD** — Wave 13 (Phase B per PRD-025) adds Passport-OpenIDConnect adapter for `IUserRepo`.
+- **PrismaUserRepo TBD** — Wave 13 (Phase B) adds raw-SQL `PgUserRepo` via existing `@gertsai/pg-client`.
+
+
 
 ## 1. `@gertsai/core` — `identity-resolver` not exported
 

@@ -1,0 +1,86 @@
+name: Storybook → GitHub Pages
+
+# Wave 11.C (PRD-025 FR-B3) — Storybook static build deployed to GitHub Pages
+# whenever the design system or its inputs change on main. Single-job
+# pipeline: build the storybook-static artifact, upload, deploy.
+#
+# Security notes:
+#   - No user-controlled `github.event.*` inputs flow into `run:` commands;
+#     repo name resolves from the safe built-in `${GITHUB_REPOSITORY}` env
+#     and is referenced via a heredoc-protected shell variable.
+#   - `permissions:` declared minimally (read source, write Pages, mint OIDC
+#     id-token for the deploy action) per GitHub Actions least-privilege.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'examples/m9s-example-web/src/lib/components/ui/**'
+      - 'examples/m9s-example-web/.storybook/**'
+      - 'examples/m9s-example-web/src/app.css'
+      - 'examples/m9s-example-web/vite.config.ts'
+      - 'examples/m9s-example-web/package.json'
+      - '.github/workflows/storybook.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: storybook-pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node 22 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Compute Storybook base URL (repo subpath)
+        id: subpath
+        env:
+          GITHUB_REPOSITORY_NAME: ${{ github.event.repository.name }}
+        run: |
+          # GITHUB_REPOSITORY_NAME is the repo name only (e.g. "shared"); the
+          # GitHub Pages URL for a project page is /<repo-name>/. We pin the
+          # value into the next step's env to keep workflow injection safe
+          # (read into a shell var, never inlined into `run:` via `${{ }}`).
+          printf 'BASE_URL=/%s/\n' "$GITHUB_REPOSITORY_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Build Storybook
+        working-directory: examples/m9s-example-web
+        env:
+          STORYBOOK_BASE_URL: ${{ steps.subpath.outputs.BASE_URL }}
+        run: pnpm build-storybook
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: examples/m9s-example-web/storybook-static
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
