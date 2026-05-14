@@ -168,7 +168,16 @@ interface RefreshResult {
 // both observe `exp - now < 60s` will both enter the proactive branch; we
 // dedupe via a module-scoped promise keyed on the refresh token so the
 // second caller awaits the first's response.
+//
+// EVID-039 P1 / W-Logic-1 fix: keep the entry briefly after resolution so a
+// concurrent caller arriving between (a) the promise resolving + cache
+// eviction and (b) the first caller persisting the rotated pair via
+// `provider.setRefreshToken` does NOT fire a second refresh with the
+// now-`used` jti. Without this extended window the backend would treat the
+// second call as reuse and revoke the user's chain. 1s is overkill compared
+// to the actual ms-level race window but cheap.
 const inflightRefresh = new Map<string, Promise<RefreshResult | null>>();
+const CACHE_LINGER_MS = 1_000;
 
 async function refreshAccessTokenViaBackend(refreshToken: string): Promise<RefreshResult | null> {
   const existing = inflightRefresh.get(refreshToken);
@@ -194,7 +203,13 @@ async function refreshAccessTokenViaBackend(refreshToken: string): Promise<Refre
     } catch {
       return null;
     } finally {
-      inflightRefresh.delete(refreshToken);
+      // Schedule eviction AFTER caller persistence window — see comment above.
+      const evict = setTimeout(() => {
+        inflightRefresh.delete(refreshToken);
+      }, CACHE_LINGER_MS);
+      if (typeof evict === 'object' && evict !== null && 'unref' in evict) {
+        (evict as { unref(): void }).unref();
+      }
     }
   })();
 

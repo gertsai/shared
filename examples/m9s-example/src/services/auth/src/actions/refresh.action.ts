@@ -60,6 +60,12 @@ export const refresh = defineAction(controller.register('refresh', {
     //                 already checks `exp` but the store enforces it again).
     //   - 'unknown' → forged signature OR server restart since issuance;
     //                 either way, no live session corresponds to this jti.
+    //
+    // EVID-039 P2 / W-Security-3 fix: ALL three failure modes surface the
+    // same client-facing 401 message so an attacker cannot fingerprint
+    // whether their stolen-token replay triggered reuse-detection vs landed
+    // on an expired/forged token. The distinguished `logger.error` for
+    // reuse stays server-side only.
     const consumed = consumeJti(claims.jti);
     if (!consumed.ok) {
       if (consumed.reason === 'reuse') {
@@ -69,16 +75,12 @@ export const refresh = defineAction(controller.register('refresh', {
           jti: claims.jti,
           revokedCount: revoked,
         });
-        throw new APIError(
-          ResponseCode.UNAUTHORIZED_REQUEST,
-          undefined,
-          'Refresh token reuse detected — please log in again',
-        );
+      } else {
+        logger.warn('[v1.auth.refresh] refresh rejected', {
+          userId: claims.sub,
+          reason: consumed.reason,
+        });
       }
-      logger.warn('[v1.auth.refresh] refresh rejected', {
-        userId: claims.sub,
-        reason: consumed.reason,
-      });
       throw new APIError(
         ResponseCode.UNAUTHORIZED_REQUEST,
         undefined,
