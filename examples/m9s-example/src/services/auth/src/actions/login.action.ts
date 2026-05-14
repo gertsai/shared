@@ -14,18 +14,21 @@
 import { APIError, ResponseCode } from '@gertsai/api-core/contracts';
 import typia from 'typia';
 
+import { defineAction } from '../../../../lib/define-action';
 import { resolveExampleController } from '../../../../lib/example-controller';
 import { demoUserFromEmail, signAccessToken, signRefreshToken } from '../jwt';
+import { registerJti } from '../rotation-store';
 import type {
   AuthServiceContext,
   LoginRequest,
   LoginResponse,
 } from '../../types';
 
+const REFRESH_TTL_SECONDS = 24 * 60 * 60;
+
 const controller = resolveExampleController<'v1', 'auth', AuthServiceContext>('v1', 'auth');
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const login: any = controller.register('login', {
+export const login = defineAction(controller.register('login', {
   auth: 'none',
 
   rest: 'POST /auth/login',
@@ -64,7 +67,10 @@ export const login: any = controller.register('login', {
     // DEMO: accept any credentials, derive deterministic demo user.
     const user = demoUserFromEmail(email);
     const { token, expiresAt } = signAccessToken(user);
-    const refreshToken = signRefreshToken(user);
+    // Wave 10.E (PRD-022): refresh token now carries a jti that we register
+    // in the rotation store so the refresh action can detect reuse.
+    const { token: refreshToken, jti } = signRefreshToken(user);
+    registerJti(jti, user.id, Math.floor(Date.now() / 1_000) + REFRESH_TTL_SECONDS);
 
     // EVID-036 audit fix (P2 / W-Security-7, CWE-532): log userId + tenantId
     // only — email is PII and the user record is recoverable from the userId
@@ -77,4 +83,4 @@ export const login: any = controller.register('login', {
     const response: LoginResponse = { token, refreshToken, user, expiresAt };
     return respond(response, 'Login successful');
   },
-});
+}));

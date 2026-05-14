@@ -24,6 +24,7 @@ import {
 } from '@gertsai/session-guard';
 import typia, { type tags } from 'typia';
 
+import { defineAction } from '../../../../lib/define-action';
 import { resolveExampleController } from '../../../../lib/example-controller';
 import { tryGetRequestContextFromCtx } from '../../../../composition/wave5-middlewares';
 import { PgSoftDeleteNotSupportedError } from '../../../../shared/errors';
@@ -46,8 +47,7 @@ export interface DeleteDocumentResponse {
 
 const controller = resolveExampleController<'v1', 'ingest', IngestServiceContext>('v1', 'ingest');
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const deleteDocument: any = controller.register('delete-document', {
+export const deleteDocument = defineAction(controller.register('delete-document', {
   auth: 'none',
 
   // POST (not DELETE) — SvelteKit form-action CSRF protection applies to
@@ -118,4 +118,4 @@ export const deleteDocument: any = controller.register('delete-document', {
       throw err;
     }
   },
-});
+}));

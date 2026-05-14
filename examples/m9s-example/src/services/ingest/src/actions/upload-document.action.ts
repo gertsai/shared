@@ -34,6 +34,7 @@ import { randomUUID } from 'crypto';
 import { APIError, ResponseCode } from '@gertsai/api-core/contracts';
 import typia from 'typia';
 
+import { defineAction } from '../../../../lib/define-action';
 import { resolveExampleController } from '../../../../lib/example-controller';
 import { tryGetRequestContextFromCtx } from '../../../../composition/wave5-middlewares';
 import {
@@ -84,8 +85,7 @@ const DOC_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 // `accept=".txt,.md,text/plain"` so a malicious client can't bypass.
 const TEXT_MIME_RE = /^text\/(plain|markdown|x-markdown)$/i;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const uploadDocument: any = controller.register('upload', {
+export const uploadDocument = defineAction(controller.register('upload', {
   // Auth handled inside the downstream `v1.ingest.document` (see
   // RFC-014 D-3 — session-guard happens at the pipeline boundary, not at
   // every alias) so curl-without-auth still exercises the upload path in
@@ -239,7 +239,7 @@ export const uploadDocument: any = controller.register('upload', {
     };
     return respond(response, 'Upload accepted for ingestion', ResponseCode.SUCCESS_CREATED);
   },
-});
+}));
 
 // Re-export the cap so tests / docs can reference the single source of truth.
 export { MAX_UPLOAD_BYTES };

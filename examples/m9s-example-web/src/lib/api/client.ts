@@ -98,12 +98,23 @@ export interface JwtTokenProvider {
   setAccessToken: (token: string) => void;
   /** Return the refresh token, or null when not available. */
   getRefreshToken: () => string | null;
+  /**
+   * Persist a rotated refresh token. Wave 10.E (PRD-022): the backend now
+   * rotates the refresh token on every successful `/auth/refresh` call —
+   * callers MUST persist the new value so the next refresh presents the
+   * fresh jti (presenting the old one again triggers reuse-detection and
+   * revokes the whole session chain). Optional in the interface so
+   * older callers compile; impls that don't store refresh tokens (the
+   * default noop) discard rotated values.
+   */
+  setRefreshToken?: (token: string) => void;
 }
 
 const noopProvider: JwtTokenProvider = {
   getAccessToken: () => null,
   setAccessToken: () => undefined,
   getRefreshToken: () => null,
+  setRefreshToken: () => undefined,
 };
 
 // EVID-036 P1 / CI-2 fix: per-request provider via AsyncLocalStorage.
@@ -144,17 +155,26 @@ export function setJwtTokenProvider(_provider: JwtTokenProvider | null): void {
 
 const REFRESH_SKEW_SECONDS = 60;
 
+/**
+ * Result of a successful backend refresh. Wave 10.E (PRD-022): both the
+ * access token AND the refresh token are rotated.
+ */
+interface RefreshResult {
+  access: string;
+  refresh: string;
+}
+
 // EVID-036 P1 / U-2 fix: single-flight refresh. Two parallel API calls that
 // both observe `exp - now < 60s` will both enter the proactive branch; we
 // dedupe via a module-scoped promise keyed on the refresh token so the
 // second caller awaits the first's response.
-const inflightRefresh = new Map<string, Promise<string | null>>();
+const inflightRefresh = new Map<string, Promise<RefreshResult | null>>();
 
-async function refreshAccessTokenViaBackend(refreshToken: string): Promise<string | null> {
+async function refreshAccessTokenViaBackend(refreshToken: string): Promise<RefreshResult | null> {
   const existing = inflightRefresh.get(refreshToken);
   if (existing !== undefined) return existing;
 
-  const promise = (async (): Promise<string | null> => {
+  const promise = (async (): Promise<RefreshResult | null> => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
         method: 'POST',
@@ -167,7 +187,10 @@ async function refreshAccessTokenViaBackend(refreshToken: string): Promise<strin
       if (!res.ok) return null;
       const body = (await res.json()) as Record<string, unknown>;
       const inner = (body.data ?? body) as Record<string, unknown>;
-      return typeof inner.token === 'string' ? inner.token : null;
+      if (typeof inner.token !== 'string' || typeof inner.refreshToken !== 'string') {
+        return null;
+      }
+      return { access: inner.token, refresh: inner.refreshToken };
     } catch {
       return null;
     } finally {
@@ -227,8 +250,11 @@ const jwtMiddleware: Middleware = {
         if (refresh !== null) {
           const fresh = await refreshAccessTokenViaBackend(refresh);
           if (fresh !== null) {
-            provider.setAccessToken(fresh);
-            access = fresh;
+            provider.setAccessToken(fresh.access);
+            // Wave 10.E (PRD-022): persist rotated refresh token so the
+            // next proactive refresh presents a fresh jti.
+            provider.setRefreshToken?.(fresh.refresh);
+            access = fresh.access;
           }
         }
       }
@@ -247,7 +273,9 @@ const jwtMiddleware: Middleware = {
     if (refresh === null) return response;
     const fresh = await refreshAccessTokenViaBackend(refresh);
     if (fresh === null) return response;
-    provider.setAccessToken(fresh);
+    provider.setAccessToken(fresh.access);
+    // Wave 10.E (PRD-022): persist rotated refresh token (reactive branch).
+    provider.setRefreshToken?.(fresh.refresh);
 
     // U-1.b: rebuild the request from the pre-consumption clone so POST/PUT
     // bodies survive the retry, and reuse the same header set that the
@@ -256,7 +284,7 @@ const jwtMiddleware: Middleware = {
     // to overwrite.
     const original = preConsumeClones.get(request) ?? request;
     const retryHeaders = new Headers(original.headers);
-    retryHeaders.set('authorization', `Bearer ${fresh}`);
+    retryHeaders.set('authorization', `Bearer ${fresh.access}`);
     let retryBody: BodyInit | null = null;
     if (original.body !== null) {
       try {

@@ -20,6 +20,8 @@
  * plus two custom fields (`email`, `tenantId`) the SvelteKit hooks attach
  * to `event.locals.user`.
  */
+import { randomUUID } from 'node:crypto';
+
 import jwt from 'jsonwebtoken';
 
 import type { DemoUser } from '../types';
@@ -74,6 +76,12 @@ export interface JwtClaims {
   exp: number;
   /** Issuer. RFC 7519 standard. */
   iss: string;
+  /**
+   * JWT ID (RFC 7519 §4.1.7). Wave 10.E (PRD-022) — required on refresh
+   * tokens so we can track use/reuse in the rotation store. Always present
+   * on refresh tokens; optional on access tokens (we don't track those).
+   */
+  jti?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -100,10 +108,16 @@ export function signAccessToken(user: DemoUser): { token: string; expiresAt: str
   return { token, expiresAt: expiryIso(ACCESS_TTL_SECONDS) };
 }
 
-/** Sign a refresh token (24 h). */
-export function signRefreshToken(user: DemoUser): string {
-  return jwt.sign(
-    { email: user.email, tenantId: user.tenantId, kind: 'refresh' },
+/**
+ * Sign a refresh token (24 h). Wave 10.E (PRD-022) — every refresh token
+ * carries a unique `jti` so the rotation store can track use/reuse. The
+ * returned object exposes the jti so the caller (login + refresh actions)
+ * can register it in the store before handing the token to the client.
+ */
+export function signRefreshToken(user: DemoUser): { token: string; jti: string } {
+  const jti = randomUUID();
+  const token = jwt.sign(
+    { email: user.email, tenantId: user.tenantId, kind: 'refresh', jti },
     getSecret(),
     {
       algorithm: 'HS256',
@@ -112,6 +126,7 @@ export function signRefreshToken(user: DemoUser): string {
       expiresIn: REFRESH_TTL_SECONDS,
     },
   );
+  return { token, jti };
 }
 
 /**
@@ -139,6 +154,11 @@ export function verifyToken(token: string): JwtClaims | null {
     ) {
       return null;
     }
+    // Wave 10.E (PRD-022): refresh tokens MUST carry a jti. Reject malformed
+    // ones early so callers don't dereference `undefined` from the store.
+    if (payload.kind === 'refresh' && typeof payload.jti !== 'string') {
+      return null;
+    }
     return {
       sub: payload.sub,
       email: payload.email,
@@ -147,6 +167,7 @@ export function verifyToken(token: string): JwtClaims | null {
       iat: payload.iat,
       exp: payload.exp,
       iss: payload.iss,
+      ...(typeof payload.jti === 'string' && { jti: payload.jti }),
     };
   } catch {
     return null;

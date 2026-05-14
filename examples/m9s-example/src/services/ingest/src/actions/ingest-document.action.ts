@@ -28,6 +28,7 @@ import {
 import typia from 'typia';
 
 import config from '../../../../../project.config';
+import { defineAction } from '../../../../lib/define-action';
 import { resolveExampleController } from '../../../../lib/example-controller';
 import { ForbiddenError } from '../../../../shared/errors';
 import { tryGetRequestContextFromCtx } from '../../../../composition/wave5-middlewares';
@@ -51,8 +52,7 @@ const QUEUE_ENABLED = !!config.REDIS_URL;
 
 const controller = resolveExampleController<'v1', 'ingest', IngestServiceContext>('v1', 'ingest');
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const ingestDocument: any = controller.register('document', {
+export const ingestDocument = defineAction(controller.register('document', {
   // Auth handled inside the gate so the example runs without an OAuth
   // provider; switch to 'required' once a real auth middleware is in place.
   auth: 'none',
@@ -218,4 +218,4 @@ export const ingestDocument: any = controller.register('document', {
       throw err;
     }
   },
-});
+}));

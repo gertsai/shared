@@ -26,6 +26,7 @@
  */
 import typia from 'typia';
 
+import { defineAction } from '../../../../lib/define-action';
 import { resolveExampleController } from '../../../../lib/example-controller';
 import type { IngestServiceContext } from '../../types';
 
@@ -46,8 +47,7 @@ export interface EmbedBatchResponse {
 
 const controller = resolveExampleController<'v1', 'ingest', IngestServiceContext>('v1', 'ingest');
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const embedBatch: any = controller.register('_embed', {
+export const embedBatch = defineAction(controller.register('_embed', {
   // Internal: not exposed over HTTP, no auth (broker-only invocation).
   auth: 'none',
 
@@ -74,4 +74,4 @@ export const embedBatch: any = controller.register('_embed', {
 
     return respond({ vectors });
   },
-});
+}));

@@ -19,6 +19,7 @@ import {
 } from '@gertsai/session-guard';
 import typia from 'typia';
 
+import { defineAction } from '../../../../lib/define-action';
 import { resolveExampleController } from '../../../../lib/example-controller';
 import { ForbiddenError, ValidationError } from '../../../../shared/errors';
 import { tryGetRequestContextFromCtx } from '../../../../composition/wave5-middlewares';
@@ -26,8 +27,7 @@ import type { SearchServiceContext, SearchQueryRequest, SearchQueryResponse } fr
 
 const controller = resolveExampleController<'v1', 'search', SearchServiceContext>('v1', 'search');
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const searchQuery: any = controller.register('query', {
+export const searchQuery = defineAction(controller.register('query', {
   auth: 'none',
 
   rest: 'POST /search/query',
@@ -89,4 +89,4 @@ export const searchQuery: any = controller.register('query', {
       throw err;
     }
   },
-});
+}));

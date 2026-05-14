@@ -62,9 +62,20 @@ export interface RefreshRequest {
   refreshToken: string;
 }
 
-/** `POST /api/v1/auth/refresh` — response body. New access token only. */
+/**
+ * `POST /api/v1/auth/refresh` — response body.
+ *
+ * Wave 10.E (PRD-022): the refresh token is now rotated on every successful
+ * refresh — the response carries BOTH a new access token and a new refresh
+ * token. Clients MUST overwrite their stored refresh token; presenting the
+ * previous one again triggers reuse-detection and revokes the user's
+ * entire refresh chain (every jti minted for that user is marked used).
+ */
 export interface RefreshResponse {
   token: string;
+  /** Rotated refresh token — replaces the one the caller presented. */
+  refreshToken: string;
+  /** ISO-8601 expiry of `token`. */
   expiresAt: string;
 }
 
