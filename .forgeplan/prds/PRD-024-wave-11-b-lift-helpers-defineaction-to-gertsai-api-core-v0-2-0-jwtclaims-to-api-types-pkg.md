@@ -2,6 +2,8 @@
 depth: standard
 id: PRD-024
 kind: prd
+last_modified_at: 2026-05-14T12:43:56.470793+00:00
+last_modified_by: claude-code/2.1.139
 links:
 - target: EVID-040
   relation: based_on
@@ -68,4 +70,7 @@ Wave 11.A (PRD-023) closed the production-hardening layer. This PRD closes the h
 - Storybook CI deploy — separate small PR.
 - oxlint sweep — separate effort.
 - npm publish itself — gated by user explicit Y per package (long-standing).
+
+
+
 

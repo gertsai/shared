@@ -1,56 +1,49 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * Server-side JWT verify helper — Wave 10.A demo.
+ * Server-side JWT verify helper — Wave 10.A demo, hardened in Wave 11.A.
  *
  * Pure Node `crypto` implementation of HS256 verification — intentionally
  * NOT depending on `jsonwebtoken` so the web package keeps its zero-runtime-
  * crypto-dep posture. Mirrors the contract of the backend `services/auth/
  * src/jwt.ts` (HS256, `iss: 'm9s-example'`, secret from `JWT_SECRET`).
  *
- * Security caveats — this is a DEMO:
- *   - default secret (`demo-secret-do-not-use-in-prod`) MUST be replaced
- *     in any non-demo deployment;
+ * Wave 11.A (PRD-023, FR-002): the historical `DEFAULT_SECRET` fallback
+ * and `M9S_ALLOW_DEMO_SECRET=1` escape hatch are GONE. `JWT_SECRET` is a
+ * hard runtime requirement — `verifyToken` will throw synchronously the
+ * first time it has to resolve the secret with no env var set.
+ *
+ * Security caveats:
  *   - no JWKS / asymmetric keys: a compromised secret invalidates both
  *     signers and verifiers;
  *   - timing-safe comparison via `crypto.timingSafeEqual`.
  *
- * Returns the typed claims on success, `null` on any failure (signature,
- * expiry, malformed, wrong issuer, wrong algorithm).
+ * Returns the typed claims on success, `null` on any token-level failure
+ * (signature, expiry, malformed, wrong issuer, wrong algorithm). Throws
+ * only for environment misconfiguration (`JWT_SECRET` missing).
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-const DEFAULT_SECRET = 'demo-secret-do-not-use-in-prod';
 const ISSUER = 'm9s-example';
 
-/** Claims attached to `event.locals.user` after successful verify. */
-export interface JwtClaims {
-  sub: string;
-  email: string;
-  tenantId: string;
-  kind: 'access' | 'refresh';
-  iat: number;
-  exp: number;
-  iss: string;
-}
+/**
+ * Wave 11.B (PRD-024): JwtClaims imported from the shared types package
+ * so web + backend (and any future consumer) stay in lock-step. Re-exported
+ * for back-compat with `app.d.ts` and hooks callers.
+ */
+import type { JwtClaims } from '@gertsai-examples/m9s-example-api-types';
+export type { JwtClaims } from '@gertsai-examples/m9s-example-api-types';
 
 /**
- * Resolve the HS256 secret. Hard-fails in production when JWT_SECRET is unset
- * (CWE-798): the DEFAULT_SECRET is committed to the repo and identical on
- * web + backend, so any deploy without an override would let attackers forge
- * tokens. Demo / local-dev paths can opt-in via M9S_ALLOW_DEMO_SECRET=1.
- *
- * EVID-036 audit fix (P0 / CI-1).
+ * Resolve the HS256 secret. Hard-fails unconditionally when `JWT_SECRET`
+ * is unset (CWE-798). Wave 11.A (PRD-023, FR-002) removed the
+ * `DEFAULT_SECRET` fallback and the `M9S_ALLOW_DEMO_SECRET` opt-in.
  */
 function getSecret(): string {
   const fromEnv = process.env.JWT_SECRET;
-  if (fromEnv && fromEnv.length > 0) return fromEnv;
-  if (process.env.NODE_ENV === 'production' && process.env.M9S_ALLOW_DEMO_SECRET !== '1') {
-    throw new Error(
-      'JWT_SECRET must be set in production. To run the demo with the public ' +
-        'default secret, set M9S_ALLOW_DEMO_SECRET=1 explicitly.',
-    );
+  if (!fromEnv || fromEnv.length === 0) {
+    throw new Error('JWT_SECRET must be set');
   }
-  return DEFAULT_SECRET;
+  return fromEnv;
 }
 
 /** Base64url decode → utf8 string. Returns null on malformed input. */

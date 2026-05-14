@@ -1,28 +1,34 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * Refresh-token rotation + reuse-detection store — Wave 10.E (PRD-022).
+ * Refresh-token rotation + reuse-detection store — module-level sync facade
+ * for the legacy intra-service callers (`login.action.ts` + `refresh.action.ts`).
  *
- * In-memory, single-process. A real deployment would back this with Redis
- * (per-tenant key prefix) or Postgres (small `refresh_tokens` table). The
- * interface here is the contract we'd port to either backing store.
+ * Wave 11.A (PRD-023) extracted the abstract port to
+ * `src/domain/ports/IRotationStore.ts` and added a class-based
+ * `InMemoryRotationStore` + `RedisRotationStore` in `src/infrastructure/`
+ * for the composition-root DI path. This file keeps the original
+ * synchronous Map-based implementation in-place so the existing action
+ * call sites (which call `consumeJti(...).ok` without `await`) keep working
+ * unchanged, AND so the hex-layer boundary (ADR-002) is respected — the
+ * services layer must NOT import from `infrastructure/`. New code (e.g.
+ * the composition-root path through `SharedInfrastructure.rotationStore`)
+ * uses the class-based impls in `infrastructure/` directly.
  *
- * Three responsibilities:
+ * Three responsibilities (unchanged from Wave 10.E):
  *
- *   1. `register(jti, userId, exp)` — record a freshly-issued refresh token
- *      as `usable`. Called by login + each successful rotate.
+ *   1. `registerJti(jti, userId, exp)` — record a freshly-issued refresh
+ *      token as `usable`. Called by login + each successful rotate.
  *
- *   2. `consume(jti)` — atomically transition a jti from `usable` → `used`.
- *      Returns the (userId, exp) so the caller can mint the next refresh.
- *      Returns `null` if the jti was already used (REUSE — caller must
- *      treat this as a credential-theft signal: revoke the whole chain).
+ *   2. `consumeJti(jti)` — atomically transition a jti `usable → used`.
+ *      Returns the (userId, exp) on success. Returns `{ok: false, reason}`
+ *      on reuse / expired / unknown.
  *
- *   3. `revokeUser(userId)` — mark every jti issued to a user as `used`,
- *      forcing re-login. Triggered when reuse is detected.
+ *   3. `revokeUser(userId)` — mark every active jti issued to a user as
+ *      `used`, forcing re-login. Triggered when reuse is detected.
  *
- * Expired jtis age out lazily on lookup; the optional `prune()` helper
- * sweeps the entire map for memory-conscious deployments / tests.
- *
- * Closes EVID-036 audit finding U-6 (no rotation / no reuse detection).
+ * Closes EVID-036 audit finding U-6 (rotation + reuse detection).
+ * Closes EVID-039 P2 / W-Security-1 (DoS via unbounded jti map) — the
+ * periodic prune timer is below.
  */
 
 interface JtiRecord {
@@ -38,28 +44,10 @@ function nowSeconds(): number {
   return Math.floor(Date.now() / 1_000);
 }
 
-/**
- * Register a freshly-issued refresh-token jti as usable. Called by
- * `login.action.ts` after `signRefreshToken` and by `refresh.action.ts`
- * after each successful rotate.
- */
 export function registerJti(jti: string, userId: string, exp: number): void {
   store.set(jti, { userId, exp, used: false });
 }
 
-/**
- * Atomic consume. Returns the record on success (jti was usable and not
- * expired); returns `null` on:
- *
- *   - unknown jti (never issued — forged signature is the most likely
- *     cause; signature verify already rejected the token but a race in the
- *     store could surface this);
- *   - expired jti (force re-login);
- *   - **already-used jti (REUSE — caller MUST revoke the user's chain).**
- *
- * The caller distinguishes reuse from unknown via the second return value
- * (`'reuse' | 'expired' | 'unknown'`).
- */
 export function consumeJti(
   jti: string,
 ): { ok: true; record: JtiRecord } | { ok: false; reason: 'reuse' | 'expired' | 'unknown' } {
@@ -74,21 +62,13 @@ export function consumeJti(
   if (record.used) {
     return { ok: false, reason: 'reuse' };
   }
-  // Atomic transition. Map operations in single-threaded Node are
-  // sequenced — no concurrent mutation possible between the read above
-  // and this assignment within the same async tick.
+  // Atomic transition. Map operations in single-threaded Node are sequenced
+  // — no concurrent mutation between the read above and the assignment here
+  // (no `await` between them).
   record.used = true;
   return { ok: true, record };
 }
 
-/**
- * Revoke every jti issued to a user. Triggered by `consumeJti` returning
- * `reuse` — the assumption is that two clients now hold the same refresh
- * token (either the original or a clone after compromise); we don't know
- * which is legitimate, so we end the session for both.
- *
- * Returns the count of revoked jtis (useful for logging).
- */
 export function revokeUser(userId: string): number {
   let count = 0;
   for (const record of store.values()) {
@@ -100,12 +80,6 @@ export function revokeUser(userId: string): number {
   return count;
 }
 
-/**
- * Sweep expired + used jtis. Optional — the map grows roughly linearly
- * with logins until pruning. The demo doesn't run this on a schedule
- * (single-process, low cardinality); a production port would call it
- * every few minutes.
- */
 export function pruneJtiStore(): number {
   const cutoff = nowSeconds();
   let removed = 0;
@@ -118,10 +92,6 @@ export function pruneJtiStore(): number {
   return removed;
 }
 
-/**
- * Test-only — reset all state. Not exported via barrel; callers import
- * from this file path directly.
- */
 export function __resetRotationStoreForTests(): void {
   store.clear();
   if (pruneTimer !== null) {
@@ -130,24 +100,13 @@ export function __resetRotationStoreForTests(): void {
   }
 }
 
-// EVID-039 P2 / W-Security-1 fix: schedule periodic prune so the store
-// can't grow unbounded under brute-force login traffic (CWE-770 DoS
-// mitigation). 5-minute interval is conservative — the demo's expected
-// login + refresh rate is single-user, so memory pressure is dwarfed by
-// timer overhead at this cadence. `.unref()` so the interval doesn't
-// hold the process open in tests / short-lived workers.
+// EVID-039 P2 / W-Security-1 fix: periodic prune timer to bound memory.
 const PRUNE_INTERVAL_MS = 5 * 60 * 1_000;
 let pruneTimer: ReturnType<typeof setInterval> | null = null;
 
-/**
- * Start the periodic prune timer. Idempotent — repeated calls are no-ops.
- * Called from `services/auth/lifecycle.ts` after the broker starts so
- * tests and short-lived workers don't get an unwanted background timer.
- */
 export function startRotationPruner(): void {
   if (pruneTimer !== null) return;
   pruneTimer = setInterval(pruneJtiStore, PRUNE_INTERVAL_MS);
-  // Allow the process to exit even if the timer is still scheduled.
   if (typeof pruneTimer === 'object' && pruneTimer !== null && 'unref' in pruneTimer) {
     (pruneTimer as { unref(): void }).unref();
   }
