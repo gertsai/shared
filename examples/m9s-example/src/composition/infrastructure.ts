@@ -49,7 +49,7 @@ import { PgClientAdapter } from '../infrastructure/pg-client.adapter';
 import { PgDocumentRepository } from '../infrastructure/pg-document.repository';
 import { PgVectorStore } from '../infrastructure/pg-vector.store';
 
-import type { IDocumentStore } from '../domain/ports/IDocumentStore';
+import type { FullDocumentStore } from '../domain/ports/IDocumentStore';
 import type { IChunkStore } from '../domain/ports/IChunkStore';
 import type { IEmbedder } from '../domain/ports/IEmbedder';
 import type { IPermissionGate } from '../domain/ports/IPermissionGate';
@@ -62,7 +62,7 @@ import type { IPermissionGate } from '../domain/ports/IPermissionGate';
  * than this shared bag.
  */
 export interface SharedInfrastructure {
-  readonly docStore: IDocumentStore;
+  readonly docStore: FullDocumentStore;
   readonly chunkStore: IChunkStore;
   readonly embedder: IEmbedder;
   readonly gate: IPermissionGate;
@@ -139,7 +139,7 @@ function pickGate(): IPermissionGate {
  *   `examples/m9s-example/migrations/` applied.
  */
 function pickStores(): {
-  readonly docStore: IDocumentStore;
+  readonly docStore: FullDocumentStore;
   readonly chunkStore: IChunkStore;
 } {
   switch (config.STORAGE_PROVIDER) {

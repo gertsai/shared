@@ -34,7 +34,9 @@ import { randomUUID } from 'crypto';
 import { APIError, ResponseCode } from '@gertsai/api-core/contracts';
 import typia from 'typia';
 
+import { defineAction } from '../../../../lib/define-action';
 import { resolveExampleController } from '../../../../lib/example-controller';
+import { tryGetRequestContextFromCtx } from '../../../../composition/wave5-middlewares';
 import {
   MAX_UPLOAD_BYTES,
   PayloadTooLargeError,
@@ -71,18 +73,19 @@ interface UploadDocumentResponse {
 
 const controller = resolveExampleController<'v1', 'ingest', IngestServiceContext>('v1', 'ingest');
 
-// Reasonably permissive docId regex matching the v1.ingest.document side
-// (see ingest-document.action.ts pattern). Allows lowercase, digits, hyphens
-// and underscores, 8-128 chars. Keeps log lines and storage keys safe.
-const DOC_ID_RE = /^[a-z0-9_-]{8,128}$/;
+// EVID-036 audit fix (P2 / W-Logic-4): unify docId regex with delete-document
+// (`^[A-Za-z0-9_-]{1,128}$`) so an upload-then-delete round-trip works for
+// any caller-supplied id. The previous lowercase-only pattern caused
+// `randomUUID()`-generated ids (which are lowercase + length 36) to succeed
+// but rejected mixed-case ids that the delete action happily accepted.
+const DOC_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 
 // Accept text/plain and markdown variants (PRD-019 FR-003 scope). PDF / Word
 // land in Wave 10.C — file-level MIME enforcement matches the client-side
 // `accept=".txt,.md,text/plain"` so a malicious client can't bypass.
 const TEXT_MIME_RE = /^text\/(plain|markdown|x-markdown)$/i;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const uploadDocument: any = controller.register('upload', {
+export const uploadDocument = defineAction(controller.register('upload', {
   // Auth handled inside the downstream `v1.ingest.document` (see
   // RFC-014 D-3 — session-guard happens at the pipeline boundary, not at
   // every alias) so curl-without-auth still exercises the upload path in
@@ -173,11 +176,21 @@ export const uploadDocument: any = controller.register('upload', {
       );
     }
 
-    // docId: prefer caller-supplied (validated against regex) → fall back to
-    // a generated UUID. UUIDs always satisfy the regex (lowercase hex +
-    // hyphens, ≥ 36 chars).
+    // EVID-036 audit fix (P0 / W-Security-9): an unauthenticated caller
+    // MUST NOT be able to choose the docId. Otherwise an anonymous attacker
+    // can overwrite any existing document by guessing its id. We only honor
+    // a caller-supplied docId when a session is present (via the broker.call
+    // ctx.meta path below). For anonymous uploads we always force a fresh
+    // UUID.
+    //
+    // The session check looks at the same RequestContext that the downstream
+    // `v1.ingest.document` will assert against — keeps the boundary single-
+    // sourced.
+    const { session: callerSession } = tryGetRequestContextFromCtx(ctx);
+    const isAuthenticated = callerSession !== undefined;
+
     const candidateId = (parsed.fields['docId'] ?? '').trim();
-    const docId = candidateId !== ''
+    const docId = isAuthenticated && candidateId !== ''
       ? candidateId
       : randomUUID();
 
@@ -226,7 +239,7 @@ export const uploadDocument: any = controller.register('upload', {
     };
     return respond(response, 'Upload accepted for ingestion', ResponseCode.SUCCESS_CREATED);
   },
-});
+}));
 
 // Re-export the cap so tests / docs can reference the single source of truth.
 export { MAX_UPLOAD_BYTES };

@@ -27,9 +27,13 @@ import type { PgClient } from '@gertsai/pg-client';
 import type { Document } from '../domain/document';
 import type {
   DocumentSummary,
+  IDocumentQuery,
   IDocumentStore,
+  ISoftDeletableDocumentStore,
   ListDocumentsOpts,
 } from '../domain/ports/IDocumentStore';
+
+import { PgSoftDeleteNotSupportedError } from '../shared/errors';
 
 import type { DocumentRow } from './document.meta';
 
@@ -57,7 +61,7 @@ export interface PgDocumentRepositoryOptions {
   readonly logger?: { warn: (...args: unknown[]) => void; error: (...args: unknown[]) => void };
 }
 
-export class PgDocumentRepository implements IDocumentStore {
+export class PgDocumentRepository implements IDocumentStore, IDocumentQuery, ISoftDeletableDocumentStore {
   private readonly client: PgClient;
   private readonly tenantId: string;
   private readonly ownerUuid: string;
@@ -103,10 +107,15 @@ export class PgDocumentRepository implements IDocumentStore {
   }
 
   async findById(id: string): Promise<Document | null> {
+    // Wave 10.E (PRD-022): exclude soft-deleted rows so callers honor the
+    // soft-delete contract — a tombstoned doc is invisible to read paths
+    // (matching the in-memory adapter's `status === 'deleted'` filter).
     const rows = await this.client.$queryRaw<DocumentRow>`
       SELECT id, tenant_id, owner_uuid, text, metadata, created_at, updated_at
         FROM documents
-       WHERE id = ${coerceUuid(id)} AND tenant_id = ${this.tenantId}
+       WHERE id = ${coerceUuid(id)}
+         AND tenant_id = ${this.tenantId}
+         AND deleted_at IS NULL
        LIMIT 1
     `;
     if (rows.length === 0) return null;
@@ -130,6 +139,8 @@ export class PgDocumentRepository implements IDocumentStore {
     const requested = opts.limit ?? 20;
     const limit = Math.min(100, Math.max(1, requested));
 
+    // Wave 10.E (PRD-022): filter tombstones; uses the partial index
+    // `idx_documents_active` added in migration 002.
     const rows = await this.client.$queryRaw<{
       id: string;
       preview: string;
@@ -142,6 +153,7 @@ export class PgDocumentRepository implements IDocumentStore {
              created_at
         FROM documents
        WHERE tenant_id = ${this.tenantId}
+         AND deleted_at IS NULL
        ORDER BY created_at DESC, id ASC
        LIMIT ${limit} OFFSET ${skip}
     `;
@@ -159,10 +171,12 @@ export class PgDocumentRepository implements IDocumentStore {
    * demo cardinality (< 2^53 rows is generous).
    */
   async count(): Promise<number> {
+    // Wave 10.E (PRD-022): tombstones excluded so list + count stay in sync.
     const rows = await this.client.$queryRaw<{ count: string }>`
       SELECT COUNT(*)::text AS count
         FROM documents
        WHERE tenant_id = ${this.tenantId}
+         AND deleted_at IS NULL
     `;
     const raw = rows[0]?.count ?? '0';
     return Number(raw);
@@ -171,26 +185,39 @@ export class PgDocumentRepository implements IDocumentStore {
   /**
    * Wave 10.B (PRD-019 FR-005) — soft-delete.
    *
-   * NOTE / caveat: the Sprint 3.11 `documents` schema does NOT carry a
-   * `deleted_at` column (see `migrations/001_init_documents_chunks.up.sql`).
-   * This adapter therefore degrades the soft-delete contract to a HARD
-   * delete — the row is physically removed. The audit-aware
-   * `DocumentRepository` (in-memory + Wave 4 entity-storage path)
-   * implements the true soft-delete semantic. Adding a `deleted_at`
-   * column is tracked in the m9s-example backlog for a future migration.
+   * Wave 10.E (PRD-022): now honors the soft-delete contract via the
+   * `deleted_at TIMESTAMPTZ NULL` column added in migration 002. Tombstones
+   * stay queryable for an admin "restore" path (out of scope here) and for
+   * audit trails. Idempotent: re-deleting an already-tombstoned row is a
+   * no-op; missing ids match zero rows.
    *
-   * Missing ids are a no-op (idempotent): `WHERE id = ${id}` matches 0
-   * rows, the delete succeeds vacuously.
+   * If the migration has NOT been applied (deleted_at column missing), the
+   * UPDATE throws a PostgreSQL error which we translate to the same
+   * PgSoftDeleteNotSupportedError the action layer maps to HTTP 501 — keeps
+   * fail-loud Liskov discipline for un-migrated deployments.
    */
   async softDelete(id: string): Promise<void> {
-    // Pg uuid columns reject non-canonical strings. Accept canonical UUIDs
-    // and let anything else through `coerceUuid`'s explicit error so the
-    // action layer can surface a clean 400. (Idempotent for valid-but-
-    // missing ids — the DELETE just affects 0 rows.)
-    await this.client.$executeRaw`
-      DELETE FROM documents
-       WHERE id = ${coerceUuid(id)} AND tenant_id = ${this.tenantId}
-    `;
+    try {
+      await this.client.$executeRaw`
+        UPDATE documents
+           SET deleted_at = now()
+         WHERE id = ${coerceUuid(id)}
+           AND tenant_id = ${this.tenantId}
+           AND deleted_at IS NULL
+      `;
+    } catch (err) {
+      // PostgreSQL error 42703 (undefined_column) signals the migration is
+      // missing. Surface as the typed error so action → HTTP 501 mapping
+      // stays correct rather than leaking a raw pg error string.
+      const msg = (err as Error).message ?? '';
+      if (msg.includes('deleted_at') || msg.includes('42703')) {
+        throw new PgSoftDeleteNotSupportedError(
+          'PgDocumentRepository.softDelete failed: deleted_at column is ' +
+            'missing. Apply migration 002_add_documents_deleted_at.up.sql.',
+        );
+      }
+      throw err;
+    }
   }
 
   /**

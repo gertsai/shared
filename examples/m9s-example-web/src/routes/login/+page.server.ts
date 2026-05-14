@@ -39,8 +39,27 @@ function unwrap(body: unknown): LoginSuccessResponse | null {
   return null;
 }
 
+/**
+ * EVID-036 audit fix (P2 / CI-4): validate `?next=` before consuming it as
+ * a redirect target. Open-redirect protection: must be a same-origin
+ * absolute path — starts with `/`, doesn't start with `//` (protocol-
+ * relative), doesn't contain `:` before the first `/` (scheme-prefixed).
+ */
+function safeNextRedirect(raw: string | null): string {
+  if (raw === null || raw.length === 0) return '/';
+  if (!raw.startsWith('/')) return '/';
+  if (raw.startsWith('//')) return '/';
+  // Reject backslash tricks like `/\evil.com` that browsers normalise.
+  if (raw.includes('\\')) return '/';
+  // Reject schemes (`/javascript:...` etc.).
+  const firstSlash = raw.indexOf('/', 1);
+  const head = firstSlash === -1 ? raw : raw.slice(0, firstSlash);
+  if (head.includes(':')) return '/';
+  return raw;
+}
+
 export const actions: Actions = {
-  default: async ({ request, cookies, fetch }) => {
+  default: async ({ request, cookies, fetch, url }) => {
     const formData = await request.formData();
     const email = formData.get('email')?.toString().trim() ?? '';
     const password = formData.get('password')?.toString() ?? '';
@@ -102,6 +121,9 @@ export const actions: Actions = {
       maxAge: 60 * 60 * 24,
     });
 
-    throw redirect(303, '/');
+    // EVID-036 audit fix (P1 / CI-4 + Logic C5): honor `?next=` set by the
+    // admin layout guard. Validated above to be a same-origin path.
+    const next = safeNextRedirect(url.searchParams.get('next'));
+    throw redirect(303, next);
   },
 };

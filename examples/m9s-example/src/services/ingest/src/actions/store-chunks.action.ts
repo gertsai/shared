@@ -23,6 +23,7 @@ import { createDocument, type DocumentMetadata } from '../../../../domain/docume
 import type { Chunk } from '../../../../domain/chunk';
 import typia from 'typia';
 
+import { defineAction } from '../../../../lib/define-action';
 import { resolveExampleController } from '../../../../lib/example-controller';
 import type { IngestServiceContext } from '../../types';
 
@@ -50,8 +51,7 @@ export interface StoreChunksResponse {
 
 const controller = resolveExampleController<'v1', 'ingest', IngestServiceContext>('v1', 'ingest');
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const storeChunks: any = controller.register('_store', {
+export const storeChunks = defineAction(controller.register('_store', {
   // Internal: not exposed over HTTP, no auth (broker-only invocation).
   auth: 'none',
 
@@ -96,4 +96,4 @@ export const storeChunks: any = controller.register('_store', {
 
     return respond({ docId: doc.id, chunkCount: chunkRows.length });
   },
-});
+}));

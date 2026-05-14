@@ -36,7 +36,9 @@ import type {
 import type { Document, DocumentMetadata } from '../domain/document';
 import type {
   DocumentSummary,
+  IDocumentQuery,
   IDocumentStore,
+  ISoftDeletableDocumentStore,
   ListDocumentsOpts,
 } from '../domain/ports/IDocumentStore';
 
@@ -97,7 +99,7 @@ export type { DocumentMeta };
  */
 export class DocumentRepository
   extends BaseEntityStorageService<DocumentMeta>
-  implements IDocumentStore
+  implements IDocumentStore, IDocumentQuery, ISoftDeletableDocumentStore
 {
   /**
    * Memoised capability object — built once at construction time and

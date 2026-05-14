@@ -104,7 +104,10 @@ export function parseMultipart(req: IncomingMessage): Promise<ParsedMultipart> {
         limits: {
           fileSize: MAX_UPLOAD_BYTES,
           files: 1,
-          fields: 8,
+          // EVID-036 audit fix (P2 / W-Logic-1): raised from 8 → 16 to
+          // accommodate optional metadata fields (source, tags, author,
+          // createdAt + a few headroom slots) without silently truncating.
+          fields: 16,
           // 1 KiB header cap — busboy default is 1 KiB. Restate for clarity.
           headerPairs: 32,
         },
@@ -163,6 +166,16 @@ export function parseMultipart(req: IncomingMessage): Promise<ParsedMultipart> {
     });
 
     bb.on('error', (err: Error) => safeReject(err));
+    // EVID-036 audit fix (P2 / W-Logic-1): busboy emits 'fieldsLimit' /
+    // 'filesLimit' silently — without explicit listeners callers can't
+    // distinguish a successful parse with truncated metadata from one that
+    // hit a cap. Surface as a clean PayloadTooLargeError.
+    bb.on('fieldsLimit', () => {
+      safeReject(new PayloadTooLargeError('multipart: too many form fields'));
+    });
+    bb.on('filesLimit', () => {
+      safeReject(new PayloadTooLargeError('multipart: too many file parts'));
+    });
     bb.on('close', () => {
       if (!fileSeen) {
         safeReject(new Error('multipart: no file part found'));

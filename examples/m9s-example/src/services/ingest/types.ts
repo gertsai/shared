@@ -15,7 +15,7 @@
 import type { ServiceContextBase } from '@gertsai/api-core/moleculer';
 
 import type { IngestDocumentUseCase } from '../../application/IngestDocumentUseCase';
-import type { IDocumentStore } from '../../domain/ports/IDocumentStore';
+import type { FullDocumentStore } from '../../domain/ports/IDocumentStore';
 import type { IChunkStore } from '../../domain/ports/IChunkStore';
 import type { IEmbedder } from '../../domain/ports/IEmbedder';
 import type { IPermissionGate } from '../../domain/ports/IPermissionGate';
@@ -33,7 +33,14 @@ import type { IPermissionGate } from '../../domain/ports/IPermissionGate';
  * onto every service whose ApiController has a queue config.
  */
 export interface IngestServiceContext extends ServiceContextBase {
-  docStore: IDocumentStore;
+  /**
+   * Wave 10.E (PRD-022): widened from `IDocumentStore` to
+   * `FullDocumentStore` (the union of IDocumentStore + IDocumentQuery +
+   * ISoftDeletableDocumentStore) so admin actions (list + delete) can call
+   * `listSummaries` / `count` / `softDelete` without a cast. Per-action
+   * narrowing remains possible via structural typing.
+   */
+  docStore: FullDocumentStore;
   chunkStore: IChunkStore;
   embedder: IEmbedder;
   gate: IPermissionGate;

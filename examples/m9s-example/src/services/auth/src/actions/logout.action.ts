@@ -13,6 +13,7 @@
 import { ResponseCode } from '@gertsai/api-core/contracts';
 import typia from 'typia';
 
+import { defineAction } from '../../../../lib/define-action';
 import { resolveExampleController } from '../../../../lib/example-controller';
 import type {
   AuthServiceContext,
@@ -22,8 +23,7 @@ import type {
 
 const controller = resolveExampleController<'v1', 'auth', AuthServiceContext>('v1', 'auth');
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const logout: any = controller.register('logout', {
+export const logout = defineAction(controller.register('logout', {
   auth: 'none',
 
   rest: 'POST /auth/logout',
@@ -39,4 +39,4 @@ export const logout: any = controller.register('logout', {
     const response: LogoutResponse = { ok: true };
     return respond(response, 'Logout acknowledged');
   },
-});
+}));

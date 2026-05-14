@@ -25,6 +25,7 @@ import {
 } from '@gertsai/session-guard';
 import typia from 'typia';
 
+import { defineAction } from '../../../../lib/define-action';
 import { resolveExampleController } from '../../../../lib/example-controller';
 import { tryGetRequestContextFromCtx } from '../../../../composition/wave5-middlewares';
 import type { DocumentSummary } from '../../../../domain/ports/IDocumentStore';
@@ -48,8 +49,7 @@ export interface ListDocumentsResponse {
 
 const controller = resolveExampleController<'v1', 'ingest', IngestServiceContext>('v1', 'ingest');
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const listDocuments: any = controller.register('list-documents', {
+export const listDocuments = defineAction(controller.register('list-documents', {
   // Wave 9.0.1 / Wave 10.B parity with ingest-document: auth-gate is done
   // inside the handler via session-guard so the rest of the demo runs
   // without an OAuth provider.
@@ -133,4 +133,4 @@ export const listDocuments: any = controller.register('list-documents', {
       throw err;
     }
   },
-});
+}));

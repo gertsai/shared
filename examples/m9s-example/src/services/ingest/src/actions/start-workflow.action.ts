@@ -31,6 +31,7 @@ import type { ServiceBroker } from 'moleculer';
 import { APIError, ResponseCode } from '@gertsai/api-core/contracts';
 import typia from 'typia';
 
+import { defineAction } from '../../../../lib/define-action';
 import { resolveExampleController } from '../../../../lib/example-controller';
 import type { IngestServiceContext } from '../../types';
 
@@ -94,8 +95,7 @@ interface WorkflowRunner {
 
 const controller = resolveExampleController<'v1', 'ingest', IngestServiceContext>('v1', 'ingest');
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const startWorkflow: any = controller.register('workflow', {
+export const startWorkflow = defineAction(controller.register('workflow', {
   // Auth handled inside the gate (same as ingest-document); switch to
   // 'required' in production deployments.
   auth: 'none',
@@ -182,4 +182,4 @@ export const startWorkflow: any = controller.register('workflow', {
     logger.info('[v1.ingest.workflow] started (async)', response);
     return respond(response, 'Workflow started', ResponseCode.SUCCESS_CREATED);
   },
-});
+}));
