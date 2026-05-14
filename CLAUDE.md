@@ -47,7 +47,13 @@ packages, extracted из `gertsai_codex` (RFC-extracted с preserved git history
 - **Стек**: Node ≥22 LTS · pnpm 10.x · TypeScript 5.9 · Vitest · moonrepo · Changesets.
 - **Источник foundation-решений**: `~/Work/GertsHub/.forgeplan/{adrs,epics,evidence}/`
   (read-only, не править отсюда). Главные: ADR-005, ADR-006, ADR-009, EPIC-007, EVID-008.
-- **Текущий статус**: Wave 7.2 закрыта на `main` (последние commits `c1f29cb` Wave 7.2 + `f791e8a` storage tri-state + `53e80c0` Wave 7.1). v0.2.0 ещё **не опубликован** в npm — pending publish gate. См. `KNOWN-ISSUES.md` для текущих limitations.
+- **Текущий статус**: Wave 11.B + сменилось 8 PRs за Wave 10-11 сессию (#17 .. #24). Stack завершён:
+  - **Wave 10** (PRDs 016-022) — m9s-example reference webapp built (auth UI + content slices + design system + audit closures).
+  - **Wave 11.A** (PRD-023) — production hardening: real bcrypt auth, hardcoded JWT_SECRET removed, Redis rotation store, per-tenant SSE caps, env-driven CORS, Button-primitive migration.
+  - **Wave 11.B** (PRD-024) — `defineAction` upstreamed в `@gertsai/api-core/moleculer` (changeset minor → v0.2.0), `JwtClaims` в shared `@gertsai-examples/m9s-example-api-types` package.
+  - **Wave 11.C** (PRD-025 design) — Production ops layer (observability, health/ready, graceful shutdown, auto-migrate, rate-limit defaults) + 4 extensions (OIDC, Prisma, Storybook CI, oxlint) + doc cleanup. Phase C now ships (this commit); Phase A in Wave 12; Phase B in Wave 13.
+  - **v0.2.0 ещё не опубликован** в npm — pending publish gate. После merge changeset PR (создаётся автоматически после Wave 11.B landing) → `pnpm changeset publish` ручной с Y per package.
+  - См. `KNOWN-ISSUES.md` для текущих limitations.
 
 ---
 
