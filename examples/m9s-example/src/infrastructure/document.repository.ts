@@ -22,10 +22,11 @@ import {
   type IStorageProvider,
 } from '@gertsai/entity-storage';
 import type { Session } from '@gertsai/session';
-import type {
-  EntityBasicStatus,
-  MutationMarks,
-  UpdateAction,
+import {
+  timestampToMillis,
+  type EntityBasicStatus,
+  type MutationMarks,
+  type UpdateAction,
 } from '@gertsai/entity-audit';
 import type {
   StorageCapabilities,
@@ -33,7 +34,11 @@ import type {
 } from '@gertsai/storage-core';
 
 import type { Document, DocumentMetadata } from '../domain/document';
-import type { IDocumentStore } from '../domain/ports/IDocumentStore';
+import type {
+  DocumentSummary,
+  IDocumentStore,
+  ListDocumentsOpts,
+} from '../domain/ports/IDocumentStore';
 
 // =============================================================================
 // Internal Wave 4 storage types — never leak into the domain layer.
@@ -167,4 +172,77 @@ export class DocumentRepository
       ...(stored.metadata !== undefined && { metadata: stored.metadata }),
     };
   }
+
+  /**
+   * Wave 10.B (PRD-019 FR-005) — page through non-deleted documents,
+   * newest first. Excludes soft-deleted entities by filtering on
+   * `status !== 'deleted'` in memory (cheap for the demo scale; a
+   * production adapter would push the filter into a `WhereConstraint`
+   * once `status` is in `Meta['indexed']`).
+   *
+   * Sort key is `created_at` (audit-stamped); ties broken by `_uid` for
+   * determinism. `Timestamp → millis` via `audit-primitives.timestampToMillis`.
+   *
+   * Returns a projection (`DocumentSummary`) that never exposes audit
+   * envelope or raw metadata — UI-shaped only.
+   */
+  async listSummaries(opts: ListDocumentsOpts = {}): Promise<readonly DocumentSummary[]> {
+    const skip = Math.max(0, opts.skip ?? 0);
+    const requested = opts.limit ?? 20;
+    const limit = Math.min(100, Math.max(1, requested));
+
+    // Fetch everything (no query → InMemoryStorageProvider returns all rows).
+    const all = await this.list();
+    const live = all.filter((row) => row.status !== 'deleted');
+
+    // Sort newest first by `created_at`; deterministic tie-break on `_uid`.
+    const sorted = [...live].sort((a, b) => {
+      const aMs = timestampToMillis(a.created_at);
+      const bMs = timestampToMillis(b.created_at);
+      if (aMs !== bMs) return bMs - aMs;
+      return a._uid.localeCompare(b._uid);
+    });
+
+    return sorted.slice(skip, skip + limit).map(toSummary);
+  }
+
+  /**
+   * Wave 10.B (PRD-019 FR-005) — count non-deleted documents (the
+   * `total` used by the admin pagination control).
+   */
+  async count(): Promise<number> {
+    const all = await this.list();
+    return all.filter((row) => row.status !== 'deleted').length;
+  }
+
+  /**
+   * Wave 10.B (PRD-019 FR-005) — soft-delete via the Wave 4 audit-aware
+   * `delete()` (flips `status` to `'deleted'`, stamps `deleted_*`). Missing
+   * ids are a no-op (idempotent) so the admin UI's optimistic flow survives
+   * a double-clicked Delete button.
+   */
+  async softDelete(id: string): Promise<void> {
+    const existing = await this.get(id);
+    if (!existing || existing.status === 'deleted') return;
+    await this.delete(id);
+  }
+}
+
+/**
+ * Pure projection — converts the Wave 4 storage shape to the
+ * `DocumentSummary` exposed by the admin port. Keeps the conversion
+ * branch-free and outside the repository class for ease of unit test.
+ *
+ * `preview` is the first 200 chars of `text`; the admin UI further trims
+ * to 80 for the table cell. `bytes` is the UTF-8 byte length (computed
+ * via `Buffer.byteLength` — Node-only, which matches the m9s-example
+ * runtime, not browser-shipped).
+ */
+function toSummary(row: DocumentReadShape): DocumentSummary {
+  return {
+    id: row._uid,
+    preview: row.text.length > 200 ? row.text.slice(0, 200) : row.text,
+    bytes: Buffer.byteLength(row.text, 'utf8'),
+    createdAt: new Date(timestampToMillis(row.created_at)).toISOString(),
+  };
 }

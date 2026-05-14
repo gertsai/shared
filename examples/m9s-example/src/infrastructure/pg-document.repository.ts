@@ -25,7 +25,11 @@ import { randomUUID } from 'node:crypto';
 import type { PgClient } from '@gertsai/pg-client';
 
 import type { Document } from '../domain/document';
-import type { IDocumentStore } from '../domain/ports/IDocumentStore';
+import type {
+  DocumentSummary,
+  IDocumentStore,
+  ListDocumentsOpts,
+} from '../domain/ports/IDocumentStore';
 
 import type { DocumentRow } from './document.meta';
 
@@ -113,6 +117,80 @@ export class PgDocumentRepository implements IDocumentStore {
       text: row.text,
       ...(rowMetadata !== undefined && { metadata: rowMetadata }),
     };
+  }
+
+  /**
+   * Wave 10.B (PRD-019 FR-005) — paginated list, newest first.
+   * Tenant-scoped via the constructor-supplied `tenantId`. Bytes column
+   * comes from `octet_length(text)` so the UI sees the on-disk size
+   * (UTF-8) without re-reading the body.
+   */
+  async listSummaries(opts: ListDocumentsOpts = {}): Promise<readonly DocumentSummary[]> {
+    const skip = Math.max(0, opts.skip ?? 0);
+    const requested = opts.limit ?? 20;
+    const limit = Math.min(100, Math.max(1, requested));
+
+    const rows = await this.client.$queryRaw<{
+      id: string;
+      preview: string;
+      bytes: number;
+      created_at: Date;
+    }>`
+      SELECT id,
+             LEFT(text, 200)         AS preview,
+             octet_length(text)::int AS bytes,
+             created_at
+        FROM documents
+       WHERE tenant_id = ${this.tenantId}
+       ORDER BY created_at DESC, id ASC
+       LIMIT ${limit} OFFSET ${skip}
+    `;
+    return rows.map((row) => ({
+      id: row.id,
+      preview: row.preview,
+      bytes: Number(row.bytes),
+      createdAt: row.created_at.toISOString(),
+    }));
+  }
+
+  /**
+   * Wave 10.B (PRD-019 FR-005) — total count (tenant-scoped). Pg returns
+   * `count(*)` as a bigint; we coerce to JS number which is safe for the
+   * demo cardinality (< 2^53 rows is generous).
+   */
+  async count(): Promise<number> {
+    const rows = await this.client.$queryRaw<{ count: string }>`
+      SELECT COUNT(*)::text AS count
+        FROM documents
+       WHERE tenant_id = ${this.tenantId}
+    `;
+    const raw = rows[0]?.count ?? '0';
+    return Number(raw);
+  }
+
+  /**
+   * Wave 10.B (PRD-019 FR-005) — soft-delete.
+   *
+   * NOTE / caveat: the Sprint 3.11 `documents` schema does NOT carry a
+   * `deleted_at` column (see `migrations/001_init_documents_chunks.up.sql`).
+   * This adapter therefore degrades the soft-delete contract to a HARD
+   * delete — the row is physically removed. The audit-aware
+   * `DocumentRepository` (in-memory + Wave 4 entity-storage path)
+   * implements the true soft-delete semantic. Adding a `deleted_at`
+   * column is tracked in the m9s-example backlog for a future migration.
+   *
+   * Missing ids are a no-op (idempotent): `WHERE id = ${id}` matches 0
+   * rows, the delete succeeds vacuously.
+   */
+  async softDelete(id: string): Promise<void> {
+    // Pg uuid columns reject non-canonical strings. Accept canonical UUIDs
+    // and let anything else through `coerceUuid`'s explicit error so the
+    // action layer can surface a clean 400. (Idempotent for valid-but-
+    // missing ids — the DELETE just affects 0 rows.)
+    await this.client.$executeRaw`
+      DELETE FROM documents
+       WHERE id = ${coerceUuid(id)} AND tenant_id = ${this.tenantId}
+    `;
   }
 
   /**
