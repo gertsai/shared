@@ -5,7 +5,7 @@
   share the same Toast component as ingest.
 -->
 <script lang="ts">
-  import Toast from '$lib/components/Toast.svelte';
+  import { Toast } from '$lib/components/ui';
   import { m } from '$lib/i18n';
   import type { ActionData } from './$types';
 

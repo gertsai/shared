@@ -13,7 +13,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { m } from '$lib/i18n';
-  import Toast from '$lib/components/Toast.svelte';
+  import { Toast } from '$lib/components/ui';
   import type { ActionData, PageData } from './$types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
