@@ -59,13 +59,17 @@ jobs:
       - name: Compute Storybook base URL (repo subpath)
         id: subpath
         env:
-          GITHUB_REPOSITORY_NAME: ${{ github.event.repository.name }}
+          # GITHUB_REPOSITORY is the built-in owner/repo (e.g. "gertsai/shared").
+          # Available for ALL workflow triggers (push, workflow_dispatch, etc.).
+          # Using github.event.repository.name fails on workflow_dispatch since
+          # the workflow_dispatch payload doesn't carry a repository object.
+          REPO_FULL: ${{ github.repository }}
         run: |
-          # GITHUB_REPOSITORY_NAME is the repo name only (e.g. "shared"); the
-          # GitHub Pages URL for a project page is /<repo-name>/. We pin the
-          # value into the next step's env to keep workflow injection safe
-          # (read into a shell var, never inlined into `run:` via `${{ }}`).
-          printf 'BASE_URL=/%s/\n' "$GITHUB_REPOSITORY_NAME" >> "$GITHUB_OUTPUT"
+          # Extract repo name (everything after the last slash) for the Pages
+          # subpath. Read from shell env, never inline ${{ }} into run: scripts
+          # (workflow-injection-safe pattern).
+          REPO_NAME="${REPO_FULL##*/}"
+          printf 'BASE_URL=/%s/\n' "$REPO_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Build Storybook
         working-directory: examples/m9s-example-web
