@@ -15,3 +15,11 @@ export * from './embed-batch.action';
 export * from './store-chunks.action';
 // Workflow trigger — public REST endpoint (POST /ingest/workflow).
 export * from './start-workflow.action';
+
+// Wave 10.B (PRD-019 / RFC-014) — content slices.
+//   - upload-document: multipart file upload (busboy)  [owner: F]
+//   - list-documents:  paginated list (admin CMS)      [owner: C]
+//   - delete-document: soft-delete via storage         [owner: C]
+export * from './upload-document.action';
+export * from './list-documents.action';
+export * from './delete-document.action';

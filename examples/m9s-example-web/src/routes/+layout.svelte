@@ -22,6 +22,11 @@
     { href: '/docs', label: () => m.nav_link_docs() },
   ] as const;
 
+  // Wave 10.B — auth-only nav entry; rendered only when `data.user` is set.
+  // Kept out of `navLinks` so the SSR for anonymous users never emits the
+  // markup (defence against NFR-1 flash-of-protected-content).
+  const adminLink = { href: '/admin/content', label: () => m.nav_link_admin() } as const;
+
   function isActive(pathname: string, href: string): boolean {
     if (href === '/') return pathname === '/';
     return pathname === href || pathname.startsWith(`${href}/`);
@@ -51,6 +56,21 @@
               </a>
             </li>
           {/each}
+          {#if data?.user}
+            <li>
+              <a
+                href={adminLink.href}
+                data-testid="nav-link-admin"
+                class="px-3 py-2 rounded-md text-sm font-medium transition-colors
+                  {isActive($page.url.pathname, adminLink.href)
+                  ? 'bg-amber-100 text-amber-800'
+                  : 'text-amber-700 hover:bg-amber-50 hover:text-amber-900'}"
+                aria-current={isActive($page.url.pathname, adminLink.href) ? 'page' : undefined}
+              >
+                {adminLink.label()}
+              </a>
+            </li>
+          {/if}
         </ul>
         {#if data?.user}
           <div class="flex items-center gap-2 border-l border-slate-200 pl-4" data-testid="auth-badge">

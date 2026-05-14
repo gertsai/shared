@@ -32,6 +32,7 @@ import { resolveExampleController } from '../../../../lib/example-controller';
 import { ForbiddenError } from '../../../../shared/errors';
 import { tryGetRequestContextFromCtx } from '../../../../composition/wave5-middlewares';
 import { INGEST_QUEUE_NAME, JOB_PROCESS_DOCUMENT } from '../queues';
+import { emitSse } from '../sse-emitter';
 import type {
   IngestServiceContext,
   IngestDocumentRequest,
@@ -82,6 +83,11 @@ export const ingestDocument: any = controller.register('document', {
       mode: QUEUE_ENABLED ? 'queued' : 'inline',
     });
 
+    // Wave 10.B (PRD-019 FR-002) — SSE lifecycle frames are emitted from
+    // inside the try {...} below. `started` only fires AFTER the session
+    // guards pass so rejected requests do not leak a phantom lifecycle to
+    // other tabs watching this docId; `error` fires in the catch with the
+    // domain error message so terminal failures still close the stream.
     try {
       // Wave 9.0.1 fix — assert session-guard invariants BEFORE deciding the
       // queue vs inline path. Pre-fix, the action enqueued first and the
@@ -105,6 +111,10 @@ export const ingestDocument: any = controller.register('document', {
         }
       }
 
+      // Wave 10.B — broadcast lifecycle start. Done after auth assertions
+      // succeed so rejected requests do not leak a `started` event.
+      emitSse({ kind: 'started', docId, ts: Date.now() });
+
       // Pipeline-style: when api-core has queue config, the service has
       // `addJob` injected automatically. Action just enqueues — the worker
       // registered in `queues/ingest-chunk.worker.ts` runs asynchronously.
@@ -122,6 +132,11 @@ export const ingestDocument: any = controller.register('document', {
           chunkCount: null,
         };
 
+        // Queued path: worker emits `embedding`/`persisted`/`done` after
+        // each pipeline stage completes (Wave 10.B+ follow-up). Here we
+        // only emit `started` above; the SSE consumer keeps the stream
+        // open until those terminal frames arrive or the 30s idle timeout
+        // fires server-side.
         logger.info('[v1.ingest.document] enqueued', response);
         return respond(response, 'Document accepted for ingestion', ResponseCode.SUCCESS_CREATED);
       }
@@ -135,6 +150,20 @@ export const ingestDocument: any = controller.register('document', {
         ...(expectedTenantId !== undefined && { expectedTenantId }),
       });
 
+      // Wave 10.B — inline path runs the full pipeline in this call, so the
+      // four-frame lifecycle is synthesised here. Real embedding/persist
+      // stages happen inside `service.useCase.execute`; this emits the
+      // marker frames around the synchronous boundary so the UI panel
+      // renders the canonical 4-event sequence without backend hooks.
+      emitSse({ kind: 'embedding', docId, ts: Date.now() });
+      emitSse({
+        kind: 'persisted',
+        docId,
+        ts: Date.now(),
+        detail: `chunkCount=${chunkCount}`,
+      });
+      emitSse({ kind: 'done', docId, ts: Date.now() });
+
       const response: IngestDocumentResponse = {
         docId,
         jobId: `inline-${Date.now()}-${chunkCount}`,
@@ -145,6 +174,18 @@ export const ingestDocument: any = controller.register('document', {
       logger.info('[v1.ingest.document] processed inline', response);
       return respond(response, 'Document accepted for ingestion', ResponseCode.SUCCESS_CREATED);
     } catch (err) {
+      // Wave 10.B — surface failures to any open SSE listener so the UI
+      // panel can show a terminal `error` row instead of dangling at
+      // `started`. Done BEFORE the domain→HTTP mapping so the wire frame
+      // always fires, even when the eventual `throw` is intercepted by the
+      // framework's default error handler.
+      emitSse({
+        kind: 'error',
+        docId,
+        ts: Date.now(),
+        detail: err instanceof Error ? err.message : String(err),
+      });
+
       // Map domain errors to transport (HTTP) errors here — keeps the
       // application layer independent of @gertsai/api-core.
       //

@@ -3,6 +3,7 @@ import RLRMiddleware from '@gertsai/api-rlr';
 import IORedis from 'ioredis';
 
 import config from '../../project.config';
+import { sseIngestAliasHandler } from './sse-ingest.handler';
 
 // `package.json` is loaded at runtime and embedded into the response envelope
 // by createApiService. Resolved relative to `process.cwd()` (set by `pnpm start`
@@ -139,6 +140,31 @@ export function createDocumentsApiService() {
             whitelist: ['v2.openapi.**'],
             authentication: false,
             authorization: false,
+          },
+          {
+            // Wave 10.B (PRD-019 FR-002) — Server-Sent Events stream for
+            // ingest pipeline lifecycle events. The alias handler is a
+            // bare `(req, res)` function (not a Moleculer action) so we
+            // can keep the connection open and write SSE frames directly.
+            //
+            //  - `use: []`  no rate-limiter on long-lived streams; the
+            //               token bucket would close otherwise-healthy
+            //               connections when their listener slot ages out.
+            //  - `bodyParsers: false`   SSE is a GET with no body.
+            //  - `authentication/authorization: false`   matches the
+            //               permissive policy of the other example routes;
+            //               tighten before any non-toy deployment.
+            //
+            // See `sse-ingest.handler.ts` for docId validation, idle
+            // timeout, and cleanup semantics.
+            path: '/api/stream',
+            use: [],
+            aliases: {
+              'GET ingest': sseIngestAliasHandler,
+            },
+            authentication: false,
+            authorization: false,
+            bodyParsers: false,
           },
         ],
       },
