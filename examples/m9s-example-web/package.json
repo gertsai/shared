@@ -14,7 +14,9 @@
     "lint": "echo 'eslint handled at workspace root'",
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install chromium",
-    "typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
+    "typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
   },
   "dependencies": {
     "@gertsai-examples/m9s-example-api-types": "workspace:*",
@@ -24,11 +26,17 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0",
+    "@storybook/addon-a11y": "^8.5.0",
+    "@storybook/addon-essentials": "^8.5.0",
+    "@storybook/addon-interactions": "^8.5.0",
+    "@storybook/svelte": "^8.5.0",
+    "@storybook/sveltekit": "^8.5.0",
     "@sveltejs/adapter-node": "^5.2.0",
     "@sveltejs/kit": "^2.8.0",
     "@sveltejs/vite-plugin-svelte": "^4.0.0",
     "@tailwindcss/vite": "^4.0.0",
     "@types/node": "^22.10.0",
+    "storybook": "^8.5.0",
     "svelte": "^5.0.0",
     "svelte-check": "^4.0.0",
     "tailwindcss": "^4.0.0",

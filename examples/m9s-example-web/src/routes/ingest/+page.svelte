@@ -10,7 +10,7 @@
   Both teammates touch THIS file at disjoint marker comments below.
 -->
 <script lang="ts">
-  import Toast from '$lib/components/Toast.svelte';
+  import { Toast } from '$lib/components/ui';
   import { m } from '$lib/i18n';
   import type { ActionData } from './$types';
   // WAVE-10-B/F:SCRIPT-IMPORTS — file-upload teammate adds XHR/SSE helpers here.
