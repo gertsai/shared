@@ -53,6 +53,9 @@ importers:
 
   examples/m9s-example:
     dependencies:
+      '@gertsai-examples/m9s-example-api-types':
+        specifier: workspace:*
+        version: link:../m9s-example-api-types
       '@gertsai/api-core':
         specifier: workspace:*
         version: link:../../packages/api-core

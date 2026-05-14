@@ -47,3 +47,12 @@ export type {
   OpenApiGeneratorOptions,
   OpenApiMapper,
 } from './openapi/types';
+
+// Wave 11.B (PRD-024) — JWT claims shared between backend sign+verify and
+// web verify. Closes EVID-036 CI-5 (drift risk from duplicated interfaces).
+export type {
+  JwtClaims,
+  JwtAccessClaims,
+  JwtRefreshClaims,
+  JwtKind,
+} from './jwt-claims';

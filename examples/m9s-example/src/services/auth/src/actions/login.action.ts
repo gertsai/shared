@@ -21,7 +21,7 @@ import { APIError, ResponseCode } from '@gertsai/api-core/contracts';
 import bcrypt from 'bcryptjs';
 import typia from 'typia';
 
-import { defineAction } from '../../../../lib/define-action';
+import { defineAction } from '@gertsai/api-core/moleculer';
 import { resolveExampleController } from '../../../../lib/example-controller';
 import { signAccessToken, signRefreshToken } from '../jwt';
 import { registerJti } from '../rotation-store';
