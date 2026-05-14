@@ -31,6 +31,8 @@ import type {
   ListDocumentsOpts,
 } from '../domain/ports/IDocumentStore';
 
+import { PgSoftDeleteNotSupportedError } from '../shared/errors';
+
 import type { DocumentRow } from './document.meta';
 
 export interface PgDocumentRepositoryOptions {
@@ -171,26 +173,26 @@ export class PgDocumentRepository implements IDocumentStore {
   /**
    * Wave 10.B (PRD-019 FR-005) — soft-delete.
    *
-   * NOTE / caveat: the Sprint 3.11 `documents` schema does NOT carry a
-   * `deleted_at` column (see `migrations/001_init_documents_chunks.up.sql`).
-   * This adapter therefore degrades the soft-delete contract to a HARD
-   * delete — the row is physically removed. The audit-aware
-   * `DocumentRepository` (in-memory + Wave 4 entity-storage path)
-   * implements the true soft-delete semantic. Adding a `deleted_at`
-   * column is tracked in the m9s-example backlog for a future migration.
+   * EVID-036 audit fix (P1 / CI-3 — Liskov violation): the Sprint 3.11
+   * `documents` schema lacks a `deleted_at` column, so this adapter cannot
+   * honor the `IDocumentStore.softDelete` contract — historically it
+   * silently degraded to a HARD delete, which broke caller assumptions
+   * (admin-restore path, audit trail). The correct fix is a migration that
+   * adds `deleted_at TIMESTAMPTZ NULL` and updates `listSummaries`/`count`
+   * to filter `WHERE deleted_at IS NULL`; tracked in the m9s-example
+   * backlog.
    *
-   * Missing ids are a no-op (idempotent): `WHERE id = ${id}` matches 0
-   * rows, the delete succeeds vacuously.
+   * Until that migration ships, we fail loud: throw a clearly-typed error
+   * the action layer can map to HTTP 501 (Not Implemented). This honors
+   * Liskov — both adapters either succeed identically or fail explicitly,
+   * never silently diverge.
    */
-  async softDelete(id: string): Promise<void> {
-    // Pg uuid columns reject non-canonical strings. Accept canonical UUIDs
-    // and let anything else through `coerceUuid`'s explicit error so the
-    // action layer can surface a clean 400. (Idempotent for valid-but-
-    // missing ids — the DELETE just affects 0 rows.)
-    await this.client.$executeRaw`
-      DELETE FROM documents
-       WHERE id = ${coerceUuid(id)} AND tenant_id = ${this.tenantId}
-    `;
+  async softDelete(_id: string): Promise<void> {
+    throw new PgSoftDeleteNotSupportedError(
+      'PgDocumentRepository.softDelete is not supported: the documents ' +
+        'schema lacks a deleted_at column. Apply the deleted_at migration ' +
+        'or switch the example to memory mode.',
+    );
   }
 
   /**

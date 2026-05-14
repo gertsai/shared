@@ -37,6 +37,20 @@ export const login: any = controller.register('login', {
   responseMessage: 'Login successful',
 
   async handler({ params, logger, respond }) {
+    // EVID-036 audit fix (P0 / U-5): block the "accept-any-credentials"
+    // path unless M9S_DEMO_AUTH=true is set. Combined with the JWT_SECRET
+    // hard-fail (CI-1), a production deploy without the demo opt-in cannot
+    // mint forgeable tokens. Replace this whole handler with a real
+    // password / OIDC check before turning the env opt-in on in prod.
+    if (process.env.M9S_DEMO_AUTH !== 'true') {
+      throw new APIError(
+        ResponseCode.FORBIDDEN__INSUFFICIENT_RIGHTS,
+        undefined,
+        'demo login disabled — set M9S_DEMO_AUTH=true to enable the open auth ' +
+          'path or replace this action with a real auth handler.',
+      );
+    }
+
     const { email, password } = params;
 
     if (!email || !password) {
@@ -52,9 +66,11 @@ export const login: any = controller.register('login', {
     const { token, expiresAt } = signAccessToken(user);
     const refreshToken = signRefreshToken(user);
 
+    // EVID-036 audit fix (P2 / W-Security-7, CWE-532): log userId + tenantId
+    // only — email is PII and the user record is recoverable from the userId
+    // in any audit trail.
     logger.info('[v1.auth.login] issued demo token', {
       userId: user.id,
-      email: user.email,
       tenantId: user.tenantId,
     });
 

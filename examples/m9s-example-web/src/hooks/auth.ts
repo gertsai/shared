@@ -19,6 +19,7 @@ import type { Handle } from '@sveltejs/kit';
 import { verifyToken } from '$lib/server/jwt';
 
 const COOKIE_NAME = 'auth_token';
+const REFRESH_COOKIE_NAME = 'refresh_token';
 
 export const authHandler: Handle = async ({ event, resolve }) => {
   const token = event.cookies.get(COOKIE_NAME);
@@ -32,8 +33,12 @@ export const authHandler: Handle = async ({ event, resolve }) => {
         tenantId: claims.tenantId,
       };
     } else {
-      // Token present but invalid — clear it to stop the loop.
+      // EVID-036 audit fix (P1 / U-3): also clear the long-lived
+      // refresh_token cookie when the access token is invalid. Before this
+      // fix, a tampered/expired access token was cleared but the 24h
+      // refresh token persisted client-side as a stale credential.
       event.cookies.delete(COOKIE_NAME, { path: '/' });
+      event.cookies.delete(REFRESH_COOKIE_NAME, { path: '/' });
     }
   }
 

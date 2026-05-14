@@ -33,8 +33,24 @@ export interface JwtClaims {
   iss: string;
 }
 
+/**
+ * Resolve the HS256 secret. Hard-fails in production when JWT_SECRET is unset
+ * (CWE-798): the DEFAULT_SECRET is committed to the repo and identical on
+ * web + backend, so any deploy without an override would let attackers forge
+ * tokens. Demo / local-dev paths can opt-in via M9S_ALLOW_DEMO_SECRET=1.
+ *
+ * EVID-036 audit fix (P0 / CI-1).
+ */
 function getSecret(): string {
-  return process.env.JWT_SECRET ?? DEFAULT_SECRET;
+  const fromEnv = process.env.JWT_SECRET;
+  if (fromEnv && fromEnv.length > 0) return fromEnv;
+  if (process.env.NODE_ENV === 'production' && process.env.M9S_ALLOW_DEMO_SECRET !== '1') {
+    throw new Error(
+      'JWT_SECRET must be set in production. To run the demo with the public ' +
+        'default secret, set M9S_ALLOW_DEMO_SECRET=1 explicitly.',
+    );
+  }
+  return DEFAULT_SECRET;
 }
 
 /** Base64url decode → utf8 string. Returns null on malformed input. */

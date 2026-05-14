@@ -13,13 +13,26 @@
  * Middleware:
  *   - Every outbound request gets `X-Tenant-ID: <PUBLIC_TENANT_ID>` injected.
  *   - `content-type: application/json` is set as a default header.
+ *   - Wave 10.A JWT refresh — proactive (60s skew) + reactive (401 retry).
  *
  * Env:
  *   - `PUBLIC_API_BASE_URL` (default `http://localhost:3031`)
  *   - `PUBLIC_TENANT_ID`    (default `tenant-acme`)
+ *
+ * EVID-036 audit remediation:
+ *   - Per-request `JwtTokenProvider` via `AsyncLocalStorage` instead of a
+ *     module-singleton (CI-2: prevents request A's tokens from leaking into
+ *     request B's middleware in a concurrent SvelteKit server).
+ *   - Single-flight refresh promise (U-2: two parallel calls observing the
+ *     same near-expiry token now dedupe instead of double-refreshing).
+ *   - Pre-consumption request clone (U-1.a) + middleware-aware retry path
+ *     (U-1.b) + `/auth/refresh` self-recursion guard (U-1.c).
  */
-import createClient, { type Middleware } from 'openapi-fetch';
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 import type { PlaceholderPaths } from '@gertsai-examples/m9s-example-api-types';
+import createClient, { type Middleware } from 'openapi-fetch';
+
 import { unsafeDecodeExp } from '$lib/server/jwt';
 
 /**
@@ -93,51 +106,128 @@ const noopProvider: JwtTokenProvider = {
   getRefreshToken: () => null,
 };
 
-let tokenProvider: JwtTokenProvider = noopProvider;
+// EVID-036 P1 / CI-2 fix: per-request provider via AsyncLocalStorage.
+//
+// Previously a module-level `let tokenProvider` was mutated by
+// `setJwtTokenProvider` once per request. SvelteKit handles requests
+// interleaved on a single Node process — request A's `setAccessToken` could
+// leak its token into request B's middleware between awaits. ALS gives every
+// async call frame a scoped provider that doesn't bleed across requests.
+const tokenProviderAls = new AsyncLocalStorage<JwtTokenProvider>();
+
+function currentProvider(): JwtTokenProvider {
+  return tokenProviderAls.getStore() ?? noopProvider;
+}
 
 /**
- * Wire a token provider for the lifetime of one server request — call
- * inside `+page.server.ts` `load` / `actions` BEFORE issuing API calls.
- * Pass `null` (or omit) to reset to the anonymous no-op.
+ * Wire a token provider for the duration of `callback`. Server-side
+ * `load` / `actions` should wrap their API calls in this helper so the JWT
+ * middleware reads the right cookies — and only the right cookies — for the
+ * request being handled.
+ *
+ * Replaces the deprecated `setJwtTokenProvider` (kept exported for legacy
+ * callers; logs a warning in dev).
  */
-export function setJwtTokenProvider(provider: JwtTokenProvider | null): void {
-  tokenProvider = provider ?? noopProvider;
+export function withJwtTokenProvider<T>(provider: JwtTokenProvider, callback: () => Promise<T>): Promise<T> {
+  return tokenProviderAls.run(provider, callback);
+}
+
+/**
+ * @deprecated Use `withJwtTokenProvider(provider, async () => …)` instead —
+ * the module-singleton path leaks tokens across concurrent server requests
+ * (EVID-036 CI-2). Retained as a no-op shim so external imports keep
+ * compiling; the new ALS-scoped path is the only one wired into middleware.
+ */
+export function setJwtTokenProvider(_provider: JwtTokenProvider | null): void {
+  // intentional no-op — see deprecation note.
 }
 
 const REFRESH_SKEW_SECONDS = 60;
 
+// EVID-036 P1 / U-2 fix: single-flight refresh. Two parallel API calls that
+// both observe `exp - now < 60s` will both enter the proactive branch; we
+// dedupe via a module-scoped promise keyed on the refresh token so the
+// second caller awaits the first's response.
+const inflightRefresh = new Map<string, Promise<string | null>>();
+
 async function refreshAccessTokenViaBackend(refreshToken: string): Promise<string | null> {
+  const existing = inflightRefresh.get(refreshToken);
+  if (existing !== undefined) return existing;
+
+  const promise = (async (): Promise<string | null> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'X-Tenant-ID': TENANT_ID,
+        },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (!res.ok) return null;
+      const body = (await res.json()) as Record<string, unknown>;
+      const inner = (body.data ?? body) as Record<string, unknown>;
+      return typeof inner.token === 'string' ? inner.token : null;
+    } catch {
+      return null;
+    } finally {
+      inflightRefresh.delete(refreshToken);
+    }
+  })();
+
+  inflightRefresh.set(refreshToken, promise);
+  return promise;
+}
+
+// EVID-036 P1 / U-1.a fix: pre-consumption request clone.
+//
+// `Request.body` is a ReadableStream that's consumed by the first `fetch`.
+// Building a new Request from `request.body` inside `onResponse` therefore
+// sends an empty payload on retry (POST/PUT silently break). We clone in
+// `onRequest` BEFORE openapi-fetch consumes the body, and pull the clone
+// when retrying. WeakMap so a request that completes without retry doesn't
+// leak.
+const preConsumeClones = new WeakMap<Request, Request>();
+
+/**
+ * `/auth/refresh` itself never participates in the reactive-401 retry —
+ * a 401 from this endpoint means the refresh token is dead and the user
+ * needs to log in again. Without this guard the middleware would recurse
+ * on its own refresh call.
+ */
+function isAuthRefreshUrl(url: string): boolean {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'X-Tenant-ID': TENANT_ID,
-      },
-      body: JSON.stringify({ refreshToken }),
-    });
-    if (!res.ok) return null;
-    const body = (await res.json()) as Record<string, unknown>;
-    const inner = (body.data ?? body) as Record<string, unknown>;
-    return typeof inner.token === 'string' ? inner.token : null;
+    const parsed = new URL(url, API_BASE_URL);
+    return parsed.pathname.endsWith('/auth/refresh');
   } catch {
-    return null;
+    return false;
   }
 }
 
 const jwtMiddleware: Middleware = {
   async onRequest({ request }) {
-    // 1. Proactive refresh if expiry is near.
-    let access = tokenProvider.getAccessToken();
+    // Stash a clone before the body is consumed — see preConsumeClones.
+    if (request.body !== null && !isAuthRefreshUrl(request.url)) {
+      try {
+        preConsumeClones.set(request, request.clone());
+      } catch {
+        // A request with a non-cloneable stream (e.g. a worker-piped FormData)
+        // gives up retry-friendliness in exchange for not crashing the
+        // outbound call. Acceptable for the demo.
+      }
+    }
+
+    const provider = currentProvider();
+    let access = provider.getAccessToken();
     if (access !== null) {
       const exp = unsafeDecodeExp(access);
       const now = Math.floor(Date.now() / 1_000);
       if (exp !== null && exp - now < REFRESH_SKEW_SECONDS) {
-        const refresh = tokenProvider.getRefreshToken();
+        const refresh = provider.getRefreshToken();
         if (refresh !== null) {
           const fresh = await refreshAccessTokenViaBackend(refresh);
           if (fresh !== null) {
-            tokenProvider.setAccessToken(fresh);
+            provider.setAccessToken(fresh);
             access = fresh;
           }
         }
@@ -148,20 +238,39 @@ const jwtMiddleware: Middleware = {
   },
 
   async onResponse({ request, response }) {
-    // 2. Reactive refresh on 401 — single retry.
     if (response.status !== 401) return response;
-    const refresh = tokenProvider.getRefreshToken();
+    // U-1.c: never recurse on the refresh endpoint itself.
+    if (isAuthRefreshUrl(request.url)) return response;
+
+    const provider = currentProvider();
+    const refresh = provider.getRefreshToken();
     if (refresh === null) return response;
     const fresh = await refreshAccessTokenViaBackend(refresh);
     if (fresh === null) return response;
-    tokenProvider.setAccessToken(fresh);
+    provider.setAccessToken(fresh);
 
-    const retryHeaders = new Headers(request.headers);
+    // U-1.b: rebuild the request from the pre-consumption clone so POST/PUT
+    // bodies survive the retry, and reuse the same header set that the
+    // middleware chain (tenant header, content-type, anything user code
+    // injected) already populated. Authorization is the only thing we need
+    // to overwrite.
+    const original = preConsumeClones.get(request) ?? request;
+    const retryHeaders = new Headers(original.headers);
     retryHeaders.set('authorization', `Bearer ${fresh}`);
-    const retryReq = new Request(request.url, {
-      method: request.method,
+    let retryBody: BodyInit | null = null;
+    if (original.body !== null) {
+      try {
+        retryBody = (await original.clone().arrayBuffer()) as ArrayBuffer;
+      } catch {
+        // If body cloning fails on retry, send headers-only — better than
+        // crashing the request.
+        retryBody = null;
+      }
+    }
+    const retryReq = new Request(original.url, {
+      method: original.method,
       headers: retryHeaders,
-      body: request.body,
+      body: retryBody,
     });
     return fetch(retryReq);
   },

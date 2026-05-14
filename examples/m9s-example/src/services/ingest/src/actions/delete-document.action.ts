@@ -26,6 +26,7 @@ import typia, { type tags } from 'typia';
 
 import { resolveExampleController } from '../../../../lib/example-controller';
 import { tryGetRequestContextFromCtx } from '../../../../composition/wave5-middlewares';
+import { PgSoftDeleteNotSupportedError } from '../../../../shared/errors';
 import type { IngestServiceContext } from '../../types';
 
 /**
@@ -96,6 +97,22 @@ export const deleteDocument: any = controller.register('delete-document', {
           ResponseCode.FORBIDDEN__INSUFFICIENT_RIGHTS,
           undefined,
           'Tenant scope violation',
+        );
+      }
+      // EVID-036 audit fix (P1 / CI-3): PG adapter explicitly refuses to
+      // hard-delete now. Surface 501 so the admin UI can show a meaningful
+      // "schema migration required" message instead of a silent contract
+      // violation.
+      if (err instanceof PgSoftDeleteNotSupportedError) {
+        logger.warn('[v1.ingest.delete-document] pg adapter refused soft-delete', {
+          docId,
+          reason: err.message,
+        });
+        throw new APIError(
+          ResponseCode.NOT_IMPLEMENTED,
+          undefined,
+          'Soft-delete is not supported by the current storage adapter ' +
+            '(documents schema lacks deleted_at).',
         );
       }
       throw err;

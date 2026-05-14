@@ -47,3 +47,16 @@ export function permissionDenied(
     details: { userId, action, resource },
   });
 }
+
+/**
+ * EVID-036 audit fix (P1 / CI-3): explicit error that signals an adapter
+ * cannot honor `IDocumentStore.softDelete` because the underlying schema
+ * lacks the required `deleted_at` column. Lives in `shared/` (neutral
+ * kernel) rather than `infrastructure/` so the `services/` layer can
+ * import it without violating hex boundaries (ADR-002).
+ *
+ * The PG adapter throws this; the action layer maps it to HTTP 501.
+ */
+export class PgSoftDeleteNotSupportedError extends Error {
+  override readonly name = 'PgSoftDeleteNotSupportedError';
+}
