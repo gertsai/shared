@@ -32,6 +32,8 @@
  */
 import config from '../../project.config';
 
+import IORedis from 'ioredis';
+
 import { InMemoryStorageProvider } from '@gertsai/entity-storage';
 import { RestRequestManager } from '@gertsai/rest-request-manager';
 import { Session } from '@gertsai/session';
@@ -39,6 +41,7 @@ import { Session } from '@gertsai/session';
 import { createAppLogger } from '../shared/logger';
 import { DocumentRepository } from '../infrastructure/document.repository';
 import type { DocumentMeta as MemoryDocumentMeta } from '../infrastructure/document.repository';
+import { InMemoryRotationStore } from '../infrastructure/in-memory-rotation.store';
 import { MemoryVectorStore } from '../infrastructure/memory-vector.store';
 import { MockEmbedder } from '../infrastructure/mock-embedder';
 import { OllamaEmbedder } from '../infrastructure/ollama-embedder';
@@ -48,11 +51,13 @@ import { OpenFgaPermissionGate } from '../infrastructure/openfga-permission.gate
 import { PgClientAdapter } from '../infrastructure/pg-client.adapter';
 import { PgDocumentRepository } from '../infrastructure/pg-document.repository';
 import { PgVectorStore } from '../infrastructure/pg-vector.store';
+import { RedisRotationStore } from '../infrastructure/redis-rotation.store';
 
 import type { FullDocumentStore } from '../domain/ports/IDocumentStore';
 import type { IChunkStore } from '../domain/ports/IChunkStore';
 import type { IEmbedder } from '../domain/ports/IEmbedder';
 import type { IPermissionGate } from '../domain/ports/IPermissionGate';
+import type { IRotationStore } from '../domain/ports/IRotationStore';
 
 /**
  * The bundle of outbound adapters wired into both use cases.
@@ -66,6 +71,14 @@ export interface SharedInfrastructure {
   readonly chunkStore: IChunkStore;
   readonly embedder: IEmbedder;
   readonly gate: IPermissionGate;
+  /**
+   * Refresh-token rotation + reuse-detection store. Wave 11.A (PRD-023):
+   * env-driven Redis vs in-memory selection. Defaults to in-memory so
+   * single-process dev runs require zero env vars; flips to Redis when
+   * `REDIS_URL` is set (matches the BullMQ + cache gating pattern used
+   * elsewhere in this file).
+   */
+  readonly rotationStore: IRotationStore;
 }
 
 /**
@@ -78,8 +91,38 @@ export function buildInfrastructure(): SharedInfrastructure {
   const { docStore, chunkStore } = pickStores();
   const embedder = pickEmbedder();
   const gate = pickGate();
+  const rotationStore = pickRotationStore();
+  // Idempotent — in-memory impl schedules a `.unref()`-ed prune timer;
+  // Redis impl is a no-op (TTL handles eviction).
+  rotationStore.startPruner();
 
-  return { docStore, chunkStore, embedder, gate };
+  return { docStore, chunkStore, embedder, gate, rotationStore };
+}
+
+/**
+ * Choose the rotation-store impl. Wave 11.A (PRD-023 / RFC-016):
+ *
+ *   - `REDIS_URL` unset (or empty) → `InMemoryRotationStore`. Fine for
+ *     single-process dev + tests. Refresh-token state is lost on
+ *     restart.
+ *
+ *   - `REDIS_URL` set → `RedisRotationStore`. Survives restarts and is
+ *     shared across multi-instance deploys (every node sees the same
+ *     jti map so reuse-detection works cluster-wide).
+ *
+ * The Redis client constructed here is dedicated to the rotation store
+ * (not shared with the BullMQ / Moleculer cache clients in
+ * `moleculer.config.ts`) so a stuck or slow rotation-store call can't
+ * back-pressure the broker. `maxRetriesPerRequest: null` matches the
+ * BullMQ pattern — let the caller decide retry policy rather than
+ * dropping commands silently.
+ */
+function pickRotationStore(): IRotationStore {
+  if (config.REDIS_URL && config.REDIS_URL.trim().length > 0) {
+    const redis = new IORedis(config.REDIS_URL, { maxRetriesPerRequest: null });
+    return new RedisRotationStore(redis);
+  }
+  return new InMemoryRotationStore();
 }
 
 /**

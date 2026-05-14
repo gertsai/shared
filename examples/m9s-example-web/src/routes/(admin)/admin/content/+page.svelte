@@ -13,7 +13,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { m } from '$lib/i18n';
-  import { Toast } from '$lib/components/ui';
+  import { Button, Toast } from '$lib/components/ui';
   import type { ActionData, PageData } from './$types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -128,13 +128,15 @@
               <td class="px-3 py-2 text-right">
                 <form method="POST" action="?/delete" onsubmit={confirmAndSubmit}>
                   <input type="hidden" name="docId" value={doc.id} />
-                  <button
+                  <!-- Wave 11.A FR-006 — migrate Delete button to the Button primitive. -->
+                  <Button
                     type="submit"
+                    variant="destructive"
+                    size="sm"
                     data-testid="admin-content-delete"
-                    class="rounded-md bg-rose-600 px-3 py-1 text-xs font-medium text-white hover:bg-rose-700 transition-colors"
                   >
                     {m.admin_content_action_delete()}
-                  </button>
+                  </Button>
                 </form>
               </td>
             </tr>

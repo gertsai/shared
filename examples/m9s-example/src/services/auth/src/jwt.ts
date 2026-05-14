@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * JWT sign/verify helpers — Wave 10.A demo auth.
+ * JWT sign/verify helpers — Wave 10.A demo auth (hardened in Wave 11.A).
  *
- * IMPORTANT: this is a DEMO. The default secret
- * (`demo-secret-do-not-use-in-prod`) is hardcoded; production deployments
- * MUST set `JWT_SECRET` to a high-entropy value (≥256 bits). The library
- * verifies the signature but the resulting trust is only as strong as the
- * secret you supply.
+ * Wave 11.A (PRD-023, FR-002): the historical `DEFAULT_SECRET` fallback
+ * and `M9S_ALLOW_DEMO_SECRET=1` escape hatch are GONE. `JWT_SECRET` is
+ * now a hard boot requirement — calling any sign/verify helper without
+ * it set throws synchronously.
  *
  * Algorithm: HS256 (symmetric). Adequate for a single-process demo where
  * the same backend signs and verifies. A multi-service deployment would
@@ -30,7 +29,6 @@ import type { DemoUser } from '../types';
 // Configuration
 // ---------------------------------------------------------------------------
 
-const DEFAULT_SECRET = 'demo-secret-do-not-use-in-prod';
 const ISSUER = 'm9s-example';
 
 /** Access token TTL — short-lived. */
@@ -39,23 +37,18 @@ const ACCESS_TTL_SECONDS = 15 * 60;
 const REFRESH_TTL_SECONDS = 24 * 60 * 60;
 
 /**
- * Resolve the HS256 secret. Hard-fails in production when JWT_SECRET is unset
- * (CWE-798 — hardcoded credential): the DEFAULT_SECRET is a public string and
- * any deploy without an override would let attackers forge tokens. Demo /
- * local-dev paths can opt-in via M9S_ALLOW_DEMO_SECRET=1.
- *
- * EVID-036 audit fix (P0 / CI-1).
+ * Resolve the HS256 secret. Hard-fails unconditionally when `JWT_SECRET`
+ * is unset (CWE-798 — hardcoded credential). Wave 11.A (PRD-023, FR-002)
+ * removed the `DEFAULT_SECRET` fallback and `M9S_ALLOW_DEMO_SECRET`
+ * opt-in: any deploy — demo, CI, prod — must set `JWT_SECRET` to a
+ * high-entropy value (≥256 bits).
  */
 function getSecret(): string {
   const fromEnv = process.env.JWT_SECRET;
-  if (fromEnv && fromEnv.length > 0) return fromEnv;
-  if (process.env.NODE_ENV === 'production' && process.env.M9S_ALLOW_DEMO_SECRET !== '1') {
-    throw new Error(
-      'JWT_SECRET must be set in production. To run the demo with the public ' +
-        'default secret, set M9S_ALLOW_DEMO_SECRET=1 explicitly.',
-    );
+  if (!fromEnv || fromEnv.length === 0) {
+    throw new Error('JWT_SECRET must be set');
   }
-  return DEFAULT_SECRET;
+  return fromEnv;
 }
 
 // ---------------------------------------------------------------------------
@@ -174,22 +167,7 @@ export function verifyToken(token: string): JwtClaims | null {
   }
 }
 
-/**
- * Build a demo user record from an arbitrary email.
- * Hash-derived id keeps it deterministic for a given email (so a re-login
- * returns the same `sub`) without storing anything server-side.
- */
-export function demoUserFromEmail(email: string, tenantId = 'tenant-acme'): DemoUser {
-  // Deterministic, non-cryptographic id — pure demo aid. NOT a security
-  // primitive: the auth surface accepts any password, so the id only
-  // serves to make repeat-logins stable in the browser cookie path.
-  let h = 0;
-  for (let i = 0; i < email.length; i += 1) {
-    h = (h * 31 + email.charCodeAt(i)) | 0;
-  }
-  return {
-    id: `user-${Math.abs(h).toString(36)}`,
-    email,
-    tenantId,
-  };
-}
+// Wave 11.A (PRD-023, FR-001): `demoUserFromEmail(...)` removed. The
+// previous "derive a user from any email" helper enabled the accept-any-
+// credentials login path. Real login now flows through `IUserRepo` in
+// `./user-repo.ts` — see `actions/login.action.ts` for the call site.

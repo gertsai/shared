@@ -5,6 +5,49 @@ import IORedis from 'ioredis';
 import config from '../../project.config';
 import { sseIngestAliasHandler } from './sse-ingest.handler';
 
+// =============================================================================
+// Wave 11.A FR-005 — CORS allow-list (env-driven).
+//
+// Default policy was `origin: '*'`, which is friction-free for local demos
+// but a security smell for any non-toy deployment (open invitation for
+// cross-site credentialed requests once cookies / Authorization are in
+// play). The new policy:
+//
+//   - `CORS_ALLOWED_ORIGINS` set       → parsed comma-separated list.
+//   - Unset AND NODE_ENV !== production → fall back to `'*'` + log a warning.
+//   - Unset AND NODE_ENV === production → throw at module load (fail-fast).
+//
+// moleculer-web accepts `origin: string | string[]` and re-emits the
+// matched origin in `Access-Control-Allow-Origin` (per spec — required
+// once credentials are non-`'*'`). See node_modules/moleculer-web/src/index.js.
+// =============================================================================
+
+function parseCorsOrigins(): readonly string[] | '*' {
+  const raw = process.env.CORS_ALLOWED_ORIGINS;
+  if (typeof raw === 'string' && raw.trim().length > 0) {
+    const list = raw
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter((origin) => origin.length > 0);
+    if (list.length > 0) {
+      return list;
+    }
+  }
+  // Unset or empty after trim — apply NODE_ENV-gated policy.
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      '[cors] CORS_ALLOWED_ORIGINS must be set in production — refusing to start with wildcard origin',
+    );
+  }
+  // eslint-disable-next-line no-console
+  console.warn(
+    '[cors] wildcard origin in use — set CORS_ALLOWED_ORIGINS for prod',
+  );
+  return '*';
+}
+
+const corsOrigin = parseCorsOrigins();
+
 // `package.json` is loaded at runtime and embedded into the response envelope
 // by createApiService. Resolved relative to `process.cwd()` (set by `pnpm start`
 // to the package directory) so the lookup works identically from `src/` (dev,
@@ -71,8 +114,12 @@ const rlrUseChain = config.RLR_ENABLED && config.REDIS_URL
  *                     generator (typia.json.schema + generateOpenAPISchema)
  *                     once the example grows.
  *
- * The API is intentionally permissive (CORS `*`, no auth) so the example
- * is friction-free to try locally. Tighten before any non-toy deployment.
+ * CORS policy (Wave 11.A FR-005):
+ *   - Default (no env): wildcard `*` in non-production, hard-fail in prod.
+ *   - `CORS_ALLOWED_ORIGINS=https://a.example,https://b.example` to whitelist.
+ *
+ * Auth is still permissive (no gateway-level authn/authz) — tighten before
+ * any non-toy deployment.
  */
 export function createDocumentsApiService() {
   return createApiService(
@@ -86,7 +133,11 @@ export function createDocumentsApiService() {
         port: Number(process.env.WEB_SERVER_PORT ?? 3000),
 
         cors: {
-          origin: '*',
+          // Wave 11.A FR-005 — env-driven allow-list (see `parseCorsOrigins`).
+          // moleculer-web accepts string | string[]; the readonly array from
+          // `parseCorsOrigins` is widened with a spread copy since the gateway
+          // mutates its settings shape internally.
+          origin: corsOrigin === '*' ? '*' : [...corsOrigin],
           methods: ['GET', 'POST', 'OPTIONS'],
           allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-ID', 'X-Request-ID'],
         },

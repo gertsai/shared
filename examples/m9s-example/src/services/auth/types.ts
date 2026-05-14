@@ -1,14 +1,11 @@
 /**
- * Auth Service Types — Wave 10.A m9s-auth-ui-jwt.
+ * Auth Service Types — Wave 10.A m9s-auth-ui-jwt, hardened Wave 11.A.
  *
- * DEMO-ONLY contract. NOT a real authentication system:
- *   - accepts ANY email + password combination
- *   - returns a fixed-shape demo user derived from the email
- *   - HS256 secret defaults to a placeholder (`demo-secret-do-not-use-in-prod`)
- *
- * Production wiring (out of scope for Wave 10.A) would replace
- * `loginAction` with a real password verifier + user repo, and require
- * `JWT_SECRET` to be set to a high-entropy value at boot.
+ * Wave 11.A (PRD-023, FR-001 / FR-002) replaced the "accept any
+ * credentials" demo path with real bcrypt verification through
+ * `IUserRepo` and removed the JWT default-secret fallback. `JWT_SECRET`
+ * is now a hard boot requirement. The transport contract below is
+ * unchanged — only the implementation behind it changed.
  *
  * Mirrors the shape of `services/ingest/types.ts`:
  * `ServiceContextBase` extension + plain transport request/response types

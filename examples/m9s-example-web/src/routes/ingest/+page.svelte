@@ -10,7 +10,7 @@
   Both teammates touch THIS file at disjoint marker comments below.
 -->
 <script lang="ts">
-  import { Toast } from '$lib/components/ui';
+  import { Button, Toast } from '$lib/components/ui';
   import { m } from '$lib/i18n';
   import type { ActionData } from './$types';
   // WAVE-10-B/F:SCRIPT-IMPORTS — file-upload teammate adds XHR/SSE helpers here.
@@ -343,12 +343,10 @@
     </div>
 
     <div class="flex items-center gap-3">
-      <button
-        type="submit"
-        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition-colors"
-      >
+      <!-- Wave 11.A FR-006 — migrate form-submit button to the Button primitive. -->
+      <Button type="submit" variant="primary">
         {m.ingest_form_submit()}
-      </button>
+      </Button>
       <a href="/search" class="text-sm text-slate-600 hover:text-slate-900">
         {m.ingest_link_to_search()}
       </a>

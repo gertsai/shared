@@ -34,6 +34,23 @@ import { subscribe, type SseEvent } from '../services/ingest/src/sse-emitter';
 const DOC_ID_PATTERN = /^[a-z0-9-]{8,64}$/;
 
 /**
+ * Wave 11.A FR-004 — tenant id shape. Matches the project-wide convention
+ * used by the RLR bucketKeyResolver in `api.service.ts` and the Wave 5
+ * tenant-resolver middlewares: alphanumerics + dash/underscore, 1..64 chars.
+ * Reject empty / oversized / CRLF-bearing values before passing the string
+ * to the per-tenant subscriber registry (defence-in-depth even though the
+ * registry is in-process).
+ */
+const TENANT_ID_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
+
+/**
+ * Project-default tenant id (matches `project.config.ts` TENANT_ID). Used as
+ * a fallback when the SSE caller supplies neither a `tenant` query param
+ * nor an `X-Tenant-ID` header — same UX as the single-tenant example flows.
+ */
+const DEFAULT_TENANT_ID = 'tenant-acme';
+
+/**
  * Idle timeout — if no event has fired for this long, the server emits a
  * synthetic `error` frame and closes the stream. Prevents indefinitely-open
  * sockets from leaking when a producer crashes mid-pipeline.
@@ -53,15 +70,23 @@ export function sseIngestAliasHandler(
   res: ServerResponse,
 ): void {
   // ---------------------------------------------------------------------
-  // 1. Parse + validate `docId` from the query string.
-  //    `req.url` may be `/api/stream/ingest?docId=abc`; we only need the
-  //    search params, so a relative URL with a dummy base is sufficient.
+  // 1. Parse + validate `docId` from the query string, plus extract the
+  //    tenant id (Wave 11.A FR-004). `req.url` may be
+  //    `/api/stream/ingest?docId=abc&tenant=xyz`; we only need the search
+  //    params, so a relative URL with a dummy base is sufficient.
+  //
+  //    Tenant precedence: `?tenant=` query param wins over `X-Tenant-ID`
+  //    header (query is more visible in browser dev-tools and easier for
+  //    SvelteKit's `EventSource` API which can't set custom headers).
+  //    Falls back to `DEFAULT_TENANT_ID` when both are absent.
   // ---------------------------------------------------------------------
   const rawUrl = req.url ?? '';
   let docId: string | null = null;
+  let rawTenant: string | null = null;
   try {
     const parsed = new URL(rawUrl, 'http://localhost');
     docId = parsed.searchParams.get('docId');
+    rawTenant = parsed.searchParams.get('tenant');
   } catch {
     // Malformed URL — fall through to the 400 branch below.
   }
@@ -70,6 +95,30 @@ export function sseIngestAliasHandler(
     res.statusCode = 400;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.end(JSON.stringify({ error: 'invalid_doc_id' }));
+    return;
+  }
+
+  // Header fallback when no query tenant — match the RLR resolver shape.
+  if (!rawTenant) {
+    const headerTenant = req.headers['x-tenant-id'];
+    if (typeof headerTenant === 'string') {
+      rawTenant = headerTenant;
+    } else if (Array.isArray(headerTenant) && headerTenant.length > 0) {
+      rawTenant = headerTenant[0] ?? null;
+    }
+  }
+
+  // Reject malformed tenant ids outright (header-injection / DoS via huge
+  // tenantId values that would inflate the in-process registry).
+  let tenantId: string;
+  if (rawTenant === null || rawTenant === '') {
+    tenantId = DEFAULT_TENANT_ID;
+  } else if (TENANT_ID_PATTERN.test(rawTenant)) {
+    tenantId = rawTenant;
+  } else {
+    res.statusCode = 400;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.end(JSON.stringify({ error: 'invalid_tenant_id' }));
     return;
   }
 
@@ -125,7 +174,13 @@ export function sseIngestAliasHandler(
     }, IDLE_TIMEOUT_MS);
   };
 
-  const unsubscribe = subscribe(docId, (event) => {
+  // Wave 11.A FR-004: pass tenantId so the emitter enforces the per-tenant
+  // subscriber cap. On cap-exceeded the callback is invoked synchronously
+  // with `{kind: 'error', detail: 'tenant subscriber cap exceeded'}` BEFORE
+  // `subscribe()` returns; the `kind === 'error'` branch below ends the
+  // response. No listener is registered in that case, so other tenants'
+  // streams (and this tenant's other already-open streams) remain healthy.
+  const unsubscribe = subscribe(docId, tenantId, (event) => {
     if (closed || res.writableEnded) return;
     res.write(`data: ${JSON.stringify(event)}${SSE_FRAME_END}`);
     resetIdleTimer();
