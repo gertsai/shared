@@ -8,14 +8,18 @@
   import '../app.css';
   import type { Snippet } from 'svelte';
   import { page } from '$app/stores';
+  import OfflineBanner from '$lib/components/OfflineBanner.svelte';
+  import { m } from '$lib/i18n';
+  import type { LayoutData } from './$types';
 
-  let { children }: { children: Snippet } = $props();
+  let { children, data }: { children: Snippet; data: LayoutData } = $props();
 
+  // Wave 10.A — paraglide tagged calls (cookie 'lang' > Accept-Language > 'en').
   const navLinks = [
-    { href: '/', label: 'Home' },
-    { href: '/ingest', label: 'Ingest' },
-    { href: '/search', label: 'Search' },
-    { href: '/docs', label: 'Docs' },
+    { href: '/', label: () => m.nav_link_home() },
+    { href: '/ingest', label: () => m.nav_link_ingest() },
+    { href: '/search', label: () => m.nav_link_search() },
+    { href: '/docs', label: () => m.nav_link_docs() },
   ] as const;
 
   function isActive(pathname: string, href: string): boolean {
@@ -25,12 +29,13 @@
 </script>
 
 <div class="min-h-screen flex flex-col bg-slate-50 text-slate-900">
+  <OfflineBanner />
   <header class="sticky top-0 z-10 border-b border-slate-200 bg-white/95 backdrop-blur">
     <div class="mx-auto max-w-6xl px-6 py-4 flex items-center justify-between">
       <a href="/" class="text-lg font-semibold text-slate-900 hover:text-blue-600 transition-colors">
         m9s-example <span class="text-slate-400 font-normal">· Wave 9</span>
       </a>
-      <nav aria-label="Primary">
+      <nav aria-label="Primary" class="flex items-center gap-4">
         <ul class="flex items-center gap-1">
           {#each navLinks as link (link.href)}
             <li>
@@ -42,11 +47,33 @@
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}"
                 aria-current={isActive($page.url.pathname, link.href) ? 'page' : undefined}
               >
-                {link.label}
+                {link.label()}
               </a>
             </li>
           {/each}
         </ul>
+        {#if data?.user}
+          <div class="flex items-center gap-2 border-l border-slate-200 pl-4" data-testid="auth-badge">
+            <span class="text-xs text-slate-500" title={data.user.id}>{data.user.email}</span>
+            <form method="POST" action="/logout?/default">
+              <button
+                type="submit"
+                data-testid="logout-submit"
+                class="text-xs text-slate-600 hover:text-rose-700 underline-offset-2 hover:underline"
+              >
+                Sign out
+              </button>
+            </form>
+          </div>
+        {:else}
+          <a
+            href="/login"
+            data-testid="login-link"
+            class="text-xs text-blue-600 hover:text-blue-700 border-l border-slate-200 pl-4"
+          >
+            Sign in
+          </a>
+        {/if}
       </nav>
     </div>
   </header>
@@ -59,8 +86,8 @@
 
   <footer class="border-t border-slate-200 bg-white">
     <div class="mx-auto max-w-6xl px-6 py-4 text-xs text-slate-500 flex flex-wrap items-center justify-between gap-2">
-      <span>m9s-example reference · Apache 2.0</span>
-      <span>tenant-acme · @gertsai/* monorepo</span>
+      <span>{m.footer_tagline()}</span>
+      <span>{m.footer_meta()}</span>
     </div>
   </footer>
 </div>

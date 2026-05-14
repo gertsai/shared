@@ -6,6 +6,7 @@
 -->
 <script lang="ts">
   import Toast from '$lib/components/Toast.svelte';
+  import { m } from '$lib/i18n';
   import type { ActionData } from './$types';
 
   let { form }: { form: ActionData } = $props();
@@ -13,22 +14,19 @@
 
 <section class="space-y-6 max-w-2xl">
   <header class="space-y-2">
-    <h1 class="text-3xl font-bold text-slate-900">Ingest a document</h1>
-    <p class="text-slate-600">
-      Submit a document to the backend ingest pipeline. The text is chunked, embedded via
-      Ollama, and persisted with pgvector indexing.
-    </p>
+    <h1 class="text-3xl font-bold text-slate-900">{m.ingest_page_title()}</h1>
+    <p class="text-slate-600">{m.ingest_page_subtitle()}</p>
   </header>
 
   {#if form?.success}
-    <Toast variant="success" message={`Document "${form.docId}" ingested successfully.`} />
+    <Toast variant="success" message={`${m.ingest_success_toast()} (${form.docId})`} />
   {:else if form?.error}
     <Toast variant="error" message={form.error} />
   {/if}
 
   <form method="POST" action="?/default" class="space-y-4">
     <div class="space-y-1">
-      <label for="docId" class="block text-sm font-medium text-slate-700">Document ID</label>
+      <label for="docId" class="block text-sm font-medium text-slate-700">{m.ingest_form_doc_id_label()}</label>
       <input
         id="docId"
         name="docId"
@@ -38,11 +36,11 @@
         value={form?.docId ?? ''}
         class="w-full border border-slate-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
-      <p class="text-xs text-slate-500">Stable identifier — re-ingesting the same id replaces prior chunks.</p>
+      <p class="text-xs text-slate-500">{m.ingest_form_doc_id_hint()}</p>
     </div>
 
     <div class="space-y-1">
-      <label for="text" class="block text-sm font-medium text-slate-700">Body text</label>
+      <label for="text" class="block text-sm font-medium text-slate-700">{m.ingest_form_text_label()}</label>
       <textarea
         id="text"
         name="text"
@@ -58,10 +56,10 @@
         type="submit"
         class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition-colors"
       >
-        Ingest
+        {m.ingest_form_submit()}
       </button>
       <a href="/search" class="text-sm text-slate-600 hover:text-slate-900">
-        → Search after ingesting
+        {m.ingest_link_to_search()}
       </a>
     </div>
   </form>

@@ -18,6 +18,8 @@
   },
   "dependencies": {
     "@gertsai-examples/m9s-example-api-types": "workspace:*",
+    "@inlang/paraglide-js": "^1.11.0",
+    "@inlang/paraglide-js-adapter-sveltekit": "^0.6.0",
     "openapi-fetch": "^0.13.0"
   },
   "devDependencies": {

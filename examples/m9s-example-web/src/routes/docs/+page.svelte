@@ -6,6 +6,8 @@
   the swap is non-breaking.
 -->
 <script lang="ts">
+  import { m } from '$lib/i18n';
+
   type DemoDoc = {
     docId: string;
     title: string;
@@ -54,12 +56,8 @@
 
 <section class="space-y-6">
   <header class="space-y-2">
-    <h1 class="text-3xl font-bold text-slate-900">Documents</h1>
-    <p class="text-slate-600 max-w-2xl">
-      Static demo list (Wave 9). The real listing endpoint
-      (<code class="font-mono text-sm bg-slate-100 px-1.5 py-0.5 rounded">GET /api/v1/docs</code>)
-      lands in Wave 10 — this page will swap its data source without visual changes.
-    </p>
+    <h1 class="text-3xl font-bold text-slate-900">{m.docs_page_title()}</h1>
+    <p class="text-slate-600 max-w-2xl">{m.docs_page_subtitle()}</p>
   </header>
 
   <ul class="grid gap-3 md:grid-cols-2">

@@ -1,0 +1,59 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+
+  "nav_link_home": "Главная",
+  "nav_link_ingest": "Загрузка",
+  "nav_link_search": "Поиск",
+  "nav_link_docs": "Документы",
+  "nav_user_signed_in_as": "Вход выполнен:",
+
+  "footer_tagline": "Справочное приложение m9s-example · Apache 2.0",
+  "footer_meta": "tenant-acme · монорепо @gertsai/*",
+
+  "home_hero_eyebrow": "Справочное приложение",
+  "home_hero_title": "Полностековое демо @gertsai/*",
+  "home_hero_subtitle": "Фронтенд SvelteKit + бэкенд Moleculer, соединённые через автогенерируемый контракт OpenAPI 3.1. Сквозная типизация: каждое тело запроса, форма ответа и вариант ошибки валидируются.",
+  "home_cta_ingest": "Загрузить документ",
+  "home_cta_search": "Запустить поиск",
+
+  "home_stat_docs_title": "Всего документов",
+  "home_stat_docs_subtitle": "Эндпоинт списка добавляется в Wave 10",
+  "home_stat_chunks_title": "Индексировано фрагментов",
+  "home_stat_chunks_subtitle": "Эмбеддинги через Ollama / pgvector",
+  "home_stat_last_search_title": "Последний поиск",
+  "home_stat_last_search_subtitle": "Учитывается по тенанту",
+
+  "home_wavemap_heading": "Что реализовано в этой волне",
+  "home_wavemap_item_openapi": "Контракт OpenAPI 3.1 автогенерируется из typia-типов",
+  "home_wavemap_item_typed_fetch": "Фронтенд типизирован через openapi-fetch",
+  "home_wavemap_item_round_trip": "Цикл загрузка + поиск с векторным сходством",
+  "home_wavemap_item_tenant": "Скоупинг по тенанту через заголовок X-Tenant-ID",
+
+  "ingest_page_title": "Загрузка документа",
+  "ingest_page_subtitle": "Отправьте документ в бэкенд-пайплайн загрузки. Текст разбивается на фрагменты, эмбеддится через Ollama и сохраняется с индексом pgvector.",
+  "ingest_form_doc_id_label": "Идентификатор документа",
+  "ingest_form_doc_id_hint": "Стабильный идентификатор — повторная загрузка с тем же id заменит предыдущие фрагменты.",
+  "ingest_form_text_label": "Текст документа",
+  "ingest_form_submit": "Загрузить",
+  "ingest_link_to_search": "→ Перейти к поиску после загрузки",
+  "ingest_success_toast": "Документ успешно загружен.",
+
+  "search_page_title": "Поиск",
+  "search_page_subtitle": "Поиск по косинусному сходству среди загруженных фрагментов. Бэкенд эмбеддит запрос и возвращает топ-результаты в пределах тенанта, отсортированные по сходству.",
+  "search_form_query_label": "Запрос",
+  "search_form_submit": "Найти",
+  "search_empty_state": "Совпадений не найдено. Попробуйте сначала загрузить документы на странице Загрузка.",
+  "search_results_count_one": "результат по запросу",
+  "search_results_count_many": "результатов по запросу",
+  "search_result_similarity_label": "сходство:",
+
+  "docs_page_title": "Документы",
+  "docs_page_subtitle": "Статический демо-список (Wave 9). Настоящий эндпоинт списка появится в Wave 10 — страница сменит источник данных без визуальных изменений.",
+
+  "login_page_title": "Вход",
+  "login_form_email_label": "Электронная почта",
+  "login_form_password_label": "Пароль",
+  "login_form_submit": "Войти",
+  "login_error_invalid": "Неверные учётные данные",
+  "logout_action": "Выйти"
+}
