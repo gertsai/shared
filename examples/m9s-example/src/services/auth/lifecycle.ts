@@ -11,6 +11,7 @@
  * `ctx.service` here.
  */
 import { resolveExampleController } from '../../lib/example-controller';
+import { startRotationPruner } from './src/rotation-store';
 import type { AuthServiceContext } from './types';
 
 const controller = resolveExampleController<'v1', 'auth', AuthServiceContext>('v1', 'auth');
@@ -28,6 +29,9 @@ controller.addStartedHandler(async (ctx) => {
       '[v1.auth] JWT_SECRET not set — using DEMO secret. Set JWT_SECRET to a high-entropy value before any deployment.',
     );
   }
+  // EVID-039 P2 / W-Security-1: start the rotation-store pruner so the
+  // jti map doesn't grow unbounded under brute-force login traffic.
+  startRotationPruner();
   ctx.logger?.info('[v1.auth] ready');
 });
 

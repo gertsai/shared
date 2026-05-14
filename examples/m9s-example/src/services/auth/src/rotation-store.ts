@@ -124,4 +124,31 @@ export function pruneJtiStore(): number {
  */
 export function __resetRotationStoreForTests(): void {
   store.clear();
+  if (pruneTimer !== null) {
+    clearInterval(pruneTimer);
+    pruneTimer = null;
+  }
+}
+
+// EVID-039 P2 / W-Security-1 fix: schedule periodic prune so the store
+// can't grow unbounded under brute-force login traffic (CWE-770 DoS
+// mitigation). 5-minute interval is conservative — the demo's expected
+// login + refresh rate is single-user, so memory pressure is dwarfed by
+// timer overhead at this cadence. `.unref()` so the interval doesn't
+// hold the process open in tests / short-lived workers.
+const PRUNE_INTERVAL_MS = 5 * 60 * 1_000;
+let pruneTimer: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Start the periodic prune timer. Idempotent — repeated calls are no-ops.
+ * Called from `services/auth/lifecycle.ts` after the broker starts so
+ * tests and short-lived workers don't get an unwanted background timer.
+ */
+export function startRotationPruner(): void {
+  if (pruneTimer !== null) return;
+  pruneTimer = setInterval(pruneJtiStore, PRUNE_INTERVAL_MS);
+  // Allow the process to exit even if the timer is still scheduled.
+  if (typeof pruneTimer === 'object' && pruneTimer !== null && 'unref' in pruneTimer) {
+    (pruneTimer as { unref(): void }).unref();
+  }
 }
