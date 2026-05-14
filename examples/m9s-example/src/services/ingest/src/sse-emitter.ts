@@ -14,10 +14,15 @@
  *   replace the `EventEmitter` with a Redis subscriber, keep this module's
  *   `emitSse` / `subscribe` surface identical.
  *
- * Listener cap:
- *   `setMaxListeners(50)` so concurrent uploads don't trigger Node's
- *   memory-leak warning. Each open SSE response is one listener; 50 is
- *   well above the example's expected concurrency (single user, browser tab).
+ * Listener cap (Wave 11.A FR-004):
+ *   `setMaxListeners(200)` is a node-level safety net against the
+ *   memory-leak warning when many tenants stream concurrently. The real
+ *   throttle is the **per-tenant subscriber cap** below
+ *   (`MAX_SUBSCRIBERS_PER_TENANT = 10`), which prevents a single tenant
+ *   from monopolising stream slots / RAM. Exceeding the cap synchronously
+ *   delivers a sentinel `error` frame so the handler can close cleanly —
+ *   no listener is registered, so cap-exceeded connections cannot
+ *   contribute to listener growth.
  */
 import { EventEmitter } from 'node:events';
 
@@ -45,11 +50,32 @@ export interface SseEvent {
 }
 
 const emitter = new EventEmitter();
-// Each open SSE connection registers one listener for its own docId plus one
-// for the `'*'` (debug/admin) channel. 50 covers the expected example load.
-emitter.setMaxListeners(50);
+// Wave 11.A FR-004: lift the node-level cap to 200 since the *real* throttle
+// is the per-tenant subscriber cap below. 200 leaves headroom for ~20 tenants
+// at the cap (10 each) plus the wildcard channel without warnings.
+emitter.setMaxListeners(200);
 
 const WILDCARD_TOPIC = '*' as const;
+
+// =============================================================================
+// Wave 11.A FR-004 — per-tenant subscriber cap.
+//
+// One in-process Map keyed by tenantId; each value is the Set of docIds that
+// tenant is currently subscribed to. A subscribe attempt that would push
+// `subscribers.get(tenantId).size` past MAX_SUBSCRIBERS_PER_TENANT does NOT
+// register a listener — instead it returns an `unsubscribe` thunk that
+// synchronously delivers a sentinel `error` event to the caller so the SSE
+// handler can write the frame + close the response.
+//
+// Rationale: prevents a single misbehaving tenant from holding 1k+ open SSE
+// connections (one per browser tab × N attackers) and exhausting RAM /
+// listener slots. The cap is intentionally generous (10 per tenant) — the
+// realistic browser concurrency is 1-2 tabs per user.
+// =============================================================================
+
+const MAX_SUBSCRIBERS_PER_TENANT = 10;
+
+const subscribers = new Map<string, Set<string>>();
 
 // EVID-036 audit fix (P1 / U-4): per-docId replay buffer.
 //
@@ -131,20 +157,62 @@ export function emitSse(event: SseEvent): void {
 }
 
 /**
- * Subscribe to events for a specific document. On call, replays buffered
- * events synchronously (start-before-subscribe race fix, EVID-036 U-4) and
- * then registers a live listener. Returns an unsubscribe callback — the
- * caller must invoke it on connection close (client disconnect, idle
- * timeout, or `done`/`error` terminal events) to avoid stranded listeners.
+ * Subscribe to events for a specific document. On call:
+ *   1. Enforces the per-tenant subscriber cap (Wave 11.A FR-004): if the
+ *      tenant has already reached `MAX_SUBSCRIBERS_PER_TENANT` live docs,
+ *      the listener is NOT registered and the returned thunk synchronously
+ *      delivers a sentinel `error` event with `detail: 'tenant subscriber
+ *      cap exceeded'`. The caller (SSE handler) is expected to write the
+ *      frame + close the response.
+ *   2. Replays buffered events synchronously so late subscribers see the
+ *      lifecycle in source order (EVID-036 U-4). If the buffer is already
+ *      terminal (`done` / `error`), no live listener is registered.
+ *   3. Otherwise registers a live `EventEmitter` listener and records the
+ *      docId in the tenant's Set.
  *
- * @param docId document identifier to listen for
- * @param fn    listener invoked once per event (replayed + live)
- * @returns     teardown function — idempotent in practice
+ * The returned teardown is idempotent: it removes BOTH the listener AND
+ * the docId from the tenant's Set, and drops the tenant from the registry
+ * when its Set becomes empty (avoids unbounded Map growth).
+ *
+ * @param docId    document identifier to listen for
+ * @param tenantId resolved tenant identifier (the SSE handler validates
+ *                 the inbound shape — this function trusts the caller)
+ * @param fn       listener invoked once per event (replayed + live, or
+ *                 sentinel-only on cap-exceeded)
+ * @returns        teardown function — idempotent in practice
  */
-export function subscribe(docId: string, fn: (e: SseEvent) => void): () => void {
-  // Replay first so the listener sees the lifecycle in source order. If the
-  // stream already reached a terminal event, the listener still receives it
-  // and can close synchronously without registering for live events.
+export function subscribe(
+  docId: string,
+  tenantId: string,
+  fn: (e: SseEvent) => void,
+): () => void {
+  // -------------------------------------------------------------------------
+  // 1. Per-tenant cap (Wave 11.A FR-004). Computed before the replay so a
+  //    cap-exceeded caller sees ONLY the sentinel, never partial replay
+  //    state from another browser tab.
+  // -------------------------------------------------------------------------
+  const tenantSet = subscribers.get(tenantId);
+  const currentSize = tenantSet?.size ?? 0;
+  if (currentSize >= MAX_SUBSCRIBERS_PER_TENANT) {
+    // Synchronously deliver the sentinel; caller will end the response.
+    // Returned thunk is a no-op (nothing to unregister).
+    fn({
+      kind: 'error',
+      docId,
+      ts: Date.now(),
+      detail: 'tenant subscriber cap exceeded',
+    });
+    return () => {
+      /* no-op: cap-exceeded subscriber never registered a listener */
+    };
+  }
+
+  // -------------------------------------------------------------------------
+  // 2. Replay buffered events first so the listener sees the lifecycle in
+  //    source order. If the stream already reached a terminal event, the
+  //    listener still receives it and can close synchronously without
+  //    registering for live events.
+  // -------------------------------------------------------------------------
   const buffered = buffers.get(docId);
   if (buffered) {
     for (const event of buffered.events) {
@@ -158,9 +226,28 @@ export function subscribe(docId: string, fn: (e: SseEvent) => void): () => void 
     }
   }
 
+  // -------------------------------------------------------------------------
+  // 3. Register the live listener AND record this docId against the tenant.
+  // -------------------------------------------------------------------------
+  const updatedSet = tenantSet ?? new Set<string>();
+  updatedSet.add(docId);
+  if (!tenantSet) {
+    subscribers.set(tenantId, updatedSet);
+  }
   emitter.on(docId, fn);
+
+  let removed = false;
   return () => {
+    if (removed) return;
+    removed = true;
     emitter.off(docId, fn);
+    const set = subscribers.get(tenantId);
+    if (set) {
+      set.delete(docId);
+      if (set.size === 0) {
+        subscribers.delete(tenantId);
+      }
+    }
   };
 }
 
@@ -174,4 +261,14 @@ export function __resetSseReplayForTests(): void {
     clearTimeout(buf.evictTimer);
   }
   buffers.clear();
+}
+
+/**
+ * Internal — test-only helper to reset the per-tenant subscriber registry
+ * (Wave 11.A FR-004). Removes every recorded tenantId/docId pair. Does NOT
+ * remove live EventEmitter listeners — callers should additionally invoke
+ * the teardown thunks they captured from `subscribe()` to fully detach.
+ */
+export function __resetSseSubscribersForTests(): void {
+  subscribers.clear();
 }

@@ -49,6 +49,7 @@
     "@moleculer/channels": "^0.1.8",
     "@moleculer/workflows": "^0.1.2",
     "@openfga/sdk": "^0.8.1",
+    "bcryptjs": "^2.4.3",
     "busboy": "^1.6.0",
     "dotenv": "^16.6.1",
     "ioredis": "^5.8.0",
@@ -62,6 +63,7 @@
   },
   "devDependencies": {
     "@openfga/syntax-transformer": "^0.2.0",
+    "@types/bcryptjs": "^2.4.6",
     "@types/busboy": "^1.5.4",
     "@types/jsonwebtoken": "^9.0.6",
     "@standard-schema/spec": "^1.1.0",

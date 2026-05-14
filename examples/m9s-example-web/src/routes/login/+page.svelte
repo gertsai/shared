@@ -8,6 +8,7 @@
   to /. Errors render as inline Toast above the form.
 -->
 <script lang="ts">
+  import { Button } from '$lib/components/ui';
   import type { ActionData } from './$types';
 
   let { form }: { form: ActionData } = $props();
@@ -60,13 +61,11 @@
       />
     </div>
 
-    <button
-      type="submit"
-      data-testid="login-submit"
-      class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition-colors"
-    >
+    <!-- Wave 11.A FR-006 — migrate raw <button> to the Button primitive
+         (PRD-020 design tokens). Visual parity preserved via primary/fullWidth. -->
+    <Button type="submit" variant="primary" fullWidth data-testid="login-submit">
       Sign in
-    </button>
+    </Button>
 
     <p class="text-xs text-slate-500 text-center">
       Wave 10.A demo — see <code>examples/m9s-example/src/services/auth/</code> for the backend.
