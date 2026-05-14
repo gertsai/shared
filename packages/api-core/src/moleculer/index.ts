@@ -10,6 +10,10 @@
  */
 export * from '../lib/controller';
 export * from '../lib/oauth';
+// Wave 11.B (PRD-024) — typed action-export wrapper retiring `: any`
+// annotations at every controller.register call site. See define-action.ts
+// for migration guidance.
+export * from '../lib/define-action';
 export * from './apiGateService.template';
 export * from './openapiService.template';
 export * from './moleculerConfig.template';

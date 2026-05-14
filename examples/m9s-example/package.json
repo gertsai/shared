@@ -28,6 +28,7 @@
     "bench:embedder": "tsx scripts/bench-embedder.ts"
   },
   "dependencies": {
+    "@gertsai-examples/m9s-example-api-types": "workspace:*",
     "@gertsai/api-core": "workspace:*",
     "@gertsai/api-rlr": "workspace:*",
     "@gertsai/async-utils": "workspace:*",

@@ -23,7 +23,7 @@ import { createDocument, type DocumentMetadata } from '../../../../domain/docume
 import type { Chunk } from '../../../../domain/chunk';
 import typia from 'typia';
 
-import { defineAction } from '../../../../lib/define-action';
+import { defineAction } from '@gertsai/api-core/moleculer';
 import { resolveExampleController } from '../../../../lib/example-controller';
 import type { IngestServiceContext } from '../../types';
 

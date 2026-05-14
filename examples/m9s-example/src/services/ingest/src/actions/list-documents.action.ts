@@ -25,7 +25,7 @@ import {
 } from '@gertsai/session-guard';
 import typia from 'typia';
 
-import { defineAction } from '../../../../lib/define-action';
+import { defineAction } from '@gertsai/api-core/moleculer';
 import { resolveExampleController } from '../../../../lib/example-controller';
 import { tryGetRequestContextFromCtx } from '../../../../composition/wave5-middlewares';
 import type { DocumentSummary } from '../../../../domain/ports/IDocumentStore';

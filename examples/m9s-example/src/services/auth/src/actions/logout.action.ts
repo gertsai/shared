@@ -13,7 +13,7 @@
 import { ResponseCode } from '@gertsai/api-core/contracts';
 import typia from 'typia';
 
-import { defineAction } from '../../../../lib/define-action';
+import { defineAction } from '@gertsai/api-core/moleculer';
 import { resolveExampleController } from '../../../../lib/example-controller';
 import type {
   AuthServiceContext,

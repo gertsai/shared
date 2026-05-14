@@ -52,30 +52,14 @@ function getSecret(): string {
 }
 
 // ---------------------------------------------------------------------------
-// Claim shape
+// Claim shape — Wave 11.B (PRD-024): JwtClaims now imported from the
+// shared package `@gertsai-examples/m9s-example-api-types` so web + backend
+// stay in lock-step. Re-exported for backward compat with existing callers
+// (`tryGetRequestContextFromCtx`, `app.d.ts`, etc.).
 // ---------------------------------------------------------------------------
 
-/** Decoded JWT payload (after `verify`). */
-export interface JwtClaims {
-  /** Subject — user id. RFC 7519 standard. */
-  sub: string;
-  email: string;
-  tenantId: string;
-  /** Marks token kind so a refresh token can't be used as an access token. */
-  kind: 'access' | 'refresh';
-  /** Issued-at (seconds since epoch). RFC 7519 standard. */
-  iat: number;
-  /** Expiry (seconds since epoch). RFC 7519 standard. */
-  exp: number;
-  /** Issuer. RFC 7519 standard. */
-  iss: string;
-  /**
-   * JWT ID (RFC 7519 §4.1.7). Wave 10.E (PRD-022) — required on refresh
-   * tokens so we can track use/reuse in the rotation store. Always present
-   * on refresh tokens; optional on access tokens (we don't track those).
-   */
-  jti?: string;
-}
+import type { JwtClaims } from '@gertsai-examples/m9s-example-api-types';
+export type { JwtClaims } from '@gertsai-examples/m9s-example-api-types';
 
 // ---------------------------------------------------------------------------
 // Helpers

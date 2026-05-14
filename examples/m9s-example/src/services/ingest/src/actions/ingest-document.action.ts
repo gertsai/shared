@@ -28,7 +28,7 @@ import {
 import typia from 'typia';
 
 import config from '../../../../../project.config';
-import { defineAction } from '../../../../lib/define-action';
+import { defineAction } from '@gertsai/api-core/moleculer';
 import { resolveExampleController } from '../../../../lib/example-controller';
 import { ForbiddenError } from '../../../../shared/errors';
 import { tryGetRequestContextFromCtx } from '../../../../composition/wave5-middlewares';

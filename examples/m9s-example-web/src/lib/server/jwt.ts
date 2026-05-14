@@ -25,16 +25,13 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 
 const ISSUER = 'm9s-example';
 
-/** Claims attached to `event.locals.user` after successful verify. */
-export interface JwtClaims {
-  sub: string;
-  email: string;
-  tenantId: string;
-  kind: 'access' | 'refresh';
-  iat: number;
-  exp: number;
-  iss: string;
-}
+/**
+ * Wave 11.B (PRD-024): JwtClaims imported from the shared types package
+ * so web + backend (and any future consumer) stay in lock-step. Re-exported
+ * for back-compat with `app.d.ts` and hooks callers.
+ */
+import type { JwtClaims } from '@gertsai-examples/m9s-example-api-types';
+export type { JwtClaims } from '@gertsai-examples/m9s-example-api-types';
 
 /**
  * Resolve the HS256 secret. Hard-fails unconditionally when `JWT_SECRET`
