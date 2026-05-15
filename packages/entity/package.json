@@ -1,6 +1,6 @@
 {
   "name": "@gertsai/entity",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Backend-agnostic entity base classes (Model, Entity, EntityWithMetadata) with pluggable reactivity. Mirrors Orchestra entity patterns. Per PRD-002 + ADR-005.",
   "license": "Apache-2.0",
   "type": "module",

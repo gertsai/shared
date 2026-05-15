@@ -1,6 +1,6 @@
 {
   "name": "@gertsai/entity-vue",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Vue 3 ReactiveAdapter for @gertsai/entity — lazy-loads @vue/runtime-core (peer-optional). Per ADR-008 Decision B + Amendment 1.",
   "license": "Apache-2.0",
   "type": "module",

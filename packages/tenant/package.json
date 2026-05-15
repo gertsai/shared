@@ -1,6 +1,6 @@
 {
   "name": "@gertsai/tenant",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Language-neutral tenant identification primitives for @gertsai/*. Pure types + helpers in root, optional Moleculer adapter in `/moleculer` subpath.",
   "license": "Apache-2.0",
   "type": "module",

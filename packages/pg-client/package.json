@@ -1,6 +1,6 @@
 {
   "name": "@gertsai/pg-client",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Agnostic PostgreSQL client interface (3 methods) + mock fixture + optional ./storage adapter (PgStorageProvider implements @gertsai/storage-core IStorageProvider). Per ADR-004 + ADR-005 + ADR-011: NO Prisma/Drizzle/pg deps in core; adapter additive.",
   "license": "Apache-2.0",
   "type": "module",
