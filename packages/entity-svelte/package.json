@@ -1,6 +1,6 @@
 {
   "name": "@gertsai/entity-svelte",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Svelte framework adapter for @gertsai/entity — svelteReactiveAdapter (Proxy + writable store backing + WeakMap registry + 3 traps + sync notify + re-entrancy guard) and entityStore factory returning Readable<Entity<Data>> compatible with the $store template syntax. Per ADR-008 Decision E + Amendment I-11..I-14.",
   "license": "Apache-2.0",
   "type": "module",

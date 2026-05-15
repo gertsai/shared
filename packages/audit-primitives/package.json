@@ -1,6 +1,6 @@
 {
   "name": "@gertsai/audit-primitives",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Pure backend-agnostic audit primitives — Timestamp, AuditMarks, TimestampProvider, conversion helpers (zero internal deps)",
   "license": "Apache-2.0",
   "type": "module",

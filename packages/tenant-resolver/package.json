@@ -1,6 +1,6 @@
 {
   "name": "@gertsai/tenant-resolver",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Composable multi-strategy tenant resolution for @gertsai/* — TenantResolverStrategy interface + ChainTenantResolver + 3 hardened built-in strategies (header / subdomain / path) + /moleculer + /http subpaths",
   "license": "Apache-2.0",
   "type": "module",

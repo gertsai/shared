@@ -1,6 +1,6 @@
 {
   "name": "@gertsai/session",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Backend-agnostic Session class with operator + dataAccess identity scoping. Mirrors Orchestra OrchestraSession patterns. Per PRD-002 + ADR-005.",
   "license": "Apache-2.0",
   "type": "module",

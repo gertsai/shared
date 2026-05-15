@@ -1,6 +1,6 @@
 {
   "name": "@gertsai/llm-costs",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "LLM model costs, capabilities, and provider registry — 2,600+ models, 100+ providers",
   "license": "Apache-2.0",
   "type": "module",

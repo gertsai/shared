@@ -1,6 +1,6 @@
 {
   "name": "@gertsai/entity-react",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "React framework adapter for @gertsai/entity — reactReactiveAdapter (Proxy + WeakMap subscribe + 3 traps + sync notify) and useEntity hook (useSyncExternalStore + version snapshot). Per ADR-008 Decision C + Amendment I-11..I-14.",
   "license": "Apache-2.0",
   "type": "module",

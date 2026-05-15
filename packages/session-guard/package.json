@@ -1,6 +1,6 @@
 {
   "name": "@gertsai/session-guard",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "External invariant guards / predicates / assertions / dedicated errors for @gertsai/session — assertion-vs-check semantics over @gertsai/errors taxonomy. Per ADR-007 (Wave 5 Phase 2) Decision B + invariants I-5..I-7, I-13, I-18, I-19.",
   "license": "Apache-2.0",
   "type": "module",

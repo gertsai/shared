@@ -1,6 +1,6 @@
 {
   "name": "@gertsai/storage-core",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Backend-agnostic IStorageProvider<Meta> abstraction for @gertsai/*. CRUD + listeners + runner-pattern transactions/batches. Concrete adapters live in separate packages. Per PRD-002 + ADR-005 Decision A.",
   "license": "Apache-2.0",
   "type": "module",
