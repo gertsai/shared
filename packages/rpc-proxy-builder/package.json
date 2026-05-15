@@ -1,6 +1,6 @@
 {
   "name": "@gertsai/rpc-proxy-builder",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Tier 3 type-safe RPC proxy builder — derives Promise-returning method maps from ActionDefinition records via read-only Proxy. Transport-agnostic (Moleculer/WS/HTTP).",
   "license": "Apache-2.0",
   "type": "module",
