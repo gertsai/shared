@@ -24,6 +24,50 @@ interface User {
   get(options: { plain: boolean }): User;
 }
 
+/**
+ * EVID-043 type-safety fix (replaces `@ts-ignore` on `ctx.meta` writes).
+ *
+ * Moleculer's `Context.meta` is intentionally typed as a loose
+ * `Record<string, unknown>` because every service decides what shape to
+ * attach. This interface captures the **specific subset** the OAuth module
+ * writes into `ctx.meta` after a successful authenticate. It is internal —
+ * exported only so downstream code that reads these fields can import the
+ * type and avoid duplication.
+ *
+ * Authentication is the single writer of these fields per the OAuth
+ * mixin contract. Callers reading `ctx.meta` SHOULD narrow via
+ * `if (typeof ctx.meta.user_uuid === 'string')` rather than casting —
+ * we don't enforce single-writer at the type system level.
+ *
+ * Closes EVID-043 mini-finding: replaces 4 occurrences of `@ts-ignore`
+ * on meta writes with a single typed-cast at the helper boundary.
+ */
+export interface OAuthContextMeta {
+  user_uuid: string;
+  user_type: string;
+}
+
+/**
+ * Write authenticated identity into ctx.meta. Single boundary cast.
+ *
+ * Pulled out as a helper so:
+ *   1. The cast lives in ONE place (one `as` annotation, audit-friendly).
+ *   2. Both `OAuth.authenticate` and the firebase-auth path in
+ *      `MX().methods.authenticate` use the same write path.
+ *   3. Future callers (e.g. a new SSO adapter) get a typed entry point.
+ */
+function setAuthenticatedMeta(
+  ctx: Context,
+  user: { _uuid: string; type?: string | null | undefined },
+): void {
+  // The cast widens `Record<string, unknown>` (Moleculer's meta type) to
+  // our writeable view. Mutation is sound because Moleculer treats meta
+  // as a free-form mutable bag — this is the documented extension point.
+  const meta = ctx.meta as Record<string, unknown> & Partial<OAuthContextMeta>;
+  meta.user_uuid = user._uuid;
+  meta.user_type = user.type ?? 'user';
+}
+
 export class OAuthRequest extends OAuthRequestOS {
   constructor(req: Request) {
     super(req);
@@ -77,10 +121,22 @@ export class OAuth extends Service {
     const request = new OAuthRequest(req);
     const response = new OAuthResponse(res);
     const token = await this.oauth.authenticate(request, response);
-    //@ts-ignore
-    ctx.meta.user_uuid = token.user._uuid;
-    //@ts-ignore
-    ctx.meta.user_type = token.user.type || 'user';
+    // EVID-043 Logic C3 fix: null-check `token.user` before dereference.
+    // oauth2-server may return a token without a `.user` object (e.g.
+    // client-credentials grant in some flows); previous code accessed
+    // `token.user._uuid` blindly under `@ts-ignore`, raising
+    // `TypeError: Cannot read properties of undefined` at runtime.
+    if (!token.user) {
+      throw new InvalidTokenError('Token has no associated user');
+    }
+    const user = token.user as { _uuid?: string; type?: string };
+    if (typeof user._uuid !== 'string') {
+      throw new InvalidTokenError('Token user is missing _uuid');
+    }
+    // EVID-043 type-safety fix: replaced two `@ts-ignore` lines with the
+    // typed `setAuthenticatedMeta` helper. Single cast in the helper, no
+    // suppressions at call sites.
+    setAuthenticatedMeta(ctx, { _uuid: user._uuid, type: user.type });
     return token;
   }
 
@@ -146,32 +202,47 @@ export class OAuth extends Service {
     return data;
   }
 
-  // @ts-ignore
+  // EVID-043 Logic C2 fix: these methods were silent stubs returning
+  // `undefined` (via `console.log` no-op). When `client_credentials` /
+  // `password` / `refresh_token` grants attempt to use them, the oauth2-
+  // server library got `undefined` back and surfaced opaque 500s. Now
+  // each throws an explicit `Not implemented` error so misuse is loud
+  // and developers know what to wire. Remove from `grants` list above
+  // or supply a real model implementation before relying on them.
   private async getUser(): Promise<User | undefined> {
-    console.log('Getting user');
+    throw new Error(
+      'OAuth.getUser is not implemented. Either remove "password" from ' +
+        'the grants list (oauth.class.ts:58) or supply a real model.',
+    );
   }
 
-  // @ts-ignore
   private async revokeToken(): Promise<boolean> {
-    console.log('Revoking token');
+    throw new Error(
+      'OAuth.revokeToken is not implemented. Either remove "refresh_token" ' +
+        'from the grants list or supply a real model.',
+    );
   }
 
-  private async saveToken(): // @ts-ignore
-  Promise<Token | undefined> {
-    console.log('Saving token');
+  private async saveToken(): Promise<Token | undefined> {
+    throw new Error(
+      'OAuth.saveToken is not implemented. Either remove the affected grant ' +
+        'from the grants list or supply a real model.',
+    );
   }
 
-  // @ts-ignore
   private async getRefreshToken(): Promise<Token | undefined> {
-    console.log('Getting refresh token');
+    throw new Error(
+      'OAuth.getRefreshToken is not implemented. Either remove "refresh_token" ' +
+        'from the grants list or supply a real model.',
+    );
   }
 
-  //@ts-ignore
-  private validateScope(): Promise<
-    // @ts-ignore
-    string | string[] | Falsey<any> | undefined
-  > {
-    console.log('Validating scope');
+  // @ts-ignore - oauth2-server's Falsey type leaks
+  private async validateScope(): Promise<string | string[] | Falsey<any> | undefined> {
+    throw new Error(
+      'OAuth.validateScope is not implemented. Override in subclass or ' +
+        'remove scope-checking from the grant flow.',
+    );
   }
 
   public static $mixin(options: any) {
@@ -203,15 +274,35 @@ export class OAuth extends Service {
 
             try {
               if (config.BYPASS_AUTH) {
+                // EVID-043 Security C1 fix (CWE-347 Improper Verification of
+                // Cryptographic Signature). BYPASS_AUTH decodes the JWT
+                // payload via atob() WITHOUT verifying the signature — any
+                // production deploy with this env set could be trivially
+                // impersonated. Hard-fail at request time if NODE_ENV is
+                // production. Local-dev paths can still use this for the
+                // m9s-example demo flow.
+                if (process.env.NODE_ENV === 'production') {
+                  throw new Error(
+                    'BYPASS_AUTH is set in production — refusing to skip ' +
+                      'JWT signature verification (CWE-347). Unset BYPASS_AUTH ' +
+                      'or run without NODE_ENV=production for demo use.',
+                  );
+                }
                 const jwtParts = token.split('.');
                 if (jwtParts[1] === undefined) {
                   throw new Error('Invalid JWT format: missing payload segment');
                 }
-                const tokenData = JSON.parse(atob(jwtParts[1]));
-                // @ts-ignore
-                ctx.meta.user_uuid = tokenData.user_id;
-                // @ts-ignore
-                ctx.meta.user_type = tokenData.type || 'user';
+                const tokenData = JSON.parse(atob(jwtParts[1])) as {
+                  user_id?: unknown;
+                  type?: unknown;
+                };
+                if (typeof tokenData.user_id !== 'string') {
+                  throw new Error('Bypass-decoded JWT missing user_id');
+                }
+                setAuthenticatedMeta(ctx, {
+                  _uuid: tokenData.user_id,
+                  type: typeof tokenData.type === 'string' ? tokenData.type : undefined,
+                });
                 return;
               }
 
@@ -219,10 +310,13 @@ export class OAuth extends Service {
               const tokenData = await authProvider.verifyIdToken(token);
 
               if (tokenData?.status === 'active') {
-                // @ts-ignore
-                ctx.meta.user_uuid = tokenData.uid;
-                // @ts-ignore
-                ctx.meta.user_type = tokenData.type || 'user';
+                setAuthenticatedMeta(ctx, {
+                  _uuid: tokenData.uid,
+                  type:
+                    typeof (tokenData as { type?: unknown }).type === 'string'
+                      ? (tokenData as { type: string }).type
+                      : undefined,
+                });
                 return;
               }
 

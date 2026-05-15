@@ -1,0 +1,14 @@
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "experimental": { "agentTeams": true },
+  "enabledPlugins": {
+    "backend-development@claude-code-workflows": true,
+    "code-review-ai@claude-code-workflows": true,
+    "tdd-workflows@claude-code-workflows": true,
+    "full-stack-orchestration@claude-code-workflows": true,
+    "git-pr-workflows@claude-code-workflows": true,
+    "codealive@codealive-marketplace": true
+  }
+}

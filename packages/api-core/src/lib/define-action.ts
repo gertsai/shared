@@ -1,13 +1,24 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * `defineAction()` — typed wrapper retiring `export const xxx: any =
- * controller.register(...)` in @gertsai/api-core action call sites.
+ * `defineAction()` — type-preserving wrapper for `controller.register(...)`
+ * action exports.
  *
- * Wave 11.B (PRD-024) — upstreamed from the local helper in
- * `examples/m9s-example/src/lib/define-action.ts` (Wave 10.E PRD-022)
- * so every @gertsai/api-core consumer benefits without copy-pasting the
- * shim. Closes EVID-036 audit findings W-Type-1 / W-Type-2 at the
- * package boundary instead of per-app.
+ * Closes EVID-036 audit findings W-Type-1 / W-Type-2 at the
+ * `@gertsai/api-core` boundary; Wave 13 (EVID-043 Type C3 closure) tightens
+ * the original Wave 11.B signature.
+ *
+ * History
+ * -------
+ * - Wave 10.E (PRD-022): local helper inside `examples/m9s-example/src/
+ *   lib/define-action.ts`, signature `(unknown) => RegisteredAction`.
+ * - Wave 11.B (PRD-024): upstreamed to this package; same signature.
+ * - Wave 13 (PRD-027): tightened to `<T extends Record<string, unknown>>
+ *   (registration: T) => T & RegisteredAction`. Two improvements:
+ *     1. Constraint rejects `defineAction(undefined)`, `null`, primitives
+ *        at compile time (the brand alone never enforced this at runtime).
+ *     2. Output preserves the inferred shape of the registration —
+ *        consumers who declaration-merge `RegisteredActions` keep the
+ *        action's typed metadata accessible.
  *
  * Background
  * ----------
@@ -16,12 +27,11 @@
  * transformer-only types (`ITypiaValidator` etc.) which leak into the
  * emitted `.d.ts` of the consumer. Annotating each action export as
  * `: any` hid the leak but surrendered type-safety at the export site
- * (and triggered per-file `eslint-disable @typescript-eslint/no-explicit-any`
- * suppressions).
+ * (and triggered per-file `eslint-disable @typescript-eslint/no-explicit-any`).
  *
- * `defineAction()` wraps the registration result in an opaque
- * `RegisteredAction` brand — the export site sees a clearly-typed
- * marker, no `any`, no eslint suppression. The handler body inside
+ * `defineAction()` adds an opaque `RegisteredAction` brand to the
+ * registration result. The export site sees `T & RegisteredAction`
+ * (no `any`, no eslint suppression). The handler body inside
  * `register({ ... })` retains full typia/Moleculer typing because the
  * brand is applied only at the OUTER call.
  *
@@ -36,38 +46,52 @@
  *     import { defineAction } from '@gertsai/api-core/moleculer';
  *     export const upload = defineAction(controller.register('upload', { ... }));
  *
- * The runtime body of `defineAction` is a no-op cast — `controller.register`
- * has already executed its side effect (the action lands in the controller's
- * registry); this helper only type-erases the leaked shape.
+ * The runtime body is a no-op cast — `controller.register` already
+ * executed its side effect (eager argument evaluation), and the helper
+ * only retypes the return.
  */
 
 /**
- * Opaque marker for a registered action. The `& { readonly __brand }`
- * pattern keeps `RegisteredAction` distinct from plain `unknown` in
- * external typing without exposing the underlying Moleculer/typia shape.
+ * Opaque marker for a registered action.
  *
- * Why a brand: prevents `defineAction(undefined)` from compiling and
- * lets consumers (or future audit tools) detect "is this export from a
- * controller.register call?" structurally.
+ * The brand is structural (TypeScript structural typing): the marker
+ * cannot prevent `{ __brand: 'registered-action' } as RegisteredAction`
+ * — it is a developer-intent signal, not a security boundary. We
+ * intentionally keep it as a string-literal brand (NOT `unique symbol`)
+ * so consumers can declaration-merge `RegisteredActions` interfaces
+ * across module boundaries.
  */
-export type RegisteredAction = {
+export interface RegisteredAction {
   readonly __brand: 'registered-action';
-};
+}
 
 /**
- * Wrap a `controller.register(...)` call result in a typed marker.
- * Accepts `unknown` so the caller doesn't have to spell out the
- * Moleculer-specific input shape; the return is the opaque marker the
- * action barrel re-exports.
+ * Wrap a `controller.register(...)` result in a typed marker.
  *
- * The runtime body is a no-op cast — `controller.register` produced its
- * registration side effect already; this helper just type-erases the
- * leaked shape.
+ * Generic constraint `T extends Record<string, unknown>` rejects
+ * `defineAction(undefined)`, `defineAction(null)`, and primitive inputs
+ * at compile time. The return type `T & RegisteredAction` preserves the
+ * inferred shape of the registration while adding the brand.
+ *
+ * The runtime body is a single `as` cast — unavoidable because the brand
+ * is a type-only intersection (there is no value to "add" at runtime).
+ * `controller.register()` produced its side effect before `defineAction`
+ * runs (JavaScript argument-evaluation order); this helper changes only
+ * the static type of the return.
+ *
+ * @typeParam T - Inferred from the input shape. Constraint
+ *   `extends Record<string, unknown>` excludes nullish + primitive
+ *   inputs at compile time.
+ * @param registration - The result of `controller.register(...)`. Must
+ *   be a non-null object value at compile + runtime.
+ * @returns The input value, retyped as `T & RegisteredAction`.
  */
-export function defineAction(registration: unknown): RegisteredAction {
-  // The `as` cast is the entire point of the helper: erase the leaked
-  // Moleculer/typia shape down to the opaque marker. Centralising this
-  // here means every action export benefits without per-file eslint
-  // suppressions.
-  return registration as RegisteredAction;
+export function defineAction<T extends Record<string, unknown>>(
+  registration: T,
+): T & RegisteredAction {
+  // Single `as` cast — the entire point of this helper. The brand exists
+  // only in the type system; at runtime the registration object is
+  // unchanged. Centralising the cast here lets every consumer action
+  // export benefit without per-file eslint suppressions.
+  return registration as T & RegisteredAction;
 }
