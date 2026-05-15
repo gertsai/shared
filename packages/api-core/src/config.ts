@@ -8,8 +8,19 @@ export default loadConfig({
   MOLECULER_NODE_ID: null as null | string,
   MOLECULER_NAMESPACE: 'development',
   //
-  ALLOWED_ORIGINS: 'none',
-  // Danger: Allows bypassing auth by not validating JWT
+  // EVID-043 Security C3 fix: ALLOWED_ORIGINS is consumed by the API
+  // gateway's CORS config. The legacy string sentinel `'none'` (with
+  // `credentials: true`) caused some cors-lib versions to coerce to `*`,
+  // creating CWE-942 permissive CORS. New default is the empty string `''`
+  // — apiGateService.template.ts parses comma-separated values into an
+  // array and fails closed in production (throws at boot if NODE_ENV is
+  // production and the parsed list is empty / contains `*`).
+  ALLOWED_ORIGINS: '',
+  // EVID-043 Security C1 fix (CWE-347 / CWE-345): Allows bypassing JWT
+  // signature verification. Decodes Firebase token payload via `atob()`
+  // without verifying the signature — instant impersonation if true in
+  // production. Hard-gated at consume site (oauth.class.ts) to throw at
+  // boot when NODE_ENV === 'production' AND BYPASS_AUTH === true.
   BYPASS_AUTH: false,
   //
   TRANSPORT_TYPE: 'Nats' as 'Redis' | 'Nats' | 'Local',

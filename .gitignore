@@ -30,3 +30,4 @@ packages/*/reports/
 .forgeplan/trash/
 .forgeplan/claims/
 .forgeplan/session.yaml
+.mcp.json

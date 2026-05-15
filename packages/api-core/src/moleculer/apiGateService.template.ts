@@ -18,8 +18,60 @@ import {
   toBaseResponse,
   extractPackageInfo,
 } from '../lib';
+import { extractClientIp } from '../lib/common/ip-utils';
 // eslint-disable-next-line import/order
 import config from '../config';
+
+/**
+ * EVID-043 Security C3 fix: parse the `ALLOWED_ORIGINS` env config into a
+ * CORS-safe origin list.
+ *
+ * Behavior:
+ *   - Comma-separated list → array of origins.
+ *   - Empty / unset AND NODE_ENV === 'production' → throw at boot. CSRF-
+ *     amplifier safety: production deploys MUST declare origins explicitly.
+ *   - Empty / unset AND NODE_ENV !== 'production' → return `'*'` with a
+ *     console.warn so local-dev works out of the box.
+ *   - List contains `'*'` AND NODE_ENV === 'production' → throw at boot.
+ *     The cors lib + `credentials: true` + wildcard origin is the textbook
+ *     CSRF-amplifier pattern (CWE-942).
+ */
+function parseCorsOrigins(raw: string): string | string[] {
+  const trimmed = (raw ?? '').trim();
+  const isProd = process.env.NODE_ENV === 'production';
+
+  if (trimmed === '' || trimmed === 'none') {
+    if (isProd) {
+      throw new Error(
+        'ALLOWED_ORIGINS must be set in production (CWE-942 permissive-CORS ' +
+          'protection). Provide a comma-separated allowlist or unset ' +
+          'credentials:true on the cors config.',
+      );
+    }
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[apiGateService] ALLOWED_ORIGINS is empty — using wildcard origin ' +
+        '(dev-only). Set ALLOWED_ORIGINS=https://app.example.com,https://... ' +
+        'for production.',
+    );
+    return '*';
+  }
+
+  const list = trimmed
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+
+  if (isProd && list.includes('*')) {
+    throw new Error(
+      'ALLOWED_ORIGINS contains "*" in production while credentials:true is ' +
+        'set on cors config. This is the textbook CSRF-amplifier (CWE-942). ' +
+        'Either remove "*" or disable credentials on cors.',
+    );
+  }
+
+  return list.length === 1 ? (list[0] as string) : list;
+}
 
 // import TestService from './mixins/test.mixin';
 import { OAuthError } from '../lib/oauth';
@@ -299,8 +351,14 @@ export const createApiService = (
       settings: {
         host: '0.0.0.0',
         port: 3000,
-        logRequestParams: 'debug',
-        logResponseData: 'debug',
+        // EVID-043 Security C5 fix (CWE-532): default logging level for
+        // request params + response data is OFF. At 'debug' the gateway
+        // dumped full OAuth password-grant credentials, client_secrets,
+        // and freshly-minted access tokens into logs. Apps that want
+        // debug-level request introspection should opt in explicitly
+        // via `settings: { logRequestParams: 'debug' }` in their consumer.
+        logRequestParams: null,
+        logResponseData: null,
         path: '/',
         etag: true,
         optimizeOrder: true,
@@ -309,9 +367,20 @@ export const createApiService = (
           window: 60 * 1000,
           limit: 30,
           headers: true,
-          key: (req: IncomingRequest) => {
-            return (req.headers['x-forwarded-for'] as string) ?? req.socket.remoteAddress;
-          },
+          // EVID-043 Security C2 fix (CWE-345 / CWE-770): use the hardened
+          // `extractClientIp` helper instead of trusting raw X-Forwarded-For.
+          // Previous code accepted any XFF header value as-is — attackers
+          // rotating the header bypassed the limit trivially. extractClientIp
+          // validates octet ranges, rejects CR/LF/NUL injection, and selects
+          // the LAST IP from the XFF chain (which is the trusted proxy hop).
+          //
+          // Cast: moleculer-web's `IncomingRequest.socket.remoteAddress` is
+          // typed as `string | undefined` (Node http types), while our
+          // helper accepts the optional shape `{ remoteAddress?: string }`.
+          // Structurally compatible at runtime; the cast bridges the
+          // TS-only mismatch in the optionality declaration.
+          key: (req: IncomingRequest) =>
+            extractClientIp(req as Parameters<typeof extractClientIp>[0]),
           handler(req: IncomingRequest, res: GatewayResponse /*, next*/) {
             return sendResponse(
               res,
@@ -322,7 +391,12 @@ export const createApiService = (
           },
         },
         cors: {
-          origin: config.ALLOWED_ORIGINS,
+          // EVID-043 Security C3 fix (CWE-942 Permissive CORS): parse env
+          // ALLOWED_ORIGINS as a comma-separated allowlist. Empty list +
+          // production → throw at boot. Wildcard `*` + production + credentials
+          // → throw at boot (cors+credentials wildcard combination is a
+          // CSRF-amplifier per CORS spec). See parseCorsOrigins below.
+          origin: parseCorsOrigins(config.ALLOWED_ORIGINS),
           methods: ['GET', 'PUT', 'POST', 'DELETE', 'OPTIONS'],
           optionsSuccessStatus: 200,
           credentials: true,
