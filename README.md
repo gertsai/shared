@@ -57,11 +57,59 @@ for the framework choice rationale.
 
 ## Install
 
-```sh
-npm i @gertsai/<package>
-# or
-pnpm add @gertsai/<package>
-```
+> **Status (Wave 11.D)**: packages currently publish to **GitHub Packages**
+> (private to `gertsai` GitHub org). Public npm release planned once
+> internal testing settles. See [Publishing](#publishing) for the switch.
+
+### From GitHub Packages (current — private)
+
+1. Get a GitHub Personal Access Token with at least `read:packages` scope
+   from <https://github.com/settings/tokens>.
+
+2. Add to `~/.npmrc` (or your project's `.npmrc`):
+
+   ```ini
+   @gertsai:registry=https://npm.pkg.github.com
+   //npm.pkg.github.com/:_authToken=YOUR_GITHUB_PAT
+   ```
+
+   Or via env var:
+
+   ```ini
+   @gertsai:registry=https://npm.pkg.github.com
+   //npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}
+   ```
+
+3. Install as usual:
+
+   ```sh
+   pnpm add @gertsai/<package>
+   # or
+   npm i @gertsai/<package>
+   ```
+
+### From public npm (when published)
+
+Once we flip to public npm release, the GitHub Packages step disappears —
+just `pnpm add @gertsai/<package>` works from any machine.
+
+## Publishing
+
+`pnpm changeset publish` (run by `.github/workflows/release.yml`) currently
+targets **GitHub Packages**. To switch to public npm:
+
+1. Edit each `packages/*/package.json` — change
+   `publishConfig.registry` from `https://npm.pkg.github.com` to
+   `https://registry.npmjs.org` (or remove the field entirely — that's the
+   default).
+2. Edit `.github/workflows/release.yml` — change `registry-url` to
+   `https://registry.npmjs.org` and the `NODE_AUTH_TOKEN` value from
+   `${{ secrets.GITHUB_TOKEN }}` to `${{ secrets.NPM_TOKEN }}`.
+3. Add `NPM_TOKEN` repo secret with publish rights to the `@gertsai` npm scope.
+4. Bump the changeset PR and merge — first push fires public publish.
+
+The package surface itself doesn't change between the two registries — it's
+just where the tarball lands.
 
 ## Develop
 

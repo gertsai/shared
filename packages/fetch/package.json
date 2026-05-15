@@ -52,5 +52,9 @@
     "type": "git",
     "url": "https://github.com/gertsai/gertsai_codex.git",
     "directory": "packages/fetch"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://npm.pkg.github.com"
   }
 }

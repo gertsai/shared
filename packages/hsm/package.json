@@ -32,7 +32,9 @@
   },
   "typesVersions": {
     "*": {
-      "providers": ["./dist/providers/index.d.ts"]
+      "providers": [
+        "./dist/providers/index.d.ts"
+      ]
     }
   },
   "files": [
@@ -58,5 +60,9 @@
   },
   "peerDependencies": {
     "@gertsai/core": "workspace:*"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://npm.pkg.github.com"
   }
 }

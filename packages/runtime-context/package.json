@@ -32,7 +32,9 @@
   },
   "typesVersions": {
     "*": {
-      "moleculer": ["./dist/moleculer/index.d.ts"]
+      "moleculer": [
+        "./dist/moleculer/index.d.ts"
+      ]
     }
   },
   "files": [
@@ -49,7 +51,8 @@
     "lint": "eslint . --max-warnings 0"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://npm.pkg.github.com"
   },
   "peerDependencies": {
     "@gertsai/di": "workspace:^",

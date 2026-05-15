@@ -1,5 +1,16 @@
 name: Release
 
+# Publishes @gertsai/* packages to GitHub Packages (the private registry
+# scoped to this repo's owner). Use this for internal testing across
+# multiple projects before any public npm publish.
+#
+# Switch to public npm by:
+#   1. Changing publishConfig.registry in each package.json to
+#      https://registry.npmjs.org  (or removing the field entirely).
+#   2. Replacing the registry-url + NODE_AUTH_TOKEN below with the npm
+#      registry + secrets.NPM_TOKEN.
+# (Tracked in README → Publishing section.)
+
 on:
   push:
     branches: [main]
@@ -10,6 +21,7 @@ permissions:
   contents: write
   pull-requests: write
   id-token: write
+  packages: write
 
 jobs:
   release:
@@ -27,7 +39,8 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-          registry-url: 'https://registry.npmjs.org'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@gertsai'
 
       - run: pnpm install --frozen-lockfile
 
@@ -42,4 +55,4 @@ jobs:
           title: 'chore: release packages'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

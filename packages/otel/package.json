@@ -32,7 +32,9 @@
   },
   "typesVersions": {
     "*": {
-      "moleculer": ["./dist/moleculer.d.ts"]
+      "moleculer": [
+        "./dist/moleculer.d.ts"
+      ]
     }
   },
   "files": [
@@ -42,7 +44,8 @@
     "CHANGELOG.md"
   ],
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://npm.pkg.github.com"
   },
   "scripts": {
     "build": "tsup",
@@ -60,11 +63,21 @@
     "moleculer": "^0.14.0"
   },
   "peerDependenciesMeta": {
-    "@opentelemetry/sdk-node": { "optional": true },
-    "@opentelemetry/exporter-trace-otlp-http": { "optional": true },
-    "@opentelemetry/resources": { "optional": true },
-    "@opentelemetry/semantic-conventions": { "optional": true },
-    "moleculer": { "optional": true }
+    "@opentelemetry/sdk-node": {
+      "optional": true
+    },
+    "@opentelemetry/exporter-trace-otlp-http": {
+      "optional": true
+    },
+    "@opentelemetry/resources": {
+      "optional": true
+    },
+    "@opentelemetry/semantic-conventions": {
+      "optional": true
+    },
+    "moleculer": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "moleculer": "^0.14.35",
