@@ -7,8 +7,14 @@
   },
   "compilerOptions": {
     "noEmit": false,
-    "declaration": true,
-    "declarationMap": true,
+    // declaration/declarationMap intentionally off — m9s-example is a runnable
+    // app, not a published library, so no consumer ever imports its `.d.ts`.
+    // Keeping them on caused TS2742 after Wave 13 tightened `defineAction` to
+    // preserve inferred shape: `typia.createValidate<T>()` returns an
+    // intersection with `StandardSchemaV1<unknown, T>`, and TS could not name
+    // the leaked path portably (`packages/api-core/node_modules/@standard-schema/spec`).
+    "declaration": false,
+    "declarationMap": false,
     "baseUrl": ".",
     "outDir": "./dist",
     "target": "ES2022",
@@ -19,10 +25,6 @@
     "plugins": [
       {
         "transform": "typescript-transform-paths"
-      },
-      {
-        "transform": "typescript-transform-paths",
-        "afterDeclarations": true
       },
       {
         "transform": "typia/lib/transform"
