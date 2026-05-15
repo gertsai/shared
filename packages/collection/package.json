@@ -87,5 +87,9 @@
   "devDependencies": {
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^3.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://npm.pkg.github.com"
   }
 }

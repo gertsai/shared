@@ -42,8 +42,12 @@
   },
   "typesVersions": {
     "*": {
-      "http": ["./dist/http/index.d.ts"],
-      "grpc": ["./dist/grpc/index.d.ts"]
+      "http": [
+        "./dist/http/index.d.ts"
+      ],
+      "grpc": [
+        "./dist/grpc/index.d.ts"
+      ]
     }
   },
   "files": [
@@ -60,7 +64,8 @@
     "lint": "eslint . --max-warnings 0"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://npm.pkg.github.com"
   },
   "devDependencies": {
     "vitest": "^3.0.0"
