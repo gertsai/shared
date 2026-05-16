@@ -7,13 +7,14 @@
  */
 
 import { STATUS_CODES } from 'node:http';
+import type { Readable } from 'node:stream';
+import type { ReadableStream } from 'node:stream/web';
 import { URLSearchParams } from 'node:url';
 import { types } from 'node:util';
 
 import { Headers, FormData as UndiciFormData, request } from 'undici';
-import type { RequestInit } from 'undici';
 
-import type { ResponseLike, RequestOptions } from '../lib/types';
+import type { HttpMethod, RequestBody, RequestOptions, ResponseLike } from '../lib/types';
 import { validateUrl } from '../lib/url-validator';
 
 /** Default maximum body size: 50MB */
@@ -22,8 +23,50 @@ const DEFAULT_MAX_BODY_SIZE = 50 * 1024 * 1024;
 /** Default request timeout: 30 seconds */
 const DEFAULT_TIMEOUT_MS = 30_000;
 
-/** Undici request options type */
-export type UndiciRequestOptions = Exclude<Parameters<typeof request>[1], undefined>;
+/**
+ * Body shape accepted by undici's `request()` after normalisation through
+ * {@link resolveBody}. Defined locally so the emitted `.d.ts` does not leak
+ * `undici`'s internal `Dispatcher.RequestOptions['body']` (Wave 12.B-fix-1).
+ *
+ * @description Uses the global `FormData` type — at runtime {@link resolveBody}
+ * returns either a string, byte buffer, Node `Readable`, Web `ReadableStream`,
+ * `null`, or an undici `FormData` instance (which is structurally equivalent
+ * to the global one for the methods undici reads).
+ */
+export type UndiciResolvedBody =
+  | string
+  | Uint8Array
+  | Buffer
+  | FormData
+  | Readable
+  | ReadableStream
+  | null;
+
+/**
+ * Structural request-options interface used to call undici's `request()`.
+ *
+ * @description This mirrors the subset of undici's `Dispatcher.RequestOptions`
+ * actually consumed by this package — defined locally (no `Parameters<typeof
+ * request>[1]`) so the emitted `.d.ts` is independent of undici's version
+ * (Wave 12.B-fix-1, EVID-044 CRIT-2).
+ */
+export interface UndiciRequestOptions {
+  /** HTTP method */
+  method?: HttpMethod | string;
+  /** Request headers */
+  headers?:
+    | Record<string, string | string[] | undefined>
+    | globalThis.Headers
+    | [string, string][];
+  /** Request body (post-{@link resolveBody} shape) */
+  body?: UndiciResolvedBody;
+  /** AbortSignal for cancellation */
+  signal?: AbortSignal;
+  /** Body read timeout in milliseconds */
+  bodyTimeout?: number;
+  /** Headers read timeout in milliseconds */
+  headersTimeout?: number;
+}
 
 /**
  * Resolves various body types to a format acceptable by undici's request().
@@ -53,9 +96,9 @@ export type UndiciRequestOptions = Exclude<Parameters<typeof request>[1], undefi
  * ```
  */
 export async function resolveBody(
-  body: RequestInit['body'],
+  body: RequestBody | undefined,
   maxBodySize: number = DEFAULT_MAX_BODY_SIZE,
-): Promise<Exclude<UndiciRequestOptions['body'], undefined>> {
+): Promise<UndiciResolvedBody> {
   if (body == null) {
     return null;
   }
@@ -254,7 +297,11 @@ export async function makeRequest(
     headersTimeout: timeoutMs,
   };
 
-  const res = await request(url, options);
+  // Cast at the boundary — our local `UndiciRequestOptions` is structurally
+  // compatible with undici's `Dispatcher.RequestOptions`, but we cast to keep
+  // undici types out of the emitted `.d.ts` (Wave 12.B-fix-1, EVID-044 CRIT-2).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const res = await request(url, options as unknown as Parameters<typeof request>[1]);
 
   return {
     body: res.body,

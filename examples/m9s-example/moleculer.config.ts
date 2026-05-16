@@ -29,8 +29,10 @@
  */
 import type { BrokerOptions, Cacher } from 'moleculer';
 import { Errors } from 'moleculer';
-import { M9sCacheCacher, MemoryCacheDriver, RedisCacheDriver } from '@gertsai/m9s-cache';
-import type { RedisLike } from '@gertsai/m9s-cache';
+import { MemoryCacheDriver } from '@gertsai/m9s-cache';
+import { M9sCacheCacher } from '@gertsai/m9s-cache/moleculer';
+import { RedisCacheDriver } from '@gertsai/m9s-cache/redis';
+import type { RedisLike } from '@gertsai/m9s-cache/redis';
 import IORedis from 'ioredis';
 import { Middleware as ChannelsMiddleware } from '@moleculer/channels';
 import { Middleware as WorkflowsMiddleware } from '@moleculer/workflows';

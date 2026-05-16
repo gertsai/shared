@@ -1,12 +1,50 @@
-// ESM-compatible dynamic import for Moleculer internals
+// ESM-compatible dynamic import for Moleculer internals.
+//
+// Moleculer is a peer-optional dependency (see package.json#peerDependenciesMeta).
+// We MUST NOT execute `require('moleculer')` at module-load — a consumer importing
+// `@gertsai/m9s-cache/moleculer` purely for its types (or a tooling pipeline that
+// resolves modules eagerly without moleculer installed) would crash before they
+// even attempt to `new M9sCacheCacher(...)`. All moleculer access is therefore
+// deferred to first construction via `getMoleculer()` + the Proxy-constructor
+// `M9sCacheCacher` export at the bottom of this file (Wave 12.B-fix-1 per
+// EVID-044 CRIT-1).
 import { createRequire } from 'node:module';
 import type { ServiceBroker, LoggerInstance, MetricRegistry } from 'moleculer';
 
 const require = createRequire(import.meta.url);
-const Moleculer = require('moleculer');
-const BaseCacher = Moleculer.Cachers.Base;
-const MoleculerSerializers = Moleculer.Serializers;
-const { METRIC } = Moleculer;
+
+/**
+ * Shape of the moleculer module (narrow to the surfaces we use).
+ * `METRIC` is intentionally typed `any` because Moleculer 0.14 exports a
+ * dynamic registry of metric constants we look up by name.
+ */
+interface MoleculerModule {
+  Cachers: { Base: new (options: unknown) => BaseCacherType };
+  Serializers: { resolve: (cfg: unknown) => MoleculerInnerSerializer };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  METRIC: any;
+}
+
+// Lazy moleculer cache. Populated on first `new M9sCacheCacher(...)`.
+let _moleculer: MoleculerModule | null = null;
+function getMoleculer(): MoleculerModule {
+  if (_moleculer === null) {
+    try {
+      _moleculer = require('moleculer') as MoleculerModule;
+    } catch (err: unknown) {
+      const e = err as { code?: string; message?: string };
+      if (e?.code === 'MODULE_NOT_FOUND') {
+        throw new Error(
+          '[@gertsai/m9s-cache/moleculer] moleculer is required for M9sCacheCacher. ' +
+            'Install it as a peer dependency: pnpm add moleculer',
+        );
+      }
+      throw err;
+    }
+  }
+  return _moleculer;
+}
+
 import { CacheStore } from './cache-store.js';
 import { generateTags } from './tag-utils.js';
 import type {
@@ -20,6 +58,15 @@ import type {
   NormalizedCacheOptions,
   TagVersionMap,
 } from './types.js';
+
+/**
+ * Inner moleculer serializer (returned by `Serializers.resolve(cfg)`).
+ */
+interface MoleculerInnerSerializer {
+  serialize: (value: unknown) => CachePayload;
+  deserialize: (payload: CachePayload) => unknown;
+  init?: (broker: ServiceBroker) => void;
+}
 
 /**
  * Base cacher interface (from Moleculer internals).
@@ -106,15 +153,63 @@ class MoleculerSerializerAdapter implements GenericCacheSerializer {
  * broker.cacher = cacher;
  * ```
  */
-// Type assertion for BaseCacher class
-const BaseCacherClass = BaseCacher as new (options: unknown) => BaseCacherType;
+/**
+ * Public M9sCacheCacher type — concrete shape callers see. Mirrors the
+ * runtime class produced by `getM9sCacheCacherClass()` below. Kept as an
+ * interface (not a class export) so that the file does not reference
+ * `Moleculer.Cachers.Base` at module-load.
+ */
+export interface M9sCacheCacher extends BaseCacherType {
+  get(key: string): Promise<unknown>;
+  getWithTTL(key: string): Promise<{ data: unknown; ttl: number | null }>;
+  set(key: string, data: unknown, ttl?: number): Promise<void>;
+  hSet(key: string, data: Record<string, CachePayload>, ttl?: number): Promise<void>;
+  hSetWithTags(
+    key: string,
+    data: unknown,
+    ttl?: number,
+    tags?: TagVersionMap,
+  ): Promise<void>;
+  hGetAll<T = unknown>(key: string): Promise<CacheEnvelope<T> | null>;
+  hGet(key: string, field: string): Promise<unknown | null>;
+  del(key: string | string[]): Promise<number>;
+  clean(match?: string): Promise<number>;
+  close(): Promise<void>;
+  getKeys(pattern: string): Promise<string[]>;
+  cachePrefix(prefix?: string): string;
+  exist(key: string): Promise<boolean>;
+  ttl(key: string): Promise<number>;
+  setTags(tags: TagVersionMap, prefix?: string): Promise<void>;
+  getTags(tags: string[], prefix?: string): Promise<Array<number | null>>;
+  middleware(): {
+    name: string;
+    localAction: (
+      handler: (ctx: MoleculerContext) => Promise<unknown>,
+      action: { name: string; cache?: boolean | MoleculerCacheOptions },
+    ) => unknown;
+  };
+  _generateKeyFromObject(obj: unknown): string;
+}
 
-export class M9sCacheCacher extends BaseCacherClass {
-  private readonly _driver: CacheDriver;
-  private readonly _lockProvider?: CacheLockProvider;
-  private _serializer!: GenericCacheSerializer;
-  private _store!: CacheStore;
-  private _tagPrefix = 'TAG-';
+// Lazy class cache. Populated on first `new M9sCacheCacher(...)`.
+// We can only build the class after we know moleculer is loadable (its
+// `Cachers.Base` is the parent prototype).
+let _M9sCacheCacherClass: (new (options: M9sCacheCacherOptions) => M9sCacheCacher) | null = null;
+
+function getM9sCacheCacherClass(): new (options: M9sCacheCacherOptions) => M9sCacheCacher {
+  if (_M9sCacheCacherClass !== null) return _M9sCacheCacherClass;
+
+  const Moleculer = getMoleculer();
+  const BaseCacher = Moleculer.Cachers.Base;
+  const MoleculerSerializers = Moleculer.Serializers;
+  const { METRIC } = Moleculer;
+
+  class M9sCacheCacherImpl extends BaseCacher {
+    private readonly _driver: CacheDriver;
+    private readonly _lockProvider?: CacheLockProvider;
+    private _serializer!: GenericCacheSerializer;
+    private _store!: CacheStore;
+    private _tagPrefix = 'TAG-';
 
   constructor(options: M9sCacheCacherOptions) {
     super(options);
@@ -131,7 +226,7 @@ export class M9sCacheCacher extends BaseCacherClass {
     super.init(broker);
 
     const serializer = MoleculerSerializers.resolve(this.opts.serializer);
-    serializer.init(this.broker);
+    serializer.init?.(this.broker);
 
     this._serializer = new MoleculerSerializerAdapter(serializer);
     this._store = new CacheStore({
@@ -627,7 +722,55 @@ export class M9sCacheCacher extends BaseCacherClass {
     }
     return result;
   }
+  }
+  // Cache + return the constructed class (idempotent per module).
+  _M9sCacheCacherClass = M9sCacheCacherImpl as unknown as new (
+    options: M9sCacheCacherOptions,
+  ) => M9sCacheCacher;
+  return _M9sCacheCacherClass;
 }
+
+/**
+ * Moleculer-compatible cacher with tag-based invalidation and distributed locking.
+ *
+ * Features:
+ * - Tag-based cache invalidation (timestamp versioning)
+ * - Distributed locking via Redlock
+ * - Double-check locking to prevent thundering herd
+ * - Hash-based envelope storage for metadata
+ *
+ * Lazy construction: the underlying class extends `Moleculer.Cachers.Base`, which
+ * is `require()`'d only on the first `new M9sCacheCacher(...)` call. A consumer
+ * who merely imports `@gertsai/m9s-cache/moleculer` for its types (e.g. for a
+ * `MoleculerCacheOptions` reference) does NOT trigger the moleculer load — and
+ * therefore does not crash if moleculer is not installed. The `new` call is the
+ * point at which moleculer becomes mandatory; absent it, a contextual error is
+ * thrown explaining how to install it (Wave 12.B-fix-1 per EVID-044 CRIT-1).
+ *
+ * @example
+ * ```typescript
+ * const cacher = new M9sCacheCacher({
+ *   driver: new RedisCacheDriver({ redis: 'redis://localhost' }),
+ *   lockProvider: new RedlockLockProvider({ clients: [redis] }),
+ *   ttl: 300,
+ *   prefix: 'app:',
+ * });
+ *
+ * broker.cacher = cacher;
+ * ```
+ */
+export const M9sCacheCacher: new (options: M9sCacheCacherOptions) => M9sCacheCacher = new Proxy(
+  function M9sCacheCacher() {
+    // Stub — never actually called as a function. Construct trap intercepts `new`.
+  } as unknown as new (options: M9sCacheCacherOptions) => M9sCacheCacher,
+  {
+    construct(_target, args) {
+      const Cls = getM9sCacheCacherClass();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return new Cls(...(args as [M9sCacheCacherOptions])) as any;
+    },
+  },
+);
 
 /**
  * Normalize cache options with defaults.

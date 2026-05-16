@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: Apache-2.0
+/**
+ * @gertsai/m9s-cache — root barrel.
+ *
+ * Backend-agnostic surface only. Moleculer-coupled symbols live under
+ * `@gertsai/m9s-cache/moleculer`; ioredis/Redlock-coupled symbols live under
+ * `@gertsai/m9s-cache/redis`. This split keeps `import { CacheStore } from
+ * '@gertsai/m9s-cache'` free of external peer-dep type leaks
+ * (Wave 12.B-fix-1 per EVID-044 CRIT-1).
+ */
+
 // Core
 export { CacheStore } from './cache-store.js';
 
@@ -9,28 +20,14 @@ export {
   PassthroughSerializer,
 } from './serializers.js';
 
-// Drivers
+// Drivers — only the backend-agnostic in-memory implementation lives here.
+// RedisCacheDriver moved to '@gertsai/m9s-cache/redis'.
 export { MemoryCacheDriver } from './memory-driver.js';
 export type { MemoryCacheDriverOptions } from './memory-driver.js';
-export { RedisCacheDriver } from './redis-driver.js';
-export type { RedisCacheDriverOptions, RedisLike } from './redis-driver.js';
 
-// Lock Providers
-export { NoopLockProvider, RedlockLockProvider } from './lock-provider.js';
-export type { RedlockProviderOptions } from './lock-provider.js';
-
-// Moleculer Integration
-export { M9sCacheCacher } from './moleculer-cacher.js';
-export type { M9sCacheCacherOptions } from './moleculer-cacher.js';
-export { moleculerDbCacheMixin } from './moleculer-db-mixin.js';
-export type {
-  MoleculerDbModel,
-  CacheableEntity,
-  CacheEnabledService,
-  CacheEnabledBroker,
-  EntityEventType,
-  EntityChangedHandler,
-} from './moleculer-db-mixin.js';
+// Lock Providers — only the backend-agnostic Noop variant lives here.
+// RedlockLockProvider moved to '@gertsai/m9s-cache/redis'.
+export { NoopLockProvider } from './lock-provider.js';
 
 // Tag Utilities
 export { generateTags } from './tag-utils.js';
@@ -64,15 +61,6 @@ export type { CacheLockProvider, UnlockFunction } from './types.js';
 
 // Types - Tags
 export type { PathSegment, CacheTagConfig, CacheTag, TagVersionMap } from './types.js';
-
-// Types - Moleculer
-export type {
-  MoleculerContext,
-  MoleculerCachedAction,
-  MoleculerCacheOptions,
-  CacheLockOptions,
-  NormalizedCacheOptions,
-} from './types.js';
 
 // Types - Envelope
 export type { CacheEnvelope } from './types.js';
