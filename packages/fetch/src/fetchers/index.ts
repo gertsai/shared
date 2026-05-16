@@ -4,5 +4,5 @@
  * @module fetchers
  */
 
-export { httpCaller, makeRequest, resolveBody, default } from './undiciFetcher';
+export { httpCaller, makeRequest, resolveBody, BodyTooLargeError, default } from './undiciFetcher';
 export type { UndiciRequestOptions } from './undiciFetcher';

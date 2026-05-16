@@ -195,7 +195,7 @@ describe('PgStorageProvider — count', () => {
 });
 
 describe('PgStorageProvider — runBatch', () => {
-  it('queues ops and applies them in order', async () => {
+  it('queues ops and applies them atomically (BEGIN ... COMMIT)', async () => {
     const client = mockPgClient();
     const provider = new PgStorageProvider<UserMeta>({ client });
     await provider.runBatch<void>(async (batch) => {
@@ -204,9 +204,58 @@ describe('PgStorageProvider — runBatch', () => {
       batch.delete('users', 'c');
     });
     const sqls = client.recorded.map((r) => r.sql);
-    expect(sqls[0]).toMatch(/INSERT INTO users/);
-    expect(sqls[1]).toMatch(/UPDATE users/);
-    expect(sqls[2]).toMatch(/DELETE FROM users/);
+    expect(sqls[0]).toBe('BEGIN');
+    expect(sqls[1]).toMatch(/INSERT INTO users/);
+    expect(sqls[2]).toMatch(/UPDATE users/);
+    expect(sqls[3]).toMatch(/DELETE FROM users/);
+    expect(sqls[sqls.length - 1]).toBe('COMMIT');
+    expect(sqls).not.toContain('ROLLBACK');
+  });
+
+  it('empty batch does NOT emit BEGIN/COMMIT (early return)', async () => {
+    const client = mockPgClient();
+    const provider = new PgStorageProvider<UserMeta>({ client });
+    await provider.runBatch<void>(async () => {
+      // no ops queued
+    });
+    expect(client.recorded).toEqual([]);
+  });
+
+  it('failure mid-batch issues ROLLBACK and rethrows original error (atomic)', async () => {
+    const opError = Object.assign(new Error('op #2 fails'), { code: 'X' });
+    const seen: string[] = [];
+    let insertCalls = 0;
+    const failingClient: PgClient = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
+      $executeRaw: vi.fn().mockImplementation(
+        async (s: TemplateStringsArray): Promise<number> => {
+          const sql = String(s[0] ?? '');
+          seen.push(sql);
+          if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return 0;
+          if (/INSERT INTO users/.test(sql)) {
+            insertCalls += 1;
+            if (insertCalls === 2) throw opError;
+            return 1;
+          }
+          return 0;
+        },
+      ),
+      $disconnect: vi.fn().mockResolvedValue(undefined),
+    };
+    const provider = new PgStorageProvider<UserMeta>({ client: failingClient });
+    await expect(
+      provider.runBatch<void>(async (batch) => {
+        batch.set('users', 'a', { name: 'a', email: 'a@x' }); // op1: succeeds
+        batch.set('users', 'b', { name: 'b', email: 'b@x' }); // op2: fails
+        batch.set('users', 'c', { name: 'c', email: 'c@x' }); // op3: never runs
+      }),
+    ).rejects.toBe(opError);
+
+    // BEGIN issued first, ROLLBACK issued after the failure, op3 never ran.
+    expect(seen[0]).toBe('BEGIN');
+    expect(seen).toContain('ROLLBACK');
+    expect(seen).not.toContain('COMMIT');
+    expect(insertCalls).toBe(2); // op1 + failed op2; op3 was never attempted
   });
 
   it('PgBatchRunner is constructible standalone (introspection)', () => {
