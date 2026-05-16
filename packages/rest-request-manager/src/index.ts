@@ -10,6 +10,7 @@ export type {
   RestResponse,
   RestCallOpts,
   RestMethod,
+  RestRequestLogger,
   RestRequestManagerOpts,
   RestRequestManagerStats,
   RateLimitConfig,

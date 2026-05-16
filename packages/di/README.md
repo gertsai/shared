@@ -67,7 +67,10 @@ class UserEntity extends EventEmitter implements ConsumerType {
     super();
   }
   $destroy() {
-    this.emit('destroy');
+    // Emit 'destroyed' (past tense) to trigger automatic ServiceDirectory
+    // cleanup. Aligns with `@gertsai/entity` Model.$destroy() per
+    // PRD-034 FR-006.
+    this.emit('destroyed');
     this.removeAllListeners();
   }
 }

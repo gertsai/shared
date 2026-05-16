@@ -250,4 +250,39 @@ describe('RestRequestManager', () => {
       );
     });
   });
+
+  describe('logger (PRD-034 FR-002 — local `RestRequestLogger` shape)', () => {
+    it('accepts a structural logger with only {debug,warn,error}', async () => {
+      const calls: Array<{ level: string; msg: string }> = [];
+      const logger = {
+        debug: (msg: string) => calls.push({ level: 'debug', msg }),
+        warn: (msg: string) => calls.push({ level: 'warn', msg }),
+        error: (msg: string) => calls.push({ level: 'error', msg }),
+      };
+      httpCallerMock.mockResolvedValueOnce(mockResponse({ body: { ok: true } }));
+      const mgr = new RestRequestManager({ logger });
+      await mgr.get('https://example.com/x');
+      // At minimum the dispatch + success debug lines must fire.
+      expect(calls.filter((c) => c.level === 'debug').length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('accepts a richer logger (extra methods are ignored, structural fit)', async () => {
+      const logger = {
+        trace: () => {},
+        debug: () => {},
+        info: () => {},
+        warn: () => {},
+        error: () => {},
+        fatal: () => {},
+        child: () => logger,
+        setLevel: () => {},
+        getLevel: () => 'info' as const,
+      };
+      httpCallerMock.mockResolvedValueOnce(mockResponse({ body: { ok: true } }));
+      // Structural typing means a `@gertsai/logger-factory.Logger` shape
+      // still satisfies `RestRequestLogger`.
+      const mgr = new RestRequestManager({ logger });
+      await expect(mgr.get('https://example.com/x')).resolves.toBeDefined();
+    });
+  });
 });

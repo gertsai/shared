@@ -17,7 +17,7 @@ diLogger.level = 0;
 // Mock consumer class
 class MockConsumer extends EventEmitter implements ConsumerType {
   $destroy() {
-    this.emit('destroy');
+    this.emit('destroyed');
   }
 }
 

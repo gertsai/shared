@@ -153,8 +153,8 @@ export class ServiceDirectory<
    * // Manual cleanup
    * directory.$destroy();
    *
-   * // Or automatically when consumer emits 'destroy' event
-   * consumer.emit('destroy');
+   * // Or automatically when consumer emits 'destroyed' event
+   * consumer.emit('destroyed');
    * ```
    */
   $destroy() {

@@ -329,6 +329,39 @@ export class FluxilisEventEmitter<
   }
 
   /**
+   * Removes a specific ListenerInfo entry by reference identity (FR-005).
+   *
+   * Public `off()` matches by function identity, which is correct for
+   * the documented API but ambiguous when the same function is registered
+   * via both `on()` and `once()` — naively calling `off(event, fn)` from
+   * once-cleanup would remove the first match, which may be the `on()`
+   * registration. This helper splices the exact ListenerInfo we observed
+   * during emit, preserving sibling registrations.
+   *
+   * @internal
+   */
+  private _removeListenerInfo<E extends keyof TEventMap>(event: E, info: ListenerInfo): void {
+    if (!this._events.has(event)) {
+      return;
+    }
+
+    // FIX-024 parity: copy-on-write if mid-emit.
+    let listeners = this._events.get(event)!;
+    if (this._emitting.has(event)) {
+      listeners = [...listeners];
+      this._events.set(event, listeners);
+    }
+
+    const idx = listeners.indexOf(info);
+    if (idx !== -1) {
+      listeners.splice(idx, 1);
+      if (listeners.length === 0) {
+        this._events.delete(event);
+      }
+    }
+  }
+
+  /**
    * Removes all listeners
    * @param event Event name (if specified, only removes listeners for this event)
    */
@@ -407,8 +440,11 @@ export class FluxilisEventEmitter<
       return false;
     }
 
-    // Track one-time listeners for removal
-    const onceListeners: ListenerInfo['listener'][] = [];
+    // FR-005: Track one-time listener registrations by ListenerInfo
+    // reference identity, not by function identity. Function identity
+    // would alias persistent on()-registrations that happen to share
+    // the same listener function and remove them by accident.
+    const onceListeners: ListenerInfo[] = [];
 
     // FIX-024: Mark this event as "emitting" so on()/off() will copy-on-write
     this._emitting.add(event);
@@ -427,9 +463,9 @@ export class FluxilisEventEmitter<
             });
           }
 
-          // Mark one-time listeners for removal
+          // Mark one-time listeners for removal (FR-005: by info ref)
           if (info.once) {
-            onceListeners.push(info.listener);
+            onceListeners.push(info);
           }
         } catch (err) {
           console.error(`Error in listener for event '${String(event)}':`, err);
@@ -440,9 +476,9 @@ export class FluxilisEventEmitter<
       this._emitting.delete(event);
     }
 
-    // Remove one-time listeners
-    for (const listener of onceListeners) {
-      this.off(event, listener as TEventMap[E]);
+    // FR-005: Remove one-time listeners by ListenerInfo reference identity.
+    for (const info of onceListeners) {
+      this._removeListenerInfo(event, info);
     }
 
     return true;
@@ -502,8 +538,9 @@ export class FluxilisEventEmitter<
       return false;
     }
 
-    // Track one-time listeners for removal
-    const onceListeners: ListenerInfo['listener'][] = [];
+    // FR-005: Track one-time listener registrations by ListenerInfo
+    // reference identity (see emit() for rationale).
+    const onceListeners: ListenerInfo[] = [];
 
     // Array of promises from async listeners
     const promises: Promise<void>[] = [];
@@ -522,9 +559,9 @@ export class FluxilisEventEmitter<
             promises.push(result);
           }
 
-          // Mark one-time listeners for removal
+          // Mark one-time listeners for removal (FR-005: by info ref)
           if (info.once) {
-            onceListeners.push(info.listener);
+            onceListeners.push(info);
           }
         } catch (err) {
           console.error(`Error in listener for event '${String(event)}':`, err);
@@ -542,9 +579,9 @@ export class FluxilisEventEmitter<
       });
     }
 
-    // Remove one-time listeners
-    for (const listener of onceListeners) {
-      this.off(event, listener as TEventMap[E]);
+    // FR-005: Remove one-time listeners by ListenerInfo reference identity.
+    for (const info of onceListeners) {
+      this._removeListenerInfo(event, info);
     }
 
     return true;

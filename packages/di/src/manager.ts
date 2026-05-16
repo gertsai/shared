@@ -155,7 +155,7 @@ const serviceDirectoryRegistry = new WeakMap<ConsumerType, ServiceDirectory<stri
  * This function implements lazy directory creation and automatic lifecycle management:
  * - Creates a new service directory if one doesn't exist for the consumer
  * - Associates the directory with the consumer's service registry
- * - Sets up automatic cleanup when the consumer emits a 'destroy' event
+ * - Sets up automatic cleanup when the consumer emits a 'destroyed' event
  * - Caches the directory for future use
  *
  * @template ConsumerClassName - String literal type of the consumer class name
@@ -198,9 +198,16 @@ function resolveServiceDirectory<
       registry,
     });
 
-    // Set up automatic cleanup when the consumer is destroyed
+    // Set up automatic cleanup when the consumer is destroyed.
+    //
+    // PRD-034 FR-006 (Wave 12.C-fix-2+3): listen for `'destroyed'` (past
+    // tense — the event `@gertsai/entity`'s `Model.$destroy()` actually
+    // emits, see `packages/entity/src/Model.ts:46`). Previously we
+    // subscribed to `'destroy'`, which never fired for entity-derived
+    // consumers and caused their ServiceDirectory `$destroy()` to be
+    // skipped (leaking timers / connections held by registered services).
     if (typeof consumer === 'object' && consumer !== null && consumer instanceof EventEmitter) {
-      consumer.on('destroy', () => {
+      consumer.on('destroyed', () => {
         directory?.$destroy();
       });
     }

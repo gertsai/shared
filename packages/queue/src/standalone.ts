@@ -9,8 +9,7 @@
  * migration to consume this primitive is a Sprint 3.x follow-up
  * (out of scope for the initial @gertsai/queue release).
  */
-import type { Job } from 'bullmq';
-import { createWorker, type QueueConnection } from './index';
+import { createWorker, type Job, type QueueConnection } from './index';
 
 /**
  * Single queue + processor binding for the standalone runner.
