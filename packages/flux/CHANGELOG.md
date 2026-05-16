@@ -1,5 +1,12 @@
 # @gertsai/flux
 
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [a26b3d6]
+  - @gertsai/collection@0.3.0
+
 ## 0.2.0
 
 ### Minor Changes

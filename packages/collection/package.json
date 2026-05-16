@@ -1,6 +1,6 @@
 {
   "name": "@gertsai/collection",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Modern TypeScript collection library with mutable, immutable, and persistent data structures",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -61,10 +61,18 @@
   },
   "typesVersions": {
     "*": {
-      "core/*": ["./dist/core/*.d.ts"],
-      "mixins/*": ["./dist/mixins/*.d.ts"],
-      "operations/*": ["./dist/operations/*.d.ts"],
-      "specialized/*": ["./dist/specialized/*.d.ts"]
+      "core/*": [
+        "./dist/core/*.d.ts"
+      ],
+      "mixins/*": [
+        "./dist/mixins/*.d.ts"
+      ],
+      "operations/*": [
+        "./dist/operations/*.d.ts"
+      ],
+      "specialized/*": [
+        "./dist/specialized/*.d.ts"
+      ]
     }
   },
   "files": [
