@@ -1,5 +1,12 @@
 # @gertsai/tenant-resolver
 
+## 2.0.0
+
+### Patch Changes
+
+- Updated dependencies [05258e5]
+  - @gertsai/errors@0.3.0
+
 ## 1.0.0
 
 ### Minor Changes

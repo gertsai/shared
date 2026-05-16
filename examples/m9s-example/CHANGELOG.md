@@ -1,5 +1,30 @@
 # @gertsai-examples/m9s-example
 
+## 0.0.7
+
+### Patch Changes
+
+- Updated dependencies [05258e5]
+- Updated dependencies [05258e5]
+- Updated dependencies [05258e5]
+- Updated dependencies [05258e5]
+  - @gertsai/api-rlr@0.3.0
+  - @gertsai/core@0.3.0
+  - @gertsai/errors@0.3.0
+  - @gertsai/logger-factory@2.0.0
+  - @gertsai/auth-openfga@0.3.0
+  - @gertsai/async-utils@0.3.0
+  - @gertsai/session-guard@2.0.0
+  - @gertsai/runtime-context@3.0.0
+  - @gertsai/entity-storage@3.0.0
+  - @gertsai/api-core@0.3.1
+  - @gertsai/rest-request-manager@4.0.0
+  - @gertsai/session@2.0.0
+  - @gertsai/tenant-resolver@2.0.0
+  - @gertsai/pg-client@2.0.0
+  - @gertsai-examples/m9s-example-api-types@0.0.4
+  - @gertsai/entity-audit@0.1.1
+
 ## 0.0.6
 
 ### Patch Changes

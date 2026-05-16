@@ -1,6 +1,6 @@
 {
   "name": "@gertsai/api-core",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Core API utilities for Gerts Moleculer services",
   "type": "module",
   "sideEffects": false,

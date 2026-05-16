@@ -1,6 +1,6 @@
 {
   "name": "@gertsai/errors",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Universal error taxonomy for @gertsai/* — 10 ErrorKind values + RFC 9457 ProblemDetails (/http) + gRPC status mapping (/grpc)",
   "license": "Apache-2.0",
   "type": "module",

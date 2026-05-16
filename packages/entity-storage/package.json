@@ -1,6 +1,6 @@
 {
   "name": "@gertsai/entity-storage",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "Session-aware audit-stamped CRUD wrapper around IStorageProvider + InMemoryStorageProvider test fixture. Backend-agnostic. Per PRD-002 + ADR-005 + SPEC-008.",
   "license": "Apache-2.0",
   "type": "module",
