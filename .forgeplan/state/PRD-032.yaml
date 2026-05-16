@@ -1,0 +1,17 @@
+artifact_id: PRD-032
+workflow_type: greenfield
+current_phase: done
+advanced_at: 2026-05-16T19:32:24.207986Z
+history:
+- to: shape
+  at: 2026-05-16T19:19:51.161810Z
+  reason: 'auto: forgeplan_new'
+- from: shape
+  to: validate
+  at: 2026-05-16T19:21:04.348527Z
+  reason: 'auto: forgeplan_validate PASS'
+- from: validate
+  to: done
+  at: 2026-05-16T19:32:24.207986Z
+  reason: 'auto: forgeplan_activate'
+schema_version: 1
