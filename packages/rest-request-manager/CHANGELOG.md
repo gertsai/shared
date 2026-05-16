@@ -1,5 +1,12 @@
 # @gertsai/rest-request-manager
 
+## 3.0.0
+
+### Patch Changes
+
+- Updated dependencies [4415a5f]
+  - @gertsai/fetch@0.4.0
+
 ## 2.0.0
 
 ### Patch Changes
