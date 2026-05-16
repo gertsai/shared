@@ -1,5 +1,11 @@
 # @gertsai/query-dsl
 
+## 2.0.0
+
+### Patch Changes
+
+- @gertsai/storage-core@2.0.0
+
 ## 1.0.0
 
 ### Minor Changes

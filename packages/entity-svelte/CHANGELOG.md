@@ -1,5 +1,12 @@
 # @gertsai/entity-svelte
 
+## 2.0.0
+
+### Patch Changes
+
+- Updated dependencies [80ca808]
+  - @gertsai/entity@1.1.0
+
 ## 1.0.0
 
 ### Minor Changes
