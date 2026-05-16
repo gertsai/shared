@@ -408,6 +408,12 @@ export interface HookMetadata {
   name: string;
   /** Run in background (non-blocking) */
   runInBackground?: boolean;
+  /**
+   * Blocking hook — MUST run synchronously even if the executor was
+   * told to runInBackground=true at workflow level. Overrides the
+   * workflow-level flag (Wave 12.D-fix per FR-023 / L-7).
+   */
+  readonly blocking?: boolean;
   /** Filter to specific agents */
   filterAgents?: string[];
   /** Filter to specific tools */

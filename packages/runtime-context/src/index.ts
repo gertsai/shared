@@ -12,6 +12,7 @@ export {
   DefaultFeatureContext,
   type FeatureContext,
   type FeatureContextInit,
+  type FeatureContextLogger,
 } from './feature-context.js';
 
 export {

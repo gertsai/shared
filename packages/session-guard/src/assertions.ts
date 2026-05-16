@@ -111,3 +111,39 @@ export function assertNotDestroyed(session: Session): void {
     });
   }
 }
+
+/**
+ * Asserts that the session represents an impersonation (i.e.
+ * `dataAccessUuid` is set and differs from `operatorUuid`).
+ *
+ * Wave 12.D-fix per PRD-036 FR-018: throwing companion to the
+ * non-throwing {@link isImpersonating} predicate. Use this from
+ * imperative code that wants a structured error when the UUIDs are
+ * missing or when the session is not actually impersonating.
+ *
+ * @throws DataAccessUuidMissingError when `operatorUuid` or
+ *   `dataAccessUuid` is empty / undefined.
+ * @throws Error when both UUIDs are present but equal (no impersonation
+ *   in progress) — distinguishable by message.
+ */
+export function assertImpersonating(session: Session): void {
+  const operatorUuid = session.operatorUuid;
+  const dataAccessUuid = session.dataAccessUuid;
+  if (
+    operatorUuid === undefined ||
+    operatorUuid === '' ||
+    dataAccessUuid === undefined ||
+    dataAccessUuid === ''
+  ) {
+    throw new DataAccessUuidMissingError({
+      message:
+        'Cannot determine impersonation: session operatorUuid or dataAccessUuid is empty / undefined',
+      details: { reason: 'data-access-uuid-missing' },
+    });
+  }
+  if (operatorUuid === dataAccessUuid) {
+    throw new Error(
+      'Session is not impersonating: operatorUuid === dataAccessUuid',
+    );
+  }
+}

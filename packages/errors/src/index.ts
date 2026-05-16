@@ -19,3 +19,10 @@ export { BadGatewayError } from './errors/bad-gateway.js';
 
 export { isAppError, wrapUnknownError } from './helpers.js';
 export { getUserMessage, registerErrorLocale } from './locale.js';
+
+// Wave 12.D-fix (PRD-036 FR-006/FR-007): redaction primitives are now
+// part of the root surface so `@gertsai/logger-factory` (and any other
+// consumer needing deep redaction without pulling the `/http` bucket
+// type set) can `import { redactDetails, REDACTION_KEYS } from
+// '@gertsai/errors'`.
+export { redactDetails, REDACTION_KEYS } from './redaction.js';

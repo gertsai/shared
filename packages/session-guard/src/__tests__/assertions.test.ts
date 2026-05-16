@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   assertAuthenticated,
   assertHasDataAccessUuid,
+  assertImpersonating,
   assertNotDestroyed,
   assertOperatorType,
   assertSessionInTenant,
@@ -153,5 +154,36 @@ describe('assertNotDestroyed', () => {
     const session = makeSession();
     session.$destroy();
     expect(() => assertNotDestroyed(session)).toThrow(SessionDestroyedError);
+  });
+});
+
+describe('assertImpersonating (Wave 12.D-fix FR-018)', () => {
+  it('passes when operatorUuid !== dataAccessUuid', () => {
+    const session = makeSession({
+      operatorUuid: 'agent-bot',
+      dataAccessUuid: 'human-user-1',
+    });
+    expect(() => assertImpersonating(session)).not.toThrow();
+  });
+
+  it('throws DataAccessUuidMissingError on empty operatorUuid', () => {
+    const session = makeSession({ operatorUuid: '' });
+    expect(() => assertImpersonating(session)).toThrow(
+      DataAccessUuidMissingError,
+    );
+  });
+
+  it('throws DataAccessUuidMissingError on empty dataAccessUuid override', () => {
+    const session = makeSession({ operatorUuid: 'op-1' });
+    session.$setDataAccessUuid('');
+    expect(() => assertImpersonating(session)).toThrow(
+      DataAccessUuidMissingError,
+    );
+  });
+
+  it('throws plain Error when not impersonating (UUIDs equal)', () => {
+    const session = makeSession({ operatorUuid: 'op-1' });
+    // dataAccessUuid getter falls back to operatorUuid → equal.
+    expect(() => assertImpersonating(session)).toThrow(/not impersonating/);
   });
 });

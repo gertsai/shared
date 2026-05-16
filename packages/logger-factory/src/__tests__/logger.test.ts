@@ -135,6 +135,42 @@ describe('createLogger — redaction (default-on per ADR-009 I-17)', () => {
       service: 'api',
     });
   });
+
+  // Wave 12.D-fix (PRD-036 FR-006): logger-factory delegates to
+  // `@gertsai/errors#redactDetails` so nested credential keys no longer
+  // leak through the top-level shallow scan.
+  it('redacts NESTED credential keys (deep scan via redactDetails)', () => {
+    const backend = spyBackend();
+    const logger = createLogger({ level: 'trace', backend });
+    logger.info('msg', { user: { password: 'p', name: 'kept' }, requestId: 'r1' });
+    const ctx = backend.calls[0]!.ctx as Record<string, unknown>;
+    const user = ctx.user as Record<string, unknown>;
+    expect(user.password).toBe('[REDACTED]');
+    expect(user.name).toBe('kept');
+    expect(ctx.requestId).toBe('r1');
+  });
+
+  // Wave 12.D-fix (PRD-036 FR-007): expansion auto-inherits from
+  // `@gertsai/errors` REDACTION_KEYS — logger-factory does not need a
+  // local update.
+  it('redacts FR-007 expanded keys (apiToken / sessionId / x-api-key)', () => {
+    const backend = spyBackend();
+    const logger = createLogger({ level: 'trace', backend });
+    logger.info('msg', {
+      apiToken: 't1',
+      sessionId: 's1',
+      'x-api-key': 'k1',
+      jwt: 'j1',
+      keep: 'ok',
+    });
+    expect(backend.calls[0]!.ctx).toEqual({
+      apiToken: '[REDACTED]',
+      sessionId: '[REDACTED]',
+      'x-api-key': '[REDACTED]',
+      jwt: '[REDACTED]',
+      keep: 'ok',
+    });
+  });
 });
 
 describe('createLogger — backend pluggable', () => {

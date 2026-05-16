@@ -62,7 +62,13 @@
   },
   "peerDependencies": {
     "ioredis": "^5.7.0",
+    "moleculer": "^0.14.0",
     "moleculer-web": "^0.10.8"
+  },
+  "peerDependenciesMeta": {
+    "ioredis": { "optional": true },
+    "moleculer": { "optional": true },
+    "moleculer-web": { "optional": true }
   },
   "devDependencies": {
     "@types/lodash.clonedeep": "^4.5.9",

@@ -11,6 +11,9 @@
 
 import type { EventBus } from '../../event-bus';
 import { BaseLLM, LLMCallError, type LLMCapabilities } from '../base';
+import { validateBaseUrl } from '../base-url-validator';
+
+const ANTHROPIC_DEFAULT_BASE_URL = 'https://api.anthropic.com/v1';
 import type {
   LLMConfig,
   LLMMessage,
@@ -130,11 +133,18 @@ export class AnthropicProvider extends BaseLLM {
 
   constructor(config: AnthropicConfig, eventBus?: EventBus) {
     const resolvedApiKey = config.apiKey ?? process.env.ANTHROPIC_API_KEY;
+    // Validate baseUrl BEFORE super() (Wave 12.D-fix per EVID-051 S-3 / CWE-918).
+    const validatedBaseUrl = validateBaseUrl(
+      config.baseUrl,
+      ANTHROPIC_DEFAULT_BASE_URL,
+      'Anthropic',
+    );
     super(
       {
         ...config,
         provider: 'anthropic',
         ...(resolvedApiKey !== undefined && { apiKey: resolvedApiKey }),
+        baseUrl: validatedBaseUrl,
         // Anthropic requires max_tokens, default to 4096
         maxTokens: config.maxTokens ?? 4096,
       },
@@ -369,7 +379,7 @@ export class AnthropicProvider extends BaseLLM {
   // ==================== Private Methods ====================
 
   private getBaseUrl(): string {
-    return this.baseUrl ?? 'https://api.anthropic.com/v1';
+    return this.baseUrl ?? ANTHROPIC_DEFAULT_BASE_URL;
   }
 
   private getHeaders(): Record<string, string> {

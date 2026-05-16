@@ -134,6 +134,13 @@ export class RequestContext {
   /**
    * Attach (or replace) the session associated with this request. Throws
    * {@link ContextFrozenError} once {@link $freeze} has been invoked.
+   *
+   * Wave 12.D-fix per PRD-036 FR-019 / EVID-051 L-3: the frozen-check is
+   * the canonical enforcement point of the single-middleware invariant —
+   * if a downstream handler still has a reference to a frozen
+   * {@link RequestContext} and tries to swap its session, the throw
+   * surfaces the bug immediately rather than letting the mutation race
+   * an already-completed authorisation check.
    */
   $setSession(session: Session): void {
     this._assertNotFrozen('session');
@@ -166,8 +173,14 @@ export class RequestContext {
    *
    * Calling `$freeze()` more than once is a no-op.
    *
-   * Per ADR-007 I-22 + I-16 (Moleculer middleware auto-freezes before
-   * invoking the downstream handler).
+   * **Single-middleware invariant (PRD-036 FR-019 / EVID-051 L-3):**
+   * `$freeze()` MUST be invoked exactly once, at the end of the
+   * request-context-establishing middleware chain (typically the
+   * Moleculer middleware exposed via `./moleculer`). After this call
+   * any `$setSession` / `$setTenantId` / `$setCorrelationId` invocation
+   * throws {@link ContextFrozenError}, surfacing accidental
+   * "middleware ran twice" races as a hard error rather than a silent
+   * authorisation downgrade. Per ADR-007 I-22 + I-16.
    */
   $freeze(): void {
     if (this._frozen) return;
@@ -185,8 +198,14 @@ export class RequestContext {
 
   private _assertNotFrozen(field: string): void {
     if (this._frozen) {
+      // Wave 12.D-fix FR-019 — explicit message includes the
+      // single-middleware invariant so the failure is self-explanatory
+      // when it surfaces in logs (EVID-051 L-3).
       throw new ContextFrozenError({
-        message: `RequestContext is frozen; cannot mutate ${field}`,
+        message:
+          `RequestContext.$set${field.charAt(0).toUpperCase()}${field.slice(1)}: ` +
+          'cannot mutate after $freeze() — single-middleware invariant. ' +
+          `Field: ${field}`,
         details: { frozen: true },
       });
     }

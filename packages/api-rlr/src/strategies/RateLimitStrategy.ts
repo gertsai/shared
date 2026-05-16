@@ -1,7 +1,12 @@
-import type { LimiterStrategy, RLRRedis } from '../utils/types';
+import type { LimiterStrategy } from '../utils/types';
 
+/**
+ * Wave 12.D-fix / EVID-051 T-3 (FR-014): `store` field dropped — it was
+ * unused dead-code coupling. Strategies receive their adapter via the
+ * constructor (`new SlidingWindowStrategy(adapter)` etc.); the
+ * pre-Wave-12.D `args.store` channel was always passed `null as any`.
+ */
 export type StrategyExecuteArgs = {
-  store: RLRRedis;
   key: string;
   limit: number;
   timeFrame: number;

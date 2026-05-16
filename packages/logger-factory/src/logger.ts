@@ -12,7 +12,7 @@
  * propagate. Independent level state (parent.setLevel does not affect
  * child).
  */
-import { REDACTION_KEYS } from '@gertsai/errors/http';
+import { redactDetails } from '@gertsai/errors';
 import { consoleBackend } from './console-backend.js';
 
 export type LogLevel =
@@ -63,22 +63,26 @@ export function createLogger(opts: LoggerFactoryOpts = {}): Logger {
   const backend = opts.backend ?? consoleBackend;
   const baseContext: LogContext = Object.freeze({ ...opts.baseContext });
   const userRedact = opts.redact ?? [];
-  const redactSet = new Set(
-    [...REDACTION_KEYS, ...userRedact].map((k) => k.toLowerCase()),
+  // Wave 12.D-fix (PRD-036 FR-006): pre-lowercased user-supplied keys
+  // are passed verbatim to `redactDetails` so each `emit()` call
+  // re-uses the same Set rather than recomputing it. Default
+  // `REDACTION_KEYS` from `@gertsai/errors` are merged inside
+  // `redactDetails` itself — FR-007 expansions thus propagate
+  // automatically.
+  const userRedactSet: ReadonlySet<string> = new Set(
+    userRedact.map((k) => k.toLowerCase()),
   );
 
   let currentLevel: LogLevel = opts.level ?? 'info';
 
+  /**
+   * Deep + cycle-safe + bounded-depth/breadth redaction delegated to
+   * `@gertsai/errors#redactDetails`. Replaces the Sprint 3.9 shallow
+   * key-loop which leaked nested credentials such as `{ user: {
+   *   password } }`. See PRD-036 FR-006.
+   */
   function applyRedaction(ctx: LogContext): LogContext {
-    const result: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(ctx)) {
-      if (redactSet.has(k.toLowerCase())) {
-        result[k] = '[REDACTED]';
-      } else {
-        result[k] = v;
-      }
-    }
-    return result;
+    return redactDetails(ctx, userRedactSet) as LogContext;
   }
 
   function shouldLog(level: LogLevel): boolean {

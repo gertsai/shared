@@ -151,6 +151,43 @@ export class VaultProvider implements HSMProvider {
       backoffMultiplier: 2,
       maxDelayMs: 30000,
     };
+    // Wave 12.D-fix (PRD-036 FR-009): reject `http://` Vault addresses
+    // at construction time except for loopback hosts (localhost / 127.x
+    // / [::1]) which are dev-only. Vault traffic carries the auth token
+    // in `X-Vault-Token`; over cleartext HTTP it is trivially
+    // intercepted. Fail-closed by default.
+    this.validateAddress();
+  }
+
+  private validateAddress(): void {
+    let parsed: URL;
+    try {
+      parsed = new URL(this.config.address);
+    } catch {
+      throw new HSMError(
+        `VaultConfig.address is not a valid URL: ${this.config.address}`,
+        HSMErrorCodes.CONFIG_ERROR,
+        'vault',
+      );
+    }
+    const isLoopback =
+      parsed.hostname === 'localhost' ||
+      parsed.hostname === '127.0.0.1' ||
+      parsed.hostname === '[::1]' ||
+      parsed.hostname === '::1';
+    if (parsed.protocol !== 'https:' && !isLoopback) {
+      throw new HSMError(
+        `VaultConfig.address must use https:// (except for localhost/127.0.0.1). Got: ${this.config.address}. Cleartext token transmission rejected.`,
+        HSMErrorCodes.CONFIG_ERROR,
+        'vault',
+      );
+    }
+    if (parsed.protocol !== 'https:' && isLoopback) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[hsm/vault] Using http:// for ${parsed.hostname} — token transmitted cleartext (dev only).`,
+      );
+    }
   }
 
   get isConnected(): boolean {

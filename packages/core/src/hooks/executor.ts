@@ -66,6 +66,23 @@ export function shouldRunInBackground(hook: Function): boolean {
 }
 
 /**
+ * Decide whether a given hook should be queued to the background queue
+ * (Wave 12.D-fix per FR-023 / L-7).
+ *
+ * Rule: a hook tagged `blocking: true` ALWAYS runs synchronously, even if
+ * the workflow-level `runInBackground` flag is true. Otherwise either the
+ * hook's own `runInBackground` opt-in OR the workflow flag will queue it.
+ */
+export function shouldUseBackground(
+  hook: Function,
+  workflowRunInBackground: boolean,
+): boolean {
+  const meta = getHookMetadata(hook);
+  if (meta?.blocking === true) return false;
+  return meta?.runInBackground === true || workflowRunInBackground === true;
+}
+
+/**
  * Get hook priority (for execution ordering).
  */
 export function getHookPriority(hook: Function): number {
@@ -114,17 +131,7 @@ export function copyArgsForBackground<T extends Record<string, unknown>>(
 
   for (const [key, value] of Object.entries(args)) {
     if (COPY_KEYS.has(key) && value != null) {
-      try {
-        // Deep copy using JSON (simple but effective)
-        copied[key] = JSON.parse(JSON.stringify(value));
-      } catch {
-        // If JSON fails (circular refs, functions, etc.), use shallow copy
-        if (typeof value === 'object') {
-          copied[key] = Array.isArray(value) ? [...value] : { ...value };
-        } else {
-          copied[key] = value;
-        }
-      }
+      copied[key] = deepCloneValue(value);
     } else {
       // Shallow copy for other keys (e.g., agent, session - references)
       copied[key] = value;
@@ -132,6 +139,27 @@ export function copyArgsForBackground<T extends Record<string, unknown>>(
   }
 
   return copied as T;
+}
+
+/**
+ * Deep clone a value using `structuredClone` (Node 17+, guaranteed on
+ * Node ≥22 per `engines.node`). Preserves Date, Map, Set, ArrayBuffer,
+ * typed arrays, and cyclic refs — unlike the old JSON.parse(JSON.stringify(...))
+ * which corrupted Dates and threw on cycles.
+ *
+ * Falls back to shallow copy if structuredClone throws (functions, DOM
+ * nodes, class instances with non-cloneable members).
+ *
+ * Wave 12.D-fix per FR-023 / L-7.
+ */
+function deepCloneValue(value: unknown): unknown {
+  try {
+    return structuredClone(value);
+  } catch {
+    if (Array.isArray(value)) return [...value];
+    if (value !== null && typeof value === 'object') return { ...value };
+    return value;
+  }
 }
 
 // ============================================================================
@@ -147,6 +175,14 @@ class BackgroundQueue {
   private running = 0;
   private readonly concurrency: number;
   private readonly timeout: number;
+  /**
+   * Deferred resolved when the queue is empty AND no tasks are running.
+   * Replaces the old `setTimeout(check, 10)` polling loop (Wave 12.D-fix
+   * per FR-023 / L-7). If a new task is enqueued before drain resolves,
+   * the deferred stays pending and resolves the next time the queue
+   * goes idle.
+   */
+  private drainDeferred: { promise: Promise<void>; resolve: () => void } | null = null;
 
   constructor(options?: { concurrency?: number; timeout?: number }) {
     this.concurrency = options?.concurrency ?? 10;
@@ -183,7 +219,18 @@ class BackgroundQueue {
         .finally(() => {
           this.running--;
           this.processQueue();
+          this.maybeResolveDrain();
         });
+    }
+  }
+
+  /**
+   * Resolve a pending `drain()` deferred if the queue is fully idle.
+   */
+  private maybeResolveDrain(): void {
+    if (this.drainDeferred && this.queue.length === 0 && this.running === 0) {
+      this.drainDeferred.resolve();
+      this.drainDeferred = null;
     }
   }
 
@@ -202,19 +249,20 @@ class BackgroundQueue {
   }
 
   /**
-   * Wait for all tasks to complete.
+   * Wait for all tasks to complete (Deferred-based — no polling).
    */
-  async drain(): Promise<void> {
-    return new Promise((resolve) => {
-      const check = () => {
-        if (this.queue.length === 0 && this.running === 0) {
-          resolve();
-        } else {
-          setTimeout(check, 10);
-        }
-      };
-      check();
-    });
+  drain(): Promise<void> {
+    if (this.queue.length === 0 && this.running === 0) {
+      return Promise.resolve();
+    }
+    if (!this.drainDeferred) {
+      let resolveRef!: () => void;
+      const promise = new Promise<void>((res) => {
+        resolveRef = res;
+      });
+      this.drainDeferred = { promise, resolve: resolveRef };
+    }
+    return this.drainDeferred.promise;
   }
 }
 
@@ -285,7 +333,7 @@ export class HookExecutor {
     const sorted = this.sortByPriority(hooks);
 
     for (const hook of sorted) {
-      const shouldRunInBg = shouldRunInBackground(hook) || runInBackground;
+      const shouldRunInBg = shouldUseBackground(hook, runInBackground);
       const hookName = getHookName(hook);
 
       // Emit start event
@@ -362,7 +410,7 @@ export class HookExecutor {
     const sorted = this.sortByPriority(hooks);
 
     for (const hook of sorted) {
-      const shouldRunInBg = shouldRunInBackground(hook) || runInBackground;
+      const shouldRunInBg = shouldUseBackground(hook, runInBackground);
       const hookName = getHookName(hook);
 
       this.emitHookEvent(RunEvent.POST_HOOK_STARTED, hookName, 'post', shouldRunInBg);

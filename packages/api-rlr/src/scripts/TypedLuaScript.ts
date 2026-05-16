@@ -11,7 +11,7 @@ import type { Redis } from 'ioredis';
  */
 export class TypedLuaScript<
   TKeys extends readonly string[],
-  TArgs extends readonly any[],
+  TArgs extends readonly unknown[],
   TResult,
 > {
   private sha?: string;
@@ -171,22 +171,28 @@ export class LuaScriptFactory {
  * Script manager with type safety
  */
 export class TypedScriptManager {
-  private readonly scripts = new Map<string, TypedLuaScript<any, any, any>>();
+  private readonly scripts = new Map<
+    string,
+    TypedLuaScript<readonly string[], readonly unknown[], unknown>
+  >();
 
   /**
    * Register a script
    */
-  register<TKeys extends readonly string[], TArgs extends readonly any[], TResult>(
+  register<TKeys extends readonly string[], TArgs extends readonly unknown[], TResult>(
     name: string,
     script: TypedLuaScript<TKeys, TArgs, TResult>,
   ): void {
-    this.scripts.set(name, script);
+    this.scripts.set(
+      name,
+      script as unknown as TypedLuaScript<readonly string[], readonly unknown[], unknown>,
+    );
   }
 
   /**
    * Get a registered script
    */
-  get<TKeys extends readonly string[], TArgs extends readonly any[], TResult>(
+  get<TKeys extends readonly string[], TArgs extends readonly unknown[], TResult>(
     name: string,
   ): TypedLuaScript<TKeys, TArgs, TResult> | undefined {
     return this.scripts.get(name) as TypedLuaScript<TKeys, TArgs, TResult> | undefined;

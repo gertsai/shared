@@ -1084,3 +1084,122 @@ describe('Hook Integration', () => {
     expect(order).toEqual([100, 50, 10]);
   });
 });
+
+// ============================================================================
+// Wave 12.D-fix: FR-023 / L-7 — structuredClone + blocking-hook + Deferred drain
+// ============================================================================
+
+describe('FR-023: copyArgsForBackground preserves structured types', () => {
+  it('preserves Date instances (JSON.stringify would mangle to ISO string)', () => {
+    const now = new Date('2025-01-01T00:00:00Z');
+    const original = {
+      runContext: {
+        runId: 'r1',
+        sessionId: 's1',
+        metadata: { createdAt: now },
+      },
+    };
+    const copied = copyArgsForBackground(original) as typeof original;
+    expect(copied.runContext.metadata.createdAt).toBeInstanceOf(Date);
+    expect((copied.runContext.metadata.createdAt as Date).getTime()).toBe(now.getTime());
+    expect(copied.runContext.metadata.createdAt).not.toBe(now);
+  });
+
+  it('preserves Map instances (JSON.stringify would produce {})', () => {
+    const map = new Map<string, number>([['a', 1], ['b', 2]]);
+    const original = {
+      sessionState: { lookup: map },
+    };
+    const copied = copyArgsForBackground(original) as typeof original;
+    expect(copied.sessionState.lookup).toBeInstanceOf(Map);
+    expect((copied.sessionState.lookup as Map<string, number>).get('a')).toBe(1);
+    expect(copied.sessionState.lookup).not.toBe(map);
+  });
+
+  it('falls back to shallow copy when value is not cloneable (e.g. functions)', () => {
+    const fn = () => 42;
+    const original = {
+      metadata: { handler: fn, n: 1 },
+    };
+    // structuredClone throws on functions — fallback path takes a shallow copy
+    const copied = copyArgsForBackground(original) as typeof original;
+    expect(copied.metadata.n).toBe(1);
+  });
+});
+
+describe('FR-023: blocking hook never goes to background', () => {
+  let executor: HookExecutor;
+
+  beforeEach(() => {
+    executor = new HookExecutor();
+    hookManager.clearAllHooks();
+  });
+
+  it('runs synchronously even when workflow runInBackground=true', async () => {
+    const order: string[] = [];
+    const blockingValidate = function blockingValidate() {
+      order.push('blocking-ran');
+    } as unknown as PreHook;
+    setHookMetadata(blockingValidate, {
+      name: 'blockingValidate',
+      blocking: true,
+      runInBackground: true, // even with runInBackground, blocking wins
+    });
+
+    await executor.executePreHooks(
+      [blockingValidate],
+      createMockPreHookParams(),
+      /* workflowRunInBackground */ true,
+    );
+
+    // Must have run synchronously before executePreHooks returns
+    expect(order).toEqual(['blocking-ran']);
+  });
+
+  it('a non-blocking hook with workflow flag true DOES go background', async () => {
+    const order: string[] = [];
+    const bgHook = async function bgHook() {
+      await new Promise((res) => setTimeout(res, 25));
+      order.push('bg-ran');
+    } as unknown as PreHook;
+    setHookMetadata(bgHook, { name: 'bgHook' });
+
+    await executor.executePreHooks(
+      [bgHook],
+      createMockPreHookParams(),
+      /* workflowRunInBackground */ true,
+    );
+
+    // Not yet run synchronously (still waiting on the 25ms timer)
+    expect(order).toEqual([]);
+    await executor.waitForBackground();
+    expect(order).toEqual(['bg-ran']);
+  });
+});
+
+describe('FR-023: drain() resolves promptly via Deferred (no polling)', () => {
+  it('resolves shortly after the last running hook completes (≤ ~30ms)', async () => {
+    const executor = new HookExecutor();
+    const slowHook = hook({ runInBackground: true })(
+      async function slowHook() {
+        await new Promise((res) => setTimeout(res, 25));
+      },
+    ) as unknown as PreHook;
+
+    await executor.executePreHooks([slowHook], createMockPreHookParams());
+    const start = Date.now();
+    await executor.waitForBackground();
+    const elapsed = Date.now() - start;
+    // The old polling impl had a 10ms granularity floor; Deferred should be
+    // tighter. Allow a generous bound — the goal is to assert "no perpetual
+    // sleep" and that we are NOT capped at the 10ms poll tick.
+    expect(elapsed).toBeLessThan(100);
+  });
+
+  it('returns immediately when queue is already empty', async () => {
+    const executor = new HookExecutor();
+    const start = Date.now();
+    await executor.waitForBackground();
+    expect(Date.now() - start).toBeLessThan(5);
+  });
+});

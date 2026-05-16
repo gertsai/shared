@@ -2,8 +2,6 @@
 import type { Session } from '@gertsai/session';
 import type { OperatorType } from '@gertsai/session';
 
-import { DataAccessUuidMissingError } from './errors.js';
-
 /**
  * Type-predicate guard. Returns `true` when `session` is a defined, non-null
  * Session instance that has not been destroyed. Narrows `Session | undefined
@@ -49,17 +47,24 @@ export function isInTenant(session: Session, tenantId: string): boolean {
 
 /**
  * Returns `true` when the session's `dataAccessUuid` is non-empty AND
- * differs from the `operatorUuid` (i.e. the operator is acting on behalf of
- * another identity).
+ * differs from the `operatorUuid` (i.e. the operator is acting on behalf
+ * of another identity).
  *
- * Per ADR-007 I-19: throws {@link DataAccessUuidMissingError} if either
- * `operatorUuid` or `dataAccessUuid` is empty / undefined. This prevents the
- * audit-miss case where both UUIDs are empty and a naive inequality check
- * would falsely return `false`.
+ * Pure predicate — never throws. Returns `false` when:
+ *   - `session` is `undefined` / `null`
+ *   - `operatorUuid` is empty / undefined
+ *   - `dataAccessUuid` is empty / undefined
  *
- * @throws DataAccessUuidMissingError when either UUID is empty / undefined.
+ * Wave 12.D-fix per PRD-036 FR-018 (EVID-051 L-2): align with predicate
+ * semantics (`is*`) and CWE-1188 fail-closed default. Callers that need a
+ * throwing variant should use {@link assertImpersonating}; callers that
+ * need a structured `CheckResult` should use {@link checkImpersonating}
+ * (see `./check.ts`).
  */
-export function isImpersonating(session: Session): boolean {
+export function isImpersonating(
+  session: Session | undefined | null,
+): boolean {
+  if (session === undefined || session === null) return false;
   const operatorUuid = session.operatorUuid;
   const dataAccessUuid = session.dataAccessUuid;
   if (
@@ -68,11 +73,7 @@ export function isImpersonating(session: Session): boolean {
     dataAccessUuid === undefined ||
     dataAccessUuid === ''
   ) {
-    throw new DataAccessUuidMissingError({
-      message:
-        'Cannot determine impersonation: session operatorUuid or dataAccessUuid is empty / undefined',
-      details: { reason: 'data-access-uuid-missing' },
-    });
+    return false;
   }
   return operatorUuid !== dataAccessUuid;
 }

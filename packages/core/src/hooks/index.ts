@@ -163,6 +163,7 @@ export {
   getHookMetadata,
   setHookMetadata,
   shouldRunInBackground,
+  shouldUseBackground,
   getHookPriority,
   getHookName,
 

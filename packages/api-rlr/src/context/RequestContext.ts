@@ -23,7 +23,7 @@ export interface RequestContextData {
   error?: string;
 }
 
-export class RequestContext {
+export class RlrRequestContext {
   private data = new Map<string, unknown>();
   private readonly startTime: number;
   public requestId: string;
@@ -152,8 +152,8 @@ export class RequestContext {
   /**
    * Create a child context for nested operations
    */
-  createChild(prefix: string): RequestContext {
-    const child = new RequestContext(this.request, this.startTime);
+  createChild(prefix: string): RlrRequestContext {
+    const child = new RlrRequestContext(this.request, this.startTime);
     child.requestId = `${this.requestId}_${prefix}`;
 
     // Copy parent data

@@ -45,12 +45,17 @@ describe('retry', () => {
     expect(delays[2]).toBeLessThan(400);
   });
 
-  it('honors AbortSignal — throws "Retry aborted" before next attempt', async () => {
+  it('honors AbortSignal — rejects (signal.reason or sentinel) before next attempt', async () => {
     const controller = new AbortController();
     const action = vi.fn(async () => {
       controller.abort();
       throw new Error('first fail');
     });
+    // Wave 12.D-fix FR-017: signal.reason now propagates (DOMException
+    // 'This operation was aborted' on AbortController.abort() without
+    // explicit reason). Old test expected literal 'Retry aborted' — that
+    // only fires when signal.reason is null/undefined, which never happens
+    // for native AbortController in Node ≥22.
     await expect(
       retry(action, {
         maxAttempts: 5,
@@ -58,7 +63,44 @@ describe('retry', () => {
         jitter: 'none',
         signal: controller.signal,
       }),
-    ).rejects.toThrow(/Retry aborted|first fail/);
+    ).rejects.toBeDefined();
+  });
+
+  it('Wave 12.D-fix FR-017 — aborts promptly while sleeping (signal mid-backoff)', async () => {
+    const controller = new AbortController();
+    // Long base delay so the back-off sleep dominates the test wall-clock.
+    const action = vi.fn(async () => {
+      throw new Error('again');
+    });
+    const start = Date.now();
+    const p = retry(action, {
+      maxAttempts: 5,
+      baseMs: 2000, // 2 seconds — would dwarf the wall-clock if not aborted.
+      jitter: 'none',
+      signal: controller.signal,
+    });
+    // Abort after the first failure has scheduled the sleep.
+    setTimeout(() => controller.abort(), 30);
+    await expect(p).rejects.toBeDefined();
+    const elapsed = Date.now() - start;
+    // Must have aborted well before the 2-second back-off completes.
+    expect(elapsed).toBeLessThan(500);
+  });
+
+  it('Wave 12.D-fix FR-017 — propagates signal.reason on abort', async () => {
+    const controller = new AbortController();
+    const reason = new Error('user-cancelled');
+    const action = vi.fn(async () => {
+      throw new Error('first fail');
+    });
+    const p = retry(action, {
+      maxAttempts: 5,
+      baseMs: 1000,
+      jitter: 'none',
+      signal: controller.signal,
+    });
+    setTimeout(() => controller.abort(reason), 10);
+    await expect(p).rejects.toBe(reason);
   });
 
   it('non-retryable errors throw immediately without further attempts', async () => {

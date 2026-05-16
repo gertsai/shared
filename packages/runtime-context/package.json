@@ -54,6 +54,9 @@
     "access": "public",
     "registry": "https://npm.pkg.github.com"
   },
+  "engines": {
+    "node": ">=22"
+  },
   "peerDependencies": {
     "@gertsai/di": "workspace:^",
     "@gertsai/errors": "workspace:^",

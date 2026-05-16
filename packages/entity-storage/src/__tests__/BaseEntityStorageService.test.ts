@@ -323,6 +323,35 @@ describe('BaseEntityStorageService — set / update / delete / restore round-tri
     expect(svc.capabilities.transactions).toBe(true);
     expect(svc.capabilities.batches).toBe(true);
   });
+
+  it('Wave 12.D-fix FR-021 — $destroy mid-set suppresses emit', async () => {
+    // Slow provider lets us $destroy() while `await provider.set` is still
+    // in flight. The post-await `_destroyed` re-check MUST suppress the
+    // entity-created emit.
+    class SlowProvider extends InMemoryStorageProvider<UserMeta> {
+      async set(p: string, id: string, data: UserMeta['write']): Promise<void> {
+        await new Promise((r) => setTimeout(r, 20));
+        return super.set(p, id, data);
+      }
+    }
+    const provider = new SlowProvider();
+    const svc = new UsersStorage(provider, makeSession());
+    const created = vi.fn();
+    svc.on(STORAGE_EVENTS.ENTITY_CREATED, created);
+
+    const pending = svc.set({
+      _uid: 'race-1',
+      name: 'X',
+      email: 'x@x.com',
+    } as UserData & { _uid: string });
+    // Destroy after the in-flight provider.set has begun.
+    await new Promise((r) => setTimeout(r, 5));
+    svc.$destroy();
+    await pending;
+    // The provider write went through, but the emit MUST have been suppressed.
+    expect(await provider.getDoc('users', 'race-1')).not.toBeNull();
+    expect(created).not.toHaveBeenCalled();
+  });
 });
 
 describe('BaseEntityStorageService — destroy() hard-delete (F-7)', () => {

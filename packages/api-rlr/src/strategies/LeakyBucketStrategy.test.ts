@@ -28,7 +28,6 @@ describe('LeakyBucketStrategy', () => {
   describe('Basic functionality', () => {
     it('should allow requests when bucket has capacity', async () => {
       const result = await strategy.execute({
-        store: null as any,
         key: 'test-key',
         limit: 10, // 10 requests per second
         timeFrame: 1000, // 1 second
@@ -50,7 +49,6 @@ describe('LeakyBucketStrategy', () => {
       // Fill the bucket
       for (let i = 0; i < capacity; i++) {
         await strategy.execute({
-          store: null as any,
           key: 'test-key',
           limit,
           timeFrame,
@@ -61,7 +59,6 @@ describe('LeakyBucketStrategy', () => {
 
       // Next request should be blocked
       const result = await strategy.execute({
-        store: null as any,
         key: 'test-key',
         limit,
         timeFrame,
@@ -82,7 +79,6 @@ describe('LeakyBucketStrategy', () => {
 
       // Fill the bucket
       await strategy.execute({
-        store: null as any,
         key: 'test-key',
         limit,
         timeFrame,
@@ -90,7 +86,6 @@ describe('LeakyBucketStrategy', () => {
         burst: capacity,
       });
       await strategy.execute({
-        store: null as any,
         key: 'test-key',
         limit,
         timeFrame,
@@ -100,7 +95,6 @@ describe('LeakyBucketStrategy', () => {
 
       // Should be full
       let result = await strategy.execute({
-        store: null as any,
         key: 'test-key',
         limit,
         timeFrame,
@@ -112,7 +106,6 @@ describe('LeakyBucketStrategy', () => {
       // Wait for 1 request to drain (100ms at 10 req/s)
       const later = now + 150; // 150ms later, ~1.5 requests should drain
       result = await strategy.execute({
-        store: null as any,
         key: 'test-key',
         limit,
         timeFrame,
@@ -133,7 +126,6 @@ describe('LeakyBucketStrategy', () => {
 
       // Add 2 requests
       await strategy.execute({
-        store: null as any,
         key: 'drain-test',
         limit,
         timeFrame,
@@ -141,7 +133,6 @@ describe('LeakyBucketStrategy', () => {
         burst: capacity,
       });
       await strategy.execute({
-        store: null as any,
         key: 'drain-test',
         limit,
         timeFrame,
@@ -151,7 +142,6 @@ describe('LeakyBucketStrategy', () => {
 
       // Should be full
       let result = await strategy.execute({
-        store: null as any,
         key: 'drain-test',
         limit,
         timeFrame,
@@ -163,7 +153,6 @@ describe('LeakyBucketStrategy', () => {
       // After 1 second, 1 unit should drain
       const oneSecLater = now + 1000;
       result = await strategy.execute({
-        store: null as any,
         key: 'drain-test',
         limit,
         timeFrame,
@@ -182,7 +171,6 @@ describe('LeakyBucketStrategy', () => {
       // Fill half the bucket
       for (let i = 0; i < 5; i++) {
         await strategy.execute({
-          store: null as any,
           key: 'high-drain',
           limit,
           timeFrame,
@@ -194,7 +182,6 @@ describe('LeakyBucketStrategy', () => {
       // After 50ms, 5 more requests should have drained
       const later = now + 50;
       const result = await strategy.execute({
-        store: null as any,
         key: 'high-drain',
         limit,
         timeFrame,
@@ -217,7 +204,6 @@ describe('LeakyBucketStrategy', () => {
 
       // Fill key1
       await strategy.execute({
-        store: null as any,
         key: 'key1',
         limit,
         timeFrame,
@@ -226,7 +212,6 @@ describe('LeakyBucketStrategy', () => {
       });
 
       const key1Result = await strategy.execute({
-        store: null as any,
         key: 'key1',
         limit,
         timeFrame,
@@ -236,7 +221,6 @@ describe('LeakyBucketStrategy', () => {
 
       // key2 should still have capacity
       const key2Result = await strategy.execute({
-        store: null as any,
         key: 'key2',
         limit,
         timeFrame,
@@ -252,7 +236,6 @@ describe('LeakyBucketStrategy', () => {
   describe('Edge cases', () => {
     it('should handle zero limit gracefully', async () => {
       const result = await strategy.execute({
-        store: null as any,
         key: 'zero-limit',
         limit: 0,
         timeFrame: 1000,
@@ -272,7 +255,6 @@ describe('LeakyBucketStrategy', () => {
       // Without explicit burst, should use limit as capacity
       for (let i = 0; i < 5; i++) {
         await strategy.execute({
-          store: null as any,
           key: 'default-burst',
           limit,
           timeFrame,
@@ -282,7 +264,6 @@ describe('LeakyBucketStrategy', () => {
       }
 
       const result = await strategy.execute({
-        store: null as any,
         key: 'default-burst',
         limit,
         timeFrame,
@@ -300,7 +281,6 @@ describe('LeakyBucketStrategy', () => {
 
       // Fill bucket
       await strategy.execute({
-        store: null as any,
         key: 'retry-test',
         limit,
         timeFrame,
@@ -309,7 +289,6 @@ describe('LeakyBucketStrategy', () => {
       });
 
       const result = await strategy.execute({
-        store: null as any,
         key: 'retry-test',
         limit,
         timeFrame,
@@ -335,7 +314,6 @@ describe('LeakyBucketStrategy', () => {
 
       for (let i = 0; i < 20; i++) {
         const result = await strategy.execute({
-          store: null as any,
           key: 'bursty',
           limit,
           timeFrame,
