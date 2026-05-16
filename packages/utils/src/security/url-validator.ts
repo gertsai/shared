@@ -33,6 +33,36 @@ export class SsrfError extends Error {
   }
 }
 
+/**
+ * Result of async URL validation with DNS rebinding protection.
+ *
+ * NOTE: DNS rebinding protection requires caller cooperation. The returned
+ * `resolvedIp` is the IP this validator confirmed safe at validation time.
+ * For true rebinding protection, callers SHOULD fetch by the resolved IP
+ * with an explicit `Host` header, e.g.:
+ *   const result = await validateWebhookUrlAsync(url, { dnsRebindingProtection: true });
+ *   if (result.valid && result.resolvedIp && result.url) {
+ *     await fetch(`https://${result.resolvedIp}${result.url.pathname}`, {
+ *       headers: { Host: result.url.host }
+ *     });
+ *   }
+ */
+export interface ValidationResultAsync {
+  /** True if the URL passed all validation checks. */
+  valid: boolean;
+  /** Parsed URL object (present when valid === true). */
+  url?: URL;
+  /** Validation error if the URL was rejected. */
+  error?: SsrfError;
+  /**
+   * The IP address that satisfied the validation. Populated when
+   * DNS rebinding protection was enabled and DNS resolution succeeded.
+   * Callers SHOULD use this IP to pin the actual fetch and avoid TOCTOU
+   * (CWE-918) where DNS could return a different IP between validate and fetch.
+   */
+  resolvedIp?: string;
+}
+
 // =============================================================================
 // Constants
 // =============================================================================
@@ -383,7 +413,39 @@ export function parseAndValidateUrl(url: string, options?: UrlValidationOptions)
 // =============================================================================
 
 /**
- * Resolve hostname to IP addresses with timeout
+ * Race a promise against an AbortSignal so DNS lookups actually cancel on
+ * timeout instead of running to completion (CWE-400). The underlying
+ * `dns.resolve4` / `dns.resolve6` calls don't accept a signal, so we
+ * surface a rejection as soon as the controller aborts and let the
+ * background DNS work resolve into the void.
+ */
+/** @internal Exported only for testing. Not part of the public API. */
+export async function _abortableResolveForTest(
+  fn: () => Promise<string[]>,
+  signal: AbortSignal,
+): Promise<string[]> {
+  return abortableResolve(fn, signal);
+}
+
+async function abortableResolve(
+  fn: () => Promise<string[]>,
+  signal: AbortSignal,
+): Promise<string[]> {
+  if (signal.aborted) {
+    throw new Error('DNS resolution aborted (pre-abort)');
+  }
+  return await Promise.race([
+    fn(),
+    new Promise<never>((_, reject) => {
+      const onAbort = () => reject(new Error('DNS resolution aborted'));
+      signal.addEventListener('abort', onAbort, { once: true });
+    }),
+  ]);
+}
+
+/**
+ * Resolve hostname to IP addresses with a hard timeout. Timeout now
+ * actually aborts the resolution promise (see `abortableResolve`).
  */
 async function resolveHostname(
   hostname: string,
@@ -401,18 +463,16 @@ async function resolveHostname(
   try {
     // Try to resolve IPv4
     try {
-      const ipv4 = await dns.resolve4(hostname);
-      result.ipv4 = ipv4;
+      result.ipv4 = await abortableResolve(() => dns.resolve4(hostname), controller.signal);
     } catch {
-      // No A records - that's OK
+      // No A records or aborted - that's OK, IPv6 may still resolve
     }
 
     // Try to resolve IPv6
     try {
-      const ipv6 = await dns.resolve6(hostname);
-      result.ipv6 = ipv6;
+      result.ipv6 = await abortableResolve(() => dns.resolve6(hostname), controller.signal);
     } catch {
-      // No AAAA records - that's OK
+      // No AAAA records or aborted - that's OK
     }
   } finally {
     clearTimeout(timeoutId);
@@ -427,6 +487,11 @@ async function resolveHostname(
  * This function performs actual DNS resolution and validates the resolved IPs.
  * Use when you need protection against DNS rebinding attacks.
  *
+ * Returns a {@link ValidationResultAsync} that includes the resolved IP that
+ * passed validation. Callers SHOULD pin the subsequent fetch to this IP to
+ * close the TOCTOU window (CWE-918) where a malicious DNS server could
+ * return a different IP between validation and the actual request.
+ *
  * @param url - URL string to validate
  * @param options - Validation options (including dnsRebindingProtection)
  * @throws SsrfError if URL is blocked or resolves to blocked IP
@@ -434,35 +499,43 @@ async function resolveHostname(
  * @example
  * ```typescript
  * // With DNS protection (slower, more secure)
- * await validateWebhookUrlAsync('https://example.com/webhook', {
+ * const result = await validateWebhookUrlAsync('https://example.com/webhook', {
  *   dnsRebindingProtection: true,
  *   dnsTimeoutMs: 5000,
  * });
+ * if (result.valid && result.resolvedIp && result.url) {
+ *   // Pin the fetch to the resolved IP + explicit Host header
+ *   await fetch(`https://${result.resolvedIp}${result.url.pathname}`, {
+ *     headers: { Host: result.url.host },
+ *   });
+ * }
  * ```
  */
 export async function validateWebhookUrlAsync(
   url: string,
   options?: UrlValidationOptions,
-): Promise<void> {
+): Promise<ValidationResultAsync> {
   // First, run sync validation
   validateWebhookUrl(url, options);
-
-  // If DNS rebinding protection is not enabled, we're done
-  if (!options?.dnsRebindingProtection) {
-    return;
-  }
 
   const parsed = new URL(url);
   const hostname = parsed.hostname.toLowerCase();
 
-  // Skip DNS resolution for IP addresses (already validated in sync function)
+  // If DNS rebinding protection is not enabled, we're done
+  if (!options?.dnsRebindingProtection) {
+    return { valid: true, url: parsed };
+  }
+
+  // Skip DNS resolution for IP addresses (already validated in sync function).
+  // The literal IP IS the resolved IP — pin it for the caller.
   if (isIpAddress(hostname)) {
-    return;
+    const literalIp = hostname.replace(/^\[|\]$/g, '');
+    return { valid: true, url: parsed, resolvedIp: literalIp };
   }
 
   // Skip for allowed hosts
   if (options?.allowedHosts?.includes(hostname)) {
-    return;
+    return { valid: true, url: parsed };
   }
 
   // Resolve DNS and validate IPs
@@ -489,6 +562,15 @@ export async function validateWebhookUrlAsync(
     if (resolved.ipv4.length === 0 && resolved.ipv6.length === 0) {
       throw new SsrfError(`DNS resolution failed for: ${hostname}`);
     }
+
+    // Pick the first IP that passed validation. Preference: IPv4 (most
+    // common transport), fall back to IPv6. Caller pins the fetch to it.
+    const resolvedIp = resolved.ipv4[0] ?? resolved.ipv6[0];
+    const result: ValidationResultAsync = { valid: true, url: parsed };
+    if (resolvedIp !== undefined) {
+      result.resolvedIp = resolvedIp;
+    }
+    return result;
   } catch (err) {
     if (err instanceof SsrfError) {
       throw err;

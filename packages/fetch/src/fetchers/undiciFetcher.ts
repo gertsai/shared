@@ -24,6 +24,31 @@ const DEFAULT_MAX_BODY_SIZE = 50 * 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 /**
+ * Thrown when a request body's size exceeds the configured limit.
+ *
+ * @description Raised by {@link resolveBody} when any branch (string, Buffer,
+ * ArrayBuffer, typed-array view, Blob, URLSearchParams, sync/async iterable)
+ * would emit more than `maxBodySize` bytes. Mitigates CWE-770 (uncontrolled
+ * resource consumption) across all body shapes (Wave 12.B-fix-2, EVID-044).
+ */
+export class BodyTooLargeError extends Error {
+  override readonly name = 'BodyTooLargeError';
+  constructor(
+    readonly size: number,
+    readonly limit: number,
+  ) {
+    super(`Request body size ${size} bytes exceeds limit ${limit} bytes`);
+  }
+}
+
+/** @internal */
+function _checkBodySize(size: number, maxBodySize: number): void {
+  if (size > maxBodySize) {
+    throw new BodyTooLargeError(size, maxBodySize);
+  }
+}
+
+/**
  * Body shape accepted by undici's `request()` after normalisation through
  * {@link resolveBody}. Defined locally so the emitted `.d.ts` does not leak
  * `undici`'s internal `Dispatcher.RequestOptions['body']` (Wave 12.B-fix-1).
@@ -72,8 +97,11 @@ export interface UndiciRequestOptions {
  * Resolves various body types to a format acceptable by undici's request().
  *
  * @param body - The request body in various formats
+ * @param maxBodySize - Maximum allowed body size in bytes. Default: 50MB
  * @returns Resolved body suitable for undici request
  * @throws {TypeError} When body type is not supported
+ * @throws {BodyTooLargeError} When body size exceeds `maxBodySize` (any branch).
+ *   FormData/multipart shapes are passed through (size unknown at this layer).
  *
  * @description Handles the following body types:
  * - null/undefined → null
@@ -104,31 +132,38 @@ export async function resolveBody(
   }
 
   if (typeof body === 'string') {
+    _checkBodySize(Buffer.byteLength(body, 'utf8'), maxBodySize);
     return body;
   }
 
   if (types.isUint8Array(body)) {
+    _checkBodySize(body.byteLength, maxBodySize);
     return body;
   }
 
   if (types.isArrayBuffer(body)) {
+    _checkBodySize(body.byteLength, maxBodySize);
     return new Uint8Array(body);
   }
 
   if (body instanceof URLSearchParams) {
-    return body.toString();
+    const str = body.toString();
+    _checkBodySize(Buffer.byteLength(str, 'utf8'), maxBodySize);
+    return str;
   }
 
   if (body instanceof DataView) {
+    _checkBodySize(body.byteLength, maxBodySize);
     return new Uint8Array(body.buffer);
   }
 
   // Handle Blob if available in environment
   if (typeof Blob !== 'undefined' && body instanceof Blob) {
+    _checkBodySize(body.size, maxBodySize);
     return new Uint8Array(await body.arrayBuffer());
   }
 
-  // Handle undici's FormData
+  // Handle undici's FormData — multipart size unknown at this layer, pass through
   if (body instanceof UndiciFormData) {
     return body;
   }
@@ -147,11 +182,7 @@ export async function resolveBody(
     let totalSize = 0;
     for (const chunk of body as Iterable<Uint8Array>) {
       totalSize += chunk.length;
-      if (totalSize > maxBodySize) {
-        throw new Error(
-          `Request body exceeds maximum size limit of ${maxBodySize} bytes (received ${totalSize}+)`,
-        );
-      }
+      _checkBodySize(totalSize, maxBodySize);
       chunks.push(chunk);
     }
     return Buffer.concat(chunks);
@@ -163,11 +194,7 @@ export async function resolveBody(
     let totalSize = 0;
     for await (const chunk of body as AsyncIterable<Uint8Array>) {
       totalSize += chunk.length;
-      if (totalSize > maxBodySize) {
-        throw new Error(
-          `Request body exceeds maximum size limit of ${maxBodySize} bytes (received ${totalSize}+)`,
-        );
-      }
+      _checkBodySize(totalSize, maxBodySize);
       chunks.push(chunk);
     }
     return Buffer.concat(chunks);

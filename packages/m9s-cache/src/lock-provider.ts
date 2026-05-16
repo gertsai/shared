@@ -131,15 +131,50 @@ export class RedlockLockProvider implements CacheLockProvider {
 
   /**
    * Try to acquire lock without blocking.
+   *
+   * Distinguishes "lock currently held by another client" (returns `null`)
+   * from infrastructure failures — Redis unreachable, misconfigured Redlock,
+   * network partition (rethrows so the caller can fail fast / fall back
+   * deliberately). Wave 12.B-fix-2 (EVID-044 HIGH-1 / defense-in-depth):
+   * the previous catch-all swallowed *every* error, which turned a Redis
+   * outage into a silent cache-bypass DoS amplifier — every request would
+   * see `unlock == null`, skip the lock-protected cache write, and stampede
+   * the origin loader.
+   *
    * @returns Unlock function if acquired, null if lock is held.
+   * @throws Underlying error when the failure is *not* lock contention
+   *   (e.g. `ECONNREFUSED`, misconfiguration). Caller decides recovery.
    */
   async tryAcquire(key: string, ttlMs: number): Promise<UnlockFunction | null> {
     try {
       // Redlock v5 uses acquire(resources[], duration) API
       const lock = await this.redlockNonBlocking.acquire([key], ttlMs);
       return () => lock.release();
-    } catch {
-      return null;
+    } catch (err: unknown) {
+      if (this._isLockHeldError(err)) {
+        return null; // Expected: lock unavailable, not an infrastructure failure.
+      }
+      // Unexpected: Redis-down, misconfiguration, network. Surface to caller.
+      throw err;
     }
+  }
+
+  /**
+   * Classify an error thrown by `redlock.acquire(...)` as "lock currently held"
+   * vs everything else. Redlock 5.x raises `ResourceLockedError` when a
+   * resource is already locked, and `ExecutionError` (with a message
+   * mentioning quorum/locked) when retries are exhausted because the
+   * quorum was not reached due to contention. Anything else (`ECONNREFUSED`,
+   * `Error`, `TypeError`, …) is treated as infrastructure failure.
+   */
+  private _isLockHeldError(err: unknown): boolean {
+    if (typeof err !== 'object' || err === null) return false;
+    const errObj = err as { name?: string; code?: string; message?: string };
+    if (errObj.name === 'ResourceLockedError') return true;
+    if (errObj.name === 'ExecutionError') {
+      const msg = errObj.message ?? '';
+      return msg.includes('quorum') || msg.includes('locked');
+    }
+    return false;
   }
 }

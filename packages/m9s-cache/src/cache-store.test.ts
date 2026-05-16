@@ -530,7 +530,7 @@ describe('CacheStore', () => {
       }
     });
 
-    it('skips validation in production mode by default', async () => {
+    it('validates keys by default regardless of NODE_ENV (Wave 12.B-fix-2)', async () => {
       const originalEnv = process.env.NODE_ENV;
       process.env.NODE_ENV = 'production';
 
@@ -538,11 +538,30 @@ describe('CacheStore', () => {
         const driver = new MemoryCacheDriver();
         const store = new CacheStore({ driver });
 
-        // Even invalid keys should work in production (for performance)
-        await expect(store.set('key with spaces', 'value')).resolves.toBeUndefined();
+        // Strict default: even in production, invalid keys must throw.
+        await expect(store.set('key with spaces', 'value')).rejects.toThrow();
       } finally {
         process.env.NODE_ENV = originalEnv;
       }
+    });
+
+    it('default validateKeys is true (rejects invalid chars without explicit opt-in)', async () => {
+      const driver = new MemoryCacheDriver();
+      const store = new CacheStore({ driver });
+
+      // No validateKeys option passed → default must be strict (true).
+      await expect(store.set('bad*key', 'value')).rejects.toThrow();
+      // Valid keys still work.
+      await expect(store.set('good:key', 'value')).resolves.toBeUndefined();
+    });
+
+    it('callers can opt out of validation explicitly', async () => {
+      const driver = new MemoryCacheDriver();
+      const store = new CacheStore({ driver, validateKeys: false });
+
+      // Opt-out preserves the old lax behaviour for callers that ingest
+      // pre-validated / driver-generated keys (e.g. Moleculer internals).
+      await expect(store.set('key with spaces', 'value')).resolves.toBeUndefined();
     });
   });
 

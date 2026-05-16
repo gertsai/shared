@@ -11,7 +11,8 @@
  * - Listener methods throw `ListenersNotSupportedError` per ADR-005 I-4.
  * - Transactions wrap `BEGIN ... COMMIT;`. Serialization failures
  *   (SQLSTATE 40001) are mapped to `TransactionConflictError`.
- * - Batches wrap multi-statement `$executeRaw` blocks (no implicit tx).
+ * - Batches are atomic: ops apply inside `BEGIN ... COMMIT;`, with `ROLLBACK`
+ *   on any failure (Wave 12.B per EVID-044). Empty batches short-circuit.
  *
  * `compileToSql` from `@gertsai/query-dsl/sql` produces the WHERE/ORDER/LIMIT
  * fragment given a `Query<Meta>`. `TableMap` allows path → table-name overrides;
@@ -119,10 +120,16 @@ interface BatchOp<Meta extends StorageMetadata> {
 }
 
 /**
- * Postgres batch runner. Collects ops in memory; on `apply()` runs them
- * sequentially via the provided client (single-statement-per-call). The
- * caller (`PgStorageProvider.runBatch`) wraps the apply call in a savepoint
- * if atomicity is required. By default ops are committed in the order added.
+ * Postgres batch runner. Collects ops in memory; on `_apply()` runs them
+ * inside an atomic `BEGIN ... COMMIT;` block via the provided client. If any
+ * op fails the runner issues `ROLLBACK` and rethrows the original error, so
+ * no partial state is committed (Wave 12.B fix per EVID-044). Empty batches
+ * short-circuit without emitting BEGIN/COMMIT.
+ *
+ * `capabilities.batches: true` therefore honestly means "atomic batch": all
+ * ops apply, or none do. Callers must NOT invoke `_apply` from inside an
+ * already-open transaction — `PgStorageProvider.runTransaction` uses its own
+ * `_flush` path; `_apply` is reserved for `runBatch`.
  */
 export class PgBatchRunner<Meta extends StorageMetadata>
   implements IBatchRunner<Meta>
@@ -151,26 +158,47 @@ export class PgBatchRunner<Meta extends StorageMetadata>
     this._ops.push({ kind: 'delete', table: this._resolveTable(path), id });
   }
 
-  /** Internal — invoked by `PgStorageProvider.runBatch` after the user's fn. */
+  /**
+   * Internal — invoked by `PgStorageProvider.runBatch` after the user's fn.
+   * Atomic: wraps queued ops in `BEGIN ... COMMIT;`. On any op failure issues
+   * `ROLLBACK` and rethrows; if `ROLLBACK` itself fails the inner error is
+   * attached as `rollbackError` on the thrown error (additive, non-breaking).
+   * Empty batches return immediately without emitting BEGIN/COMMIT.
+   */
   async _apply(): Promise<void> {
-    for (const op of this._ops) {
-      if (op.kind === 'set') {
-        await rawExecute(
-          this._client,
-          `INSERT INTO ${op.table} (id, data) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data`,
-          [op.id, op.data],
-        );
-      } else if (op.kind === 'update') {
-        await rawExecute(
-          this._client,
-          `UPDATE ${op.table} SET data = data || $2 WHERE id = $1`,
-          [op.id, op.data],
-        );
-      } else {
-        await rawExecute(this._client, `DELETE FROM ${op.table} WHERE id = $1`, [
-          op.id,
-        ]);
+    if (this._ops.length === 0) return;
+
+    await rawExecute(this._client, 'BEGIN', []);
+    try {
+      for (const op of this._ops) {
+        if (op.kind === 'set') {
+          await rawExecute(
+            this._client,
+            `INSERT INTO ${op.table} (id, data) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data`,
+            [op.id, op.data],
+          );
+        } else if (op.kind === 'update') {
+          await rawExecute(
+            this._client,
+            `UPDATE ${op.table} SET data = data || $2 WHERE id = $1`,
+            [op.id, op.data],
+          );
+        } else {
+          await rawExecute(this._client, `DELETE FROM ${op.table} WHERE id = $1`, [
+            op.id,
+          ]);
+        }
       }
+      await rawExecute(this._client, 'COMMIT', []);
+    } catch (err) {
+      try {
+        await rawExecute(this._client, 'ROLLBACK', []);
+      } catch (rollbackErr) {
+        if (err && typeof err === 'object') {
+          (err as { rollbackError?: unknown }).rollbackError = rollbackErr;
+        }
+      }
+      throw err;
     }
   }
 }

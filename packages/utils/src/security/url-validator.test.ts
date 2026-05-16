@@ -6,6 +6,7 @@ import {
   isUrlSafeAsync,
   SsrfError,
   parseAndValidateUrl,
+  _abortableResolveForTest,
 } from './url-validator';
 
 describe('url-validator', () => {
@@ -225,10 +226,13 @@ describe('url-validator', () => {
 
   describe('validateWebhookUrlAsync', () => {
     it('should pass sync validation for safe URLs', async () => {
-      // Without DNS protection, should behave like sync version
-      await expect(
-        validateWebhookUrlAsync('https://api.example.com/webhook'),
-      ).resolves.toBeUndefined();
+      // Without DNS protection, returns a ValidationResultAsync with valid=true.
+      const result = await validateWebhookUrlAsync('https://api.example.com/webhook');
+      expect(result.valid).toBe(true);
+      expect(result.url).toBeInstanceOf(URL);
+      expect(result.url?.host).toBe('api.example.com');
+      // No DNS lookup performed → resolvedIp not populated
+      expect(result.resolvedIp).toBeUndefined();
     });
 
     it('should block unsafe URLs even without DNS protection', async () => {
@@ -241,20 +245,61 @@ describe('url-validator', () => {
       );
     });
 
-    it('should skip DNS resolution for IP addresses', async () => {
-      // Public IP should pass without DNS lookup
-      await expect(
-        validateWebhookUrlAsync('https://8.8.8.8/webhook', { dnsRebindingProtection: true }),
-      ).resolves.toBeUndefined();
+    it('should skip DNS resolution for IP addresses and pin the literal IP', async () => {
+      // Public IP should pass without DNS lookup; resolvedIp = the literal IP
+      const result = await validateWebhookUrlAsync('https://8.8.8.8/webhook', {
+        dnsRebindingProtection: true,
+      });
+      expect(result.valid).toBe(true);
+      expect(result.resolvedIp).toBe('8.8.8.8');
     });
 
     it('should skip DNS resolution for allowed hosts', async () => {
-      await expect(
-        validateWebhookUrlAsync('https://localhost/webhook', {
-          dnsRebindingProtection: true,
-          allowedHosts: ['localhost'],
-        }),
-      ).resolves.toBeUndefined();
+      const result = await validateWebhookUrlAsync('https://localhost/webhook', {
+        dnsRebindingProtection: true,
+        allowedHosts: ['localhost'],
+      });
+      expect(result.valid).toBe(true);
+      expect(result.url?.host).toBe('localhost');
+    });
+
+    it('should populate resolvedIp when DNS rebinding protection passes (IP literal path)', async () => {
+      // Literal-IP input bypasses DNS — resolvedIp is the literal itself.
+      // This is the deterministic path we can assert against in unit tests.
+      const result = await validateWebhookUrlAsync('https://8.8.8.8/webhook', {
+        dnsRebindingProtection: true,
+      });
+      expect(result.valid).toBe(true);
+      expect(result.resolvedIp).toBe('8.8.8.8');
+      expect(result.url?.host).toBe('8.8.8.8');
+    });
+  });
+
+  describe('abortableResolve (CWE-400 — DNS lookup actually cancels on timeout)', () => {
+    it('should reject when the abort signal fires before the resolver settles', async () => {
+      const controller = new AbortController();
+      // A resolver that hangs forever — simulates a slow/unresponsive DNS server.
+      const hanging = () => new Promise<string[]>(() => {});
+      const racing = _abortableResolveForTest(hanging, controller.signal);
+      // Fire abort on next tick.
+      setTimeout(() => controller.abort(), 5);
+      await expect(racing).rejects.toThrow(/aborted/);
+    });
+
+    it('should reject immediately if the signal is already aborted', async () => {
+      const controller = new AbortController();
+      controller.abort();
+      const fn = () => Promise.resolve(['1.2.3.4']);
+      await expect(_abortableResolveForTest(fn, controller.signal)).rejects.toThrow(/pre-abort/);
+    });
+
+    it('should pass through the resolved value when no abort happens', async () => {
+      const controller = new AbortController();
+      const fn = () => Promise.resolve(['8.8.8.8', '8.8.4.4']);
+      await expect(_abortableResolveForTest(fn, controller.signal)).resolves.toEqual([
+        '8.8.8.8',
+        '8.8.4.4',
+      ]);
     });
   });
 

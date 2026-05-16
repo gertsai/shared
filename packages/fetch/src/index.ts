@@ -46,7 +46,7 @@
  */
 
 // Re-export fetchers
-export { httpCaller, makeRequest, resolveBody, default } from './fetchers';
+export { httpCaller, makeRequest, resolveBody, BodyTooLargeError, default } from './fetchers';
 export type { UndiciRequestOptions } from './fetchers';
 
 // Re-export types

@@ -46,7 +46,14 @@ export class CacheStore {
     this.serializer = options.serializer ?? new JsonSerializer();
     this.prefix = options.prefix ?? '';
     this.defaultTTLSeconds = options.defaultTTLSeconds ?? null;
-    this.validateKeys = options.validateKeys ?? process.env.NODE_ENV !== 'production';
+    // Fail-safe default: strict key validation regardless of NODE_ENV.
+    // Wave 12.B-fix-2 (EVID-044 HIGH-2 / CWE-20): the prior `NODE_ENV !==
+    // 'production'` default inverted the safer setting — production traffic
+    // skipped validation, dev traffic enforced it. Callers that intentionally
+    // ingest unrestricted keys (e.g. Moleculer's internal cacher, which
+    // generates safe keys itself) must opt out explicitly with
+    // `validateKeys: false`.
+    this.validateKeys = options.validateKeys ?? true;
     this.keyValidation = options.keyValidation ?? {};
   }
 
