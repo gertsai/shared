@@ -1,6 +1,6 @@
 {
   "name": "@gertsai/rest-request-manager",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "Tier 2 HTTP request manager — retry + token-bucket rate limit + LRU circuit breaker per host + AppError translation. Per ADR-009 Decision D + invariants I-8/I-9/I-13/I-14.",
   "license": "Apache-2.0",
   "type": "module",

@@ -1,5 +1,20 @@
 # @gertsai-examples/m9s-example
 
+## 0.0.5
+
+### Patch Changes
+
+- Updated dependencies [4415a5f]
+- Updated dependencies [4415a5f]
+- Updated dependencies [4415a5f]
+  - @gertsai/fetch@0.4.0
+  - @gertsai/m9s-cache@0.4.0
+  - @gertsai/pg-client@1.1.0
+  - @gertsai/rest-request-manager@3.0.0
+  - @gertsai/entity-storage@1.0.0
+  - @gertsai/runtime-context@1.0.0
+  - @gertsai/storage-core@1.0.0
+
 ## 0.0.4
 
 ### Patch Changes
