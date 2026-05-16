@@ -1,6 +1,6 @@
 {
   "name": "@gertsai/entity-audit",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Audit trail types (MutationMarks, UpdateAction) + builder functions (buildDataForSet/Update/Delete/Restore). Backend-agnostic. Mirrors Orchestra meta patterns. Per PRD-002 + ADR-005.",
   "license": "Apache-2.0",
   "type": "module",

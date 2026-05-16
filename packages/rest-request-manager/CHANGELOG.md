@@ -1,5 +1,15 @@
 # @gertsai/rest-request-manager
 
+## 4.0.0
+
+### Patch Changes
+
+- Updated dependencies [05258e5]
+- Updated dependencies [05258e5]
+  - @gertsai/errors@0.3.0
+  - @gertsai/logger-factory@2.0.0
+  - @gertsai/async-utils@0.3.0
+
 ## 3.1.0
 
 ### Minor Changes

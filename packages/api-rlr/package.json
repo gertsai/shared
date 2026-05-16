@@ -1,6 +1,6 @@
 {
   "name": "@gertsai/api-rlr",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Production-grade rate limit middleware for Moleculer.js APIs — Redis (sliding-window + GCRA via Lua scripts), PostgreSQL (database-agnostic via PgClient interface), and in-memory adapters",
   "engines": {
     "node": ">=22"
@@ -66,9 +66,15 @@
     "moleculer-web": "^0.10.8"
   },
   "peerDependenciesMeta": {
-    "ioredis": { "optional": true },
-    "moleculer": { "optional": true },
-    "moleculer-web": { "optional": true }
+    "ioredis": {
+      "optional": true
+    },
+    "moleculer": {
+      "optional": true
+    },
+    "moleculer-web": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/lodash.clonedeep": "^4.5.9",

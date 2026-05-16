@@ -1,5 +1,14 @@
 # @orchdev/api-core
 
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies [05258e5]
+- Updated dependencies [05258e5]
+  - @gertsai/core@0.3.0
+  - @gertsai/auth-openfga@0.3.0
+
 ## 0.3.0
 
 ### Minor Changes
