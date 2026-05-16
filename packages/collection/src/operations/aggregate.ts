@@ -361,15 +361,15 @@ export function partition<K, V>(
 /**
  * Creates a frequency map of values
  */
-export function frequencies<K, V>(
+export function frequencies<K, V, F = V>(
   iterable: Iterable<[K, V]>,
-  keyFn?: (value: V) => any,
-): Map<any, number> {
-  const freqs = new Map<any, number>();
+  keyFn?: (value: V) => F,
+): Map<F | V, number> {
+  const freqs = new Map<F | V, number>();
 
   for (const [, value] of iterable) {
-    const key = keyFn ? keyFn(value) : value;
-    freqs.set(key, (freqs.get(key) || 0) + 1);
+    const key: F | V = keyFn ? keyFn(value) : value;
+    freqs.set(key, (freqs.get(key) ?? 0) + 1);
   }
 
   return freqs;

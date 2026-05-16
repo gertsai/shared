@@ -331,14 +331,18 @@ export function getIterableSize<T>(iterable: Iterable<T>): number {
 }
 
 /**
- * Convert any value to entries array
+ * Convert any value to entries array.
+ *
+ * Returns `Array<[PropertyKey, unknown]>` — keys are `number` for arrays,
+ * `string` for objects, and whatever the Map's key type is for Maps (widened
+ * to `PropertyKey` here so callers narrow at the use-site).
  */
-export function entriesArray(value: unknown): Array<[any, any]> {
+export function entriesArray(value: unknown): Array<[PropertyKey, unknown]> {
   if (isMap(value)) {
-    return Array.from(value.entries());
+    return Array.from(value.entries()) as Array<[PropertyKey, unknown]>;
   }
   if (Array.isArray(value)) {
-    return value.map((v, i) => [i, v]);
+    return value.map((v, i): [PropertyKey, unknown] => [i, v]);
   }
   if (value && typeof value === 'object') {
     return Object.entries(value);

@@ -205,6 +205,7 @@ export type {
 // Branded types
 export type { CacheKey, CollectionId, SeqOperationIndex, HashCode } from './types/branded';
 export {
+  BrandValidationError,
   createCacheKey,
   createCollectionId,
   createSeqOperationIndex,

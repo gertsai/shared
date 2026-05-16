@@ -59,17 +59,16 @@ export const chatTargetSyncFields = [
  * // syncableData is { name: 'My Chat', space_uid: '123' }
  * ```
  */
-export const getSyncFields = <T extends Record<string, any>>(data: T) =>
+export const getSyncFields = <T extends Record<string, unknown>>(
+  data: T,
+): Partial<T> =>
   Object.keys(data)
     .filter((key) =>
       chatTargetSyncFields.some(
         (field) => key === field || key.startsWith(field + '.'),
       ),
     )
-    .reduce(
-      (obj, key) => {
-        obj[key] = data[key];
-        return obj;
-      },
-      {} as Record<string, any>,
-    );
+    .reduce((obj, key) => {
+      (obj as Record<string, unknown>)[key] = data[key];
+      return obj;
+    }, {} as Partial<T>);

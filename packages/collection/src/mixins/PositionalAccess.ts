@@ -138,7 +138,7 @@ export function withPositionalAccess<
 
   if (useProtoMixins) {
     const ctor = (
-      target as unknown as { constructor?: new (...args: any[]) => any }
+      target as unknown as { constructor?: new (...args: never[]) => unknown }
     ).constructor;
     if (typeof ctor === 'function') {
       augmentPositionalAccessPrototype(ctor);
@@ -200,9 +200,11 @@ export function withPositionalAccess<
  * Prototype-based augmentation: Adds PositionalAccessOps methods to a class prototype.
  * Does not modify existing instances directly; safe to call multiple times.
  */
-export function augmentPositionalAccessPrototype<
-  T extends new (...args: any[]) => any,
->(ctor: T): void {
+export function augmentPositionalAccessPrototype<T extends new (...args: never[]) => unknown>(
+  ctor: T,
+): void {
+  type ProtoTarget = HasInternalData<unknown, unknown> & { data?: Map<unknown, unknown> };
+
   const getData = function <K, V>(
     this: HasInternalData<K, V> & { data?: Map<K, V> },
   ): Map<K, V> {
@@ -212,7 +214,7 @@ export function augmentPositionalAccessPrototype<
     return (this.data as Map<K, V>) ?? new Map<K, V>();
   };
 
-  defineProtoMethod(ctor, 'at', function (this: any, index: number) {
+  defineProtoMethod(ctor, 'at', function (this: ProtoTarget, index: number) {
     const data = getData.call(this);
     if (!Number.isFinite(index)) {
       return undefined;
@@ -235,7 +237,7 @@ export function augmentPositionalAccessPrototype<
     return undefined;
   });
 
-  defineProtoMethod(ctor, 'keyAt', function (this: any, index: number) {
+  defineProtoMethod(ctor, 'keyAt', function (this: ProtoTarget, index: number) {
     const data = getData.call(this);
     if (!Number.isFinite(index)) {
       return undefined;
@@ -258,32 +260,32 @@ export function augmentPositionalAccessPrototype<
     return undefined;
   });
 
-  defineProtoMethod(ctor, 'firstKey', function (this: any) {
+  defineProtoMethod(ctor, 'firstKey', function (this: ProtoTarget) {
     const data = getData.call(this);
     return data.keys().next().value;
   });
 
-  defineProtoMethod(ctor, 'lastKey', function (this: any) {
+  defineProtoMethod(ctor, 'lastKey', function (this: ProtoTarget) {
     const data = getData.call(this);
     let last: unknown = undefined;
     for (const k of data.keys()) {
       last = k;
     }
-    return last as unknown;
+    return last;
   });
 
-  defineProtoMethod(ctor, 'firstEntry', function (this: any) {
+  defineProtoMethod(ctor, 'firstEntry', function (this: ProtoTarget) {
     const data = getData.call(this);
     const first = data.entries().next();
     return first.done ? undefined : first.value;
   });
 
-  defineProtoMethod(ctor, 'lastEntry', function (this: any) {
+  defineProtoMethod(ctor, 'lastEntry', function (this: ProtoTarget) {
     const data = getData.call(this);
     let last: unknown = undefined;
     for (const e of data.entries()) {
       last = e;
     }
-    return last as unknown;
+    return last;
   });
 }

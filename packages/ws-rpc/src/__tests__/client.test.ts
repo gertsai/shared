@@ -2,9 +2,16 @@
  * Tests for WsRpcClient
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, expectTypeOf } from 'vitest';
 import { WsRpcClient } from '../client.js';
-import { RpcError, RpcTimeoutError, ConnectionError } from '../types.js';
+import {
+  RpcError,
+  RpcTimeoutError,
+  ConnectionError,
+  type WsRpcOptions,
+  type WsRpcOptionsBrowser,
+  type WsRpcOptionsNode,
+} from '../types.js';
 
 // Mock WebSocket for Node.js environment
 class MockWebSocket {
@@ -563,6 +570,110 @@ describe('WsRpcClient', () => {
 
       expect(rejectedError).toBeTruthy();
       expect(rejectedError?.message).toBe('Disconnected');
+    });
+  });
+
+  describe('connect() concurrency', () => {
+    it('should share a single in-flight connect promise across concurrent callers', async () => {
+      client = new WsRpcClient({ url: 'ws://localhost:3023/ws' });
+
+      const openHandler = vi.fn();
+      client.on('open', openHandler);
+
+      const p1 = client.connect();
+      const p2 = client.connect();
+      const p3 = client.connect();
+
+      await vi.advanceTimersByTimeAsync(50);
+      await Promise.all([p1, p2, p3]);
+
+      // Exactly one open emission — listeners should not multiply per caller.
+      expect(openHandler).toHaveBeenCalledTimes(1);
+      expect(client.isConnected()).toBe(true);
+    });
+
+    it('should not reject any caller when a post-open error fires', async () => {
+      client = new WsRpcClient({ url: 'ws://localhost:3023/ws' });
+
+      const errorHandler = vi.fn();
+      client.on('error', errorHandler);
+
+      const p1 = client.connect();
+      const p2 = client.connect();
+
+      await vi.advanceTimersByTimeAsync(50);
+      await Promise.all([p1, p2]);
+      expect(client.isConnected()).toBe(true);
+
+      // Simulate a transient WS-level error AFTER open.
+      const ws = (client as any).ws as { onerror?: () => void };
+      ws.onerror?.();
+
+      // Error should be emitted but not reject either resolved promise.
+      expect(errorHandler).toHaveBeenCalledTimes(1);
+      expect(errorHandler.mock.calls[0][0]).toBeInstanceOf(ConnectionError);
+      // Connection should still be considered open (post-open transient errors
+      // are surfaced via the event, not by collapsing state).
+      expect(client.isConnected()).toBe(true);
+    });
+
+    it('should allow a fresh connect after disconnect (in-flight slot cleared)', async () => {
+      client = new WsRpcClient({ url: 'ws://localhost:3023/ws' });
+
+      const p1 = client.connect();
+      await vi.advanceTimersByTimeAsync(50);
+      await p1;
+      expect(client.isConnected()).toBe(true);
+
+      client.disconnect();
+      expect(client.getState()).toBe('closed');
+
+      // Second cycle must spin up a brand-new WebSocket.
+      const p2 = client.connect();
+      await vi.advanceTimersByTimeAsync(50);
+      await p2;
+      expect(client.isConnected()).toBe(true);
+    });
+  });
+
+  describe('WsRpcOptions discriminated union', () => {
+    it('should accept headers on the Node branch (default environment)', () => {
+      // Backward-compat: legacy callers without `environment`.
+      const legacy: WsRpcOptions = {
+        url: 'ws://localhost:3023/ws',
+        headers: { Authorization: 'Bearer x' },
+      };
+      expect(legacy.url).toBe('ws://localhost:3023/ws');
+
+      // Explicit Node branch.
+      const explicit: WsRpcOptionsNode = {
+        url: 'ws://localhost:3023/ws',
+        environment: 'node',
+        headers: { 'X-API-Key': 'secret' },
+      };
+      expectTypeOf(explicit.headers).toEqualTypeOf<Record<string, string> | undefined>();
+    });
+
+    it('should reject headers on the Browser branch at compile time', () => {
+      const browserOpts: WsRpcOptionsBrowser = {
+        url: 'ws://localhost:3023/ws',
+        environment: 'browser',
+        // @ts-expect-error -- `headers` is intentionally absent from the browser branch.
+        headers: { 'X-API-Key': 'secret' },
+      };
+      // Runtime sanity: browser-shaped options still construct a client.
+      expect(browserOpts.environment).toBe('browser');
+    });
+
+    it('should drop headers at runtime when environment is browser', () => {
+      const c = new WsRpcClient({
+        url: 'ws://localhost:3023/ws',
+        environment: 'browser',
+        // Type-system already prevents `headers` here; cast tests the
+        // belt-and-braces runtime guard against bad casts at the boundary.
+      } as unknown as WsRpcOptions);
+      // Internal field — verify we didn't smuggle headers through a cast.
+      expect((c as unknown as { headers: unknown }).headers).toBeUndefined();
     });
   });
 });

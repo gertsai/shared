@@ -112,6 +112,19 @@ export class WsRpcClient extends EventEmitter<WsRpcEvents> {
   private reconnectTimer: NodeJS.Timeout | undefined;
   private isDestroyed = false;
 
+  /**
+   * Runtime target for {@link createWebSocket}. Defaults to `'node'` when the
+   * caller omits `environment`, preserving the original Node-shaped surface.
+   */
+  private readonly environment: 'node' | 'browser';
+
+  /**
+   * In-flight connect promise shared by every concurrent {@link connect}
+   * caller. Cleared once the underlying socket settles so that a subsequent
+   * connect (after disconnect / reconnect) starts fresh.
+   */
+  private connecting: Promise<void> | null = null;
+
   constructor(options: WsRpcOptions) {
     super();
 
@@ -122,7 +135,12 @@ export class WsRpcClient extends EventEmitter<WsRpcEvents> {
     this.maxQueueSize = options.maxQueueSize ?? DEFAULT_OPTIONS.maxQueueSize;
     this.maxMessageSize = options.maxMessageSize ?? DEFAULT_OPTIONS.maxMessageSize;
     this.maxPendingRequests = options.maxPendingRequests ?? DEFAULT_OPTIONS.maxPendingRequests;
-    this.headers = options.headers;
+    // Default to 'node' so legacy callers `{ url, headers }` keep working.
+    this.environment = options.environment ?? 'node';
+    // `headers` only exists on the Node branch of the union; drop it for
+    // browser so we never silently forward something the runtime cannot use.
+    this.headers =
+      options.environment === 'browser' ? undefined : options.headers;
 
     this.reconnectStrategy = new ReconnectStrategy({
       ...DEFAULT_OPTIONS.reconnect,
@@ -137,7 +155,13 @@ export class WsRpcClient extends EventEmitter<WsRpcEvents> {
   // ============================================================================
 
   /**
-   * Connect to WebSocket server
+   * Connect to WebSocket server.
+   *
+   * Concurrent callers share a single in-flight {@link connecting} promise so
+   * there is exactly one open/error listener pair per attempt. This avoids
+   * the race where a post-open transient `error` event would reject extra
+   * listeners registered by a second caller even though the connection had
+   * already succeeded for the first.
    */
   async connect(): Promise<void> {
     if (this.isDestroyed) {
@@ -148,27 +172,14 @@ export class WsRpcClient extends EventEmitter<WsRpcEvents> {
       return; // Already connected
     }
 
-    if (this.state === WebSocketState.CONNECTING) {
-      // Wait for current connection attempt
-      return new Promise((resolve, reject) => {
-        const onOpen = () => {
-          this.off('open', onOpen);
-          this.off('error', onError);
-          resolve();
-        };
-        const onError = (error: Error) => {
-          this.off('open', onOpen);
-          this.off('error', onError);
-          reject(error);
-        };
-        this.once('open', onOpen);
-        this.once('error', onError);
-      });
+    // Concurrent calls (state === CONNECTING) ride the same promise.
+    if (this.connecting) {
+      return this.connecting;
     }
 
     this.state = WebSocketState.CONNECTING;
 
-    return new Promise((resolve, reject) => {
+    this.connecting = new Promise<void>((resolve, reject) => {
       this.createWebSocket()
         .then((ws) => {
           this.ws = ws;
@@ -179,15 +190,44 @@ export class WsRpcClient extends EventEmitter<WsRpcEvents> {
           reject(error instanceof Error ? error : new Error(String(error)));
         });
     });
+
+    try {
+      await this.connecting;
+    } finally {
+      // Always clear so a later reconnect can start fresh, regardless of
+      // success/failure outcome of this attempt.
+      this.connecting = null;
+    }
   }
 
   /**
-   * Create WebSocket instance (handles browser vs Node.js)
+   * Create WebSocket instance (handles browser vs Node.js).
+   *
+   * Routing is driven by the {@link environment} field so callers in a
+   * Node-shaped context (e.g. SSR) can opt into the browser code path
+   * explicitly. We keep the `typeof window` fallback for the default
+   * `'node'` setting in case the bundle is shipped to a browser without
+   * the caller updating the option.
    */
   private async createWebSocket(): Promise<WebSocket> {
-    // Browser environment
-    if (typeof window !== 'undefined' && typeof window.WebSocket !== 'undefined') {
-      return new window.WebSocket(this.url, this.protocols);
+    const useBrowser =
+      this.environment === 'browser' ||
+      (typeof window !== 'undefined' && typeof window.WebSocket !== 'undefined');
+
+    if (useBrowser) {
+      // Browser `WebSocket` does not accept headers — by construction
+      // `this.headers` is undefined here (constructor drops it for the
+      // browser branch), but we never forward it either way.
+      const BrowserWS =
+        typeof window !== 'undefined' && typeof window.WebSocket !== 'undefined'
+          ? window.WebSocket
+          : (globalThis as { WebSocket?: typeof WebSocket }).WebSocket;
+      if (!BrowserWS) {
+        throw new ConnectionError(
+          "environment: 'browser' set but no global WebSocket is available",
+        );
+      }
+      return new BrowserWS(this.url, this.protocols);
     }
 
     // Node.js environment - dynamic import of 'ws'
@@ -206,19 +246,27 @@ export class WsRpcClient extends EventEmitter<WsRpcEvents> {
   }
 
   /**
-   * Setup WebSocket event handlers
+   * Setup WebSocket event handlers.
+   *
+   * The `connectSettled` flag guards against post-open transient errors
+   * leaking into a previously-resolved connect promise. After `onopen`
+   * fires, `onerror` only emits the `error` event — it no longer rejects
+   * the connect promise of any caller waiting on this attempt.
    */
   private setupWebSocketHandlers(
     ws: WebSocket,
     resolve: () => void,
     reject: (error: Error) => void
   ): void {
+    let connectSettled = false;
+
     ws.onopen = () => {
       this.state = WebSocketState.OPEN;
       this.reconnectStrategy.reset();
       this.startHeartbeat();
       this.flushQueue();
       this.emit('open');
+      connectSettled = true;
       resolve();
     };
 
@@ -229,7 +277,8 @@ export class WsRpcClient extends EventEmitter<WsRpcEvents> {
     ws.onerror = () => {
       const error = new ConnectionError('WebSocket error');
       this.emit('error', error);
-      if (this.state === WebSocketState.CONNECTING) {
+      if (!connectSettled && this.state === WebSocketState.CONNECTING) {
+        connectSettled = true;
         reject(error);
       }
     };

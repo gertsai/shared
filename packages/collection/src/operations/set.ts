@@ -270,12 +270,12 @@ export function uniqueBy<K, V, S>(
 /**
  * Returns duplicate entries based on value
  */
-export function duplicates<K, V>(
+export function duplicates<K, V, D = V>(
   iterable: Iterable<[K, V]>,
-  keyFn?: (value: V) => any,
+  keyFn?: (value: V) => D,
 ): Array<[K, V]> {
-  const seen = new Set<any>();
-  const duplicated = new Set<any>();
+  const seen = new Set<D | V>();
+  const duplicated = new Set<D | V>();
   const result: Array<[K, V]> = [];
 
   // First pass: identify duplicates
