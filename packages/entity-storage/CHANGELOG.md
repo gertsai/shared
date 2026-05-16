@@ -1,5 +1,15 @@
 # @gertsai/entity-storage
 
+## 2.0.0
+
+### Patch Changes
+
+- Updated dependencies [80ca808]
+- Updated dependencies [f662fa5]
+  - @gertsai/entity@1.1.0
+  - @gertsai/di@0.3.0
+  - @gertsai/storage-core@2.0.0
+
 ## 1.0.0
 
 ### Minor Changes

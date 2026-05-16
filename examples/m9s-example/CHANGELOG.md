@@ -1,5 +1,16 @@
 # @gertsai-examples/m9s-example
 
+## 0.0.6
+
+### Patch Changes
+
+- Updated dependencies [f662fa5]
+  - @gertsai/rest-request-manager@3.1.0
+  - @gertsai/entity-storage@2.0.0
+  - @gertsai/runtime-context@2.0.0
+  - @gertsai/storage-core@2.0.0
+  - @gertsai/pg-client@2.0.0
+
 ## 0.0.5
 
 ### Patch Changes

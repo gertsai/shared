@@ -1,5 +1,12 @@
 # @gertsai/storage-core CHANGELOG
 
+## 2.0.0
+
+### Patch Changes
+
+- Updated dependencies [f662fa5]
+  - @gertsai/di@0.3.0
+
 ## 1.0.0
 
 ### Minor Changes
