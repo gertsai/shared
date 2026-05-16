@@ -242,10 +242,10 @@ export function reject<K, V>(
 /**
  * Flatten nested arrays in values
  */
-export function flatten<K>(iterable: Iterable<[K, any]>, depth: number = 1): Array<any> {
-  const result: Array<any> = [];
+export function flatten<K>(iterable: Iterable<[K, unknown]>, depth: number = 1): Array<unknown> {
+  const result: Array<unknown> = [];
 
-  const flattenHelper = (value: any, currentDepth: number): void => {
+  const flattenHelper = (value: unknown, currentDepth: number): void => {
     if (currentDepth > 0 && Array.isArray(value)) {
       for (const item of value) {
         flattenHelper(item, currentDepth - 1);

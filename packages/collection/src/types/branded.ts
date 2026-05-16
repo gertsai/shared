@@ -52,14 +52,37 @@ export type SeqOperationIndex = number & {
 export type HashCode = number & { readonly [HashCodeBrand]: true };
 
 // ============================================================================
+// Validation Error
+// ============================================================================
+
+/**
+ * Thrown when a brand factory rejects its input.
+ *
+ * Branded type factories validate inputs at runtime; this error carries the
+ * brand name and the offending value for diagnostics.
+ */
+export class BrandValidationError extends Error {
+  override readonly name = 'BrandValidationError';
+  readonly brand: string;
+  readonly received: unknown;
+
+  constructor(message: string, brand: string, received: unknown) {
+    super(message);
+    this.brand = brand;
+    this.received = received;
+  }
+}
+
+// ============================================================================
 // Factory Functions
 // ============================================================================
 
 /**
- * Create a branded cache key from a string.
+ * Create a branded cache key from a non-empty string.
  *
  * @param key - The key string
  * @returns Branded CacheKey
+ * @throws {BrandValidationError} If `key` is not a non-empty string.
  *
  * @example
  * ```typescript
@@ -68,36 +91,67 @@ export type HashCode = number & { readonly [HashCodeBrand]: true };
  * ```
  */
 export function createCacheKey(key: string): CacheKey {
+  if (typeof key !== 'string' || key.length === 0) {
+    throw new BrandValidationError(
+      `createCacheKey expects non-empty string, got ${typeof key}`,
+      'CacheKey',
+      key,
+    );
+  }
   return key as CacheKey;
 }
 
 /**
  * Create a branded collection ID.
  *
- * @param prefix - Optional prefix for the ID
+ * @param prefix - Optional non-empty prefix for the ID
  * @returns Unique CollectionId
+ * @throws {BrandValidationError} If `prefix` is not a non-empty string.
  */
 export function createCollectionId(prefix = 'col'): CollectionId {
+  if (typeof prefix !== 'string' || prefix.length === 0) {
+    throw new BrandValidationError(
+      `createCollectionId expects non-empty string prefix, got ${typeof prefix}`,
+      'CollectionId',
+      prefix,
+    );
+  }
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}` as CollectionId;
 }
 
 /**
  * Create a branded Seq operation index.
  *
- * @param index - The index number
+ * @param index - A non-negative integer
  * @returns Branded SeqOperationIndex
+ * @throws {BrandValidationError} If `index` is not a non-negative integer.
  */
 export function createSeqOperationIndex(index: number): SeqOperationIndex {
+  if (!Number.isInteger(index) || index < 0) {
+    throw new BrandValidationError(
+      `createSeqOperationIndex expects non-negative integer, got ${String(index)}`,
+      'SeqOperationIndex',
+      index,
+    );
+  }
   return index as SeqOperationIndex;
 }
 
 /**
  * Create a branded hash code.
  *
- * @param hash - The hash value
+ * @param hash - A finite numeric hash value
  * @returns Branded HashCode
+ * @throws {BrandValidationError} If `hash` is not a finite number.
  */
 export function createHashCode(hash: number): HashCode {
+  if (typeof hash !== 'number' || !Number.isFinite(hash)) {
+    throw new BrandValidationError(
+      `createHashCode expects finite number, got ${String(hash)}`,
+      'HashCode',
+      hash,
+    );
+  }
   return hash as HashCode;
 }
 

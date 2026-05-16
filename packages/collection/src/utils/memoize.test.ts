@@ -751,4 +751,21 @@ describe('memoize with custom key generator', () => {
 
     expect(fn).toHaveBeenCalledTimes(2);
   });
+
+  it('preserves Parameters<T>/ReturnType<T> narrowing on the memoized signature', () => {
+    // Regression: previously `memoize<T extends (...args: any[]) => any>` produced
+    // a return type that surfaced `any` to call-sites. With the tightened
+    // `(...args: never[]) => unknown` constraint, the wrapped function should
+    // retain the original input/return types exactly.
+    const original = (a: number, b: string): string => `${a}:${b}`;
+    const memoized = memoize(original);
+
+    // Type-level: the return type must be `string`, not `any`/`unknown`.
+    const result: string = memoized(42, 'x');
+    expect(result).toBe('42:x');
+
+    // Type-level: calling with wrong types is a compile-time error.
+    // @ts-expect-error - 'b' must be a string, not a number
+    memoized(1, 2);
+  });
 });

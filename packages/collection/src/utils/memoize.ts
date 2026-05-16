@@ -29,14 +29,14 @@ export interface MemoizeOptions {
   /** Use weak references for keys */
   weak?: boolean;
   /** Custom key generator */
-  keyGenerator?: (...args: any[]) => string;
+  keyGenerator?: (...args: readonly unknown[]) => string;
 }
 
 /**
  * Default key generator for memoization
  * Converts arguments to a stable string key
  */
-function defaultKeyGenerator(...args: any[]): string {
+function defaultKeyGenerator(...args: readonly unknown[]): string {
   return JSON.stringify(args, (key, value): unknown => {
     // Handle undefined explicitly
     if (value === undefined) {
@@ -166,7 +166,7 @@ export class LRUCache<K, V> {
  * );
  * ```
  */
-export function memoize<T extends (...args: any[]) => any>(
+export function memoize<T extends (...args: never[]) => unknown>(
   fn: T,
   options: MemoizeOptions = {},
 ): T & { clearCache: () => void; getCacheSize: () => number } {
@@ -178,7 +178,7 @@ export function memoize<T extends (...args: any[]) => any>(
       ? new WeakMap<object, CacheEntry<ReturnType<T>>>()
       : new LRUCache<string, CacheEntry<ReturnType<T>>>(maxSize);
 
-  const memoized = function (this: any, ...args: Parameters<T>): ReturnType<T> {
+  const memoized = function (this: unknown, ...args: Parameters<T>): ReturnType<T> {
     // Generate cache key
     const key = weak ? args[0] : keyGenerator(...args);
 
@@ -187,7 +187,7 @@ export function memoize<T extends (...args: any[]) => any>(
       if (typeof key === 'object' && key !== null && cache.has(key)) {
         const entry = cache.get(key);
         if (!entry) {
-          return fn.apply(this, args);
+          return fn.apply(this, args) as ReturnType<T>;
         }
 
         // Check TTL
@@ -209,7 +209,7 @@ export function memoize<T extends (...args: any[]) => any>(
     }
 
     // Compute and cache result
-    const result = fn.apply(this, args);
+    const result = fn.apply(this, args) as ReturnType<T>;
     const entry: CacheEntry<ReturnType<T>> = {
       value: result,
       timestamp: Date.now(),
@@ -223,24 +223,24 @@ export function memoize<T extends (...args: any[]) => any>(
     }
 
     return result;
-  } as T;
+  } as unknown as T & { clearCache: () => void; getCacheSize: () => number };
 
   // Add cache management methods
-  (memoized as any).clearCache = () => {
+  memoized.clearCache = () => {
     if (cache instanceof LRUCache) {
       cache.clear();
     }
     // WeakMap doesn't have a clear method
   };
 
-  (memoized as any).getCacheSize = () => {
+  memoized.getCacheSize = () => {
     if (cache instanceof LRUCache) {
       return cache.size;
     }
     return -1; // WeakMap size is not accessible
   };
 
-  return memoized as T & { clearCache: () => void; getCacheSize: () => number };
+  return memoized;
 }
 
 /**
@@ -251,12 +251,15 @@ export function memoize<T extends (...args: any[]) => any>(
  * @returns Memoized operation
  */
 export function memoizeCollectionOp<K, V, R>(
-  operation: (collection: ReadableCollection<K, V>, ...args: any[]) => R,
-): (collection: ReadableCollection<K, V>, ...args: any[]) => R {
+  operation: (collection: ReadableCollection<K, V>, ...args: readonly unknown[]) => R,
+): (collection: ReadableCollection<K, V>, ...args: readonly unknown[]) => R {
   // Use WeakMap for collection references
   const cache = new WeakMap<ReadableCollection<K, V>, Map<string, R>>();
 
-  return function memoizedOp(collection: ReadableCollection<K, V>, ...args: any[]): R {
+  return function memoizedOp(
+    collection: ReadableCollection<K, V>,
+    ...args: readonly unknown[]
+  ): R {
     // Get or create cache for this collection
     if (!cache.has(collection)) {
       cache.set(collection, new Map());
@@ -373,14 +376,14 @@ export function hashCollection<K, V>(collection: ReadableCollection<K, V>): stri
  * @param detectChanges - Function to detect if collection has changed
  * @returns Memoized method
  */
-export function memoizeMethod<T extends (...args: any[]) => any>(
+export function memoizeMethod<T extends (...args: never[]) => unknown>(
   method: T,
   detectChanges: () => string | number = () => Date.now().toString(),
 ): T {
   let lastChangeToken: string | number = detectChanges();
   const cache = new Map<string, ReturnType<T>>();
 
-  return function memoizedMethod(this: any, ...args: Parameters<T>): ReturnType<T> {
+  return function memoizedMethod(this: unknown, ...args: Parameters<T>): ReturnType<T> {
     // Check if collection has changed
     const currentToken = detectChanges();
     if (currentToken !== lastChangeToken) {
@@ -400,7 +403,7 @@ export function memoizeMethod<T extends (...args: any[]) => any>(
     }
 
     // Compute and cache result
-    const result = method.apply(this, args);
+    const result = method.apply(this, args) as ReturnType<T>;
     cache.set(key, result);
 
     // Limit cache size
@@ -420,7 +423,7 @@ export function memoizeMethod<T extends (...args: any[]) => any>(
  * Shares cache between operations for efficiency
  */
 export class BatchMemoizer {
-  private cache = new LRUCache<string, any>(500);
+  private cache = new LRUCache<string, unknown>(500);
 
   /**
    * Memoizes a batch of related operations
@@ -428,28 +431,29 @@ export class BatchMemoizer {
    * @param operations - Object with operation functions
    * @returns Object with memoized operations
    */
-  memoizeBatch<T extends Record<string, (...args: any[]) => any>>(
+  memoizeBatch<T extends Record<string, (...args: never[]) => unknown>>(
     operations: T,
   ): T & { clearCache: () => void } {
-    const memoized: any = {};
+    const memoized: Record<string, unknown> = {};
 
     for (const [name, op] of Object.entries(operations)) {
-      memoized[name] = (...args: any[]) => {
+      const fn = op as (...args: readonly unknown[]) => unknown;
+      memoized[name] = (...args: readonly unknown[]): unknown => {
         const key = `${name}:${defaultKeyGenerator(args)}`;
 
         if (this.cache.has(key)) {
           return this.cache.get(key);
         }
 
-        const result = op(...args);
+        const result = fn(...args);
         this.cache.set(key, result);
         return result;
       };
     }
 
-    memoized.clearCache = () => this.cache.clear();
+    memoized.clearCache = (): void => this.cache.clear();
 
-    return memoized;
+    return memoized as T & { clearCache: () => void };
   }
 }
 

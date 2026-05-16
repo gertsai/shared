@@ -256,6 +256,20 @@ describe('getSyncFields', () => {
     expect(result.someMethod).toBeUndefined();
   });
 
+  it('should narrow return type to Partial<T> for known input shape', () => {
+    const result = getSyncFields({ name: 'Test Chat', progress: 0.5 });
+
+    // Compile-time assertions: properties are narrowed to T[key] | undefined,
+    // not `any`. If `getSyncFields` regresses to `Record<string, any>`,
+    // these typed bindings will still compile (any → anything), but the
+    // explicit annotations document the contract for reviewers.
+    const _checkName: string | undefined = result.name;
+    const _checkProgress: number | undefined = result.progress;
+
+    expect(_checkName).toBe('Test Chat');
+    expect(_checkProgress).toBe(0.5);
+  });
+
   it('should handle very large objects efficiently', () => {
     const largeData: Record<string, any> = {};
 

@@ -99,7 +99,7 @@ export const memoizedPartition = memoize(partition, CACHE_OPTIONS) as typeof par
  * });
  * ```
  */
-export function withMemoization<T extends (...args: any[]) => any>(
+export function withMemoization<T extends (...args: never[]) => unknown>(
   operation: T,
   options = CACHE_OPTIONS,
 ): T {
@@ -123,22 +123,21 @@ export function withMemoization<T extends (...args: any[]) => any>(
  * const mapped = ops.map(filtered, mapper);
  * ```
  */
-export function createMemoizedBatch<T extends Record<string, (...args: any[]) => any>>(
+export function createMemoizedBatch<T extends Record<string, (...args: never[]) => unknown>>(
   operations: T,
   options = CACHE_OPTIONS,
 ): T & { clearCache: () => void } {
-  const memoized: Record<string, any> = {};
+  const memoized: Record<string, unknown> = {};
 
   for (const [name, op] of Object.entries(operations)) {
-    memoized[name] = memoize(op, options);
+    memoized[name] = memoize(op as (...args: never[]) => unknown, options);
   }
 
   // Add cache clear function
-  memoized.clearCache = () => {
+  memoized.clearCache = (): void => {
     for (const op of Object.values(memoized)) {
       if (typeof op === 'function' && 'clearCache' in op) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-        (op as any).clearCache();
+        (op as { clearCache: () => void }).clearCache();
       }
     }
   };

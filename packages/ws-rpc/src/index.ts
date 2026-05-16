@@ -73,6 +73,9 @@ export type {
 
   // Client options
   WsRpcOptions,
+  WsRpcOptionsBase,
+  WsRpcOptionsNode,
+  WsRpcOptionsBrowser,
   ReconnectOptions,
 
   // Subscription types

@@ -133,9 +133,11 @@ export interface ReconnectOptions {
 }
 
 /**
- * WebSocket RPC client options
+ * Common WebSocket RPC client options shared between Node and browser
+ * environments. Environment-specific extensions inhabit the discriminated
+ * union `WsRpcOptions` below.
  */
-export interface WsRpcOptions {
+export interface WsRpcOptionsBase {
   /** WebSocket URL */
   url: string;
   /** WebSocket protocols */
@@ -148,13 +150,42 @@ export interface WsRpcOptions {
   heartbeatInterval?: number;
   /** Max queued messages when disconnected */
   maxQueueSize?: number;
-  /** Custom headers for connection (Node.js only) */
-  headers?: Record<string, string>;
   /** Max message size in bytes (default: 1MB). Messages exceeding this are rejected. */
   maxMessageSize?: number;
   /** Max pending requests (default: 1000). Prevents memory exhaustion from too many concurrent requests. */
   maxPendingRequests?: number;
 }
+
+/**
+ * Options for the Node.js runtime (default). Accepts `headers` because the
+ * underlying `ws` library forwards them on the HTTP upgrade request.
+ */
+export interface WsRpcOptionsNode extends WsRpcOptionsBase {
+  /**
+   * Environment marker. Defaults to `'node'` when omitted, preserving
+   * backward compatibility for callers passing `{ url, headers }`.
+   */
+  environment?: 'node';
+  /** Custom headers for the upgrade request (Node.js `ws` only). */
+  headers?: Record<string, string>;
+}
+
+/**
+ * Options for the browser runtime. The browser `WebSocket` constructor does
+ * not accept headers, so the field is intentionally omitted from this branch
+ * — passing it would be silently discarded.
+ */
+export interface WsRpcOptionsBrowser extends WsRpcOptionsBase {
+  /** Environment marker — must be set explicitly to opt into the browser shape. */
+  environment: 'browser';
+}
+
+/**
+ * WebSocket RPC client options. Discriminated by `environment`:
+ * - `'node'` (default) accepts `headers`.
+ * - `'browser'` rejects `headers` at compile time.
+ */
+export type WsRpcOptions = WsRpcOptionsNode | WsRpcOptionsBrowser;
 
 // ============================================================================
 // Subscription Types

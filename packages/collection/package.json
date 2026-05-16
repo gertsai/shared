@@ -59,6 +59,14 @@
     },
     "./package.json": "./package.json"
   },
+  "typesVersions": {
+    "*": {
+      "core/*": ["./dist/core/*.d.ts"],
+      "mixins/*": ["./dist/mixins/*.d.ts"],
+      "operations/*": ["./dist/operations/*.d.ts"],
+      "specialized/*": ["./dist/specialized/*.d.ts"]
+    }
+  },
   "files": [
     "dist",
     "README.md",
