@@ -20,7 +20,33 @@
         "default": "./dist/index.cjs"
       }
     },
+    "./moleculer": {
+      "import": {
+        "types": "./dist/moleculer.d.ts",
+        "default": "./dist/moleculer.js"
+      },
+      "require": {
+        "types": "./dist/moleculer.d.cts",
+        "default": "./dist/moleculer.cjs"
+      }
+    },
+    "./redis": {
+      "import": {
+        "types": "./dist/redis.d.ts",
+        "default": "./dist/redis.js"
+      },
+      "require": {
+        "types": "./dist/redis.d.cts",
+        "default": "./dist/redis.cjs"
+      }
+    },
     "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "moleculer": ["./dist/moleculer.d.ts"],
+      "redis": ["./dist/redis.d.ts"]
+    }
   },
   "files": [
     "dist",
