@@ -29,7 +29,7 @@ class UserEntity extends EventEmitter implements ConsumerType, ServiceConsumer<'
   }
 
   $destroy() {
-    this.emit('destroy');
+    this.emit('destroyed');
     this.removeAllListeners();
   }
 }
@@ -47,7 +47,7 @@ class ChatEntity extends EventEmitter implements ConsumerType {
   }
 
   $destroy() {
-    this.emit('destroy');
+    this.emit('destroyed');
     this.removeAllListeners();
   }
 }

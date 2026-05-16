@@ -1017,4 +1017,72 @@ describe('DataStream', () => {
       });
     });
   });
+
+  // FR-004 — pipe() single-pipe contract + listener cleanup
+  describe('FR-004 — pipe() contract and listener cleanup', () => {
+    it('should throw when pipe() is called twice on the same stream', () => {
+      const stream = new DataStream<number>();
+      // First pipe is fine
+      stream.pipe((n) => n * 2);
+      // Second pipe must throw — silent overwrite would lose fn1.
+      expect(() => stream.pipe((n) => n + 1)).toThrow(/only one pipe per stream/);
+    });
+
+    it('still supports chained pipes through the returned stream', async () => {
+      // Regression: fan-out through chaining still works because each
+      // pipe() is called on a *different* stream.
+      const input = new DataStream<number>();
+      const results: string[] = [];
+      const output = input
+        .pipe((n) => n * 2)
+        .pipe((n) => n + 1)
+        .pipe((n) => `R:${n}`);
+      output.on('data', (d) => results.push(d as string));
+      input.write(5);
+      input.end();
+      await wait(50);
+      expect(results).toContain('R:11');
+    });
+
+    it('removes end/error listeners attached by pipe() on destroy()', () => {
+      const stream = new DataStream<number>();
+      const beforePipe = stream['_eventEmitter'].listenerCount('end');
+      stream.pipe((n) => n * 2);
+      const afterPipe = stream['_eventEmitter'].listenerCount('end');
+      expect(afterPipe).toBe(beforePipe + 1);
+      const errAfterPipe = stream['_eventEmitter'].listenerCount('error');
+      expect(errAfterPipe).toBeGreaterThanOrEqual(1);
+
+      stream.destroy();
+
+      // After destroy, removeAllListeners drops everything (and the
+      // explicit detach ran first — both paths converge to 0).
+      expect(stream['_eventEmitter'].listenerCount('end')).toBe(0);
+      expect(stream['_eventEmitter'].listenerCount('error')).toBe(0);
+    });
+
+    it('does not invoke orphaned pipe wiring after destroy()', async () => {
+      const input = new DataStream<number>({ autoEnd: true });
+      const endSpy = vi.fn();
+      const output = input.pipe((n) => n * 2);
+      output.on('end', endSpy);
+
+      input.destroy();
+
+      // Emit end on the source after destroy — wiring is gone, output
+      // must NOT auto-end (the autoEnd-forwarder listener was removed).
+      input.emit('end');
+      await wait(10);
+      expect(endSpy).not.toHaveBeenCalled();
+      expect(output.isEnded()).toBe(false);
+    });
+
+    it('removes pipe listeners on close() too', () => {
+      const stream = new DataStream<number>();
+      stream.pipe((n) => n * 2);
+      stream.close();
+      expect(stream['_eventEmitter'].listenerCount('end')).toBe(0);
+      expect(stream['_eventEmitter'].listenerCount('error')).toBe(0);
+    });
+  });
 });

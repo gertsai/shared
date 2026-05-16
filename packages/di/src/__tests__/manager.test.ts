@@ -13,13 +13,13 @@ import type { ConsumerType, IGlobalService, IService } from '../types';
 // Mock consumer classes
 class MockConsumer extends EventEmitter implements ConsumerType {
   $destroy() {
-    this.emit('destroy');
+    this.emit('destroyed');
   }
 }
 
 class AnotherMockConsumer extends EventEmitter implements ConsumerType {
   $destroy() {
-    this.emit('destroy');
+    this.emit('destroyed');
   }
 }
 
@@ -286,7 +286,7 @@ describe('diContainer', () => {
       }).toThrow('Service registry not found for UnregisteredConsumer');
     });
 
-    it('should set up automatic cleanup when consumer emits destroy', () => {
+    it('should set up automatic cleanup when consumer emits destroyed', () => {
       const consumer = new MockConsumer();
       const directory = diContainer.resolveServiceDirectory(
         'MockConsumer',
@@ -299,11 +299,30 @@ describe('diContainer', () => {
       const destroySpy = vi.spyOn(service, '$destroy');
       const directoryDestroySpy = vi.spyOn(directory, '$destroy');
 
-      // Emit destroy event on consumer
-      consumer.emit('destroy');
+      // Emit destroyed event on consumer (PRD-034 FR-006 — past tense
+      // aligns with `@gertsai/entity` Model.$destroy semantics).
+      consumer.emit('destroyed');
 
       expect(directoryDestroySpy).toHaveBeenCalledTimes(1);
       expect(destroySpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('should NOT clean up on the legacy "destroy" event (PRD-034 FR-006)', () => {
+      const consumer = new MockConsumer();
+      const directory = diContainer.resolveServiceDirectory(
+        'MockConsumer',
+        MockConsumer,
+        consumer,
+      );
+
+      directory.get(serviceId);
+      const directoryDestroySpy = vi.spyOn(directory, '$destroy');
+
+      // Emitting the legacy event name must not trigger cleanup — the
+      // contract is `'destroyed'` (past tense, per entity Model.ts:46).
+      consumer.emit('destroy');
+
+      expect(directoryDestroySpy).not.toHaveBeenCalled();
     });
   });
 
@@ -423,7 +442,7 @@ describe('diContainer', () => {
       const serviceSpy = vi.spyOn(userService, '$destroy');
 
       // Destroy the user
-      user.$destroy(); // This emits 'destroy' event
+      user.$destroy(); // This emits 'destroyed' event
 
       // Service should be cleaned up
       expect(serviceSpy).toHaveBeenCalledTimes(1);

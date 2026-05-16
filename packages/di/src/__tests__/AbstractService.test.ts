@@ -11,7 +11,7 @@ import type { ConsumerType } from '../types';
 // Mock consumer class
 class MockConsumer extends EventEmitter implements ConsumerType {
   $destroy() {
-    this.emit('destroy');
+    this.emit('destroyed');
   }
 }
 

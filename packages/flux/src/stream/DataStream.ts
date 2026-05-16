@@ -134,6 +134,20 @@ export class DataStream<T> implements IDataStream<T> {
   private _processItem: ((item: T) => Promise<void>) | null = null;
 
   /**
+   * Pipe wiring saved for explicit cleanup (FR-004).
+   *
+   * Stored end/error handler refs let `destroy()` / `close()` `off()`
+   * them — without this, every `pipe()` permanently attaches two
+   * listeners that survive destroy and leak.
+   *
+   * @internal
+   */
+  private _pipeWiring: {
+    endHandler: () => void;
+    errorHandler: (err: unknown) => void;
+  } | null = null;
+
+  /**
    * Creates a new DataStream instance.
    *
    * @param options - Configuration options for the stream
@@ -372,6 +386,23 @@ export class DataStream<T> implements IDataStream<T> {
    * ```
    */
   pipe<R>(transform: DataTransformer<T, R>): IDataStream<R> {
+    // FR-004 (Option B): single-pipe contract.
+    //
+    // Decision: throw on second pipe rather than fan-out (Option A).
+    // Rationale: the `_processItem` single-slot, `_pause()`/`_resume()`
+    // backpressure coupling, and FIFO buffer in this class are all
+    // built around exactly one downstream transformer. Multi-pipe
+    // fan-out would require reworking the data path. For fan-out use
+    // multiple `on('data', ...)` subscribers, or pipe in a chain
+    // (`a.pipe(f).pipe(g)`), which the existing tests exercise.
+    if (this._processItem !== null) {
+      throw new Error(
+        'DataStream.pipe(): only one pipe per stream is supported. ' +
+          'Use multiple on("data", ...) subscriptions for fan-out, ' +
+          'or chain pipes on the returned stream (a.pipe(f).pipe(g)).',
+      );
+    }
+
     const outputStream = new DataStream<R>(this._options);
 
     // Handler for input data
@@ -402,16 +433,23 @@ export class DataStream<T> implements IDataStream<T> {
       }
     };
 
-    // Forward end and error events
-    this.on('end', () => {
+    // FR-004: capture listener refs so destroy()/close() can detach them
+    // and prevent the leak documented in the audit finding.
+    const endHandler = (): void => {
       if (outputStream._options.autoEnd) {
         outputStream.end();
       }
-    });
+    };
 
-    this.on('error', (err: unknown) => {
+    const errorHandler = (err: unknown): void => {
       outputStream.emit('error', err);
-    });
+    };
+
+    this._pipeWiring = { endHandler, errorHandler };
+
+    // Forward end and error events
+    this.on('end', endHandler);
+    this.on('error', errorHandler);
 
     // If buffer already has data, start processing
     if (this._buffer.length > 0) {
@@ -419,6 +457,24 @@ export class DataStream<T> implements IDataStream<T> {
     }
 
     return outputStream;
+  }
+
+  /**
+   * Detaches pipe wiring listeners attached by `pipe()` (FR-004).
+   *
+   * Safe to call multiple times. After `destroy()` / `close()` the
+   * underlying emitter clears all listeners anyway, but invoking this
+   * keeps `listenerCount('end' | 'error')` accurate immediately and
+   * cleans up before `removeAllListeners` runs.
+   *
+   * @internal
+   */
+  private _detachPipeListeners(): void {
+    if (this._pipeWiring) {
+      this._eventEmitter.off('end', this._pipeWiring.endHandler);
+      this._eventEmitter.off('error', this._pipeWiring.errorHandler);
+      this._pipeWiring = null;
+    }
   }
 
   /**
@@ -508,6 +564,8 @@ export class DataStream<T> implements IDataStream<T> {
     if (!this._state.ended) {
       this.end();
     }
+    // FR-004: detach pipe wiring before removeAllListeners (idempotent).
+    this._detachPipeListeners();
     this._eventEmitter.emit('close');
     this._eventEmitter.removeAllListeners();
   }
@@ -537,6 +595,9 @@ export class DataStream<T> implements IDataStream<T> {
       this._drainPromise.reject(new Error('Stream destroyed'));
       this._drainPromise = null;
     }
+
+    // FR-004: detach pipe wiring before removeAllListeners (idempotent).
+    this._detachPipeListeners();
 
     // Emit close and cleanup
     this._eventEmitter.emit('close');

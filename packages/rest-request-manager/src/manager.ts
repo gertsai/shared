@@ -4,7 +4,6 @@ import type { RetryOpts } from '@gertsai/async-utils';
 import { RateLimitedError } from '@gertsai/errors';
 import { httpCaller } from '@gertsai/fetch';
 import type { ResponseLike } from '@gertsai/fetch';
-import type { Logger } from '@gertsai/logger-factory';
 import { CircuitBreaker } from './circuit-breaker.js';
 import { TokenBucketRateLimiter } from './rate-limiter.js';
 import { redact } from './redaction.js';
@@ -12,6 +11,7 @@ import { translateHttpStatus, translateTransportError } from './translation.js';
 import type {
   RestCallOpts,
   RestRequest,
+  RestRequestLogger,
   RestRequestManagerOpts,
   RestRequestManagerStats,
   RestResponse,
@@ -33,7 +33,7 @@ export class RestRequestManager {
   private readonly retryOpts: RetryOpts;
   private readonly rateLimiter: TokenBucketRateLimiter | undefined;
   private readonly breaker: CircuitBreaker;
-  private readonly logger: Logger | undefined;
+  private readonly logger: RestRequestLogger | undefined;
   private totalRequests = 0;
   private totalRetries = 0;
   private rateLimitedRequests = 0;

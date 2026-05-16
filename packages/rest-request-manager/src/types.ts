@@ -1,9 +1,24 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { RetryOpts } from '@gertsai/async-utils';
 import type { FetchSecurityConfig } from '@gertsai/fetch';
-import type { Logger } from '@gertsai/logger-factory';
 
 export type RestMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
+
+/**
+ * Minimum structural shape consumed from `@gertsai/logger-factory.Logger`.
+ *
+ * Inlined locally so the optional `@gertsai/logger-factory` peer remains
+ * truly optional (Wave 12.C-fix-2+3 PRD-034 FR-002 / Wave-13 pattern fix
+ * per EVID-048 H-4). Consumers passing `@gertsai/logger-factory`'s `Logger`
+ * still satisfy this interface structurally — only the methods this
+ * package actually invokes are listed (`debug`, `warn`, `error`; see
+ * `manager.ts`).
+ */
+export interface RestRequestLogger {
+  debug(message: string, context?: Record<string, unknown>): void;
+  warn(message: string, context?: Record<string, unknown>): void;
+  error(message: string, context?: Record<string, unknown>): void;
+}
 
 export interface RestRequest<TBody = unknown> {
   readonly url: string;
@@ -48,7 +63,7 @@ export interface RestRequestManagerOpts {
   readonly retry?: RetryOpts;
   readonly rateLimit?: RateLimitConfig;
   readonly circuitBreaker?: CircuitBreakerConfig;
-  readonly logger?: Logger;
+  readonly logger?: RestRequestLogger;
   readonly redactRequestKeys?: readonly string[];
   readonly redactResponseKeys?: readonly string[];
   /**

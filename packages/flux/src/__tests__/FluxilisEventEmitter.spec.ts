@@ -1096,4 +1096,58 @@ describe('FluxilisEventEmitter', () => {
       expect(calls).toEqual([1, 1, 2]);
     });
   });
+
+  // FR-005 — once-cleanup must use ListenerInfo reference identity
+  describe('FR-005 — once-cleanup by reference identity', () => {
+    it('does not clobber an on()-registration that shares the function with once()', () => {
+      const fn = vi.fn();
+      emitter.once('x', fn);
+      emitter.on('x', fn);
+      expect(emitter.listenerCount('x')).toBe(2);
+
+      emitter.emit('x');
+      // Both fired this turn (once + on).
+      expect(fn).toHaveBeenCalledTimes(2);
+
+      // Persistent on() must survive once-cleanup.
+      expect(emitter.listenerCount('x')).toBe(1);
+
+      emitter.emit('x');
+      expect(fn).toHaveBeenCalledTimes(3);
+      expect(emitter.listenerCount('x')).toBe(1);
+    });
+
+    it('does not clobber on()-registration regardless of registration order', () => {
+      const fn = vi.fn();
+      emitter.on('x', fn);
+      emitter.once('x', fn);
+      expect(emitter.listenerCount('x')).toBe(2);
+
+      emitter.emit('x');
+      expect(fn).toHaveBeenCalledTimes(2);
+      expect(emitter.listenerCount('x')).toBe(1);
+    });
+
+    it('fires both once-listeners and removes both when same fn is registered twice via once()', () => {
+      const fn = vi.fn();
+      emitter.once('x', fn);
+      emitter.once('x', fn);
+      expect(emitter.listenerCount('x')).toBe(2);
+
+      emitter.emit('x');
+      expect(fn).toHaveBeenCalledTimes(2);
+      expect(emitter.listenerCount('x')).toBe(0);
+    });
+
+    it('also applies in emitAsync()', async () => {
+      const fn = vi.fn();
+      emitter.once('x', fn);
+      emitter.on('x', fn);
+
+      await emitter.emitAsync('x');
+      expect(fn).toHaveBeenCalledTimes(2);
+      // Persistent on() must survive once-cleanup in the async path.
+      expect(emitter.listenerCount('x')).toBe(1);
+    });
+  });
 });
