@@ -19,6 +19,9 @@ import {
   LLMContextLengthExceededError,
   type LLMCapabilities,
 } from '../base';
+import { validateBaseUrl } from '../base-url-validator';
+
+const GEMINI_DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 import type {
   LLMConfig,
   LLMMessage,
@@ -128,11 +131,14 @@ type GeminiGenerateResponse = ValidatedGeminiResponse;
 export class GeminiProvider extends BaseLLM {
   constructor(config: GeminiConfig, eventBus?: EventBus) {
     const resolvedApiKey = config.apiKey ?? process.env.GEMINI_API_KEY;
+    // Validate baseUrl BEFORE super() (Wave 12.D-fix per EVID-051 S-3 / CWE-918).
+    const validatedBaseUrl = validateBaseUrl(config.baseUrl, GEMINI_DEFAULT_BASE_URL, 'Gemini');
     super(
       {
         ...config,
         provider: 'gemini',
         ...(resolvedApiKey !== undefined && { apiKey: resolvedApiKey }),
+        baseUrl: validatedBaseUrl,
       },
       eventBus
     );
@@ -372,7 +378,7 @@ export class GeminiProvider extends BaseLLM {
   }
 
   private getBaseUrl(): string {
-    return (this.baseUrl ?? 'https://generativelanguage.googleapis.com/v1beta').replace(/\/$/, '');
+    return (this.baseUrl ?? GEMINI_DEFAULT_BASE_URL).replace(/\/$/, '');
   }
 
   private extractText(response: GeminiGenerateResponse): string {

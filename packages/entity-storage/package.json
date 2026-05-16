@@ -30,6 +30,9 @@
     "access": "public",
     "registry": "https://npm.pkg.github.com"
   },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "tsup",
     "clean": "rm -rf dist tsconfig.tsbuildinfo *.tsbuildinfo",

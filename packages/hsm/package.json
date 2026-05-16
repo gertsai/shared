@@ -64,5 +64,8 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://npm.pkg.github.com"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

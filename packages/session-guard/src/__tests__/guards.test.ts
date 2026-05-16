@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, expect, it } from 'vitest';
 
-import { DataAccessUuidMissingError } from '../errors.js';
 import {
   hasOperatorType,
   isAuthenticated,
@@ -103,16 +102,19 @@ describe('isImpersonating', () => {
     expect(isImpersonating(session)).toBe(true);
   });
 
-  it('throws DataAccessUuidMissingError on empty operatorUuid (ADR-007 I-19)', () => {
+  it('returns false on empty operatorUuid (PRD-036 FR-018 — fail-closed predicate)', () => {
     const session = makeSession({ operatorUuid: '' });
-    expect(() => isImpersonating(session)).toThrow(DataAccessUuidMissingError);
+    expect(isImpersonating(session)).toBe(false);
   });
 
-  it('throws DataAccessUuidMissingError on empty-string dataAccessUuid override (ADR-007 I-19)', () => {
-    // Bypass Session's getter fallback by hitting the empty-string path
-    // through $setDataAccessUuid (set then verify).
+  it('returns false on empty-string dataAccessUuid override (PRD-036 FR-018)', () => {
     const session = makeSession({ operatorUuid: 'op-1' });
     session.$setDataAccessUuid('');
-    expect(() => isImpersonating(session)).toThrow(DataAccessUuidMissingError);
+    expect(isImpersonating(session)).toBe(false);
+  });
+
+  it('returns false on undefined / null session (CWE-1188 fail-closed)', () => {
+    expect(isImpersonating(undefined)).toBe(false);
+    expect(isImpersonating(null)).toBe(false);
   });
 });

@@ -16,6 +16,9 @@ import {
   LLMContextLengthExceededError,
   type LLMCapabilities,
 } from '../base';
+import { validateBaseUrl } from '../base-url-validator';
+
+const OPENAI_DEFAULT_BASE_URL = 'https://api.openai.com/v1';
 import type {
   LLMConfig,
   LLMMessage,
@@ -138,11 +141,15 @@ export class OpenAIProvider extends BaseLLM {
 
   constructor(config: OpenAIConfig, eventBus?: EventBus) {
     const resolvedApiKey = config.apiKey ?? process.env.OPENAI_API_KEY;
+    // Validate baseUrl BEFORE super() so we throw early on attacker-supplied
+    // URLs (Wave 12.D-fix per EVID-051 S-3 / CWE-918).
+    const validatedBaseUrl = validateBaseUrl(config.baseUrl, OPENAI_DEFAULT_BASE_URL, 'OpenAI');
     super(
       {
         ...config,
         provider: 'openai',
         ...(resolvedApiKey !== undefined && { apiKey: resolvedApiKey }),
+        baseUrl: validatedBaseUrl,
       },
       eventBus,
     );
@@ -331,7 +338,7 @@ export class OpenAIProvider extends BaseLLM {
   // ==================== Private Methods ====================
 
   private getBaseUrl(): string {
-    return this.baseUrl ?? 'https://api.openai.com/v1';
+    return this.baseUrl ?? OPENAI_DEFAULT_BASE_URL;
   }
 
   private getHeaders(): Record<string, string> {

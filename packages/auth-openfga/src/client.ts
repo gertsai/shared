@@ -263,8 +263,19 @@ export class GertsFgaClient {
       return this.resolvedConfig!;
     }
 
+    // Wave 12.D-fix (PRD-036 FR-022): on failure, clear `initPromise`
+    // so the next caller can retry from a clean slate. Without this,
+    // the rejected promise sticks forever — every subsequent
+    // `initialize()` awaits it and re-throws the same error, masking
+    // transient failures (network blip, OpenFGA cold start) as
+    // permanent ones.
     this.initPromise = this.doInitialize();
-    await this.initPromise;
+    try {
+      await this.initPromise;
+    } catch (err) {
+      this.initPromise = null;
+      throw err;
+    }
     return this.resolvedConfig!;
   }
 

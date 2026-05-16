@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { SlidingWindowStrategy } from './SlidingWindowStrategy';
 import { LimiterStrategy } from '../utils/types';
-import type { RLRRedis } from '../utils/types';
 import type { StorageAdapter } from '../adapters/StorageAdapter';
 
 describe('SlidingWindowStrategy logic', () => {
@@ -13,15 +12,9 @@ describe('SlidingWindowStrategy logic', () => {
       incrementSW: vi.fn().mockResolvedValue(fakeResult),
     } as unknown as StorageAdapter;
 
-    const mockStore = {
-      defineCommand: vi.fn(),
-      incrementSW: vi.fn().mockResolvedValue(fakeResult),
-    } as unknown as RLRRedis;
-
     const strategy = new SlidingWindowStrategy(mockAdapter);
 
     const out = await strategy.execute({
-      store: mockStore,
       key: 'k',
       limit: 3,
       timeFrame: 1000,

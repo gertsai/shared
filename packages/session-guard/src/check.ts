@@ -5,6 +5,7 @@ import type { OperatorType } from '@gertsai/session';
 
 import {
   AuthenticationRequiredError,
+  DataAccessUuidMissingError,
   OperatorTypeMismatchError,
   TenantScopeViolationError,
 } from './errors.js';
@@ -88,4 +89,52 @@ export function checkSessionInTenant(
     };
   }
   return { ok: true };
+}
+
+/**
+ * Result-shape variant of `assertImpersonating` (assertions.ts). Returns
+ * a {@link CheckResult} carrying the boolean `impersonating` outcome on
+ * success or a structured error on failure.
+ *
+ * Wave 12.D-fix per PRD-036 FR-018: structured variant of the
+ * {@link isImpersonating} predicate. Distinguishes the three states the
+ * predicate flattens to `false`:
+ *
+ *   - Session missing / destroyed → `AuthenticationRequiredError`
+ *   - UUIDs missing / empty → `DataAccessUuidMissingError`
+ *   - UUIDs equal → `ok: true, impersonating: false`
+ *
+ * Use this when the caller needs to discriminate between "not
+ * impersonating" and "cannot tell" without try/catch noise.
+ */
+export function checkImpersonating(
+  session: Session | undefined | null,
+): CheckResult<{ impersonating: boolean }> {
+  if (!isAuthenticated(session)) {
+    return {
+      ok: false,
+      error: new AuthenticationRequiredError({
+        message: 'Session required for this operation',
+        details: { reason: 'session-required' },
+      }),
+    };
+  }
+  const operatorUuid = session.operatorUuid;
+  const dataAccessUuid = session.dataAccessUuid;
+  if (
+    operatorUuid === undefined ||
+    operatorUuid === '' ||
+    dataAccessUuid === undefined ||
+    dataAccessUuid === ''
+  ) {
+    return {
+      ok: false,
+      error: new DataAccessUuidMissingError({
+        message:
+          'Cannot determine impersonation: session operatorUuid or dataAccessUuid is empty / undefined',
+        details: { reason: 'data-access-uuid-missing' },
+      }),
+    };
+  }
+  return { ok: true, impersonating: operatorUuid !== dataAccessUuid };
 }

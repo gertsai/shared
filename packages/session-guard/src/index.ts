@@ -17,6 +17,7 @@ export {
 export {
   assertAuthenticated,
   assertHasDataAccessUuid,
+  assertImpersonating,
   assertNotDestroyed,
   assertOperatorType,
   assertSessionInTenant,
@@ -24,6 +25,7 @@ export {
 
 export {
   checkAuthenticated,
+  checkImpersonating,
   checkOperatorType,
   checkSessionInTenant,
 } from './check.js';

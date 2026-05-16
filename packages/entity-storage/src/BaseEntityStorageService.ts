@@ -271,6 +271,11 @@ export abstract class BaseEntityStorageService<
     });
     const data = stamped as unknown as Meta['write'];
     await this._provider.set(this._path, id, data);
+    // Wave 12.D-fix FR-021 / EVID-051 L-5 — re-check after await: if
+    // `$destroy` ran while the provider write was in-flight, suppress
+    // the emit (listeners have been removed, but tests + auditors should
+    // not see an event from a destroyed service).
+    if (this._destroyed) return { id };
     const payload: StorageEventPayload<Meta> = {
       event: 'entity-created',
       path: this._path,
@@ -325,6 +330,8 @@ export abstract class BaseEntityStorageService<
     );
     const data = stamped as unknown as Partial<Meta['write']>;
     await this._provider.update(this._path, uid, data);
+    // Wave 12.D-fix FR-021 — see note in `set()`.
+    if (this._destroyed) return;
     const payload: StorageEventPayload<Meta> = {
       event: 'entity-updated',
       path: this._path,
@@ -364,6 +371,8 @@ export abstract class BaseEntityStorageService<
       Meta['write']
     >;
     await this._provider.update(this._path, uid, data);
+    // Wave 12.D-fix FR-021 — see note in `set()`.
+    if (this._destroyed) return;
     const payload: StorageEventPayload<Meta> = {
       event: 'entity-deleted',
       path: this._path,
@@ -400,6 +409,8 @@ export abstract class BaseEntityStorageService<
     }
     this._logger.debug('destroy', { path: this._path, id: uid });
     await this._provider.delete(this._path, uid);
+    // Wave 12.D-fix FR-021 — see note in `set()`.
+    if (this._destroyed) return;
     const payload: StorageEventPayload<Meta> = {
       event: 'entity-destroyed',
       path: this._path,
@@ -435,6 +446,8 @@ export abstract class BaseEntityStorageService<
       Meta['write']
     >;
     await this._provider.update(this._path, uid, data);
+    // Wave 12.D-fix FR-021 — see note in `set()`.
+    if (this._destroyed) return;
     const payload: StorageEventPayload<Meta> = {
       event: 'entity-restored',
       path: this._path,
@@ -467,6 +480,19 @@ export abstract class BaseEntityStorageService<
    * a `runInTransaction`** to amortise connection acquisition overhead,
    * OR sidestep it by calling `set` / `update` directly when the caller
    * already knows the row's existence status.
+   *
+   * **TOCTOU caveat (Wave 12.D-fix FR-021 / EVID-051 L-5):** the 2-RTT
+   * fallback (`get → set/update`) races a concurrent insert / update
+   * between the read and the write — the same row may be inserted
+   * twice (provider rejects on the second `set` with a unique-violation
+   * error) OR updated twice (lost-update). Mitigations:
+   *   - prefer the native 1-RTT fast path (set
+   *     `capabilities.upsert = { supported: true, preservesCreatorAudit: true }`
+   *     on the provider)
+   *   - wrap callers in `runTransaction({ ... })` when the provider
+   *     advertises `capabilities.transactions === true`
+   * A fully-transactional fallback is tracked separately (Wave 14 / D2
+   * scope per PRD-036).
    */
   async upsert(
     entity: UpsertEntityInput<Meta>,
@@ -508,10 +534,16 @@ export abstract class BaseEntityStorageService<
       // create-vs-update discrimination should subscribe via
       // `provider.onDocumentSnapshot` (where supported) or use the slow
       // path by setting `capabilities.upsert = false` on their provider.
-      return this._provider.upsertDoc(this._path, _uid, stamped);
+      const result = await this._provider.upsertDoc(this._path, _uid, stamped);
+      // Wave 12.D-fix FR-021 — re-check after await; the fast path has no
+      // emit but the contract still says "destroyed services don't act".
+      if (this._destroyed) return { id: _uid };
+      return result;
     }
     // Backwards-compat 2-RTT fallback (Sprint 3.5 path).
     const existing = await this.get(entity._uid);
+    // Wave 12.D-fix FR-021 — re-check after await between the two RTTs.
+    if (this._destroyed) return { id: entity._uid };
     if (existing) {
       const { _uid, ...rest } = entity as { _uid: string } & Record<
         string,

@@ -50,7 +50,7 @@ export async function retry<T>(action: () => Promise<T>, opts: RetryOpts = {}): 
 
   let lastError: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    if (signal?.aborted) throw new Error('Retry aborted');
+    if (signal?.aborted) throw signal.reason ?? new Error('Retry aborted');
     try {
       return await action();
     } catch (e) {
@@ -61,7 +61,12 @@ export async function retry<T>(action: () => Promise<T>, opts: RetryOpts = {}): 
       else if (jitter === 'equal') delayMs = delayMs / 2 + Math.random() * (delayMs / 2);
       // 'none' — no jitter applied.
       opts.onRetry?.(attempt, e, delayMs);
-      await sleep(delayMs);
+      // Wave 12.D-fix FR-017: propagate signal into sleep AND re-check
+      // after — signal-aborted mid-sleep must reject promptly rather than
+      // wait the full backoff window.
+      if (signal?.aborted) throw signal.reason ?? new Error('Retry aborted');
+      await sleep(delayMs, signal);
+      if (signal?.aborted) throw signal.reason ?? new Error('Retry aborted');
     }
   }
   throw lastError;

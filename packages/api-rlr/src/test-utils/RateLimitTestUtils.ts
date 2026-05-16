@@ -4,7 +4,12 @@
  */
 
 import type { RateLimitRequest } from '../client/rlr';
-import type { ClientRateLimitInfo, GatewayResponse, IncomingRequest } from '../utils/types';
+import type {
+  ClientRateLimitInfo,
+  GatewayResponse,
+  IncomingRequest,
+  NextFunction,
+} from '../utils/types';
 
 export interface SimulationResult {
   key: string;
@@ -249,12 +254,16 @@ export class RateLimitTestUtils {
    * Create a test scenario for middleware
    */
   static async testMiddleware(
-    middleware: (req: IncomingRequest, res: GatewayResponse, next?: any) => Promise<void>,
+    middleware: (
+      req: IncomingRequest,
+      res: GatewayResponse,
+      next?: NextFunction,
+    ) => Promise<void>,
     request: IncomingRequest = RateLimitTestUtils.createMockRequest(),
   ): Promise<{
     request: IncomingRequest;
     response: GatewayResponse & { headers: MockHeaders };
-    next: any;
+    next: ReturnType<typeof RateLimitTestUtils.createMockNext>;
     error?: Error;
   }> {
     const response = RateLimitTestUtils.createMockResponse();

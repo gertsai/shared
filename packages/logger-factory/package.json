@@ -97,5 +97,8 @@
     "gerts",
     "gertsai"
   ],
+  "engines": {
+    "node": ">=22"
+  },
   "author": "gerts.ai"
 }

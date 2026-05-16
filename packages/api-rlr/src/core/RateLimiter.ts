@@ -4,7 +4,7 @@
  */
 
 import type { StorageAdapter } from '../adapters/StorageAdapter';
-import { RequestContext } from '../context/RequestContext';
+import { RlrRequestContext } from '../context/RequestContext';
 import { KeyGenerator } from '../services/KeyGenerator';
 import { PathNormalizer } from '../services/PathNormalizer';
 import { RouteResolver } from '../services/RouteResolver';
@@ -16,7 +16,7 @@ import { isWhitelisted } from '../utils/security';
 export interface RateLimitDecision {
   allowed: boolean;
   info: RateLimitInfo;
-  context: RequestContext;
+  context: RlrRequestContext;
   strategy: LimiterStrategy;
 }
 
@@ -52,7 +52,7 @@ export class RateLimiter {
    * Check if a request is within rate limits
    */
   async checkLimit(request: IncomingRequest): Promise<RateLimitDecision> {
-    const context = new RequestContext(request);
+    const context = new RlrRequestContext(request);
 
     // Use Redis/Valkey time if configured, otherwise use local time
     const now = await this.getCurrentTime();
@@ -95,7 +95,6 @@ export class RateLimiter {
     // Execute strategy
     const strategy = this.strategyFactory.get(limits.strategy);
     const result = await strategy.execute({
-      store: null as any, // Not used with new adapters
       key,
       limit: limits.limit,
       timeFrame: limits.timeFrame,
@@ -129,7 +128,7 @@ export class RateLimiter {
   /**
    * Resolve the subject for rate limiting (IP, API key, user ID, etc.)
    */
-  private resolveSubject(request: IncomingRequest, context: RequestContext): string {
+  private resolveSubject(request: IncomingRequest, context: RlrRequestContext): string {
     // Use custom resolver if provided
     if (typeof this.config.bucketKeyResolver === 'function') {
       const customSubject = this.config.bucketKeyResolver(request);
@@ -251,7 +250,7 @@ export class RateLimiter {
    * Create an allowed decision
    */
   private createAllowedDecision(
-    context: RequestContext,
+    context: RlrRequestContext,
     limit: number,
     timeFrame: number,
   ): RateLimitDecision {

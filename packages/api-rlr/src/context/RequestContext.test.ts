@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { RequestContext } from './RequestContext';
+import { RlrRequestContext } from './RequestContext';
 import type { IncomingRequest } from '../utils/types';
 import { createMockRequest } from '../utils/test-types';
 
 describe('RequestContext', () => {
   let mockRequest: IncomingRequest;
-  let context: RequestContext;
+  let context: RlrRequestContext;
 
   beforeEach(() => {
     mockRequest = createMockRequest({
@@ -17,7 +17,7 @@ describe('RequestContext', () => {
       },
     });
 
-    context = new RequestContext(mockRequest);
+    context = new RlrRequestContext(mockRequest);
   });
 
   describe('constructor', () => {
@@ -31,7 +31,7 @@ describe('RequestContext', () => {
 
     it('handles missing request properties', () => {
       const minimalRequest = createMockRequest({});
-      const minimalContext = new RequestContext(minimalRequest);
+      const minimalContext = new RlrRequestContext(minimalRequest);
 
       expect(minimalContext.get('method')).toBe('GET');
       expect(minimalContext.get('path')).toBe('');
@@ -75,7 +75,7 @@ describe('RequestContext', () => {
   describe('getDuration', () => {
     it('calculates duration from start time', async () => {
       const startTime = Date.now() - 100;
-      const timedContext = new RequestContext(mockRequest, startTime);
+      const timedContext = new RlrRequestContext(mockRequest, startTime);
 
       const duration = timedContext.getDuration();
       expect(duration).toBeGreaterThanOrEqual(100);

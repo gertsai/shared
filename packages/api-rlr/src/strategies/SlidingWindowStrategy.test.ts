@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SlidingWindowStrategy } from './SlidingWindowStrategy';
-import type { RLRRedis } from '../utils/types';
 import type { StorageAdapter } from '../adapters/StorageAdapter';
 
 describe('SlidingWindowStrategy (negative)', () => {
@@ -10,11 +9,9 @@ describe('SlidingWindowStrategy (negative)', () => {
     } as unknown as StorageAdapter;
 
     const strategy = new SlidingWindowStrategy(mockAdapter);
-    const mockStore = { defineCommand: vi.fn() } as unknown as RLRRedis;
 
     await expect(
       strategy.execute({
-        store: mockStore,
         key: 'k',
         limit: 10,
         timeFrame: 1000,

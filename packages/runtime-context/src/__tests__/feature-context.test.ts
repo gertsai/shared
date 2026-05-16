@@ -33,6 +33,32 @@ describe('DefaultFeatureContext', () => {
     expect(ctx.isEnabled('any')).toBe(false);
   });
 
+  it('flagProvider exception → false AND logs warn when logger configured (FR-020)', () => {
+    const warn = vi.fn();
+    const ctx = new DefaultFeatureContext({
+      flagProvider: () => {
+        throw new Error('boom');
+      },
+      logger: { warn },
+    });
+    expect(ctx.isEnabled('flag-x')).toBe(false);
+    expect(warn).toHaveBeenCalledTimes(1);
+    const [msg, context] = warn.mock.calls[0] ?? [];
+    expect(String(msg)).toContain('flag-x');
+    expect(String(msg)).toContain('flag provider threw');
+    expect(context).toMatchObject({ error: 'boom' });
+  });
+
+  it('flagProvider exception → false silently when no logger (back-compat)', () => {
+    const ctx = new DefaultFeatureContext({
+      flagProvider: () => {
+        throw new Error('silent');
+      },
+    });
+    expect(() => ctx.isEnabled('any')).not.toThrow();
+    expect(ctx.isEnabled('any')).toBe(false);
+  });
+
   it('flagProvider returning non-true treated as false', () => {
     const ctx = new DefaultFeatureContext({
       flagProvider: () => false as unknown as boolean,

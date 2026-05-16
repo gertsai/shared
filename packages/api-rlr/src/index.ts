@@ -52,8 +52,15 @@ export { RateLimitDebugger, rlrDebugger } from './debug/RateLimitDebugger';
 export { RateLimitHealthCheck } from './health/RateLimitHealthCheck';
 export type { HealthStatus } from './health/RateLimitHealthCheck';
 
-// Export request context
-export { RequestContext } from './context/RequestContext';
+// Export request context (Wave 12.D-fix: renamed to avoid collision with
+// @gertsai/runtime-context.RequestContext per EVID-051 A-1 / FR-002)
+export { RlrRequestContext } from './context/RequestContext';
+/**
+ * @deprecated Use {@link RlrRequestContext} to avoid collision with
+ * `@gertsai/runtime-context.RequestContext` (Wave 12.D-fix per EVID-051 A-1).
+ * This alias will be removed in v1.0.0.
+ */
+export { RlrRequestContext as RequestContext } from './context/RequestContext';
 export type { RequestContextData } from './context/RequestContext';
 
 // Export test utilities

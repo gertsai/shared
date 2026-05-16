@@ -363,7 +363,6 @@ export class RateLimitRequest extends EventEmitter implements Store {
       const burstForGCRA =
         (customRoute && customRoute.burst != null ? customRoute.burst : this.config.burst) ?? 3;
       const result = await strategyImpl.execute({
-        store: this.store,
         key,
         limit,
         timeFrame,

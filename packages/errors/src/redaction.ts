@@ -23,6 +23,30 @@ export const REDACTION_KEYS: readonly string[] = [
   'privateKey',
   'connection_string',
   'connectionString',
+  // Wave 12.D-fix (PRD-036 FR-007): expanded credential surface.
+  // Match is via `key.toLowerCase()` against this set, so the lowercase
+  // form (`apitoken`) covers camelCase keys (`apiToken`) but not
+  // snake_case (`api_token` keeps its underscore after lowercase). Add
+  // BOTH spellings explicitly so snake_case + camelCase both fail-closed.
+  'apitoken',
+  'api_token',
+  'accesstoken',
+  'access_token',
+  'refreshtoken',
+  'refresh_token',
+  'csrftoken',
+  'csrf_token',
+  'bearertoken',
+  'bearer_token',
+  'idtoken',
+  'id_token',
+  'sessionid',
+  'session_id',
+  'clientsecret',
+  'client_secret',
+  'x-api-key',
+  'bearer',
+  'jwt',
 ];
 
 const REDACTION_SET = new Set(REDACTION_KEYS.map((k) => k.toLowerCase()));
@@ -66,12 +90,33 @@ const MAX_BREADTH = 1000;
  */
 export function redactDetails(
   details: Readonly<Record<string, unknown>>,
+  customKeys?: ReadonlySet<string> | readonly string[] | null,
 ): Record<string, unknown> {
   const seen = new WeakSet<object>();
-  return _redactValue(details, 0, seen) as Record<string, unknown>;
+  // Wave 12.D-fix (PRD-036 FR-006): optional `customKeys` union with the
+  // default `REDACTION_SET`. Accepts either a `ReadonlySet<string>`
+  // (already lowercased — fast path used by `@gertsai/logger-factory`)
+  // or a `readonly string[]` (lowercased on entry). `null` / `undefined`
+  // preserve the historical default-only behaviour.
+  let activeSet: ReadonlySet<string> = REDACTION_SET;
+  if (customKeys) {
+    const merged = new Set(REDACTION_SET);
+    if (customKeys instanceof Set) {
+      for (const k of customKeys) merged.add(k.toLowerCase());
+    } else {
+      for (const k of customKeys) merged.add(k.toLowerCase());
+    }
+    activeSet = merged;
+  }
+  return _redactValue(details, 0, seen, activeSet) as Record<string, unknown>;
 }
 
-function _redactValue(value: unknown, depth: number, seen: WeakSet<object>): unknown {
+function _redactValue(
+  value: unknown,
+  depth: number,
+  seen: WeakSet<object>,
+  redactionSet: ReadonlySet<string>,
+): unknown {
   if (depth > MAX_DEPTH) {
     return '[REDACTED:depth]';
   }
@@ -86,7 +131,7 @@ function _redactValue(value: unknown, depth: number, seen: WeakSet<object>): unk
   if (Array.isArray(value)) {
     const truncated = value.length > MAX_BREADTH;
     const slice = value.slice(0, MAX_BREADTH);
-    const out: unknown[] = slice.map((item) => _redactValue(item, depth + 1, seen));
+    const out: unknown[] = slice.map((item) => _redactValue(item, depth + 1, seen, redactionSet));
     if (truncated) {
       out.push(`[REDACTED:breadth>${MAX_BREADTH}]`);
     }
@@ -105,10 +150,10 @@ function _redactValue(value: unknown, depth: number, seen: WeakSet<object>): unk
   const truncated = entries.length > MAX_BREADTH;
   const result: Record<string, unknown> = {};
   for (const [key, v] of entries.slice(0, MAX_BREADTH)) {
-    if (REDACTION_SET.has(key.toLowerCase())) {
+    if (redactionSet.has(key.toLowerCase())) {
       result[key] = '[REDACTED]';
     } else {
-      result[key] = _redactValue(v, depth + 1, seen);
+      result[key] = _redactValue(v, depth + 1, seen, redactionSet);
     }
   }
   if (truncated) {
