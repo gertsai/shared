@@ -15,6 +15,7 @@
  */
 import { Entity } from './Entity';
 import { deepEqual } from './internal/deep-equal';
+import { DANGEROUS_KEYS } from './internal/dangerous-keys';
 import type {
   EntityWithMetadataJSON,
   EntityWithMetadataOpts,
@@ -112,12 +113,21 @@ export abstract class EntityWithMetadata<
     if (this._destroyed)
       throw new Error('Cannot $setMetadata on destroyed Entity');
     if (!check) {
-      Object.assign(this._metadata, partial);
+      // CWE-1321 protection per PRD-033 FR-002: filtered loop replaces
+      // `Object.assign` (which would propagate `__proto__` setter).
+      for (const key of Object.keys(partial)) {
+        if (DANGEROUS_KEYS.has(key)) continue;
+        (this._metadata as Record<string, unknown>)[key] = (
+          partial as Record<string, unknown>
+        )[key];
+      }
       this.emit('metadata-changed', { partial, metadata: this._metadata });
       return true;
     }
     let changed = false;
     for (const key in partial) {
+      // CWE-1321 protection per PRD-033 FR-002.
+      if (DANGEROUS_KEYS.has(key)) continue;
       if (!Object.prototype.hasOwnProperty.call(partial, key)) continue;
       const next = (partial as Record<string, unknown>)[key];
       const prev = (this._metadata as Record<string, unknown>)[key];

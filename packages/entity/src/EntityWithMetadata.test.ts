@@ -134,6 +134,24 @@ describe('EntityWithMetadata', () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
+  // ---------------- PRD-033 FR-002: $setMetadata prototype-pollution guard ----------------
+
+  it('$setMetadata ignores __proto__ key and does NOT pollute metadata prototype', () => {
+    const o = new Order();
+    o.$setMetadata({ __proto__: { admin: true } } as never);
+    const proto = Object.getPrototypeOf(o.$metadata) as object | null;
+    expect(proto).toBe(Object.prototype);
+    expect((o.$metadata as Record<string, unknown>).admin).toBeUndefined();
+  });
+
+  it('$setMetadata(partial, false) also filters dangerous keys', () => {
+    const o = new Order();
+    o.$setMetadata({ __proto__: { admin: true } } as never, false);
+    const proto = Object.getPrototypeOf(o.$metadata) as object | null;
+    expect(proto).toBe(Object.prototype);
+    expect((o.$metadata as Record<string, unknown>).admin).toBeUndefined();
+  });
+
   it('$setMetadata throws after $destroy', () => {
     const o = new Order();
     o.$destroy();

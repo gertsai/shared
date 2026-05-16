@@ -13,6 +13,7 @@ import { randomUUID } from 'crypto';
 import { Model } from './Model';
 import { plainReactiveAdapter } from './adapters/plain';
 import { deepEqual } from './internal/deep-equal';
+import { DANGEROUS_KEYS } from './internal/dangerous-keys';
 import type {
   EntityJSON,
   EntityOpts,
@@ -100,12 +101,23 @@ export abstract class Entity<Data extends object> extends Model {
   $patch(partial: Partial<Data>, check = true): boolean {
     if (this._destroyed) throw new Error('Cannot $patch destroyed Entity');
     if (!check) {
-      Object.assign(this._data, partial);
+      // CWE-1321 protection per PRD-033 FR-002: `Object.assign` propagates
+      // the `__proto__` setter on its receiver; we MUST iterate explicitly
+      // and skip dangerous keys.
+      for (const key of Object.keys(partial)) {
+        if (DANGEROUS_KEYS.has(key)) continue;
+        (this._data as Record<string, unknown>)[key] = (
+          partial as Record<string, unknown>
+        )[key];
+      }
       this.emit('patched', { partial, data: this._data });
       return true;
     }
     let changed = false;
     for (const key in partial) {
+      // CWE-1321 protection per PRD-033 FR-002 — reject prototype-pollution
+      // vectors before the hasOwnProperty + write step.
+      if (DANGEROUS_KEYS.has(key)) continue;
       if (!Object.prototype.hasOwnProperty.call(partial, key)) continue;
       const next = (partial as Record<string, unknown>)[key];
       const prev = (this._data as Record<string, unknown>)[key];
