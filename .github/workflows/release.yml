@@ -17,6 +17,13 @@ on:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
+# Opt into Node.js 24 for JavaScript actions (actions/checkout, actions/
+# setup-node, pnpm/action-setup) so they don't emit the Node 20 deprecation
+# warning. GitHub forces Node 24 by default starting 2026-06-02 and removes
+# Node 20 entirely on 2026-09-16 — this env makes us future-proof.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 permissions:
   contents: write
   pull-requests: write
