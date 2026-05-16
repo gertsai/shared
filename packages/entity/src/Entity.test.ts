@@ -161,6 +161,37 @@ describe('Entity', () => {
 
   // ---------------- F-5: markRaw(this) ----------------
 
+  // ---------------- PRD-033 FR-002: prototype-pollution protection ----------------
+
+  it('$patch ignores __proto__ key and does NOT pollute the data prototype', () => {
+    const e = new TestEntity({ data: { name: 'A' } });
+    e.$patch({ __proto__: { admin: true } } as never);
+    // The internal data object's prototype must remain Object.prototype.
+    // We probe via getPrototypeOf — guards against Object.assign-style attacks.
+    const proto = Object.getPrototypeOf(e.$data) as object | null;
+    expect(proto).toBe(Object.prototype);
+    expect((e.$data as Record<string, unknown>).admin).toBeUndefined();
+    // Untouched values must remain readable.
+    expect(e.$data.name).toBe('A');
+  });
+
+  it('$patch ignores constructor key and does NOT mutate the entity constructor', () => {
+    const e = new TestEntity({ data: { name: 'A' } });
+    e.$patch({ constructor: 'pwned' } as never);
+    // Class identity preserved.
+    expect(e.constructor).toBe(TestEntity);
+    // The dangerous key is NOT written into _data either.
+    expect((e.$data as Record<string, unknown>).constructor).not.toBe('pwned');
+  });
+
+  it('$patch(partial, false) also filters dangerous keys (check=false branch)', () => {
+    const e = new TestEntity({ data: { name: 'A' } });
+    e.$patch({ __proto__: { admin: true } } as never, false);
+    const proto = Object.getPrototypeOf(e.$data) as object | null;
+    expect(proto).toBe(Object.prototype);
+    expect((e.$data as Record<string, unknown>).admin).toBeUndefined();
+  });
+
   it('calls reactive adapter markRaw(this) during construction', () => {
     const markRawSpy = vi.fn(<T>(v: T): T => v);
     const adapter: ReactiveAdapter = {

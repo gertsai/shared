@@ -36,6 +36,17 @@ describe('vueReactiveAdapter', () => {
     }
   });
 
+  // PRD-033 FR-001: adapter is inlined in @gertsai/entity (no longer
+  // re-exported from @gertsai/entity-vue), so the public shape must remain
+  // the same `ReactiveAdapter` contract.
+  it('exposes a ReactiveAdapter shape after inlining (reactive/markRaw/isReactive)', async () => {
+    vi.resetModules();
+    const { vueReactiveAdapter } = await import('./vue');
+    expect(typeof vueReactiveAdapter.reactive).toBe('function');
+    expect(typeof vueReactiveAdapter.markRaw).toBe('function');
+    expect(typeof vueReactiveAdapter.isReactive).toBe('function');
+  });
+
   it('delegates to @vue/runtime-core when installed (shallowReactive + markRaw + isReactive)', async () => {
     // Sanity: Vue is in devDependencies so import resolves.
     const req = createRequire(import.meta.url);

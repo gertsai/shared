@@ -572,9 +572,6 @@ importers:
 
   packages/entity:
     dependencies:
-      '@gertsai/entity-vue':
-        specifier: workspace:^
-        version: link:../entity-vue
       '@gertsai/session':
         specifier: workspace:*
         version: link:../session

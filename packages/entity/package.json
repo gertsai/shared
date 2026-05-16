@@ -48,24 +48,23 @@
     "registry": "https://npm.pkg.github.com"
   },
   "scripts": {
-    "build": "tsup && node scripts/emit-vue-shim-dts.mjs",
+    "build": "tsup",
     "clean": "rm -rf dist tsconfig.tsbuildinfo *.tsbuildinfo",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings 0"
   },
+  "engines": {
+    "node": ">=22"
+  },
   "dependencies": {
     "@gertsai/session": "workspace:*"
   },
   "peerDependencies": {
-    "@gertsai/entity-vue": "workspace:^",
     "@vue/runtime-core": "^3.0.0"
   },
   "peerDependenciesMeta": {
-    "@gertsai/entity-vue": {
-      "optional": true
-    },
     "@vue/runtime-core": {
       "optional": true
     }

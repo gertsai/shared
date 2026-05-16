@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// Sprint 3.8 (ADR-008 Decision B + I-3 + W-3-8-26): canonical home of
-// `vueReactiveAdapter` moved to standalone `@gertsai/entity-vue` package.
-// This file is a backward-compat re-export shim.
+// Wave 12.C-fix-1 (PRD-033 FR-001): `vueReactiveAdapter` is now inlined in
+// `@gertsai/entity` (see `./adapters/vue.ts`). The previous indirection
+// through `@gertsai/entity-vue` is dissolved to break the
+// `entity ↔ entity-vue` peer-dependency cycle (CRIT-1 audit finding).
 //
-// Existing imports continue to work without changes:
+// Existing consumers continue to work without source changes:
 //
-//   import { vueReactiveAdapter } from '@gertsai/entity/vue'; // still works (this shim)
-//   import { vueReactiveAdapter } from '@gertsai/entity-vue'; // new canonical path
+//   import { vueReactiveAdapter } from '@gertsai/entity/vue'; // still works
 //
-// The `/vue` subpath shim will be removed in v1.0. Migrate at your convenience.
+// The standalone `@gertsai/entity-vue` package remains available as a
+// thin re-export alias for users who already depend on it; both routes
+// resolve to the same adapter contract (`ReactiveAdapter` from
+// `@gertsai/entity`).
 
-export { vueReactiveAdapter } from '@gertsai/entity-vue';
+export { vueReactiveAdapter } from './adapters/vue';
