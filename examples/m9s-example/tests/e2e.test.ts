@@ -124,6 +124,35 @@ function probeMiddleware(): Middleware {
   };
 }
 
+/**
+ * Wave 12.E-fix-1 (PRD-038 FR-002 / EVID-053 CRIT-2): after the CRIT-2 fix
+ * the ingest action requires an authenticated session unconditionally. The
+ * first describe block below probes Wave 5 middleware composition (tenant
+ * + sessionMiddleware) and was historically issuing anonymous broker.call —
+ * which now fails closed with 401. We inject a `testSession` (Wave 9.0.1
+ * test seam) into each call so the composition assertions still run on top
+ * of an authenticated request. `meta.testSession` is consumed by
+ * `wave5-middlewares.ts:155` and wired into the per-request
+ * RequestContext.
+ */
+function makeAuthSession(opts: { tenantId: string; operatorUuid?: string }) {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { Session } = requireFromHere('@gertsai/session');
+  return new Session({
+    operatorUuid: opts.operatorUuid ?? 'user-e2e-default',
+    operatorType: 'web',
+    tokenGetter: async () => 'tok',
+    dialog: {
+      confirm: async () => true,
+      alert: () => {},
+      error: () => {},
+    },
+    clientPlatform: 'web',
+    clientVersion: '0.0.0-test',
+    tenantId: opts.tenantId,
+  });
+}
+
 describe('m9s-example e2e (broker.call) — Sprint 3.10 Wave 5 stack', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let broker: any;
@@ -181,7 +210,10 @@ describe('m9s-example e2e (broker.call) — Sprint 3.10 Wave 5 stack', () => {
     };
 
     const resp = await broker.call('v1.ingest.document', input, {
-      meta: { headers: { 'x-tenant-id': 'tenant-acme' } },
+      meta: {
+        headers: { 'x-tenant-id': 'tenant-acme' },
+        testSession: makeAuthSession({ tenantId: 'tenant-acme' }),
+      },
     });
 
     expect(resp).toBeDefined();
@@ -200,25 +232,34 @@ describe('m9s-example e2e (broker.call) — Sprint 3.10 Wave 5 stack', () => {
     expect(frame!.rcCorrelationId).not.toBe('');
   }, 15_000);
 
-  it('runs ingest action without X-Tenant-ID header (mode=optional resolver)', async () => {
+  /**
+   * Wave 12.E-fix-1 (PRD-038 FR-002 / EVID-053 CRIT-2 / CWE-862): pre-fix
+   * the ingest action accepted anonymous requests (session guard was
+   * conditional). The test below historically asserted that contract.
+   * Post-fix the contract flipped: anonymous → 401 unconditionally. This
+   * test now codifies the security guarantee so any future regression
+   * (re-introducing conditional auth) fails CI.
+   */
+  it('rejects anonymous ingest with 401 (post-CRIT-2 fix)', async () => {
     probeFrames.clear();
 
     const input = {
       docId: 'doc-e2e-anon-1',
-      text: 'Anonymous flow — no tenant header. Wave 5 middleware in optional mode allows this.',
+      text: 'Anonymous flow — no testSession injected; must be rejected.',
       userId: 'user-anon',
     };
 
-    const resp = await broker.call('v1.ingest.document', input);
+    const result = await broker.call('v1.ingest.document', input).then(
+      () => ({ resolved: true as const }),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (err: any) => ({ resolved: false as const, err }),
+    );
 
-    expect(resp).toBeDefined();
-    const frame = probeFrames.get('v1.ingest.document');
-    expect(frame).toBeDefined();
-    // Anonymous: tenantMiddleware optional mode → no tenantId on meta.
-    expect(frame!.metaTenantId).toBeUndefined();
-    // sessionMiddleware still composed RequestContext, just without tenant.
-    expect(frame!.rcTenantId).toBeUndefined();
-    expect(frame!.rcFrozen).toBe(true);
+    expect(result.resolved).toBe(false);
+    if (result.resolved === false) {
+      const errStr = String(result.err?.message ?? result.err);
+      expect(errStr).toMatch(/Authentication required|UNAUTHORIZED/i);
+    }
   }, 15_000);
 
   it('exercises ingest → search round-trip with X-Tenant-ID propagated through both calls', async () => {
@@ -231,7 +272,10 @@ describe('m9s-example e2e (broker.call) — Sprint 3.10 Wave 5 stack', () => {
     };
 
     const ingestResp = await broker.call('v1.ingest.document', ingestInput, {
-      meta: { headers: { 'x-tenant-id': 'tenant-acme' } },
+      meta: {
+        headers: { 'x-tenant-id': 'tenant-acme' },
+        testSession: makeAuthSession({ tenantId: 'tenant-acme' }),
+      },
     });
     expect(ingestResp).toBeDefined();
     const ingestFrame = probeFrames.get('v1.ingest.document');
@@ -241,7 +285,10 @@ describe('m9s-example e2e (broker.call) — Sprint 3.10 Wave 5 stack', () => {
       'v1.search.query',
       { query: 'wave 5' },
       {
-        meta: { headers: { 'x-tenant-id': 'tenant-acme' } },
+        meta: {
+          headers: { 'x-tenant-id': 'tenant-acme' },
+          testSession: makeAuthSession({ tenantId: 'tenant-acme' }),
+        },
       },
     );
     expect(searchResp).toBeDefined();
@@ -262,7 +309,12 @@ describe('m9s-example e2e (broker.call) — Sprint 3.10 Wave 5 stack', () => {
       await broker.call(
         'v1.ingest.document',
         { docId: `doc-corr-${i}`, text: 'x'.repeat(20), userId: 'u' },
-        { meta: { headers: { 'x-tenant-id': 'tenant-corr' } } },
+        {
+          meta: {
+            headers: { 'x-tenant-id': 'tenant-corr' },
+            testSession: makeAuthSession({ tenantId: 'tenant-corr' }),
+          },
+        },
       );
       const frame = probeFrames.get('v1.ingest.document');
       callsCorrelationIds.push(frame?.rcCorrelationId);
