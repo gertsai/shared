@@ -383,10 +383,28 @@ export function createExecutorMetadata(
 }
 
 /**
+ * Convenience alias for the most-permissive `IQueryExecutor` shape that
+ * still preserves the discriminated-union contract on the public interface.
+ *
+ * Closes EVID-059 FR-E-1: previous helpers were parameterised with the
+ * two `any` slots on `IQueryExecutor`, which silently defeated
+ * discriminated-union enforcement at the registry boundary (e.g.
+ * `getExecutor(name)` returned an executor whose `execute` accepted
+ * `any` — callers lost type-system feedback).
+ *
+ * `AnyQueryExecutor` keeps the same call-site ergonomics as the old `any, any`
+ * but constrains `TQuery` to `QueryRequest` and `TData` / `TMeta` to
+ * `unknown`. Callers who care about a narrower shape should still parameterise
+ * `IQueryExecutor<...>` directly — this alias is for places that genuinely
+ * accept "any executor".
+ */
+export type AnyQueryExecutor = IQueryExecutor<QueryRequest, unknown, unknown>;
+
+/**
  * Check if executor supports a query type
  */
 export function executorSupportsType(
-  executor: IQueryExecutor<any, any>,
+  executor: AnyQueryExecutor,
   type: string
 ): boolean {
   return executor.metadata.supportedTypes.includes(type);
@@ -396,7 +414,7 @@ export function executorSupportsType(
  * Get all supported types from multiple executors
  */
 export function getAllSupportedTypes(
-  executors: readonly IQueryExecutor<any, any>[]
+  executors: readonly AnyQueryExecutor[]
 ): string[] {
   const types = new Set<string>();
   for (const executor of executors) {
@@ -410,7 +428,7 @@ export function getAllSupportedTypes(
 /**
  * Find executor by name
  */
-export function findExecutorByName<T extends IQueryExecutor<any, any>>(
+export function findExecutorByName<T extends AnyQueryExecutor>(
   executors: readonly T[],
   name: string
 ): T | undefined {
@@ -420,7 +438,7 @@ export function findExecutorByName<T extends IQueryExecutor<any, any>>(
 /**
  * Find executors supporting a type
  */
-export function findExecutorsByType<T extends IQueryExecutor<any, any>>(
+export function findExecutorsByType<T extends AnyQueryExecutor>(
   executors: readonly T[],
   type: string
 ): T[] {

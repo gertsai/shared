@@ -13,11 +13,27 @@ import type {
 } from './types.js';
 import { queryFailure, isQuerySuccess } from './types.js';
 import type {
+  AnyQueryExecutor,
   IQueryExecutor,
   ExecutorMetadata,
   QueryToolOptions,
 } from './executor.js';
 import { getAllSupportedTypes } from './executor.js';
+
+// ============================================================================
+// Module-scoped constants
+// ============================================================================
+
+/**
+ * Latency ordering used by `TypeBasedSelector` when multiple executors match.
+ *
+ * Closes EVID-059 FR-E-4: previously rebuilt as an object literal inside
+ * every `Array.sort` comparator call (`O(n log n)` allocations for routing
+ * decisions on hot paths). Hoisted to module scope so each comparator
+ * invocation reuses the same frozen map.
+ */
+const LATENCY_ORDER: Readonly<Record<'fast' | 'medium' | 'slow', number>> =
+  Object.freeze({ fast: 0, medium: 1, slow: 2 });
 
 // ============================================================================
 // Internal helpers
@@ -132,13 +148,11 @@ export class TypeBasedSelector implements IQuerySelector {
     // If multiple executors match, prefer:
     // 1. Lower latency
     // 2. First registered
-    const sorted = [...matching].sort((a, b) => {
-      const latencyOrder = { fast: 0, medium: 1, slow: 2 };
-      return (
-        (latencyOrder[a.estimatedLatency] ?? 1) -
-        (latencyOrder[b.estimatedLatency] ?? 1)
-      );
-    });
+    const sorted = [...matching].sort(
+      (a, b) =>
+        (LATENCY_ORDER[a.estimatedLatency] ?? 1) -
+        (LATENCY_ORDER[b.estimatedLatency] ?? 1)
+    );
 
     // matching.length > 0 verified above
     return {
@@ -235,7 +249,7 @@ export class PriorityBasedSelector implements IQuerySelector {
  * ```
  */
 export class QueryRouter implements IQueryExecutor<QueryRequest, unknown> {
-  private executors = new Map<string, IQueryExecutor<any, any>>();
+  private executors = new Map<string, AnyQueryExecutor>();
   private selector: IQuerySelector;
 
   /**
@@ -279,9 +293,15 @@ export class QueryRouter implements IQueryExecutor<QueryRequest, unknown> {
   }
 
   /**
-   * Get registered executor by name
+   * Get registered executor by name.
+   *
+   * Closes EVID-059 FR-E-1: previously typed with two `any` slots on
+   * `IQueryExecutor`, which silently defeated discriminated-union
+   * enforcement on consumers. Now returns `AnyQueryExecutor`
+   * (= `IQueryExecutor<QueryRequest, unknown, unknown>`), so callers see
+   * `unknown` data and must narrow before use.
    */
-  getExecutor(name: string): IQueryExecutor<any, any> | undefined {
+  getExecutor(name: string): AnyQueryExecutor | undefined {
     return this.executors.get(name);
   }
 
@@ -416,9 +436,14 @@ export class QueryRouter implements IQueryExecutor<QueryRequest, unknown> {
   }
 
   /**
-   * Convert router to unified tool
+   * Convert router to unified tool.
+   *
+   * Closes EVID-059 FR-E-5: previously typed `unknown` so callers had no
+   * structural hints about the returned shape. Now returns a typed
+   * `QueryRouterAsTool` (subtype of `unknown`) carrying `name`,
+   * `description`, and a back-reference to this `QueryRouter` instance.
    */
-  asTool(options?: QueryToolOptions): unknown {
+  asTool(options?: QueryToolOptions): QueryRouterAsTool {
     const supportedTypes = this.getSupportedTypes();
 
     return {
@@ -429,6 +454,28 @@ export class QueryRouter implements IQueryExecutor<QueryRequest, unknown> {
       router: this,
     };
   }
+}
+
+/**
+ * Shape returned by `QueryRouter.asTool()`.
+ *
+ * Closes EVID-059 FR-E-5: introduces a structural surface so consumers can
+ * destructure / branch on the wrapper instead of receiving `unknown` and
+ * resorting to ad-hoc casts.
+ *
+ * @example
+ * ```typescript
+ * const tool: QueryRouterAsTool = router.asTool({ name: 'kb_query' });
+ * await tool.router.execute(query);
+ * ```
+ */
+export interface QueryRouterAsTool {
+  /** Tool name (defaults to `'unified_query'`) */
+  readonly name: string;
+  /** Tool description (auto-generated from supported types when omitted) */
+  readonly description: string;
+  /** Back-reference to the underlying router for direct execution */
+  readonly router: QueryRouter;
 }
 
 // ============================================================================
@@ -448,7 +495,7 @@ export class QueryRouter implements IQueryExecutor<QueryRequest, unknown> {
  * ```
  */
 export function createQueryRouter(
-  executors: IQueryExecutor<any, any>[],
+  executors: AnyQueryExecutor[],
   selector?: IQuerySelector
 ): QueryRouter {
   const router = new QueryRouter(selector);
@@ -473,7 +520,7 @@ export function createQueryRouter(
  * ```
  */
 export function createPriorityRouter(
-  executors: IQueryExecutor<any, any>[],
+  executors: AnyQueryExecutor[],
   priorities: Record<string, number>
 ): QueryRouter {
   const selector = new PriorityBasedSelector();

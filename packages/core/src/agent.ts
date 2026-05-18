@@ -78,11 +78,21 @@ export interface IAgent {
   /**
    * Execute the agent with input.
    *
-   * @param input - User input (string, message, or messages — narrow via `typeof` / schema check)
+   * Closes EVID-059 FR-E-6: the parameter was previously typed as a
+   * union of `string` with `unknown`, which TypeScript collapses to plain
+   * `unknown` — the leading `string` was decorative and misled readers
+   * into thinking the type system would prefer or preserve the string
+   * branch. The signature is now just `unknown` and the documentation
+   * makes the intent explicit: implementations MUST narrow
+   * (`typeof input === 'string'` or schema check) before consuming the
+   * value.
+   *
+   * @param input - User input (string, message, or messages — narrow via
+   *   `typeof` / schema check before use)
    * @param options - Run options
    * @returns Run result with response and status
    */
-  run(input: string | unknown, options?: AgentRunOptions): Promise<AgentRunResult>;
+  run(input: unknown, options?: AgentRunOptions): Promise<AgentRunResult>;
 
   /**
    * Tenant ID for multi-tenancy isolation.
@@ -149,7 +159,17 @@ export interface AgentFactoryConfig {
   /** Tenant ID */
   tenantId: string;
 
-  /** Tools available to agent (structural — readonly to discourage in-place mutation) */
+  /**
+   * Tools available to agent (structural shape).
+   *
+   * NOTE (EVID-059 FR-E-6): the `readonly` modifier only freezes the array
+   * shell — it prevents `tools.push(...)` / index-assignment, but element
+   * fields (`name`, `description`) remain mutable because `ITool` itself
+   * does NOT declare its members as `readonly`. If element-level
+   * immutability matters to a caller, defensively `Object.freeze` each tool
+   * before constructing the config, or extend `ITool` locally with a
+   * `Readonly<ITool>` alias.
+   */
   tools?: readonly ITool[];
 
   /** Enable verbose logging */

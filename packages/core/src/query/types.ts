@@ -253,16 +253,27 @@ export function querySuccess<TData, TMeta = unknown>(
     custom?: TMeta;
   }
 ): QuerySuccess<TData, TMeta> {
+  // EVID-059 FR-E-2: previously `queryPartial` clamped `progress ∈ [0,1]` but
+  // `querySuccess` accepted any number for `confidence` and any number
+  // (including negative / NaN) for `durationMs`. Sibling factories now apply
+  // the same defensive normalisation so downstream consumers (logging, KPI
+  // dashboards, retry heuristics) never see out-of-range values.
   const confidence = options?.confidence;
+  const clampedConfidence =
+    confidence !== undefined && Number.isFinite(confidence)
+      ? Math.max(0, Math.min(1, confidence))
+      : confidence;
+  const normalisedDurationMs =
+    Number.isFinite(durationMs) && durationMs >= 0 ? durationMs : 0;
   const custom = options?.custom;
   return {
     status: 'success',
     data,
     sources,
     metadata: {
-      durationMs,
+      durationMs: normalisedDurationMs,
       cached: options?.cached ?? false,
-      ...(confidence !== undefined && { confidence }),
+      ...(clampedConfidence !== undefined && { confidence: clampedConfidence }),
       ...(custom !== undefined && { custom }),
     },
   };
@@ -322,17 +333,26 @@ export function queryPartial<TData, TMeta = unknown>(
     custom?: TMeta;
   }
 ): QueryPartial<TData, TMeta> {
+  // EVID-059 FR-E-2: align with sibling `querySuccess` — clamp `confidence`,
+  // floor `durationMs` to 0 on NaN/negative.
   const confidence = options?.confidence;
+  const clampedConfidence =
+    confidence !== undefined && Number.isFinite(confidence)
+      ? Math.max(0, Math.min(1, confidence))
+      : confidence;
+  const normalisedDurationMs =
+    Number.isFinite(durationMs) && durationMs >= 0 ? durationMs : 0;
+  const safeProgress = Number.isFinite(progress) ? progress : 0;
   const custom = options?.custom;
   return {
     status: 'partial',
     data,
-    progress: Math.max(0, Math.min(1, progress)), // Clamp to 0-1
+    progress: Math.max(0, Math.min(1, safeProgress)), // Clamp to 0-1
     sources,
     metadata: {
-      durationMs,
+      durationMs: normalisedDurationMs,
       cached: options?.cached ?? false,
-      ...(confidence !== undefined && { confidence }),
+      ...(clampedConfidence !== undefined && { confidence: clampedConfidence }),
       ...(custom !== undefined && { custom }),
     },
   };

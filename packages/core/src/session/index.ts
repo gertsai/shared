@@ -40,6 +40,8 @@ export {
   defaultSession,
   createSessionFactory,
   createSystemSession,
+  // FR-D-7: schema guard for fromJSON validation
+  isSerializedSessionContext,
   type SessionContextConfig,
   type SerializedSessionContext,
   type SessionFactory,
@@ -101,9 +103,13 @@ export {
   isTenantConfigUpdate,
   isSanitizedTenantConfig,
   // Defaults & Helpers
+  // FR-D-5: shared agent-reasoning default extracted from DEFAULT_TENANT_CONFIG.
+  DEFAULT_AGENT_REASONING,
   DEFAULT_TENANT_CONFIG,
   mergeTenantConfigWithDefaults,
   applyTenantConfigUpdate,
+  // FR-D-3: prefer `configCacheKey`; `calculateConfigHash` is a deprecated alias.
+  configCacheKey,
   calculateConfigHash,
   // Sanitization (RISK-003)
   sanitizeTenantConfig,

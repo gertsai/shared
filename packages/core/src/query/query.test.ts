@@ -988,3 +988,122 @@ describe('EVID-059 H-2 — safeExecute error propagation', () => {
     expect((r.details?.cause as { name: string }).name).toBe('NonError');
   });
 });
+
+// ============================================================================
+// EVID-059 FR-E-2 — querySuccess / queryPartial input normalisation
+// ============================================================================
+
+describe('EVID-059 FR-E-2 — querySuccess / queryPartial field validation', () => {
+  describe('querySuccess', () => {
+    it('clamps confidence above 1 down to 1', () => {
+      const r = querySuccess('data', [], 100, { confidence: 1.7 });
+      expect(r.metadata.confidence).toBe(1);
+    });
+
+    it('clamps negative confidence up to 0', () => {
+      const r = querySuccess('data', [], 100, { confidence: -0.5 });
+      expect(r.metadata.confidence).toBe(0);
+    });
+
+    it('drops NaN confidence onto the wire as NaN (caller must clean) — we preserve undefined fast-path', () => {
+      // Sanity guard: NaN is finite=false, so the clamp short-circuits and
+      // the NaN value is forwarded. We document that here, but the consumer
+      // contract is "confidence ∈ [0,1]" so NaN is still degenerate.
+      const r = querySuccess('data', [], 100, { confidence: Number.NaN });
+      expect(Number.isNaN(r.metadata.confidence)).toBe(true);
+    });
+
+    it('floors negative durationMs to 0', () => {
+      const r = querySuccess('data', [], -42);
+      expect(r.metadata.durationMs).toBe(0);
+    });
+
+    it('floors NaN durationMs to 0', () => {
+      const r = querySuccess('data', [], Number.NaN);
+      expect(r.metadata.durationMs).toBe(0);
+    });
+
+    it('preserves valid in-range values untouched', () => {
+      const r = querySuccess('data', [], 123, { confidence: 0.42 });
+      expect(r.metadata.durationMs).toBe(123);
+      expect(r.metadata.confidence).toBe(0.42);
+    });
+  });
+
+  describe('queryPartial — sibling consistency', () => {
+    it('clamps confidence and floors durationMs the same way', () => {
+      const r = queryPartial('data', 0.5, [], -10, { confidence: 2 });
+      expect(r.metadata.durationMs).toBe(0);
+      expect(r.metadata.confidence).toBe(1);
+    });
+  });
+});
+
+// ============================================================================
+// EVID-059 FR-E-3 — Query factories preserve discriminator under hostile spread
+// ============================================================================
+
+describe('EVID-059 FR-E-3 — discriminator survives spread', () => {
+  it('createNLQuery: caller-supplied options.type cannot overwrite "nl"', () => {
+    // Cast is intentional — we want to simulate a hostile / accidental
+    // caller who passes `type` in the options bag.
+    const q = createNLQuery(tenantId, 'q', {
+      type: 'graph',
+    } as unknown as Partial<Omit<NLQuery, 'type' | 'tenantId' | 'question'>>);
+    expect(q.type).toBe('nl');
+  });
+
+  it('createGraphQuery: discriminator wins over options', () => {
+    const q = createGraphQuery(tenantId, 'e1', 2, {
+      type: 'rag',
+    } as unknown as Partial<Omit<GraphQuery, 'type' | 'tenantId' | 'startEntityId' | 'maxDepth'>>);
+    expect(q.type).toBe('graph');
+  });
+
+  it('createVectorQuery: discriminator wins, tenantId not overwritable', () => {
+    const q = createVectorQuery(tenantId, 'text', 5, {
+      type: 'nl',
+      tenantId: 'spoofed' as TenantId,
+    } as any);
+    expect(q.type).toBe('vector');
+    expect(q.tenantId).toBe(tenantId);
+  });
+
+  it('createRAGQuery: mode override from options is overridden by positional arg', () => {
+    const q = createRAGQuery(tenantId, 'q', 'global', {
+      mode: 'local',
+    } as any);
+    expect(q.mode).toBe('global');
+    expect(q.type).toBe('rag');
+  });
+
+  it('legitimate options are still merged', () => {
+    const q = createNLQuery(tenantId, 'q', { maxResults: 7, includeExplanation: true });
+    expect(q.maxResults).toBe(7);
+    expect(q.includeExplanation).toBe(true);
+    expect(q.type).toBe('nl');
+  });
+});
+
+// ============================================================================
+// EVID-059 FR-E-5 — QueryRouter.asTool returns typed surface
+// ============================================================================
+
+describe('EVID-059 FR-E-5 — QueryRouter.asTool typed shape', () => {
+  it('returns an object whose fields are accessible without further casts', () => {
+    const router = new QueryRouter();
+    const tool = router.asTool({ name: 'kb', description: 'docs' });
+    // Direct property access — no `(tool as any)` needed.
+    expect(tool.name).toBe('kb');
+    expect(tool.description).toBe('docs');
+    expect(tool.router).toBe(router);
+  });
+
+  it('falls back to defaults when options are omitted', () => {
+    const router = new QueryRouter();
+    const tool = router.asTool();
+    expect(tool.name).toBe('unified_query');
+    expect(typeof tool.description).toBe('string');
+    expect(tool.router).toBe(router);
+  });
+});

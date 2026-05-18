@@ -1489,7 +1489,12 @@ export const IngestionConfigSchema = z.object({
   enableTableExtraction: z.boolean().optional(),
   autoIngestOnUpload: z.boolean().optional(),
   // Semantic chunker settings (RFC-105)
-  chunkingStrategy: z.enum(['sentence-splitter', 'semantic', 'semantic-overlap']).optional(),
+  // FR-D-1: Zod enum mirrors `ChunkingStrategy` TS type 1:1 — `'hierarchical'`
+  // was missing here while present in the TS union, so runtime parsing rejected
+  // valid TS-typed payloads. Adding it closes the type/runtime drift.
+  chunkingStrategy: z
+    .enum(['sentence-splitter', 'semantic', 'semantic-overlap', 'hierarchical'])
+    .optional(),
   breakpointMethod: z
     .enum(['percentile', 'standard_deviation', 'interquartile', 'gradient'])
     .optional(),
@@ -1850,6 +1855,37 @@ export function isTenantConfigUpdate(value: unknown): value is TenantConfigUpdat
 // ============================================================================
 
 /**
+ * Default agent-reasoning configuration.
+ *
+ * FR-D-5: extracted as a named constant so merge sites can `?? DEFAULT_AGENT_REASONING`
+ * instead of relying on the non-null assertion `DEFAULT_TENANT_CONFIG.agentReasoning!`.
+ * The assertion was technically safe (the inline literal below is always defined)
+ * but it bypassed strict-null analysis and would silently produce `undefined` runtime
+ * spreads if the optional field were ever removed.
+ *
+ * Re-used by `DEFAULT_TENANT_CONFIG.agentReasoning` below so the two stay in sync.
+ */
+export const DEFAULT_AGENT_REASONING: NonNullable<TenantConfig['agentReasoning']> = {
+  enabled: false,
+  confidenceThresholdAnswer: 0.85,
+  confidenceThresholdEscalate: 0.5,
+  maxSubtasks: 5,
+  maxReactIterations: 5,
+  toolRankerWeights: {
+    relevance: 0.5,
+    historicalSuccess: 0.3,
+    latency: 0.1,
+    freshness: 0.1,
+  },
+  defaultBudget: {
+    maxSteps: 10,
+    maxTokens: 8000,
+    maxTimeMs: 30000,
+    maxRetries: 2,
+  },
+};
+
+/**
  * System defaults for TenantConfig
  * Used when tenant config is missing or incomplete
  */
@@ -2131,25 +2167,8 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
       hallucination: 0.3,
     },
   },
-  agentReasoning: {
-    enabled: false,
-    confidenceThresholdAnswer: 0.85,
-    confidenceThresholdEscalate: 0.5,
-    maxSubtasks: 5,
-    maxReactIterations: 5,
-    toolRankerWeights: {
-      relevance: 0.5,
-      historicalSuccess: 0.3,
-      latency: 0.1,
-      freshness: 0.1,
-    },
-    defaultBudget: {
-      maxSteps: 10,
-      maxTokens: 8000,
-      maxTimeMs: 30000,
-      maxRetries: 2,
-    },
-  },
+  // FR-D-5: reference shared constant; see `DEFAULT_AGENT_REASONING` above.
+  agentReasoning: DEFAULT_AGENT_REASONING,
 };
 
 // ============================================================================
@@ -2253,19 +2272,23 @@ export function mergeTenantConfigWithDefaults(config: TenantConfigCreate): Tenan
     config.eval?.thresholds,
   );
 
+  // FR-D-5: use `?? DEFAULT_AGENT_REASONING` instead of non-null assertions so
+  // strict-null analysis can prove the spread is always over a defined object,
+  // even if `DEFAULT_TENANT_CONFIG.agentReasoning` becomes optional in the future.
   type AgentReasT = NonNullable<TenantConfig['agentReasoning']>;
   type ToolRankerT = AgentReasT['toolRankerWeights'];
   type DefaultBudgetT = AgentReasT['defaultBudget'];
+  const defaultAgentReasoning = DEFAULT_TENANT_CONFIG.agentReasoning ?? DEFAULT_AGENT_REASONING;
   const agentReasoningMerged = safeSpread<AgentReasT>(
-    DEFAULT_TENANT_CONFIG.agentReasoning!,
+    defaultAgentReasoning,
     config.agentReasoning,
   );
   agentReasoningMerged.toolRankerWeights = safeSpread<ToolRankerT>(
-    DEFAULT_TENANT_CONFIG.agentReasoning!.toolRankerWeights,
+    defaultAgentReasoning.toolRankerWeights,
     config.agentReasoning?.toolRankerWeights,
   );
   agentReasoningMerged.defaultBudget = safeSpread<DefaultBudgetT>(
-    DEFAULT_TENANT_CONFIG.agentReasoning!.defaultBudget,
+    defaultAgentReasoning.defaultBudget,
     config.agentReasoning?.defaultBudget,
   );
 
@@ -2503,20 +2526,23 @@ export function applyTenantConfigUpdate(
         return merged;
       })()
     : existing.eval;
+  // FR-D-5: replace `DEFAULT_TENANT_CONFIG.agentReasoning!` with the
+  // `?? DEFAULT_AGENT_REASONING` fallback so strict-null inference is preserved.
   const agentReasoning = update.agentReasoning
     ? (() => {
+        const defaultAR = DEFAULT_TENANT_CONFIG.agentReasoning ?? DEFAULT_AGENT_REASONING;
         const merged = safeSpread(
-          DEFAULT_TENANT_CONFIG.agentReasoning! as unknown as Record<string, unknown>,
+          defaultAR as unknown as Record<string, unknown>,
           existing.agentReasoning as Record<string, unknown> | undefined,
           update.agentReasoning as Record<string, unknown> | undefined,
         ) as NonNullable<TenantConfig['agentReasoning']>;
         merged.toolRankerWeights = safeSpread(
-          DEFAULT_TENANT_CONFIG.agentReasoning!.toolRankerWeights as Record<string, unknown>,
+          defaultAR.toolRankerWeights as unknown as Record<string, unknown>,
           existing.agentReasoning?.toolRankerWeights as Record<string, unknown> | undefined,
           update.agentReasoning?.toolRankerWeights as Record<string, unknown> | undefined,
         ) as NonNullable<TenantConfig['agentReasoning']>['toolRankerWeights'];
         merged.defaultBudget = safeSpread(
-          DEFAULT_TENANT_CONFIG.agentReasoning!.defaultBudget as Record<string, unknown>,
+          defaultAR.defaultBudget as unknown as Record<string, unknown>,
           existing.agentReasoning?.defaultBudget as Record<string, unknown> | undefined,
           update.agentReasoning?.defaultBudget as Record<string, unknown> | undefined,
         ) as NonNullable<TenantConfig['agentReasoning']>['defaultBudget'];
@@ -2625,14 +2651,29 @@ export function applyTenantConfigUpdate(
 }
 
 /**
- * Calculate config hash for cache invalidation
+ * Compute a stable cache key for a tenant config.
+ *
+ * FR-D-3: previously called `calculateConfigHash`. The name implied a
+ * cryptographic hash but the implementation is a 32-bit FNV-like fold over
+ * `JSON.stringify(config)` — fast, deterministic, collision-prone, **not**
+ * suitable for any security-sensitive use (integrity, signing, dedup of
+ * untrusted input). Renamed to `configCacheKey` to disclaim crypto intent.
+ *
+ * Use-case: cache invalidation only — when two tenant configs produce the
+ * same key, we may serve the same cached resolved-config without re-merging
+ * defaults. Collisions are tolerable; adversarial preimage is out of scope.
+ *
+ * Property order in `JSON.stringify(rest)` follows V8 insertion order, so
+ * keys are stable for the same struct shape but vary if callers reshuffle
+ * object literals — acceptable for a cache key.
  *
  * @param config - Tenant config
- * @returns Hash string
+ * @returns 8-hex-char cache key (NOT a cryptographic hash)
+ * @security NOT cryptographic — do not use for signing or integrity.
  */
-export function calculateConfigHash(config: TenantConfig): string {
+export function configCacheKey(config: TenantConfig): string {
   const { configHash: _configHash, createdAt: _createdAt, updatedAt: _updatedAt, ...rest } = config;
-  // Simple hash based on JSON string
+  // FNV-like fold over JSON.stringify — fast, NOT crypto. See note above.
   const str = JSON.stringify(rest);
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -2642,6 +2683,15 @@ export function calculateConfigHash(config: TenantConfig): string {
   }
   return Math.abs(hash).toString(16).padStart(8, '0');
 }
+
+/**
+ * @deprecated FR-D-3: renamed to {@link configCacheKey} to disclaim
+ * cryptographic intent. The implementation is a non-crypto fold suitable
+ * **only** for cache invalidation. Use `configCacheKey` directly in new code.
+ *
+ * Back-compat alias preserved for existing call-sites (semver-minor safe).
+ */
+export const calculateConfigHash = configCacheKey;
 
 // ============================================================================
 // Sanitized Config (for inter-service propagation)
@@ -2730,27 +2780,118 @@ export type SanitizedTenantConfig = Omit<TenantConfig, 'llm' | 'embedding' | 're
  * ctx.locals.tenantConfig = response.data;  // Full config, server-side only
  * ```
  */
+// ----------------------------------------------------------------------------
+// FR-D-4: sanitization allowlists
+// ----------------------------------------------------------------------------
+//
+// Previous implementation stripped only `apiKeyRef` and `baseUrl` via
+// destructure-rest. Any new field added to `TenantLLMConfig` /
+// `EmbeddingConfig` / `RerankerConfig` (e.g. `authToken`, `headers`,
+// `clientSecret`) would leak by default because the blocklist did not know
+// about it. Allowlist inverts that bias — only known-safe fields are copied
+// through, every new field is sensitive-by-default.
+//
+// When adding a new safe field to any of these configs, update the matching
+// allowlist below.
+
+/**
+ * Fields on `TenantLLMConfig` that are safe to propagate via `ctx.meta`.
+ * Sensitive fields (apiKeyRef, baseUrl) are excluded by omission.
+ */
+const SAFE_LLM_KEYS = [
+  'provider',
+  'model',
+  'temperature',
+  'maxTokens',
+  'timeout',
+  'registryModelId',
+  'registryProviderId',
+] as const satisfies ReadonlyArray<keyof SanitizedTenantLLMConfig>;
+
+/**
+ * Fields on `EmbeddingConfig` that are safe to propagate via `ctx.meta`.
+ * Sensitive fields (apiKeyRef, baseUrl) are excluded by omission.
+ */
+const SAFE_EMBEDDING_KEYS = [
+  'provider',
+  'model',
+  'dimension',
+  'dimensions',
+  'batchSize',
+  'registryModelId',
+  'registryProviderId',
+  'sparseEmbeddingsEnabled',
+  'hybridSearchEnabled',
+  'rerankerEnabled',
+] as const satisfies ReadonlyArray<keyof SanitizedEmbeddingConfig>;
+
+/**
+ * Fields on `RerankerConfig` that are safe to propagate via `ctx.meta`.
+ * Sensitive fields (apiKeyRef, baseUrl) are excluded by omission.
+ */
+const SAFE_RERANKER_KEYS = [
+  'enabled',
+  'provider',
+  'model',
+  'registryModelId',
+  'registryProviderId',
+  'topN',
+  'scoreThreshold',
+] as const satisfies ReadonlyArray<keyof SanitizedRerankerConfig>;
+
+/**
+ * Generic allowlist-pick: copies only listed keys whose value is defined.
+ *
+ * Uses `Object.prototype.hasOwnProperty` to avoid inheriting prototype
+ * properties, and preserves the `exactOptionalPropertyTypes` contract by
+ * skipping `undefined` values entirely (writing `field: undefined` is
+ * rejected under EOPT for `field?: T` declarations).
+ */
+function pickAllowlist<T extends object, K extends keyof T>(
+  source: T,
+  keys: ReadonlyArray<K>,
+): Pick<T, K> {
+  const out = {} as Pick<T, K>;
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(source, key)) {
+      const value = source[key];
+      if (value !== undefined) {
+        out[key] = value;
+      }
+    }
+  }
+  return out;
+}
+
 export function sanitizeTenantConfig(config: TenantConfig): SanitizedTenantConfig {
-  // Destructure to remove sensitive LLM fields
-  const { apiKeyRef: _llmApiKey, baseUrl: _llmBaseUrl, ...sanitizedLlm } = config.llm;
+  // FR-D-4: allowlist (Pick) instead of blocklist (Omit) — sensitive fields
+  // added to TenantLLMConfig/EmbeddingConfig/RerankerConfig in the future
+  // will be excluded by default unless explicitly added to the SAFE_*_KEYS
+  // arrays above. This inverts the bias: silent leak vs explicit opt-in.
+  const sanitizedLlm = pickAllowlist(config.llm, SAFE_LLM_KEYS) as SanitizedTenantLLMConfig;
+  const sanitizedEmbedding = pickAllowlist(
+    config.embedding,
+    SAFE_EMBEDDING_KEYS,
+  ) as SanitizedEmbeddingConfig;
 
-  // Destructure to remove sensitive Embedding fields
-  const {
-    apiKeyRef: _embeddingApiKey,
-    baseUrl: _embeddingBaseUrl,
-    ...sanitizedEmbedding
-  } = config.embedding;
-
-  // Destructure to remove sensitive Reranker fields (if present)
   let sanitizedReranker: SanitizedRerankerConfig | undefined;
   if (config.reranker) {
-    const { apiKeyRef: _rerankerApiKey, baseUrl: _rerankerBaseUrl, ...rest } = config.reranker;
-    sanitizedReranker = rest;
+    sanitizedReranker = pickAllowlist(
+      config.reranker,
+      SAFE_RERANKER_KEYS,
+    ) as SanitizedRerankerConfig;
   }
 
-  // Return config with sanitized nested objects
+  // Top-level: drop the original sensitive nested configs, then re-attach
+  // sanitized versions. `llm`/`embedding`/`reranker` keys come from the
+  // sanitized values; all other top-level keys flow through unchanged.
+  const { llm: _llm, embedding: _embedding, reranker: _reranker, ...rest } = config;
+  void _llm;
+  void _embedding;
+  void _reranker;
+
   return {
-    ...config,
+    ...rest,
     llm: sanitizedLlm,
     embedding: sanitizedEmbedding,
     ...(sanitizedReranker !== undefined && { reranker: sanitizedReranker }),

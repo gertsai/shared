@@ -501,7 +501,13 @@ export function isKnownQueryType(type: string): type is QueryType {
 // ============================================================================
 
 /**
- * Create an NL query
+ * Create an NL query.
+ *
+ * Closes EVID-059 FR-E-3: previously spread `...options` AFTER the literal
+ * discriminator (`type: 'nl'`), so a caller-supplied `options.type` would
+ * silently overwrite the discriminator at runtime. Now we spread `options`
+ * FIRST and let the literal-typed fields win, preserving discriminated-union
+ * invariants under hostile / accidental input.
  */
 export function createNLQuery(
   tenantId: TenantId,
@@ -509,15 +515,15 @@ export function createNLQuery(
   options?: Partial<Omit<NLQuery, 'type' | 'tenantId' | 'question'>>
 ): NLQuery {
   return {
+    ...options,
     type: 'nl',
     tenantId,
     question,
-    ...options,
   };
 }
 
 /**
- * Create a Graph query
+ * Create a Graph query (see `createNLQuery` for the spread-order rationale).
  */
 export function createGraphQuery(
   tenantId: TenantId,
@@ -526,16 +532,16 @@ export function createGraphQuery(
   options?: Partial<Omit<GraphQuery, 'type' | 'tenantId' | 'startEntityId' | 'maxDepth'>>
 ): GraphQuery {
   return {
+    ...options,
     type: 'graph',
     tenantId,
     startEntityId,
     maxDepth,
-    ...options,
   };
 }
 
 /**
- * Create a Vector query
+ * Create a Vector query (see `createNLQuery` for the spread-order rationale).
  */
 export function createVectorQuery(
   tenantId: TenantId,
@@ -544,16 +550,16 @@ export function createVectorQuery(
   options?: Partial<Omit<VectorQuery, 'type' | 'tenantId' | 'query' | 'topK'>>
 ): VectorQuery {
   return {
+    ...options,
     type: 'vector',
     tenantId,
     query,
     topK,
-    ...options,
   };
 }
 
 /**
- * Create a RAG query
+ * Create a RAG query (see `createNLQuery` for the spread-order rationale).
  */
 export function createRAGQuery(
   tenantId: TenantId,
@@ -562,10 +568,10 @@ export function createRAGQuery(
   options?: Partial<Omit<RAGQuery, 'type' | 'tenantId' | 'question' | 'mode'>>
 ): RAGQuery {
   return {
+    ...options,
     type: 'rag',
     tenantId,
     question,
     mode,
-    ...options,
   };
 }
