@@ -18,7 +18,24 @@
         "default": "./dist/index.cjs"
       }
     },
+    "./lru": {
+      "import": {
+        "types": "./dist/lru/index.d.ts",
+        "default": "./dist/lru/index.js"
+      },
+      "require": {
+        "types": "./dist/lru/index.d.cts",
+        "default": "./dist/lru/index.cjs"
+      }
+    },
     "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "lru": [
+        "./dist/lru/index.d.ts"
+      ]
+    }
   },
   "files": [
     "dist",

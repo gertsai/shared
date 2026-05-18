@@ -4,5 +4,8 @@ import baseConfig from '../../tsup.config';
 
 export default defineConfig({
   ...baseConfig,
-  entry: { 'index': 'src/index.ts' },
+  entry: {
+    index: 'src/index.ts',
+    'lru/index': 'src/lru/index.ts',
+  },
 });

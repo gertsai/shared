@@ -4,10 +4,29 @@
  * Memoization utilities for expensive collection operations
  * Provides caching mechanisms to avoid redundant computations
  *
+ * Wave 14.1 (PRD-044 / EVID-057): the inline `LRUCache<K, V>` class
+ * was consolidated into `@gertsai/utils/lru` (`LruMap`). It is
+ * re-exported here under its original name to preserve the public
+ * surface of `@gertsai/collection` — consumers that import
+ * `{ LRUCache }` from `@gertsai/collection` keep working unchanged.
+ *
  * @module utils/memoize
  */
 
+// Wave 14.1: consolidated LRU kernel — re-exported below under the
+// legacy name `LRUCache` to preserve `@gertsai/collection`'s public API.
+import { LruMap as LRUCache } from '@gertsai/utils/lru';
+
 import type { ReadableCollection } from '../types/interfaces';
+
+/**
+ * LRU (Least Recently Used) cache.
+ *
+ * @deprecated Use `LruMap` from `@gertsai/utils/lru` directly. This
+ * symbol is re-exported as a back-compat alias and forwards to the
+ * consolidated kernel.
+ */
+export { LRUCache };
 
 /**
  * Cache entry with value and metadata
@@ -54,97 +73,6 @@ function defaultKeyGenerator(...args: readonly unknown[]): string {
     }
     return value as unknown;
   });
-}
-
-/**
- * LRU (Least Recently Used) cache implementation
- * Automatically evicts least recently used items when size limit is reached
- */
-export class LRUCache<K, V> {
-  private cache = new Map<K, V>();
-  private readonly maxSize: number;
-
-  constructor(maxSize: number = 100) {
-    this.maxSize = Math.max(0, maxSize);
-  }
-
-  /**
-   * Gets a value from the cache
-   * Moves the item to the end (most recently used)
-   */
-  get(key: K): V | undefined {
-    if (!this.cache.has(key)) {
-      return undefined;
-    }
-
-    // Move to end (most recently used)
-    const value = this.cache.get(key);
-    if (value === undefined) {
-      return undefined;
-    }
-    this.cache.delete(key);
-    this.cache.set(key, value);
-    return value;
-  }
-
-  /**
-   * Sets a value in the cache
-   * Evicts least recently used item if size limit is reached
-   *
-   * @remarks
-   * Note: We use delete+set to move existing keys to the end of the Map
-   * (maintaining LRU order). This is O(1) amortized but has higher constant
-   * factor than a linked-list-based LRU. For high-performance scenarios,
-   * consider using a dedicated LRU library with doubly-linked list.
-   */
-  set(key: K, value: V): void {
-    // Don't cache if maxSize is 0
-    if (this.maxSize === 0) {
-      return;
-    }
-
-    // Delete existing key to update position (no has() check needed - delete is safe on missing keys)
-    // FIX-023: Removed redundant has() check before delete
-    this.cache.delete(key);
-
-    // Evict oldest if at capacity (after delete, so we don't evict the key we're about to set)
-    if (this.cache.size >= this.maxSize) {
-      const firstKey = this.cache.keys().next().value;
-      if (firstKey !== undefined) {
-        this.cache.delete(firstKey);
-      }
-    }
-
-    this.cache.set(key, value);
-  }
-
-  /**
-   * Checks if a key exists in the cache
-   */
-  has(key: K): boolean {
-    return this.cache.has(key);
-  }
-
-  /**
-   * Deletes a key from the cache
-   */
-  delete(key: K): boolean {
-    return this.cache.delete(key);
-  }
-
-  /**
-   * Clears the cache
-   */
-  clear(): void {
-    this.cache.clear();
-  }
-
-  /**
-   * Gets the current cache size
-   */
-  get size(): number {
-    return this.cache.size;
-  }
 }
 
 /**

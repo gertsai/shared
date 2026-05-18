@@ -45,7 +45,8 @@
     "@gertsai/async-utils": "workspace:^",
     "@gertsai/errors": "workspace:^",
     "@gertsai/fetch": "workspace:^",
-    "@gertsai/logger-factory": "workspace:^"
+    "@gertsai/logger-factory": "workspace:^",
+    "@gertsai/utils": "workspace:^"
   },
   "peerDependenciesMeta": {
     "@gertsai/logger-factory": {
@@ -57,6 +58,7 @@
     "@gertsai/errors": "workspace:*",
     "@gertsai/fetch": "workspace:*",
     "@gertsai/logger-factory": "workspace:*",
+    "@gertsai/utils": "workspace:*",
     "vitest": "^3.0.0"
   },
   "keywords": [

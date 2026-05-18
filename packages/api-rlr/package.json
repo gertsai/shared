@@ -48,6 +48,7 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@gertsai/api-core": "workspace:*",
+    "@gertsai/utils": "workspace:*",
     "consola": "^3.4.2",
     "lodash.clonedeep": "^4.5.0",
     "lodash.debounce": "^4.0.8",
