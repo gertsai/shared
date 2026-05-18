@@ -274,15 +274,20 @@ export class GraphRAGSessionContext implements IDestroyable {
     this._tenantConfig = config;
   }
 
-  // ========== Operator Switch (Orchestra compatibility) ==========
-
-  /**
-   * Switch the operator to a new one
-   */
-  $switchOperator(operator: { _uid: string; type: UserType }): void {
-    (this._operator as Operator).id = operator._uid;
-    (this._operator as Operator).type = operator.type;
-  }
+  // ========== Operator Switch (REMOVED — see EVID-059 H-5) ==========
+  //
+  // The previous `$switchOperator` method allowed callers to mutate
+  // `operator.id` + `operator.type` with no tenant check, no audit event,
+  // and no authorisation gate — an unauthenticated privilege swap on a
+  // publicly exported class. The `$` prefix suggested "internal" but the
+  // method was on the public class surface.
+  //
+  // Per EVID-059 H-5 the method has been removed (Option A: 0 external
+  // consumers found via `git grep '\$switchOperator' packages/ examples/`
+  // outside session-context.ts itself). Consumers that need genuine
+  // operator-switching semantics should use `@gertsai/session` —
+  // `Session.$switchOperator` there enforces destroyed-state checks and
+  // emits an `operator-switched` event.
 
   // ========== Abort ==========
 
