@@ -11,17 +11,17 @@
  * Production code would map 401 to a specific user-facing error.
  */
 import { fail, redirect, type Actions } from '@sveltejs/kit';
+import type { LoginResponse } from '@gertsai-examples/m9s-example-api-types';
 import { apiConfig } from '$lib/api/client';
 
-interface LoginSuccessResponse {
-  token: string;
-  refreshToken: string;
-  user: { id: string; email: string; tenantId: string };
-  expiresAt: string;
-}
+// Wave 12.E-fix-2 Phase 2 (EVID-053 H-8) — `LoginResponse` is now sourced
+// from `@gertsai-examples/m9s-example-api-types`. Pre-fix this file
+// redeclared an inline `LoginSuccessResponse` interface that drifted from
+// backend reality (most security-critical contract, most likely to
+// silently diverge).
 
 /** Wraps the backend envelope (`{ data, ... }` from APIController). */
-function unwrap(body: unknown): LoginSuccessResponse | null {
+function unwrap(body: unknown): LoginResponse | null {
   if (typeof body !== 'object' || body === null) return null;
   const env = body as Record<string, unknown>;
   // api-core envelopes responses under `data` — fall back to root for the
@@ -34,7 +34,7 @@ function unwrap(body: unknown): LoginSuccessResponse | null {
     typeof inner.user === 'object' &&
     inner.user !== null
   ) {
-    return inner as unknown as LoginSuccessResponse;
+    return inner as unknown as LoginResponse;
   }
   return null;
 }

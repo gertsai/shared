@@ -140,6 +140,20 @@ export function createDocumentsApiService() {
           origin: corsOrigin === '*' ? '*' : [...corsOrigin],
           methods: ['GET', 'POST', 'OPTIONS'],
           allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-ID', 'X-Request-ID'],
+          // Wave 12.E-fix-2 Phase 2 (EVID-053 H-5 + H-6) — the XHR upload
+          // and SSE EventSource both run with `withCredentials: true`
+          // so the browser ships the httpOnly `auth_token` cookie. CORS
+          // refuses to expose the response unless we explicitly opt in to
+          // credentialed mode. moleculer-web emits
+          // `Access-Control-Allow-Credentials: true` when this is set
+          // (see node_modules/moleculer-web/src/index.js around the
+          // `route.cors.credentials === true` branch). Note: this is only
+          // valid when `origin` is an explicit list, NOT '*' — the
+          // wildcard-with-credentials combination is rejected by browsers
+          // per fetch spec. In the non-prod wildcard fallback the browser
+          // will simply ignore credentials; production deploys with the
+          // CORS_ALLOWED_ORIGINS allow-list get the cookie correctly.
+          credentials: true,
         },
 
         // -------------------------------------------------------------------
@@ -198,16 +212,27 @@ export function createDocumentsApiService() {
             // bare `(req, res)` function (not a Moleculer action) so we
             // can keep the connection open and write SSE frames directly.
             //
-            //  - `use: []`  no rate-limiter on long-lived streams; the
-            //               token bucket would close otherwise-healthy
-            //               connections when their listener slot ages out.
+            //  - `use: []`  the api-rlr token bucket is bypassed because
+            //               long-lived streams would otherwise be closed
+            //               when their bucket ages out. Wave 12.E-fix-2
+            //               Phase 2 (EVID-053 H-15 / CWE-770) added an
+            //               SSE-specific rate-limit IN the handler:
+            //                 * per-IP burst    (SSE_RATE_LIMIT_IP_BURST,
+            //                                    default 10 /
+            //                                    SSE_RATE_LIMIT_WINDOW_MS).
+            //                 * per-tenant cap  (SSE_RATE_LIMIT_TENANT_OPEN,
+            //                                    default 50 concurrent
+            //                                    open streams).
             //  - `bodyParsers: false`   SSE is a GET with no body.
-            //  - `authentication/authorization: false`   matches the
-            //               permissive policy of the other example routes;
-            //               tighten before any non-toy deployment.
+            //  - `authentication/authorization: false`   gateway-level
+            //               authentication is OFF; the handler itself
+            //               consumes the `auth_token` cookie + verifies
+            //               the JWT (EVID-053 H-14 / CWE-639) before
+            //               opening the stream.
             //
-            // See `sse-ingest.handler.ts` for docId validation, idle
-            // timeout, and cleanup semantics.
+            // See `sse-ingest.handler.ts` for docId validation, JWT +
+            // tenant cross-check, idle timeout, rate limit, and cleanup
+            // semantics.
             path: '/api/stream',
             use: [],
             aliases: {

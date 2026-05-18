@@ -122,6 +122,12 @@ controller.addStartedHandler(async (ctx) => {
 });
 
 controller.addStoppedHandler(async (ctx) => {
+  // Wave 12.E-fix-2 Phase 2 (PRD-039 FR-006 / EVID-053 H-3): set the
+  // `_destroyed` flag the queue worker checks after every significant
+  // `await` (Wave 12.D-fix L-5 contract). Without this flag, the worker
+  // keeps emitting SSE frames / publishing channel events for the doc
+  // mid-shutdown, race-able with broker tear-down.
+  (ctx.service as { _destroyed?: boolean })._destroyed = true;
   ctx.logger?.info('[v1.ingest] stopped.');
   // Queue cleanup is api-core's responsibility — nothing to do here.
 });

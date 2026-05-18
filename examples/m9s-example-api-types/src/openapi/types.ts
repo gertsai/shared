@@ -267,19 +267,44 @@ export type OpenApiMapper<ApiEndpoints extends Record<string, EndpointLike>> = {
 // =============================================================================
 
 /**
+ * OpenAPI server entry (Swagger / OpenAPI 3.x `servers[]` element). Keeps
+ * the surface tight enough that `OpenApiGeneratorOptions.servers` can't be
+ * any-typed by accident.
+ */
+export interface OpenApiServerEntry {
+  /** Absolute or relative URL to the server. */
+  url: string;
+  /** Optional description shown in the generated docs. */
+  description?: string;
+  /** Optional template variables (per OpenAPI 3.x `Server Variable Object`). */
+  variables?: Record<string, { default: string; description?: string; enum?: string[] }>;
+}
+
+/**
  * Options shape preserved for forward compatibility — historically consumed
  * by `generateOpenAPISchema` (deleted in Wave 12.E-fix-2 / EVID-053 CRIT-5).
  *
  * - `schema`  — `typia.json.schema<OpenApiMapper<...>, '3.1'>()` result
- * - `servers` — OpenAPI server entries (typically one local-dev URL)
- * - `info`    — title/version block
- * - `debug`   — opt-in verbose logging during conversion
+ *               (a fully-resolved OpenAPI 3.x document). Typed as
+ *               `Record<string, unknown>` here instead of `any` so consumers
+ *               cannot accidentally silence type errors on the schema body
+ *               (EVID-053 H-9). A future typia-driven generator can
+ *               narrow this further (e.g. import an `OpenApi.IDocument`
+ *               shape) without breaking source compat.
+ * - `servers` — OpenAPI server entries (typically one local-dev URL).
+ * - `info`    — title/version block.
+ * - `debug`   — opt-in verbose logging during conversion.
  */
 export interface OpenApiGeneratorOptions {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  schema: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  servers: any[];
+  /**
+   * The OpenAPI 3.x JSON-Schema document produced upstream
+   * (`typia.json.schema<..., '3.1'>()`). Modelled as
+   * `Record<string, unknown>` so that downstream code (the dead generator,
+   * a future replacement, or third-party tooling) has to validate the
+   * structure rather than trusting `any`. See EVID-053 H-9.
+   */
+  schema: Record<string, unknown>;
+  servers: readonly OpenApiServerEntry[];
   info: {
     title: string;
     version: string;

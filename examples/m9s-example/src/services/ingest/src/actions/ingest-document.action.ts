@@ -31,6 +31,15 @@ import config from '../../../../../project.config';
 import { defineAction } from '@gertsai/api-core/moleculer';
 import { resolveExampleController } from '../../../../lib/example-controller';
 import { ForbiddenError } from '../../../../shared/errors';
+// Wave 12.E-fix-2 Phase 2 (PRD-039 FR-007 / EVID-053 H-4): wire the
+// HTTP-boundary scrubber from the composition layer. Pre-fix it was exported
+// but no action invoked it, so AppError `details` (userId / url / originalKind)
+// reached the wire unscrubbed — divergence from the OpenAPI contract that
+// advertises these keys stripped. Action handlers route AppError-derived
+// catches through the scrubber and surface the scrubbed `details` via
+// `APIError.data` so they end up inside `OrchestraApiResponse`.
+import { appErrorToHttpResponse } from "../../../../shared/error-scrubber";
+import { isAppError } from '@gertsai/errors';
 import { tryGetRequestContextFromCtx } from '../../../../composition/wave5-middlewares';
 import { INGEST_QUEUE_NAME, JOB_PROCESS_DOCUMENT } from '../queues';
 import { emitSse } from '../sse-emitter';
@@ -197,20 +206,47 @@ export const ingestDocument = defineAction(controller.register('document', {
       // middleware path → use case assertions) surface as AppError subclasses;
       // map them to the closest HTTP/RFC-9457 status without leaking internal
       // session details.
+      //
+      // Wave 12.E-fix-2 Phase 2 (PRD-039 FR-007 / EVID-053 H-4): AppError
+      // subclasses (incl. session-guard `AuthenticationRequiredError` /
+      // `TenantScopeViolationError`) are routed through
+      // `appErrorToHttpResponse` so PII / topology hints
+      // (`userId`/`url`/`originalKind`) are scrubbed from `details` before
+      // crossing the HTTP wire. The scrubbed `details` ride on `APIError.data`
+      // → `OrchestraApiResponse.data` → outbound JSON body.
+      // Note on the `data` cast: api-core's `ResponseDataType<ErrorCode>`
+      // resolves to `never` for every error ResponseCode (their meta uses
+      // the default `getNeverValidator`). We deliberately surface the
+      // scrubbed `ProblemDetails.details` onto the wire via `APIError.data`
+      // → `OrchestraApiResponse.data`. The `as never` cast bridges this
+      // type-vs-runtime gap; the body shape is still validated against the
+      // shared `ProblemDetails` schema (`composition/errors.ts`).
       if (err instanceof AuthenticationRequiredError) {
-        // 401 Unauthorized — destroyed/missing session.
+        const { body } = appErrorToHttpResponse(err);
         throw new APIError(
           ResponseCode.UNAUTHORIZED_REQUEST,
-          undefined,
+          body.details as never,
           'Authentication required',
         );
       }
       if (err instanceof TenantScopeViolationError) {
-        // 403 Forbidden — session tenant ≠ expected tenant.
+        const { body } = appErrorToHttpResponse(err);
         throw new APIError(
           ResponseCode.FORBIDDEN__INSUFFICIENT_RIGHTS,
-          undefined,
+          body.details as never,
           'Tenant scope violation',
+        );
+      }
+      // Catch-all for any other AppError subclass (defensive — future
+      // error types added by the domain / application layers automatically
+      // get routed through the HTTP-boundary scrubber without needing
+      // per-error branches here).
+      if (isAppError(err)) {
+        const { body } = appErrorToHttpResponse(err);
+        throw new APIError(
+          ResponseCode.INTERNAL_ERROR,
+          body.details as never,
+          body.title,
         );
       }
       if (err instanceof ForbiddenError) {

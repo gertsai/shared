@@ -35,14 +35,14 @@ export const actions: Actions = {
     }
 
     try {
-      // openapi-fetch types: when `paths` is still PlaceholderPaths (Teammate
-      // B's snapshot pending), the generic `POST` falls back to a dynamic
-      // body shape. Real `paths` will tighten this automatically.
+      // Wave 12.E-fix-2 Phase 2 (EVID-053 H-13): drop the `as never` casts —
+      // `paths` from `@gertsai-examples/m9s-example-api-types` now mirrors
+      // backend handler shapes verbatim, so openapi-fetch type-checks both
+      // the URL literal and the body against the real contract.
       const body: IngestRequestBody = { docId, text };
-      const { data, error } = await api.POST(
-        '/api/v1/ingest/document' as never,
-        { body } as never,
-      );
+      const { data, error } = await api.POST('/api/v1/ingest/document', {
+        body,
+      });
 
       if (error) {
         return {

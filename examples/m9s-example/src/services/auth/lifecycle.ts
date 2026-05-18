@@ -37,12 +37,18 @@ controller.setRestBasePath('/');
 
 controller.addStartedHandler(async (ctx) => {
   ctx.logger?.info('[v1.auth] starting...');
-  // Soft warning when running with the placeholder secret. We intentionally
-  // do NOT throw — the demo MUST run out of the box.
-  if (!process.env.JWT_SECRET) {
-    ctx.logger?.warn(
-      '[v1.auth] JWT_SECRET not set — using DEMO secret. Set JWT_SECRET to a high-entropy value before any deployment.',
-    );
+  // Wave 12.E-fix-2 Phase 2 (PRD-039 FR-002 / EVID-053 H-1): JWT_SECRET
+  // must hard-fail unconditionally at boot. Pre-fix this branch only emitted
+  // a `warn` log and the sign/verify helpers in `src/jwt.ts` would throw on
+  // the FIRST request, which obfuscated the misconfiguration and let the
+  // process linger in a half-broken state. The Wave 11.A FR-002 contract
+  // requires fail-closed at boot — mirroring the web-side helper
+  // `examples/m9s-example-web/src/lib/server/jwt.ts:43-46`. The sign/verify
+  // helpers in `src/jwt.ts` already throw identically; this just makes the
+  // failure synchronous at service-start rather than first-request.
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret || jwtSecret.length === 0) {
+    throw new Error('JWT_SECRET must be set');
   }
 
   // Wave 12.E-fix-2 (EVID-053 CRIT-1): wire the composition-root rotation

@@ -18,6 +18,12 @@
   // WAVE-10-B/S:SCRIPT-IMPORTS — sse-streaming teammate adds EventSource client here.
   import { openSse, type SseEvent } from '$lib/sse-client';
   import { lastUpload } from '$lib/stores/upload';
+  // Wave 12.E-fix-2 Phase 2 (EVID-053 H-5): expose base URL + tenant ID to
+  // the XHR so the upload doesn't bypass the same multi-tenancy + auth
+  // boundaries the typed openapi-fetch client enforces. Imported from the
+  // browser-safe `$lib/api/config` (NOT `$lib/api/client`, which pulls in
+  // `node:async_hooks` and crashes the browser bundle).
+  import { apiConfig } from '$lib/api/config';
 
   let { form }: { form: ActionData } = $props();
   // WAVE-10-B/F:STATE — file-upload teammate adds dropzone state + progress runes.
@@ -119,7 +125,16 @@
 
     const fd = new FormData();
     fd.append('file', file, file.name);
-    xhr.open('POST', '/api/v1/ingest/upload');
+    // Wave 12.E-fix-2 Phase 2 (EVID-053 H-5): post directly to the backend
+    // base URL with explicit tenant scoping AND `withCredentials = true`
+    // so the browser sends the httpOnly `auth_token` cookie. Pre-fix the
+    // request landed at the same-origin SvelteKit dev server without any
+    // tenant header — cross-tenant uploads from any logged-in session
+    // were possible. Backend already validates the cookie via Wave 5
+    // middleware; we just have to stop bypassing it.
+    xhr.open('POST', `${apiConfig.baseUrl}/api/v1/ingest/upload`);
+    xhr.setRequestHeader('X-Tenant-ID', apiConfig.tenantId);
+    xhr.withCredentials = true;
     xhr.send(fd);
   }
   // WAVE-10-B/S:STATE — sse-streaming teammate adds events[] + connection state runes.

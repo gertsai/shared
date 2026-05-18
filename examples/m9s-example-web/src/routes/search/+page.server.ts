@@ -11,22 +11,19 @@
  * types.ts:53-60` + `domain/chunk.ts:22-27`. The pre-fix code declared
  * `{ docId, text, similarity }` and the page rendered `hit.similarity.toFixed(3)`
  * which crashed at runtime because the field doesn't exist on the wire.
- * The `as never` casts that masked this drift are kept ONLY where openapi-fetch
- * paths typing isn't aligned yet (FR-018 follow-up).
+ *
+ * Wave 12.E-fix-2 Phase 2 (EVID-053 H-13) — `as never` casts dropped now
+ * that `paths` mirrors backend reality (CRIT-4). The `SearchHit` /
+ * `SearchQueryResponse` types are re-exported from the api-types package
+ * so the frontend and backend share a single source of truth.
  */
 import type { Actions } from './$types';
+import type { SearchHit, SearchQueryResponse } from '@gertsai-examples/m9s-example-api-types';
 import { api } from '$lib/api/client';
 
-export type SearchHit = {
-  docId: string;
-  chunkIdx: number;
-  text: string;
-  score: number;
-};
-
-type SearchResponseBody = {
-  results: SearchHit[];
-};
+// Re-export the canonical SearchHit so the +page.svelte consumer keeps
+// importing from this server module (no `$types`-style coupling shift).
+export type { SearchHit };
 
 export const actions: Actions = {
   default: async ({ request }) => {
@@ -38,32 +35,32 @@ export const actions: Actions = {
         success: false as const,
         error: 'Enter a query to search.',
         query,
-        results: [] as SearchHit[],
+        results: [] as readonly SearchHit[],
       };
     }
 
     try {
       // Wave 12.E-fix-1 FR-017: backend reads `topK`, not `limit`.
       const body = { query, topK: 10 };
-      const { data, error } = await api.POST(
-        '/api/v1/search/query' as never,
-        { body } as never,
-      );
+      const { data, error } = await api.POST('/api/v1/search/query', { body });
 
       if (error) {
         return {
           success: false as const,
           error: `Backend rejected search: ${JSON.stringify(error)}`,
           query,
-          results: [] as SearchHit[],
+          results: [] as readonly SearchHit[],
         };
       }
 
-      // Wave 9: backend response shape is contractually `{ results: SearchHit[] }`
-      // per SPEC-019. With PlaceholderPaths this is structurally untyped — narrow
-      // it locally so the page consumer remains type-safe.
-      const responseData = (data ?? {}) as Partial<SearchResponseBody>;
-      const results = Array.isArray(responseData.results) ? responseData.results : [];
+      // Wave 12.E-fix-2 Phase 2: `data` is now `SearchQueryResponse | undefined`
+      // courtesy of the typed `paths`. Defensive narrowing kept so a future
+      // backend shape regression surfaces as `results: []` rather than a
+      // page crash.
+      const responseData: Partial<SearchQueryResponse> = data ?? {};
+      const results: readonly SearchHit[] = Array.isArray(responseData.results)
+        ? responseData.results
+        : [];
 
       return {
         success: true as const,
@@ -76,7 +73,7 @@ export const actions: Actions = {
         success: false as const,
         error: `Search request failed: ${message}`,
         query,
-        results: [] as SearchHit[],
+        results: [] as readonly SearchHit[],
       };
     }
   },

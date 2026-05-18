@@ -3,7 +3,8 @@
  * Wave 10.B (PRD-019 FR-002) — browser-side SSE consumer.
  *
  * Thin wrapper around the platform `EventSource` API. The backend exposes
- * `/api/stream/ingest?docId=...` (see m9s-example/src/mol-services/api.service.ts).
+ * `/api/stream/ingest?docId=...&tenantId=...` (see
+ * m9s-example/src/mol-services/api.service.ts + sse-ingest.handler.ts).
  *
  * Why a wrapper over raw `EventSource`:
  *
@@ -13,6 +14,11 @@
  *      to `.close()` on every terminal frame.
  *   3. The component receives a single `unsubscribe()` teardown which is
  *      idempotent and `$effect`-cleanup friendly (Svelte 5 reactive pattern).
+ *   4. Wave 12.E-fix-2 Phase 2 (EVID-053 H-6) — base URL + tenant query
+ *      string + `withCredentials` injected here so the consumer cannot
+ *      accidentally hit the same-origin path without tenant scoping or
+ *      auth cookie. EventSource does not support custom headers, so the
+ *      tenant goes on the URL (validated server-side against the session).
  *
  * The `SseEvent` type is duplicated here (structural copy of the backend
  * type) on purpose — importing from `m9s-example` would couple the frontend
@@ -20,6 +26,7 @@
  * established in Wave 9. If the wire shape ever needs to be shared, promote
  * it via the api-types package.
  */
+import { apiConfig } from '$lib/api/config';
 
 /**
  * Discriminator for SSE lifecycle events. Mirrors the backend
@@ -70,10 +77,27 @@ export interface SseHandlers {
  * @returns        Idempotent close-this-stream function.
  */
 export function openSse(docId: string, handlers: SseHandlers): () => void {
-  // EventSource itself URL-encodes the path; we still encode the query
-  // value to defend against unexpected docId characters (the UI should
-  // already pre-validate, but defence-in-depth is cheap here).
-  const es = new EventSource(`/api/stream/ingest?docId=${encodeURIComponent(docId)}`);
+  // Wave 12.E-fix-2 Phase 2 (EVID-053 H-6):
+  //   - Build against `apiConfig.baseUrl` so the request hits the backend
+  //     gateway directly (pre-fix it landed at the same-origin SvelteKit
+  //     dev server with the gateway URL unset).
+  //   - Forward `tenantId` as a query param — `EventSource` cannot set
+  //     custom headers, and the backend handler now cross-checks this
+  //     value against the authenticated session (H-14) before fanning
+  //     events out to the per-tenant subscriber registry.
+  //   - `withCredentials: true` so the browser ships the httpOnly
+  //     `auth_token` cookie alongside; gateway Wave 5 middleware reads
+  //     it as part of the same auth flow used by the REST routes.
+  //
+  // EventSource still URL-encodes the path; we encode each query param
+  // value defensively (the UI should already pre-validate, but
+  // defence-in-depth is cheap here).
+  const tenantId = apiConfig.tenantId;
+  const url =
+    `${apiConfig.baseUrl}/api/stream/ingest` +
+    `?docId=${encodeURIComponent(docId)}` +
+    `&tenantId=${encodeURIComponent(tenantId)}`;
+  const es = new EventSource(url, { withCredentials: true });
 
   let closed = false;
   const closeOnce = (reason: SseCloseReason): void => {

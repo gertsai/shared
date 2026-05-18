@@ -64,3 +64,16 @@ export type {
   SearchQueryRequest,
   SearchQueryResponse,
 } from './search-types';
+
+// Wave 12.E-fix-2 Phase 2 (PRD-039 / EVID-053 H-8) — canonical auth contracts.
+// Single source of truth for login/refresh/logout request+response shapes so
+// the SvelteKit form actions stop redeclaring inline structural duplicates.
+export type {
+  AuthUser,
+  LoginRequest,
+  LoginResponse,
+  RefreshRequest,
+  RefreshResponse,
+  LogoutRequest,
+  LogoutResponse,
+} from './auth-types';
