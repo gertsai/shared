@@ -32,7 +32,7 @@ import { tryGetRequestContextFromCtx } from '../../../../composition/wave5-middl
 // scrubber. Pre-fix `appErrorToHttpResponse` was exported but uncalled — this
 // route is the second-highest-traffic action and a typical leak vector for
 // `userId`/`url`/`originalKind` details.
-import { appErrorToHttpResponse } from '../../../../composition/errors';
+import { appErrorToHttpResponse } from "../../../../shared/error-scrubber";
 import { PgSoftDeleteNotSupportedError } from '../../../../shared/errors';
 import type { IngestServiceContext } from '../../types';
 

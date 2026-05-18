@@ -38,7 +38,7 @@ import { ForbiddenError } from '../../../../shared/errors';
 // advertises these keys stripped. Action handlers route AppError-derived
 // catches through the scrubber and surface the scrubbed `details` via
 // `APIError.data` so they end up inside `OrchestraApiResponse`.
-import { appErrorToHttpResponse } from '../../../../composition/errors';
+import { appErrorToHttpResponse } from "../../../../shared/error-scrubber";
 import { isAppError } from '@gertsai/errors';
 import { tryGetRequestContextFromCtx } from '../../../../composition/wave5-middlewares';
 import { INGEST_QUEUE_NAME, JOB_PROCESS_DOCUMENT } from '../queues';
