@@ -1,6 +1,6 @@
 {
   "name": "@gertsai/auth-openfga",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "OpenFGA integration for gerts.ai authorization (Zanzibar-style ReBAC)",
   "type": "module",
   "main": "./dist/index.cjs",
