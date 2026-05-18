@@ -36,6 +36,15 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createRequire } from 'node:module';
 import type { Context, Middleware } from 'moleculer';
 
+// Wave 12.E-fix-2 Phase 2 (PRD-039 FR-002 / EVID-053 H-1): the auth
+// lifecycle now hard-fails at boot when `JWT_SECRET` is unset, matching
+// the Wave 11.A FR-002 contract. Set a deterministic test-only secret
+// here BEFORE any `requireFromHere(...)` triggers ApiController.Start.
+// The secret value is never used in this suite (tests inject pre-built
+// Session fixtures via `meta.testSession` rather than signed tokens).
+process.env.JWT_SECRET ??=
+  'test-only-jwt-secret-not-used-for-signing-in-broker.call-suite';
+
 // REQUEST_CONTEXT_LOCALS_KEY lives on the /moleculer subpath (NOT the root
 // surface — root remains transport-agnostic per ADR-007 §2).
 import { REQUEST_CONTEXT_LOCALS_KEY } from '@gertsai/runtime-context/moleculer';

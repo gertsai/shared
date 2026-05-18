@@ -2,13 +2,11 @@
 /**
  * Wave 9 — typed openapi-fetch client for `@gertsai-examples/m9s-example-web`.
  *
- * Uses `paths` from `@gertsai-examples/m9s-example-api-types`. During the
- * Wave 9 build, that package exports a `PlaceholderPaths` (empty record);
- * Teammate B's snapshot commit replaces it with the real generated `paths`.
- * Until then `openapi-fetch` falls back to its generic dynamic-call shape —
- * code still compiles and runs at the cost of weaker type inference on
- * request/response bodies. Once `paths` lands, every endpoint becomes
- * IDE-autocomplete-driven without any consumer touch-ups.
+ * Uses `paths` from `@gertsai-examples/m9s-example-api-types`. Post Wave
+ * 12.E-fix-2 Phase 2 (EVID-053 H-13) the `paths` snapshot mirrors backend
+ * handler reality (CRIT-4 hand-alignment) so we import the real `paths`
+ * directly — the Wave 9 `PlaceholderPaths` alias + downstream `as never`
+ * casts are gone.
  *
  * Middleware:
  *   - Every outbound request gets `X-Tenant-ID: <PUBLIC_TENANT_ID>` injected.
@@ -30,41 +28,27 @@
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-import type { PlaceholderPaths } from '@gertsai-examples/m9s-example-api-types';
+import type { paths } from '@gertsai-examples/m9s-example-api-types';
 import createClient, { type Middleware } from 'openapi-fetch';
 
 import { unsafeDecodeExp } from '$lib/server/jwt';
+// Wave 12.E-fix-2 Phase 2 (EVID-053 H-5): browser-safe env constants split
+// into `$lib/api/config` so the ingest XHR upload can import `apiConfig`
+// without dragging `node:async_hooks` into the client bundle.
+import { API_BASE_URL, TENANT_ID, apiConfig as sharedApiConfig } from './config';
 
 /**
- * Resolve the consumed `paths` type at build time. Until Teammate B's
- * snapshot commit lands, the api-types package only exports
- * `PlaceholderPaths`; we alias to it so the bundle still builds. When
- * `paths` is published, swap this single import line — no other code
- * needs to change.
- *
- * TODO(Wave 9 Teammate B): replace with
- *   `import type { paths } from '@gertsai-examples/m9s-example-api-types';`
- *   `export type ApiPaths = paths;`
+ * Canonical `paths` type for the m9s-example backend. Used by every
+ * `api.POST` / `api.GET` call so endpoint paths + request/response bodies
+ * are IDE-autocomplete-driven. The snapshot is hand-aligned with backend
+ * handlers per Wave 12.E-fix-2 (EVID-053 CRIT-4); update both sides in
+ * lock-step when a handler signature changes.
  */
-export type ApiPaths = PlaceholderPaths;
+export type ApiPaths = paths;
 
-const DEFAULT_API_BASE_URL = 'http://localhost:3031';
-const DEFAULT_TENANT_ID = 'tenant-acme';
-
-/**
- * Resolve env at module load. We read `process.env` (set by SvelteKit /
- * Node) and fall back to the Wave 9 demo defaults so a freshly cloned
- * repo builds without `.env`.
- */
-function readEnv(key: string, fallback: string): string {
-  if (typeof process !== 'undefined' && process.env && typeof process.env[key] === 'string') {
-    return process.env[key] as string;
-  }
-  return fallback;
-}
-
-const API_BASE_URL = readEnv('PUBLIC_API_BASE_URL', DEFAULT_API_BASE_URL);
-const TENANT_ID = readEnv('PUBLIC_TENANT_ID', DEFAULT_TENANT_ID);
+// Wave 12.E-fix-2 Phase 2 (EVID-053 H-5): env constants now live in
+// `./config.ts` (browser-safe — no `node:async_hooks`). Re-imported above
+// so the rest of this server-only module reads them under the same names.
 
 /** Inject the demo tenant header on every outbound request. */
 const tenantHeaderMiddleware: Middleware = {
@@ -330,7 +314,7 @@ export const api = createClient<ApiPaths>({
 api.use(tenantHeaderMiddleware);
 api.use(jwtMiddleware);
 
-export const apiConfig = {
-  baseUrl: API_BASE_URL,
-  tenantId: TENANT_ID,
-} as const;
+// Re-export the browser-safe shape so legacy server-side callers
+// (`import { apiConfig } from '$lib/api/client'`) keep working — see
+// `./config.ts` for the canonical definition (EVID-053 H-5).
+export const apiConfig = sharedApiConfig;

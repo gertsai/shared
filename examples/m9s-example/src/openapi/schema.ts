@@ -78,6 +78,11 @@ export function buildOpenApiSchema() {
             required: true,
             content: {
               'application/json': {
+                // Wave 12.E-fix-2 Phase 2 (PRD-039 FR-007 / EVID-053 backend
+                // openapi/schema.ts realignment): IngestDocumentRequest
+                // mirrors the typia-validated handler type in
+                // `services/ingest/types.ts`. Adds optional `userId` field
+                // (pre-fix missing; handler accepts it as a fallback).
                 schema: {
                   type: 'object',
                   required: ['docId', 'text'],
@@ -87,25 +92,41 @@ export function buildOpenApiSchema() {
                     text: { type: 'string', minLength: 1 },
                     metadata: {
                       type: 'object',
-                      additionalProperties: true,
+                      properties: {
+                        source: { type: 'string' },
+                        tags: { type: 'array', items: { type: 'string' } },
+                        author: { type: 'string' },
+                        createdAt: { type: 'string' },
+                      },
                     },
+                    userId: { type: 'string' },
                   },
                 },
               },
             },
           },
           responses: {
+            // Wave 12.E-fix-2 Phase 2 (PRD-039 FR-007 / EVID-053 backend
+            // openapi/schema.ts realignment): IngestDocumentResponse mirrors
+            // the typia-validated handler type in
+            // `services/ingest/types.ts` (`docId/jobId/mode/chunkCount`).
+            // Pre-fix shape advertised a stale chunk-count key + an
+            // outdated mode-enum that contradicted (a) Teammate B's
+            // realigned api-types snapshot and (b) the typia-validated
+            // handler. Kept in lock-step until/unless the auto-emission
+            // pipeline lands.
             '200': {
               description: 'Document accepted',
               content: {
                 'application/json': {
                   schema: {
                     type: 'object',
-                    required: ['docId', 'mode'],
+                    required: ['docId', 'jobId', 'mode', 'chunkCount'],
                     properties: {
                       docId: { type: 'string' },
-                      mode: { type: 'string', enum: ['sync', 'queued'] },
-                      chunksIndexed: { type: 'integer' },
+                      jobId: { type: 'string' },
+                      mode: { type: 'string', enum: ['queued', 'inline'] },
+                      chunkCount: { type: ['integer', 'null'] },
                     },
                   },
                 },
@@ -155,45 +176,57 @@ export function buildOpenApiSchema() {
             required: true,
             content: {
               'application/json': {
+                // Wave 12.E-fix-2 Phase 2 (PRD-039 FR-007 / EVID-053
+                // backend openapi/schema.ts realignment): SearchQueryRequest
+                // mirrors the typia-validated handler type in
+                // `services/search/types.ts` (`query/topK?/userId?`).
+                // Pre-fix advertised `limit` which the handler never accepts.
                 schema: {
                   type: 'object',
                   required: ['query'],
                   additionalProperties: false,
                   properties: {
                     query: { type: 'string', minLength: 1 },
-                    limit: {
+                    topK: {
                       type: 'integer',
                       minimum: 1,
                       maximum: 100,
-                      default: 10,
                     },
+                    userId: { type: 'string' },
                   },
                 },
               },
             },
           },
           responses: {
+            // Wave 12.E-fix-2 Phase 2 (PRD-039 FR-007 / EVID-053 backend
+            // openapi/schema.ts realignment): SearchQueryResponse mirrors
+            // the typia-validated handler type in
+            // `services/search/types.ts` (`results: { docId, chunkIdx,
+            // text, score }[]`). Pre-fix advertised a top-level timing
+            // field and a per-result similarity field — neither is
+            // present on the handler — and omitted `chunkIdx`.
             '200': {
               description: 'Search results',
               content: {
                 'application/json': {
                   schema: {
                     type: 'object',
-                    required: ['results', 'took_ms'],
+                    required: ['results'],
                     properties: {
                       results: {
                         type: 'array',
                         items: {
                           type: 'object',
-                          required: ['docId', 'text', 'similarity'],
+                          required: ['docId', 'chunkIdx', 'text', 'score'],
                           properties: {
                             docId: { type: 'string' },
+                            chunkIdx: { type: 'integer' },
                             text: { type: 'string' },
-                            similarity: { type: 'number' },
+                            score: { type: 'number' },
                           },
                         },
                       },
-                      took_ms: { type: 'number' },
                     },
                   },
                 },

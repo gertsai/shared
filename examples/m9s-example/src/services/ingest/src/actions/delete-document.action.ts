@@ -25,8 +25,14 @@ import {
 import typia, { type tags } from 'typia';
 
 import { defineAction } from '@gertsai/api-core/moleculer';
+import { isAppError } from '@gertsai/errors';
 import { resolveExampleController } from '../../../../lib/example-controller';
 import { tryGetRequestContextFromCtx } from '../../../../composition/wave5-middlewares';
+// Wave 12.E-fix-2 Phase 2 (PRD-039 FR-007 / EVID-053 H-4): wire HTTP-boundary
+// scrubber. Pre-fix `appErrorToHttpResponse` was exported but uncalled — this
+// route is the second-highest-traffic action and a typical leak vector for
+// `userId`/`url`/`originalKind` details.
+import { appErrorToHttpResponse } from '../../../../composition/errors';
 import { PgSoftDeleteNotSupportedError } from '../../../../shared/errors';
 import type { IngestServiceContext } from '../../types';
 
@@ -86,17 +92,26 @@ export const deleteDocument = defineAction(controller.register('delete-document'
       const response: DeleteDocumentResponse = { docId, deleted: true };
       return respond(response, 'Document deleted', ResponseCode.SUCCESS);
     } catch (err) {
+      // Wave 12.E-fix-2 Phase 2 (PRD-039 FR-007 / EVID-053 H-4): route
+      // AppError-derived rejections through `appErrorToHttpResponse` so PII
+      // / topology hints (`userId`/`url`/`originalKind`) are scrubbed from
+      // `details` before crossing the HTTP wire. The `as never` cast is
+      // required because api-core's error-code `ResponseDataType` resolves
+      // to `never` (default `getNeverValidator`), but the scrubbed details
+      // legitimately ride on `OrchestraApiResponse.data` at runtime.
       if (err instanceof AuthenticationRequiredError) {
+        const { body } = appErrorToHttpResponse(err);
         throw new APIError(
           ResponseCode.UNAUTHORIZED_REQUEST,
-          undefined,
+          body.details as never,
           'Authentication required',
         );
       }
       if (err instanceof TenantScopeViolationError) {
+        const { body } = appErrorToHttpResponse(err);
         throw new APIError(
           ResponseCode.FORBIDDEN__INSUFFICIENT_RIGHTS,
-          undefined,
+          body.details as never,
           'Tenant scope violation',
         );
       }
@@ -114,6 +129,17 @@ export const deleteDocument = defineAction(controller.register('delete-document'
           undefined,
           'Soft-delete is not supported by the current storage adapter ' +
             '(documents schema lacks deleted_at).',
+        );
+      }
+      // Wave 12.E-fix-2 Phase 2 (PRD-039 FR-007 / EVID-053 H-4): catch-all
+      // for any other AppError subclass — routes through the scrubber so
+      // future error types stay PII-clean by construction.
+      if (isAppError(err)) {
+        const { body } = appErrorToHttpResponse(err);
+        throw new APIError(
+          ResponseCode.INTERNAL_ERROR,
+          body.details as never,
+          body.title,
         );
       }
       throw err;
