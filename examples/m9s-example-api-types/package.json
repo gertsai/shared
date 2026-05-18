@@ -1,6 +1,6 @@
 {
   "name": "@gertsai-examples/m9s-example-api-types",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "private": true,
   "description": "OpenAPI 3.1 types generated from the m9s-example backend (Wave 9 reference application)",
   "license": "Apache-2.0",
