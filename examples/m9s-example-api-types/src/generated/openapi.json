@@ -3,7 +3,7 @@
   "info": {
     "title": "m9s-example",
     "version": "0.0.1",
-    "description": "@gertsai/* reference application — Wave 9 minimal contract (synthetic seed; replaced by live spec once backend auto-emission is wired)."
+    "description": "@gertsai/* reference application — hand-aligned OpenAPI snapshot after Wave 12.E-fix-2 (EVID-053 CRIT-4/CRIT-5). Mirrors typia-validated backend handler types in examples/m9s-example/src/services/{ingest,search}/types.ts. Keep in lock-step with backend handlers; the auto-emission generator path was deleted because no first-party consumer invoked it."
   },
   "servers": [
     {
@@ -97,7 +97,7 @@
     "/api/v1/search/query": {
       "post": {
         "operationId": "v1.search.query",
-        "summary": "Vector-similarity search across ingested documents",
+        "summary": "Vector search across ingested documents (cosine score over chunk embeddings)",
         "tags": [
           "search"
         ],
@@ -175,7 +175,27 @@
           },
           "metadata": {
             "type": "object",
-            "additionalProperties": true
+            "properties": {
+              "source": {
+                "type": "string"
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "author": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          "userId": {
+            "type": "string"
           }
         },
         "additionalProperties": false
@@ -184,21 +204,29 @@
         "type": "object",
         "required": [
           "docId",
-          "mode"
+          "jobId",
+          "mode",
+          "chunkCount"
         ],
         "properties": {
           "docId": {
             "type": "string"
           },
+          "jobId": {
+            "type": "string"
+          },
           "mode": {
             "type": "string",
             "enum": [
-              "sync",
-              "queued"
+              "queued",
+              "inline"
             ]
           },
-          "chunksIndexed": {
-            "type": "integer",
+          "chunkCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
             "minimum": 0
           }
         }
@@ -213,11 +241,13 @@
             "type": "string",
             "minLength": 1
           },
-          "limit": {
+          "topK": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 100,
-            "default": 10
+            "maximum": 100
+          },
+          "userId": {
+            "type": "string"
           }
         },
         "additionalProperties": false
@@ -225,8 +255,7 @@
       "SearchQueryResponse": {
         "type": "object",
         "required": [
-          "results",
-          "took_ms"
+          "results"
         ],
         "properties": {
           "results": {
@@ -235,24 +264,26 @@
               "type": "object",
               "required": [
                 "docId",
+                "chunkIdx",
                 "text",
-                "similarity"
+                "score"
               ],
               "properties": {
                 "docId": {
                   "type": "string"
                 },
+                "chunkIdx": {
+                  "type": "integer",
+                  "minimum": 0
+                },
                 "text": {
                   "type": "string"
                 },
-                "similarity": {
+                "score": {
                   "type": "number"
                 }
               }
             }
-          },
-          "took_ms": {
-            "type": "number"
           }
         }
       },

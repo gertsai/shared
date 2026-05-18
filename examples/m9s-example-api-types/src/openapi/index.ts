@@ -2,17 +2,20 @@
 /**
  * Barrel for the OpenAPI helper layer.
  *
- * Backend wires this in at startup:
- * ```ts
- * import { generateOpenAPISchema } from '@gertsai-examples/m9s-example-api-types/openapi';
- * import type { OpenApiMapper, ApiEndpointsGenerator } from '@gertsai-examples/m9s-example-api-types/openapi';
- * ```
+ * History: Wave 9 shipped a `generateOpenAPISchema(...)` runtime generator
+ * here. Wave 12.E-fix-2 (PRD-039 / EVID-053 CRIT-5) deleted it — the function
+ * was 683 LOC of dead code never invoked by any first-party consumer (backend
+ * wires its own static `buildOpenApiSchema()` in
+ * `examples/m9s-example/src/openapi/schema.ts`). The exported-but-bypassed
+ * shape guaranteed forever-drift, so the generator was removed instead of
+ * resurrected.
  *
- * Frontend never imports this — it consumes the generated `paths` type from
- * the package root (`@gertsai-examples/m9s-example-api-types`) instead.
+ * The TYPE-ONLY helpers (`ApiEndpointsGenerator`, `OpenApiMapper`, etc.) are
+ * still useful: they describe the compile-time pipeline a future typia-driven
+ * generator could feed, and a couple of them are exported from the root
+ * barrel for backwards compatibility. They incur zero runtime cost.
  */
 
-export { generateOpenAPISchema } from './generator';
 export type {
   ActionsWithRest,
   ApiEndpointsGenerator,

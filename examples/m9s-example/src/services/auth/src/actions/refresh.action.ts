@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
+// Wave 12.E-fix-2 (PRD-039 FR-001 / EVID-053 CRIT-1 / CWE-613): rotation
+// store now DI'd; in-memory and Redis modes both wired through composition.
 /**
  * Refresh Action — `v1.auth.refresh` — Wave 10.A + Wave 10.E rotation.
  *
@@ -13,6 +15,13 @@
  *
  * Sticking with HS256 + the same `JWT_SECRET` env var, so the verify
  * surface lives in `jwt.ts`.
+ *
+ * Wave 12.E-fix-2 (EVID-053 CRIT-1 / CWE-613): the rotation store is now
+ * DI'd via `service.rotationStore` so the composition root's env-driven
+ * `RedisRotationStore` (when `REDIS_URL` is set) is actually consumed —
+ * previously the action static-imported a module-level Map facade so
+ * multi-instance prod deploys silently dropped reuse-detection state
+ * across nodes and process restarts wiped the in-memory map.
  */
 import { APIError, ResponseCode } from '@gertsai/api-core/contracts';
 import typia from 'typia';
@@ -20,7 +29,6 @@ import typia from 'typia';
 import { defineAction } from '@gertsai/api-core/moleculer';
 import { resolveExampleController } from '../../../../lib/example-controller';
 import { signAccessToken, signRefreshToken, verifyToken } from '../jwt';
-import { consumeJti, registerJti, revokeUser } from '../rotation-store';
 import type {
   AuthServiceContext,
   RefreshRequest,
@@ -42,7 +50,7 @@ export const refresh = defineAction(controller.register('refresh', {
   responseCode: ResponseCode.SUCCESS,
   responseMessage: 'Token refreshed',
 
-  async handler({ params, logger, respond }) {
+  async handler({ params, service, logger, respond }) {
     const claims = verifyToken(params.refreshToken);
     if (claims === null || claims.kind !== 'refresh' || typeof claims.jti !== 'string') {
       logger.warn('[v1.auth.refresh] invalid refresh token');
@@ -66,10 +74,10 @@ export const refresh = defineAction(controller.register('refresh', {
     // whether their stolen-token replay triggered reuse-detection vs landed
     // on an expired/forged token. The distinguished `logger.error` for
     // reuse stays server-side only.
-    const consumed = consumeJti(claims.jti);
+    const consumed = await service.rotationStore.consumeJti(claims.jti);
     if (!consumed.ok) {
       if (consumed.reason === 'reuse') {
-        const revoked = revokeUser(claims.sub);
+        const revoked = await service.rotationStore.revokeUser(claims.sub);
         logger.error('[v1.auth.refresh] reuse detected — revoking user chain', {
           userId: claims.sub,
           jti: claims.jti,
@@ -95,7 +103,11 @@ export const refresh = defineAction(controller.register('refresh', {
     // `consumeJti`, so a stolen copy presented again will trigger the
     // reuse path above.
     const { token: refreshToken, jti } = signRefreshToken(user);
-    registerJti(jti, user.id, Math.floor(Date.now() / 1_000) + REFRESH_TTL_SECONDS);
+    await service.rotationStore.registerJti(
+      jti,
+      user.id,
+      Math.floor(Date.now() / 1_000) + REFRESH_TTL_SECONDS,
+    );
 
     logger.info('[v1.auth.refresh] rotated tokens', { userId: claims.sub });
 

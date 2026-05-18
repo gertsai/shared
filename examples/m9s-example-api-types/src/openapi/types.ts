@@ -5,20 +5,24 @@
  *
  * Compile-time helpers that transform `ApiController.register({...})` action
  * definitions into an OpenAPI-compatible mapped type, ready for
- * `typia.json.schema<...>()` JSON-Schema extraction and then conversion to a
- * proper OpenAPI 3.1 document via {@link generateOpenAPISchema}.
+ * `typia.json.schema<...>()` JSON-Schema extraction.
  *
- * Pipeline:
+ * Pipeline (type-only after Wave 12.E-fix-2):
  *   ApiEndpoints (typeof imports)
  *     → ApiEndpointsGenerator
  *     → OpenApiMapper
  *     → typia.json.schema<..., '3.1'>()
- *     → generateOpenAPISchema(...)  ← runtime
+ *
+ * The historical runtime `generateOpenAPISchema(...)` consumer was deleted in
+ * Wave 12.E-fix-2 (PRD-039 / EVID-053 CRIT-5) because it had no first-party
+ * caller — the backend uses its own static `buildOpenApiSchema()`. These
+ * helpers are kept so that a future typia-driven generator (if ever wired)
+ * has a ready-made mapped-type pipeline.
  *
  * Deviations from upstream (m9s-example needs only the basics per SPEC-019):
  * - Same public surface, no trimming: m9s-example uses POST endpoints only,
- *   but the helpers stay generic so adding GET/PUT/PATCH/DELETE in Wave 10
- *   is non-breaking.
+ *   but the helpers stay generic so adding GET/PUT/PATCH/DELETE later is
+ *   non-breaking.
  * - `ApiControllerRegisteredAction` re-exported via `@gertsai/api-core` root
  *   (matches our `dependencies` block — no `/contracts` subpath needed here).
  */
@@ -263,7 +267,8 @@ export type OpenApiMapper<ApiEndpoints extends Record<string, EndpointLike>> = {
 // =============================================================================
 
 /**
- * Options accepted by {@link generateOpenAPISchema}.
+ * Options shape preserved for forward compatibility — historically consumed
+ * by `generateOpenAPISchema` (deleted in Wave 12.E-fix-2 / EVID-053 CRIT-5).
  *
  * - `schema`  — `typia.json.schema<OpenApiMapper<...>, '3.1'>()` result
  * - `servers` — OpenAPI server entries (typically one local-dev URL)
