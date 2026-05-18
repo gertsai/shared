@@ -197,6 +197,20 @@ export interface GertsErrorDetail {
  * };
  * ```
  */
+/**
+ * @deprecated Wave 14.4 (PRD-046 / EVID-057 §Error Envelope):
+ * `GertsErrorResponse` (RFC-030 hybrid envelope) is being phased out in
+ * favour of the canonical RFC 9457 `ProblemDetails` from `@gertsai/errors/http`
+ * per ADR-006 §A1.5. Use `appErrorToHttpResponse(err)` to build a canonical
+ * `ProblemDetails` body, or use `toProblemDetails(gertsError)` (in this file)
+ * to migrate existing GertsErrorResponse instances.
+ *
+ * Removal: planned for `@gertsai/api-core@1.0.0` (next major).
+ *
+ * @see {@link https://www.rfc-editor.org/rfc/rfc9457}
+ * @see `appErrorToHttpResponse` from `@gertsai/errors/http`
+ * @see {@link toProblemDetails} for migration helper
+ */
 export interface GertsErrorResponse {
   /**
    * Success indicator. Always `false` for error responses.
@@ -291,6 +305,13 @@ export function generateRequestId(): string {
 
 /**
  * Create a GertsErrorResponse.
+ *
+ * @deprecated Wave 14.4 (PRD-046 / EVID-057): build a canonical RFC 9457
+ *   `ProblemDetails` body via `appErrorToHttpResponse(err)` from
+ *   `@gertsai/errors/http` instead. Removal in `@gertsai/api-core@1.0.0`.
+ *
+ * @see `appErrorToHttpResponse` from `@gertsai/errors/http`
+ * @see {@link toProblemDetails} to migrate an existing GertsErrorResponse
  *
  * @param params - Error parameters
  * @returns Complete GertsErrorResponse object
@@ -459,23 +480,126 @@ export function internalError(
 
 /**
  * Validate GertsErrorResponse structure.
+ *
+ * @deprecated Wave 14.4 (PRD-046 / EVID-057): use ProblemDetails from
+ *   `@gertsai/errors/http` instead. Removal in `@gertsai/api-core@1.0.0`.
  */
 export const validateGertsError = typia.createValidate<GertsErrorResponse>();
 
 /**
  * Validate GertsErrorResponse with strict equality.
+ *
+ * @deprecated Wave 14.4 (PRD-046 / EVID-057): use ProblemDetails from
+ *   `@gertsai/errors/http` instead. Removal in `@gertsai/api-core@1.0.0`.
  */
 export const validateGertsErrorEquals = typia.createValidate<GertsErrorResponse>();
 
 /**
  * Assert GertsErrorResponse is valid (throws on error).
+ *
+ * @deprecated Wave 14.4 (PRD-046 / EVID-057): use ProblemDetails from
+ *   `@gertsai/errors/http` instead. Removal in `@gertsai/api-core@1.0.0`.
  */
 export const assertGertsError = typia.createAssert<GertsErrorResponse>();
 
 /**
  * Check if value is a valid GertsErrorResponse.
+ *
+ * @deprecated Wave 14.4 (PRD-046 / EVID-057): use ProblemDetails from
+ *   `@gertsai/errors/http` instead. Removal in `@gertsai/api-core@1.0.0`.
  */
 export const isGertsError = typia.createIs<GertsErrorResponse>();
+
+// ============================================================================
+// Wave 14.4 Migration Helper — GertsErrorResponse → RFC 9457 ProblemDetails
+// ============================================================================
+
+/**
+ * RFC 9457 ProblemDetails shape (canonical per ADR-006 §A1.5).
+ *
+ * Mirrors `@gertsai/errors/http.ProblemDetails` field-for-field. Defined
+ * locally here so this helper doesn't introduce a new dependency on
+ * `@gertsai/errors` from `@gertsai/api-core`. Consumers building a real
+ * HTTP response body should prefer the canonical type at runtime — the
+ * shapes are structurally identical.
+ *
+ * @see {@link https://www.rfc-editor.org/rfc/rfc9457}
+ * @see `appErrorToHttpResponse` from `@gertsai/errors/http`
+ */
+export interface ProblemDetailsLike {
+  readonly type: string;
+  readonly title: string;
+  readonly status: number;
+  readonly detail?: string;
+  readonly instance?: string;
+  readonly details?: Readonly<Record<string, unknown>>;
+  readonly correlationId?: string;
+}
+
+/**
+ * URN-prefix mapping for GertsErrorType → ADR-006 ProblemDetails bucket.
+ * Mirrors `PROBLEM_TYPE_BUCKETS` from `@gertsai/errors/http`.
+ */
+const GERTS_TYPE_TO_PROBLEM_URN: Readonly<Record<GertsErrorType, string>> = {
+  validation_error: 'urn:gertsai:errors:validation',
+  bad_request_error: 'urn:gertsai:errors:validation',
+  authentication_error: 'urn:gertsai:errors:unauthenticated',
+  permission_error: 'urn:gertsai:errors:permission',
+  not_found_error: 'urn:gertsai:errors:not-found',
+  conflict_error: 'urn:gertsai:errors:conflict',
+  rate_limit_error: 'urn:gertsai:errors:rate-limit',
+  timeout_error: 'urn:gertsai:errors:timeout',
+  server_error: 'urn:gertsai:errors:server',
+  service_unavailable: 'urn:gertsai:errors:server',
+} as const;
+
+/**
+ * Map a `GertsErrorResponse` (RFC-030 envelope) → RFC 9457 ProblemDetails.
+ *
+ * Wave 14.4 (PRD-046 / EVID-057) migration helper. RFC-030-specific extras
+ * (`request_id`, `retryable`, `retry_after`, `stage`, `tenant_id`, `param`,
+ * `code`) land in `ProblemDetails.details`. `trace_id` maps to
+ * `correlationId`. Use this to ease migration off `GertsErrorResponse`
+ * ahead of its removal in `@gertsai/api-core@1.0.0`.
+ *
+ * @example
+ * ```typescript
+ * const gertsError = createGertsError({ type: 'not_found_error', code: 'X', message: 'not found' });
+ * const problem = toProblemDetails(gertsError);
+ * // problem === { type: 'urn:gertsai:errors:not-found', title: 'not found', status: 404,
+ * //   detail: 'not found', details: { code: 'X', requestId: 'req_...', retryable: false } }
+ * ```
+ *
+ * @param error - GertsErrorResponse to migrate
+ * @returns Equivalent ProblemDetails body (status code lookup via {@link getStatusCode})
+ */
+// eslint-disable-next-line @typescript-eslint/no-deprecated
+export function toProblemDetails(error: GertsErrorResponse): ProblemDetailsLike {
+  const status = ERROR_STATUS_CODES[error.error.type] ?? 500;
+  const details: Record<string, unknown> = {
+    code: error.error.code,
+    retryable: error.error.retryable,
+    requestId: error.request_id,
+    timestamp: error.timestamp,
+  };
+  if (error.error.param !== undefined) details.param = error.error.param;
+  if (error.error.stage !== undefined) details.stage = error.error.stage;
+  if (error.error.retry_after !== undefined) details.retryAfter = error.error.retry_after;
+  if (error.error.details !== undefined) {
+    Object.assign(details, error.error.details);
+  }
+  if (error.tenant_id !== undefined) details.tenantId = error.tenant_id;
+  if (error.documentation_url !== undefined) details.documentationUrl = error.documentation_url;
+
+  return {
+    type: GERTS_TYPE_TO_PROBLEM_URN[error.error.type] ?? 'urn:gertsai:errors:server',
+    title: error.error.message,
+    status,
+    detail: error.error.message,
+    details,
+    ...(error.trace_id !== undefined ? { correlationId: error.trace_id } : {}),
+  };
+}
 
 // ============================================================================
 // Type Guards
@@ -484,6 +608,7 @@ export const isGertsError = typia.createIs<GertsErrorResponse>();
 /**
  * Type guard for error responses.
  */
+// eslint-disable-next-line @typescript-eslint/no-deprecated
 export function isErrorResponse(response: unknown): response is GertsErrorResponse {
   return (
     typeof response === 'object' &&
