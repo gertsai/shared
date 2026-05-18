@@ -146,11 +146,14 @@ export class ModelRouter {
     }
 
     // Try each model in order
+    // Wave 13.C (PRD-047 / EVID-059 §L FR-003): log fallback failures at
+    // debug level so silent catches no longer mask configuration bugs.
     for (const model of models) {
       try {
         return this.create(model, config);
-      } catch {
-        // Continue to next model
+      } catch (err) {
+        // createWithFallback: try next, log for debug
+        console.debug('createWithFallback fallback', { model, error: err });
       }
     }
 
@@ -159,8 +162,9 @@ export class ModelRouter {
     for (const model of fallbackModels) {
       try {
         return this.create(model, config);
-      } catch {
-        // Continue to next model
+      } catch (err) {
+        // createWithFallback: try next, log for debug
+        console.debug('createWithFallback default-chain fallback', { model, error: err });
       }
     }
 
@@ -414,7 +418,17 @@ export class ModelRouter {
       case 'azure':
         return 'azure-openai';
       case 'bedrock':
-        return 'google'; // Bedrock often hosts Anthropic/Mistral, but mapping is complex. Defaulting to safe choice or need update in llm-info
+        // Wave 13.C (PRD-047 / EVID-059 §M FR-002): the previous mapping to
+        // 'google' was admittedly wrong and silently misclassified Bedrock
+        // models. The upstream llm-info AI_PROVIDER_TYPE enum has no
+        // 'aws'/'bedrock' value yet (only openai/anthropic/azure-openai/
+        // deepseek/openrouter/google/google-vertex-ai/fireworks/xai), so we
+        // fail loudly instead of returning a plausible-but-incorrect value.
+        // When llm-info adds an 'aws-bedrock' provider, swap this throw for
+        // the correct enum value.
+        throw new Error(
+          'Bedrock provider mapping not yet implemented: upstream llm-info AI_PROVIDER_TYPE has no aws/bedrock value'
+        );
       case 'groq':
         return 'openai'; // Groq often hosts OSS models compatible with OpenAI SDK
       case 'mistral':

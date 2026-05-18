@@ -22,6 +22,16 @@ import {
 import { validateBaseUrl } from '../base-url-validator';
 
 const GEMINI_DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
+
+/**
+ * Wave 13.C (PRD-047 / EVID-059 §L FR-004): cap raw upstream response bodies
+ * before interpolating them into error messages. Prevents megabyte-sized
+ * HTML/JSON payloads (or accidental PII leaks) from being logged verbatim.
+ */
+function truncateForError(text: string, maxBytes = 500): string {
+  if (text.length <= maxBytes) return text;
+  return `${text.slice(0, maxBytes)}... [truncated, ${text.length} chars total]`;
+}
 import type {
   LLMConfig,
   LLMMessage,
@@ -364,8 +374,11 @@ export class GeminiProvider extends BaseLLM {
         } catch {
           // Keep original error text if JSON parsing fails
         }
+        // Wave 13.C (PRD-047 / EVID-059 §L FR-004): truncate raw upstream
+        // error body before interpolation (covers both parsed and fallback
+        // paths since errorMessage may still be the unparsed errorText).
         throw new Error(
-          `Gemini API error: ${response.status} - ${errorMessage}`
+          `Gemini API error: ${response.status} - ${truncateForError(errorMessage)}`
         );
       }
 

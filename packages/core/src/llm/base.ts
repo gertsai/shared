@@ -151,7 +151,10 @@ export abstract class BaseLLM {
     } else if (typeof config.stop === 'string') {
       this.stop = [config.stop];
     } else {
-      this.stop = config.stop;
+      // Wave 13.C (PRD-047 / EVID-059 §M FR-001): defensive copy prevents
+      // post-construction mutation of the caller's array from corrupting our
+      // internal stop-words list (and vice versa).
+      this.stop = [...config.stop];
     }
   }
 
