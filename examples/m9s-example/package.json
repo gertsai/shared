@@ -1,6 +1,6 @@
 {
   "name": "@gertsai-examples/m9s-example",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "private": true,
   "description": "Hexagonal Moleculer.js example consuming @gertsai/* packages",
   "license": "Apache-2.0",

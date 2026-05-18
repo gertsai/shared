@@ -1,6 +1,6 @@
 {
   "name": "@gertsai-examples/m9s-example-api-types",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "private": true,
   "description": "Hand-aligned OpenAPI 3.1 types mirroring the m9s-example backend handlers (Wave 9 reference application; auto-emission generator removed in Wave 12.E-fix-2 per EVID-053 CRIT-5).",
   "license": "Apache-2.0",

@@ -1,5 +1,13 @@
 # @gertsai/di
 
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies [8de6205]
+- Updated dependencies [739b3de]
+  - @gertsai/utils@0.5.0
+
 ## 0.3.0
 
 ### Minor Changes
