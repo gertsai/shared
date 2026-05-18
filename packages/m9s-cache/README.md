@@ -123,7 +123,7 @@ export default {
 
 | | |
 |:---|:---|
-| **Drivers** | `MemoryCacheDriver` (LRU + TTL), `RedisCacheDriver` (single node, Sentinel, Cluster) |
+| **Drivers** | `MemoryCacheDriver` (FIFO + TTL — see [Drivers](#drivers)), `RedisCacheDriver` (single node, Sentinel, Cluster) |
 | **Tag invalidation** | `generateTags()` + `CacheTagConfig` — version-based bumps, no `KEYS *` scans |
 | **Locks** | `NoopLockProvider` (default), `RedlockLockProvider` for stampede protection in `wrap()` |
 | **TTL** | Per-key, per-action, per-store; validated via `validateTTL` (`MIN`/`MAX_TTL_SECONDS`) |
@@ -167,7 +167,7 @@ Plus types: `CachePayload`, `CacheDriver`, `CacheSerializer`, `CacheStoreOptions
 
 | Driver | Use for | Notes |
 |---|---|---|
-| **`MemoryCacheDriver`** | Tests, single-process apps, dev mode | LRU eviction + TTL sweep, no external deps |
+| **`MemoryCacheDriver`** | Tests, single-process apps, dev mode | **FIFO eviction** (insertion-order, NOT LRU) + TTL sweep, no external deps. For LRU semantics, build a custom driver on top of `@gertsai/utils/lru.LruMap`. |
 | **`RedisCacheDriver`** | Production, multi-instance services | `ioredis` client; supports single node, Sentinel, and Cluster topologies (Valkey-compatible) |
 
 ### Redis Cluster / Valkey

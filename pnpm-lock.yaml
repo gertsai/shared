@@ -684,6 +684,9 @@ importers:
 
   packages/fetch:
     dependencies:
+      '@gertsai/utils':
+        specifier: workspace:*
+        version: link:../utils
       undici:
         specifier: ^7.2.3
         version: 7.25.0

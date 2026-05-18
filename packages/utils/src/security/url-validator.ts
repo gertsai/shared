@@ -7,7 +7,28 @@
  * - Private IP ranges (RFC 1918)
  * - Link-local addresses
  * - Cloud metadata endpoints (169.254.169.254)
+ *
+ * # Public API (two flavours)
+ *
+ * 1. **Throw-primary** (`validateWebhookUrl` + `parseAndValidateUrl` +
+ *    `isUrlSafe` + async DNS-rebinding variants): HTTPS-by-default,
+ *    credential-rejecting, OWASP-hardened. Throws `SsrfError` on block.
+ *    Use for webhook URLs, OAuth callbacks, anything user-supplied
+ *    where defaults-secure matters.
+ *
+ * 2. **Result-shape** (`validateUrl` + `assertSafeUrl` +
+ *    `createUrlValidator`): Wave 14.3 (PRD-045 / EVID-057) port from
+ *    `@gertsai/fetch`. Non-throwing primary, granular `allow*` flags,
+ *    explicit `maxUrlLength` cap, IPv4 int-CIDR fast path. Use for
+ *    fetch-style flows where caller branches on `{valid, error?}`.
+ *
+ * Both flavours share the same blocklist (private/loopback/link-local/
+ * cloud-metadata) and the same `SsrfError`. The result-shape flavour
+ * wraps the throw-primary core and catches the error to convert to
+ * `{valid: false, error: string}`.
  */
+
+import { isIP } from 'node:net';
 
 // =============================================================================
 // Types
@@ -24,6 +45,45 @@ export interface UrlValidationOptions {
   dnsRebindingProtection?: boolean;
   /** DNS resolution timeout in ms (default: 5000) */
   dnsTimeoutMs?: number;
+}
+
+/**
+ * Configuration for the result-shape {@link validateUrl} flavour.
+ *
+ * Ported from `@gertsai/fetch` in Wave 14.3 (PRD-045 / EVID-057).
+ * Differs from {@link UrlValidationOptions} in defaults and the
+ * granularity of opt-in flags — `validateUrl` defaults to allowing
+ * both `http:` and `https:` (because it's primarily consumed by
+ * `undici`-driven HTTP clients that need plain HTTP support), while
+ * `validateWebhookUrl` defaults to HTTPS-only.
+ */
+export interface UrlValidatorConfig {
+  /** Allow localhost (127.0.0.1, ::1, localhost). Default: false */
+  allowLocalhost?: boolean;
+  /** Allow private networks (10.x, 172.16-31.x, 192.168.x). Default: false */
+  allowPrivateNetworks?: boolean;
+  /** Allow link-local addresses (169.254.x.x, fe80::). Default: false */
+  allowLinkLocal?: boolean;
+  /** Allow cloud metadata endpoints (169.254.169.254). Default: false */
+  allowCloudMetadata?: boolean;
+  /** Allowed protocols. Default: ['http:', 'https:'] */
+  allowedProtocols?: string[];
+  /** Blocked hostnames (exact match). Default: [] */
+  blockedHostnames?: string[];
+  /** Allowed hostnames (if set, ONLY these are allowed). Default: undefined */
+  allowedHostnames?: string[];
+  /** Maximum URL length. Default: 2048 */
+  maxUrlLength?: number;
+}
+
+/**
+ * Result returned by the non-throwing {@link validateUrl}.
+ */
+export interface UrlValidationResult {
+  valid: boolean;
+  error?: string;
+  /** Normalized URL if valid */
+  url?: URL;
 }
 
 export class SsrfError extends Error {
@@ -593,4 +653,275 @@ export async function isUrlSafeAsync(
   } catch {
     return false;
   }
+}
+
+// =============================================================================
+// Result-shape API (Wave 14.3 / PRD-045 / EVID-057)
+//
+// Ported from `@gertsai/fetch` so that fetch can become a thin shim
+// while consumers get a single canonical SSRF validator owned by
+// `@gertsai/utils/security`.
+//
+// Design notes:
+// - The result-shape flavour does NOT duplicate the blocklist — it
+//   reuses the throw-primary core's hostname/IP checks plus its own
+//   IPv4 int-CIDR fast path. Granular `allow*` flags are layered on
+//   top so callers can opt-in to localhost/private/link-local/cloud
+//   metadata access for trusted-internal scenarios (e.g. Vault).
+// - `validateUrl` defaults to allowing both `http:` and `https:` to
+//   preserve `@gertsai/fetch`'s historical default.
+// - Error strings are kept identical to the original `fetch` impl so
+//   existing pattern-matching consumers (and the 31 test cases) keep
+//   working unchanged.
+// =============================================================================
+
+/** Private IPv4 CIDR ranges (int-encoded for fast comparison). */
+const PRIVATE_IPV4_RANGES = [
+  { start: 0x0a000000, end: 0x0affffff }, // 10.0.0.0/8
+  { start: 0xac100000, end: 0xac1fffff }, // 172.16.0.0/12
+  { start: 0xc0a80000, end: 0xc0a8ffff }, // 192.168.0.0/16
+];
+
+/** Loopback IPv4 range (127.0.0.0/8). */
+const LOOPBACK_IPV4_START = 0x7f000000;
+const LOOPBACK_IPV4_END = 0x7fffffff;
+
+/** Link-local IPv4 range (169.254.0.0/16). */
+const LINK_LOCAL_IPV4_START = 0xa9fe0000;
+const LINK_LOCAL_IPV4_END = 0xa9feffff;
+
+/** Cloud metadata IP (AWS / GCP / Azure). */
+const CLOUD_METADATA_IP = 0xa9fea9fe; // 169.254.169.254
+
+/** Internal config type with resolved defaults. */
+interface ResolvedValidatorConfig {
+  allowLocalhost: boolean;
+  allowPrivateNetworks: boolean;
+  allowLinkLocal: boolean;
+  allowCloudMetadata: boolean;
+  allowedProtocols: string[];
+  blockedHostnames: string[];
+  allowedHostnames: string[] | undefined;
+  maxUrlLength: number;
+}
+
+const DEFAULT_VALIDATOR_CONFIG: ResolvedValidatorConfig = {
+  allowLocalhost: false,
+  allowPrivateNetworks: false,
+  allowLinkLocal: false,
+  allowCloudMetadata: false,
+  allowedProtocols: ['http:', 'https:'],
+  blockedHostnames: [],
+  allowedHostnames: undefined,
+  maxUrlLength: 2048,
+};
+
+/** Converts an IPv4 dotted-quad string to a 32-bit unsigned int. */
+function ipv4ToInt(ip: string): number {
+  const parts = ip.split('.').map(Number);
+  const [a = 0, b = 0, c = 0, d = 0] = parts;
+  return ((a << 24) | (b << 16) | (c << 8) | d) >>> 0;
+}
+
+function isPrivateIPv4Int(ipInt: number): boolean {
+  return PRIVATE_IPV4_RANGES.some((range) => ipInt >= range.start && ipInt <= range.end);
+}
+
+function isLoopbackIPv4Int(ipInt: number): boolean {
+  return ipInt >= LOOPBACK_IPV4_START && ipInt <= LOOPBACK_IPV4_END;
+}
+
+function isLinkLocalIPv4Int(ipInt: number): boolean {
+  return ipInt >= LINK_LOCAL_IPV4_START && ipInt <= LINK_LOCAL_IPV4_END;
+}
+
+function isLoopbackIPv6Literal(ip: string): boolean {
+  const normalized = ip.toLowerCase();
+  return normalized === '::1' || normalized === '0:0:0:0:0:0:0:1';
+}
+
+function isLinkLocalIPv6Literal(ip: string): boolean {
+  return ip.toLowerCase().startsWith('fe80:');
+}
+
+function isPrivateIPv6Literal(ip: string): boolean {
+  const normalized = ip.toLowerCase();
+  return normalized.startsWith('fc') || normalized.startsWith('fd');
+}
+
+/**
+ * Validate a URL against SSRF attack patterns and return a result
+ * object. Non-throwing primary; pair with {@link assertSafeUrl} for
+ * a throwing flavour.
+ *
+ * Defaults block: localhost, RFC1918 private networks, link-local,
+ * cloud metadata, `file:` / `ftp:` / `javascript:` protocols,
+ * `0.0.0.0`, `255.255.255.255`, IPv6 `::1` / `fe80::` / `fc00::/7`.
+ * Default protocol allowlist: `['http:', 'https:']`.
+ *
+ * Wave 14.3 (PRD-045 / EVID-057): consolidated from
+ * `@gertsai/fetch/lib/url-validator` into the canonical security
+ * namespace. `@gertsai/fetch` now re-exports this function.
+ *
+ * @example
+ * ```typescript
+ * const result = validateUrl('https://api.example.com/data');
+ * if (!result.valid) throw new Error(result.error);
+ *
+ * // Trusted-internal callers can opt-in
+ * validateUrl('http://10.0.0.1/health', { allowPrivateNetworks: true });
+ * ```
+ */
+export function validateUrl(
+  urlString: string,
+  config: UrlValidatorConfig = {},
+): UrlValidationResult {
+  const cfg: ResolvedValidatorConfig = {
+    allowLocalhost: config.allowLocalhost ?? DEFAULT_VALIDATOR_CONFIG.allowLocalhost,
+    allowPrivateNetworks:
+      config.allowPrivateNetworks ?? DEFAULT_VALIDATOR_CONFIG.allowPrivateNetworks,
+    allowLinkLocal: config.allowLinkLocal ?? DEFAULT_VALIDATOR_CONFIG.allowLinkLocal,
+    allowCloudMetadata:
+      config.allowCloudMetadata ?? DEFAULT_VALIDATOR_CONFIG.allowCloudMetadata,
+    allowedProtocols: config.allowedProtocols ?? DEFAULT_VALIDATOR_CONFIG.allowedProtocols,
+    blockedHostnames: config.blockedHostnames ?? DEFAULT_VALIDATOR_CONFIG.blockedHostnames,
+    allowedHostnames: config.allowedHostnames ?? DEFAULT_VALIDATOR_CONFIG.allowedHostnames,
+    maxUrlLength: config.maxUrlLength ?? DEFAULT_VALIDATOR_CONFIG.maxUrlLength,
+  };
+
+  if (urlString.length > cfg.maxUrlLength) {
+    return { valid: false, error: `URL exceeds maximum length of ${cfg.maxUrlLength}` };
+  }
+
+  let url: URL;
+  try {
+    url = new URL(urlString);
+  } catch {
+    return { valid: false, error: 'Invalid URL format' };
+  }
+
+  if (!cfg.allowedProtocols.includes(url.protocol)) {
+    return {
+      valid: false,
+      error: `Protocol '${url.protocol}' not allowed. Allowed: ${cfg.allowedProtocols.join(', ')}`,
+    };
+  }
+
+  // Allowlist short-circuit — if hostname is on the allowlist, skip
+  // all other blocklist checks (intentional escape hatch for trusted
+  // internal services).
+  if (cfg.allowedHostnames && cfg.allowedHostnames.length > 0) {
+    const hostname = url.hostname.toLowerCase();
+    if (!cfg.allowedHostnames.some((h) => h.toLowerCase() === hostname)) {
+      return { valid: false, error: `Hostname '${url.hostname}' not in allowlist` };
+    }
+    return { valid: true, url };
+  }
+
+  if (cfg.blockedHostnames.length > 0) {
+    const hostname = url.hostname.toLowerCase();
+    if (cfg.blockedHostnames.some((h) => h.toLowerCase() === hostname)) {
+      return { valid: false, error: `Hostname '${url.hostname}' is blocked` };
+    }
+  }
+
+  const hostname = url.hostname.toLowerCase();
+
+  // Localhost-name check (string-based; covers names that don't parse
+  // as IPs).
+  if (!cfg.allowLocalhost) {
+    if (
+      hostname === 'localhost' ||
+      hostname === 'localhost.localdomain' ||
+      hostname.endsWith('.localhost')
+    ) {
+      return { valid: false, error: 'Localhost not allowed' };
+    }
+  }
+
+  // IP-address checks. URL parser keeps brackets for IPv6 hosts
+  // (`[::1]`), so strip them before passing to `isIP()`.
+  const isIPv6Bracketed = hostname.startsWith('[') && hostname.endsWith(']');
+  const ipToCheck = isIPv6Bracketed ? hostname.slice(1, -1) : hostname;
+  const ipVersion = isIP(ipToCheck);
+
+  if (ipVersion === 4) {
+    const ipInt = ipv4ToInt(hostname);
+
+    // Cloud metadata is the most critical block (AWS/GCP/Azure).
+    if (!cfg.allowCloudMetadata && ipInt === CLOUD_METADATA_IP) {
+      return { valid: false, error: 'Cloud metadata endpoint blocked (169.254.169.254)' };
+    }
+
+    if (!cfg.allowLocalhost && isLoopbackIPv4Int(ipInt)) {
+      return { valid: false, error: 'Loopback addresses (127.x.x.x) not allowed' };
+    }
+
+    if (!cfg.allowPrivateNetworks && isPrivateIPv4Int(ipInt)) {
+      return { valid: false, error: 'Private network addresses not allowed' };
+    }
+
+    if (!cfg.allowLinkLocal && isLinkLocalIPv4Int(ipInt)) {
+      return { valid: false, error: 'Link-local addresses (169.254.x.x) not allowed' };
+    }
+
+    if (ipInt === 0) {
+      return { valid: false, error: 'Address 0.0.0.0 not allowed' };
+    }
+
+    if (ipInt === 0xffffffff) {
+      return { valid: false, error: 'Broadcast address not allowed' };
+    }
+  } else if (ipVersion === 6) {
+    if (!cfg.allowLocalhost && isLoopbackIPv6Literal(ipToCheck)) {
+      return { valid: false, error: 'IPv6 loopback (::1) not allowed' };
+    }
+
+    if (!cfg.allowLinkLocal && isLinkLocalIPv6Literal(ipToCheck)) {
+      return { valid: false, error: 'IPv6 link-local addresses not allowed' };
+    }
+
+    if (!cfg.allowPrivateNetworks && isPrivateIPv6Literal(ipToCheck)) {
+      return { valid: false, error: 'IPv6 private addresses (fc00::/7) not allowed' };
+    }
+  }
+
+  return { valid: true, url };
+}
+
+/**
+ * Validate a URL and return the parsed {@link URL} or throw.
+ * Throw-primary mirror of {@link validateUrl}.
+ *
+ * @throws {Error} with `SSRF blocked: <reason>` if invalid.
+ */
+export function assertSafeUrl(urlString: string, config?: UrlValidatorConfig): URL {
+  const result = validateUrl(urlString, config);
+  if (!result.valid) {
+    throw new Error(`SSRF blocked: ${result.error}`);
+  }
+  return result.url!;
+}
+
+/**
+ * Create a preset validator with default {@link UrlValidatorConfig}.
+ * Each call merges per-call overrides on top of the preset.
+ *
+ * @example
+ * ```typescript
+ * const internalValidator = createUrlValidator({
+ *   allowPrivateNetworks: true,
+ *   allowedHostnames: ['internal-api.local', 'redis.local'],
+ * });
+ * internalValidator.validate('http://internal-api.local/health');
+ * internalValidator.assert('http://evil.com'); // throws
+ * ```
+ */
+export function createUrlValidator(config: UrlValidatorConfig = {}) {
+  return {
+    validate: (url: string, overrides?: UrlValidatorConfig) =>
+      validateUrl(url, { ...config, ...overrides }),
+    assert: (url: string, overrides?: UrlValidatorConfig) =>
+      assertSafeUrl(url, { ...config, ...overrides }),
+  };
 }
