@@ -1,5 +1,11 @@
 # @gerts/api-rlr
 
+## 0.3.1
+
+### Patch Changes
+
+- @gertsai/api-core@0.3.2
+
 ## 0.3.0
 
 ### Minor Changes

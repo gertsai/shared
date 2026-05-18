@@ -1,5 +1,95 @@
 # @gertsai/core
 
+## 0.4.0
+
+### Minor Changes
+
+- f0f6f26: Wave 13.A — close 2 CRITICALs + 3 HIGHs from EVID-059 (Wave 12.D2 deep audit).
+
+  **CRIT-1 (cross-tenant state leakage) — BREAKING for multi-turn extended thinking.**
+  `AnthropicProvider.previousThinkingBlocks` instance-level mutable state replayed
+  one tenant's chain-of-thought into the next tenant's prompt when the provider
+  was pooled. `ModelRouter`'s module-level singleton at `routing.ts:600-604`
+  actively encouraged pooling, making this a production cross-tenant leak.
+
+  Fix: removed the instance field entirely. Thinking blocks are now caller-
+  supplied per call via `options.metadata[ANTHROPIC_PREVIOUS_THINKING_BLOCKS_KEY]`
+  (exported `as const` string key). Added a defensive narrowing helper
+  `extractPreviousThinkingBlocks(options)` that filters to entries whose `type`
+  is exactly `'thinking'` or `'redacted_thinking'`. `formatMessagesForAnthropic`
+  now takes `previousThinkingBlocks` as a parameter rather than reading instance
+  state.
+
+  **Migration**: callers using multi-turn extended-thinking with Anthropic
+  providers MUST thread previous thinking blocks themselves via the metadata
+  channel. Single-turn callers are unaffected. The prior auto-cache was the leak —
+  removing it is the security fix.
+
+  **CRIT-2 (prototype pollution / unsafe dispatch).** `BaseLLM.handleToolExecution`
+  flowed LLM-controlled `toolName` straight to `availableFunctions[toolName]` with
+  no `hasOwnProperty` guard (CWE-1321). Fix: 3-prong guard before any dispatch:
+
+  1. `typeof toolName === 'string'` + non-empty
+  2. `Object.prototype.hasOwnProperty.call(availableFunctions, toolName)` —
+     blocks `__proto__`, `constructor`, `toString`, `hasOwnProperty`
+  3. `typeof fn === 'function'` — rejects own-properties holding non-function values
+
+  Both `console.warn`/`console.error` calls converted to structured logging
+  (user-controlled `toolName` now a structured field, not part of format string —
+  CWE-117 protection).
+
+  **H-9 (Gemini URL path injection).** `GeminiProvider.makeRequest` interpolated
+  `this.model` into URL path without `encodeURIComponent`. Model name containing
+  `/`, `?`, `#`, `:` could reroute the request + leak API key. Fix: wrap
+  `this.model` with `encodeURIComponent` before path interpolation.
+
+  **H-3 (createRequestMeta spread-after-literal).** Replaced
+  `timeout: options.timeout ?? DEFAULT_TIMEOUT, ...options` with destructure-then-
+  spread pattern so `{ timeout: undefined }` no longer silently overrides the
+  default. Scanned `packages/core/src/session/` — only 1 affected factory
+  (`createRequestMeta`); 3 other patterns reviewed and confirmed safe.
+
+  **H-5 (`$switchOperator` unauthenticated privilege swap).** Method on
+  `GraphRAGSessionContext` mutated `operator.id` + `operator.type` with no tenant
+  check, no audit event, no auth gate. `grep` confirmed zero external callers
+  across `packages/` + `examples/`. Deleted the method outright per EVID-059
+  guidance "Cleanest if no external consumer uses it". Callers needing legitimate
+  operator-switching should use `@gertsai/session.Session.$switchOperator` which
+  already throws `SessionDestroyedError` and emits `operator-switched` events.
+
+  **Tests**: 10 new tests across `llm.test.ts` (8 covering CRIT-1, CRIT-2, H-9) +
+  `session-types.test.ts` (7 covering H-3 regression) + `session-context.test.ts`
+  (3 pinning the H-5 removal). 1154 tests pass, 0 fail.
+
+  Refs: PRD-043, EVID-059 (Wave 12.D2 audit), EVID-058 (Wave 12.G aggregate).
+
+- 7bc148b: Wave 13.B — close 8 remaining HIGHs from EVID-059 (query + session + LLM).
+
+  **Query domain (Teammate G):**
+
+  - **H-1** — `QueryRouter.execute` + `.stream` blindly spread `result.metadata.custom as object`. Caller-controlled value could be a string (→ char-indexed spread `{0:'s',1:'o',...}`) or contain an own `__proto__` key (post `JSON.parse`). Fix: new `safeSpreadCustom(custom)` helper narrows with `typeof === 'object' && !== null` + drops `__proto__`/`constructor`/`prototype` keys. Both call sites swapped.
+  - **H-2** — `safeExecute` swallowed all non-`QueryError` exceptions as generic `EXECUTION_FAILED retryable:false`. Programmer errors (`TypeError`/`RangeError`) were indistinguishable from transient network errors. Fix: typed catch branch propagates `cause.name`/`cause.message`, flags `programmerError: true` for TypeError/RangeError/ReferenceError/SyntaxError/URIError/EvalError, translates AbortError → CANCELLED (retryable=false) + TimeoutError → TIMEOUT (retryable=true).
+
+  **Session domain (Teammate G):**
+
+  - **H-4** — `GraphRAGSessionContext.updateSettings` mutated `Readonly<GraphRAGSettings>` private field via `Object.assign`. Callers who captured a reference via the getter saw their "read-only" snapshot change underneath. Fix: drop `readonly` on the field + freeze initial value in constructor + `updateSettings` reassigns brand-new `Object.freeze({...current, ...settings})`. Captured snapshots stay immutable.
+  - **H-6** — `mergeTenantConfigWithDefaults` + `applyTenantConfigUpdate` deep-spread caller-controlled config with no key sanitisation. If config came from `JSON.parse` with own `__proto__`, propagated as own property on merged result. `isTenantConfig` only checked 2 keys + would pass arbitrary extras. Fix: new module-private `safeSpread<T>(...sources)` helper drops `__proto__`/`constructor`/`prototype` from every nested section. Both merge functions rewritten to route through `safeSpread`. Preserves `exactOptionalPropertyTypes` discipline.
+
+  **LLM domain (Teammate H):**
+
+  - **H-7** — Module-level `defaultRouter` singleton ignored subsequent config. `getDefaultRouter(config)` only honoured `config` on first call. Multi-tenant servers initialising with tenant-specific event buses lost telemetry routing for all but the first tenant. Fix: cache first `RouterConfig`; subsequent calls with `config !== undefined` deep-compare against cached (provider, costOptimization, eventBus by identity, fallbacks structurally); mismatch throws with guidance pointing to `new ModelRouter(...)`. Added `__resetDefaultRouterForTests` (test-only) for isolation.
+  - **H-8** — `OpenAIProvider.isO1Model` used `.includes('o1') || .includes('o3')` substring check. False positives: `gpt-4o-1106`, `gpt-4o-3-mini`, `gpto1-eval` silently lost temperature/tools/stop words. Fix: anchored regex `/^(?:openai\/)?o[13](?:-|$)/` — true positives (`o1`, `o1-mini`, `o1-preview`, `o3`, `o3-mini`, `openai/o1`) classify correctly; false positives no longer match.
+  - **H-10** — `JSON.parse(toolCall.function.arguments)` unwrapped in `OpenAIProvider.call` + `AnthropicProvider.call`. Malformed args from model threw `SyntaxError` mid-loop, leaked unparsed args via `error.message`, aborted subsequent tool calls. Fix: try/catch wrap; emit `llm.tool.failed` event; continue with remaining tool calls. Tightened parsed-shape contract — plain object only (null/arrays/primitives rejected with informative message).
+  - **H-11** — Both `AnthropicProvider` and `GeminiProvider` silently injected a fabricated `{role:'user', content:'Hello'}` when conversation transformation yielded zero messages or started with non-user role. Caller's audit trail mismatched actual prompt. Fix: replace fabrication with `throw new Error('Empty or assistant-led conversation: caller must supply at least one user message as the first turn')`. Both providers.
+
+  **Tests added: 38 new tests (24 LLM + 14 query/session). Total: 1195 pass, 53 skipped, 0 fail.**
+
+  All 8 Wave 13.A tests (CRIT-1 × 3, CRIT-2 × 3, H-9 × 2) continue passing.
+
+  After Wave 13.A + 13.B, EVID-059's 11 HIGHs are closed (3 in 13.A, 8 in 13.B). 14 MED + 8 LOW deferred to Wave 13.C-E backlog.
+
+  Refs: PRD-043 (Wave 13.A precedent), EVID-059 (audit source), EVID-060 (13.A), EVID-061 (this fix).
+
 ## 0.3.0
 
 ### Minor Changes

@@ -1,5 +1,17 @@
 # @gertsai-examples/m9s-example
 
+## 0.0.10
+
+### Patch Changes
+
+- Updated dependencies [f0f6f26]
+- Updated dependencies [7bc148b]
+  - @gertsai/core@0.4.0
+  - @gertsai/api-core@0.3.2
+  - @gertsai/auth-openfga@0.3.1
+  - @gertsai-examples/m9s-example-api-types@0.0.7
+  - @gertsai/api-rlr@0.3.1
+
 ## 0.0.9
 
 ### Patch Changes
