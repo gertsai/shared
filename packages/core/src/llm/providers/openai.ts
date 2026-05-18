@@ -19,6 +19,16 @@ import {
 import { validateBaseUrl } from '../base-url-validator';
 
 const OPENAI_DEFAULT_BASE_URL = 'https://api.openai.com/v1';
+
+/**
+ * Wave 13.C (PRD-047 / EVID-059 §L FR-004): cap raw upstream response bodies
+ * before interpolating them into error messages. Prevents megabyte-sized
+ * HTML/JSON payloads (or accidental PII leaks) from being logged verbatim.
+ */
+function truncateForError(text: string, maxBytes = 500): string {
+  if (text.length <= maxBytes) return text;
+  return `${text.slice(0, maxBytes)}... [truncated, ${text.length} chars total]`;
+}
 import type {
   LLMConfig,
   LLMMessage,
@@ -216,6 +226,13 @@ export class OpenAIProvider extends BaseLLM {
 
       const response = await this.makeRequest(params);
 
+      // Wave 13.C (PRD-047 / EVID-059 §L FR-005): distinguish "no choices
+      // returned" (a real upstream failure) from "choices[0] returned an
+      // empty string" (legitimate empty completion). The previous
+      // `?? ''` collapsed both cases into a silent empty response.
+      if (!response.choices || response.choices.length === 0) {
+        throw new Error('OpenAI returned no choices in response');
+      }
       const content = response.choices[0]?.message?.content ?? '';
       const processedContent = this.applyStopWords(content);
 
@@ -316,7 +333,7 @@ export class OpenAIProvider extends BaseLLM {
 
       if (!response.ok) {
         const error = await response.text();
-        throw new Error(`OpenAI API error: ${response.status} - ${error}`);
+        throw new Error(`OpenAI API error: ${response.status} - ${truncateForError(error)}`);
       }
 
       if (!response.body) {
@@ -503,7 +520,7 @@ export class OpenAIProvider extends BaseLLM {
 
       if (!response.ok) {
         const error = await response.text();
-        throw new Error(`OpenAI API error: ${response.status} - ${error}`);
+        throw new Error(`OpenAI API error: ${response.status} - ${truncateForError(error)}`);
       }
 
       return (await response.json()) as OpenAICompletion;

@@ -14,6 +14,16 @@ import { BaseLLM, LLMCallError, type LLMCapabilities } from '../base';
 import { validateBaseUrl } from '../base-url-validator';
 
 const ANTHROPIC_DEFAULT_BASE_URL = 'https://api.anthropic.com/v1';
+
+/**
+ * Wave 13.C (PRD-047 / EVID-059 §L FR-004): cap raw upstream response bodies
+ * before interpolating them into error messages. Prevents megabyte-sized
+ * HTML/JSON payloads (or accidental PII leaks) from being logged verbatim.
+ */
+function truncateForError(text: string, maxBytes = 500): string {
+  if (text.length <= maxBytes) return text;
+  return `${text.slice(0, maxBytes)}... [truncated, ${text.length} chars total]`;
+}
 import type {
   LLMConfig,
   LLMMessage,
@@ -355,7 +365,7 @@ export class AnthropicProvider extends BaseLLM {
 
       if (!response.ok) {
         const error = await response.text();
-        throw new Error(`Anthropic API error: ${response.status} - ${error}`);
+        throw new Error(`Anthropic API error: ${response.status} - ${truncateForError(error)}`);
       }
 
       if (!response.body) {
@@ -613,7 +623,7 @@ export class AnthropicProvider extends BaseLLM {
 
       if (!response.ok) {
         const error = await response.text();
-        throw new Error(`Anthropic API error: ${response.status} - ${error}`);
+        throw new Error(`Anthropic API error: ${response.status} - ${truncateForError(error)}`);
       }
 
       return (await response.json()) as AnthropicCompletion;

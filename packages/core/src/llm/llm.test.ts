@@ -164,6 +164,19 @@ describe('BaseLLM', () => {
       const llm2 = new TestLLM({ model: 'test', provider: 'test', stop: ['STOP1', 'STOP2'] });
       expect(llm2['stop']).toEqual(['STOP1', 'STOP2']);
     });
+
+    // Wave 13.C (PRD-047 / EVID-059 §M FR-001) — regression
+    it('should defensively copy stop array so caller mutation does not leak in', () => {
+      const callerStops = ['STOP1', 'STOP2'];
+      const llm = new TestLLM({ model: 'test', provider: 'test', stop: callerStops });
+
+      // Mutate the caller's array AFTER construction.
+      callerStops.push('INJECTED');
+      callerStops[0] = 'TAMPERED';
+
+      expect(llm['stop']).toEqual(['STOP1', 'STOP2']);
+      expect(llm['stop']).not.toBe(callerStops);
+    });
   });
 
   describe('applyStopWords', () => {
@@ -398,6 +411,16 @@ describe('ModelRouter', () => {
       expect(candidates[0].contextWindow).toBeGreaterThan(0);
     });
 
+    // Wave 13.C (PRD-047 / EVID-059 §M FR-002) — regression
+    it('should fail loudly when routing to bedrock instead of silently mapping to google', () => {
+      // Previously bedrock silently mapped to AI_PROVIDER_TYPE 'google' which
+      // produced confidently-wrong telemetry and candidate lists. Now we
+      // throw an informative error.
+      expect(() => router.listCandidates({ provider: 'bedrock' })).toThrow(
+        /Bedrock provider mapping not yet implemented/,
+      );
+    });
+
     it('should emit router selection events', () => {
       const eventBus = new SimpleEventBus();
       const events: LLMRouterSelectionEvent[] = [];
@@ -502,6 +525,45 @@ describe('OpenAIProvider', () => {
       } as Response);
 
       await expect(provider.call([{ role: 'user', content: 'Hi' }])).rejects.toThrow(LLMCallError);
+    });
+
+    // Wave 13.C (PRD-047 / EVID-059 §L FR-005) — regression
+    it('should throw informative error when OpenAI returns no choices (vs masking as empty string)', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id: 'chatcmpl-empty',
+            object: 'chat.completion',
+            created: Date.now(),
+            model: 'gpt-4o',
+            // Critical: empty choices array
+            choices: [],
+            usage: { prompt_tokens: 5, completion_tokens: 0, total_tokens: 5 },
+          }),
+      } as unknown as Response);
+
+      await expect(provider.call([{ role: 'user', content: 'Hi' }])).rejects.toThrow(
+        /OpenAI API call failed: OpenAI returned no choices in response/,
+      );
+    });
+
+    // Wave 13.C (PRD-047 / EVID-059 §L FR-004) — regression
+    it('should truncate raw upstream error body to 500 bytes before interpolation', async () => {
+      const bigBody = 'X'.repeat(2000);
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        text: () => Promise.resolve(bigBody),
+      } as Response);
+
+      try {
+        await provider.call([{ role: 'user', content: 'Hi' }]);
+        expect.fail('expected provider.call to reject');
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        expect(msg).toContain('truncated');
+        expect(msg).not.toContain('X'.repeat(1000));
+      }
     });
   });
 
