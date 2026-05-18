@@ -101,14 +101,17 @@ export const ingestDocument = defineAction(controller.register('document', {
       // case. tryGetRequestContextFromCtx returns `{ session, expectedTenantId
       // }` populated when sessionMiddleware composed an authenticated
       // RequestContext (or when an e2e test passed `meta.testSession` —
-      // Wave 9.0.1 test seam). Use case treats the fields as additive
-      // optional per ADR-010 I-2/I-3 (16-test regression invariant).
+      // Wave 9.0.1 test seam).
+      //
+      // Wave 12.E-fix-1 (PRD-038 FR-002 / EVID-053 CRIT-2 / CWE-862):
+      // Authentication is now MANDATORY. Pre-fix the guard was conditional
+      // (`if (session !== undefined) { ... }`) so unauthenticated POSTs
+      // proceeded with no tenant scoping — the use case happily ingested
+      // documents under whatever tenant the wire said. Now fails closed.
       const { session, expectedTenantId } = tryGetRequestContextFromCtx(ctx);
-      if (session !== undefined) {
-        assertAuthenticated(session);
-        if (expectedTenantId !== undefined) {
-          assertSessionInTenant(session, expectedTenantId);
-        }
+      assertAuthenticated(session);
+      if (expectedTenantId !== undefined) {
+        assertSessionInTenant(session, expectedTenantId);
       }
 
       // Wave 10.B — broadcast lifecycle start. Done after auth assertions
@@ -146,7 +149,8 @@ export const ingestDocument = defineAction(controller.register('document', {
         text,
         userId,
         ...(metadata !== undefined && { metadata }),
-        ...(session !== undefined && { session }),
+        // Session is now always present post Wave 12.E-fix-1 FR-002.
+        session,
         ...(expectedTenantId !== undefined && { expectedTenantId }),
       });
 
