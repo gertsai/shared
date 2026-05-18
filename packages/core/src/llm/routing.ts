@@ -592,15 +592,91 @@ export class ModelRouter {
  * Singleton router instance for convenience.
  */
 let defaultRouter: ModelRouter | null = null;
+let defaultRouterConfig: RouterConfig | undefined;
+
+/**
+ * Compare two RouterConfig values for the fields that affect router behaviour.
+ *
+ * H-7 (EVID-059): the module-level singleton previously honoured `config` only
+ * on the first call; later callers silently got the cached instance with a
+ * possibly-different `eventBus` / `fallbacks` / `defaultProvider`. In a
+ * multi-tenant server initialising with tenant-specific event buses, every
+ * tenant after the first lost telemetry routing.
+ *
+ * Strategy: fail-loud on mismatched second-call config. The first call defines
+ * the singleton's configuration; any subsequent call that passes a `config`
+ * value which is not deeply equivalent throws. Callers that need distinct
+ * configurations should construct an explicit `new ModelRouter(...)` and pass
+ * it down rather than relying on the convenience singleton.
+ */
+function isRouterConfigEqual(a: RouterConfig | undefined, b: RouterConfig | undefined): boolean {
+  // Both unset → equivalent.
+  if (a === undefined && b === undefined) return true;
+  // One unset, the other not → not equivalent (presence of options matters).
+  if (a === undefined || b === undefined) return false;
+
+  if (a.defaultProvider !== b.defaultProvider) return false;
+  if (a.costOptimization !== b.costOptimization) return false;
+  // EventBus is a reference type — identity-compare so callers detect that
+  // they're handing the singleton a *different* bus.
+  if (a.eventBus !== b.eventBus) return false;
+
+  // Fallback maps: identity-equal OR structurally equal.
+  if (a.fallbacks !== b.fallbacks) {
+    const af = a.fallbacks;
+    const bf = b.fallbacks;
+    if (af === undefined || bf === undefined) return false;
+    const keys = new Set([...Object.keys(af), ...Object.keys(bf)]) as Set<LLMProvider>;
+    for (const k of keys) {
+      const av = af[k];
+      const bv = bf[k];
+      if (av === undefined || bv === undefined) return false;
+      if (av.length !== bv.length) return false;
+      for (let i = 0; i < av.length; i += 1) {
+        if (av[i] !== bv[i]) return false;
+      }
+    }
+  }
+
+  return true;
+}
 
 /**
  * Get or create the default router instance.
+ *
+ * H-7 (EVID-059): if a non-undefined `config` is passed after the singleton is
+ * already initialised, throws when the new config is not equivalent to the
+ * cached one. Pass `undefined` (or no argument) to retrieve the existing
+ * instance without re-asserting configuration.
  */
 export function getDefaultRouter(config?: RouterConfig): ModelRouter {
   if (!defaultRouter) {
     defaultRouter = new ModelRouter(config);
+    defaultRouterConfig = config;
+    return defaultRouter;
   }
+
+  if (config !== undefined && !isRouterConfigEqual(defaultRouterConfig, config)) {
+    throw new Error(
+      'getDefaultRouter: config mismatch — the default router was already initialised ' +
+        'with a different RouterConfig. Construct an explicit `new ModelRouter(config)` ' +
+        'and thread it through your code instead of relying on the convenience singleton.',
+    );
+  }
+
   return defaultRouter;
+}
+
+/**
+ * Reset the module-level default router. Test-only — not exported from the
+ * public package surface (the file-level export keeps it accessible to the
+ * co-located test suite without leaking into consumers' typings).
+ *
+ * @internal
+ */
+export function __resetDefaultRouterForTests(): void {
+  defaultRouter = null;
+  defaultRouterConfig = undefined;
 }
 
 /**

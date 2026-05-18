@@ -827,3 +827,164 @@ describe('QUERY_ERROR_CODES', () => {
     expect(QUERY_ERROR_CODES.INJECTION_DETECTED).toBe('INJECTION_DETECTED');
   });
 });
+
+// ============================================================================
+// EVID-059 H-1 — QueryRouter.execute custom-metadata narrowing
+// ============================================================================
+
+describe('EVID-059 H-1 — QueryRouter custom metadata narrowing', () => {
+  class CustomMetaExecutor extends BaseQueryExecutor<NLQuery, string> {
+    constructor(private readonly customValue: unknown) {
+      super();
+    }
+    readonly metadata: ExecutorMetadata = {
+      name: 'custom-meta',
+      description: 'Returns user-supplied custom metadata',
+      supportedTypes: ['nl'],
+      estimatedLatency: 'fast',
+    };
+    async execute(): Promise<QueryResult<string>> {
+      // Use the low-level result shape so we can plant any value, including
+      // ones that violate the `unknown` contract at runtime.
+      return {
+        status: 'success',
+        data: 'ok',
+        sources: [],
+        metadata: {
+          durationMs: 1,
+          cached: false,
+          custom: this.customValue,
+        },
+      } as unknown as QueryResult<string>;
+    }
+  }
+
+  it('does NOT spread a string custom value into character indices', async () => {
+    // Pre-fix: `...(result.metadata.custom as object)` turned `"hello"` into
+    // `{ '0': 'h', '1': 'e', '2': 'l', '3': 'l', '4': 'o' }`.
+    const router = new QueryRouter().register(new CustomMetaExecutor('hello'));
+    const result = await router.execute(createNLQuery(tenantId, 'q'));
+
+    expect(isQuerySuccess(result)).toBe(true);
+    if (!isQuerySuccess(result)) return;
+
+    const custom = result.metadata.custom as Record<string, unknown>;
+    // The malformed string must not leak as numeric-indexed own keys.
+    expect(Object.keys(custom)).not.toContain('0');
+    expect(Object.keys(custom)).not.toContain('1');
+    expect(custom['0']).toBeUndefined();
+    // The routing payload still lands as expected.
+    expect((custom.routing as { executor: string }).executor).toBe('custom-meta');
+  });
+
+  it('does NOT copy own `__proto__` key from caller-controlled custom into merged metadata', async () => {
+    // Simulate `JSON.parse` of attacker input — V8 produces a real own
+    // property named `__proto__` on the parsed object.
+    const tainted = JSON.parse('{"__proto__": {"polluted": true}, "ok": 1}');
+    const router = new QueryRouter().register(new CustomMetaExecutor(tainted));
+    const result = await router.execute(createNLQuery(tenantId, 'q'));
+
+    expect(isQuerySuccess(result)).toBe(true);
+    if (!isQuerySuccess(result)) return;
+
+    const custom = result.metadata.custom as Record<string, unknown>;
+    // The legitimate own key survives.
+    expect(custom.ok).toBe(1);
+    // The forbidden key MUST NOT be carried over as an own property.
+    expect(Object.prototype.hasOwnProperty.call(custom, '__proto__')).toBe(false);
+    // And — critical — the prototype chain of an unrelated plain object
+    // must not have been polluted by the spread.
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
+});
+
+// ============================================================================
+// EVID-059 H-2 — safeExecute distinguishes programmer errors from transients
+// ============================================================================
+
+describe('EVID-059 H-2 — safeExecute error propagation', () => {
+  // Helper executor that throws whatever we hand it.
+  class ThrowingExecutor extends BaseQueryExecutor<NLQuery, string> {
+    constructor(private readonly toThrow: unknown) {
+      super();
+    }
+    readonly metadata: ExecutorMetadata = {
+      name: 'throwing',
+      description: 'Throws on execute',
+      supportedTypes: ['nl'],
+      estimatedLatency: 'fast',
+    };
+    async execute(): Promise<QueryResult<string>> {
+      return this.safeExecute(async () => {
+        throw this.toThrow;
+      });
+    }
+  }
+
+  it('marks TypeError as programmerError with cause.name preserved', async () => {
+    const exec = new ThrowingExecutor(new TypeError("Cannot read property 'x' of undefined"));
+    const r = await exec.execute(createNLQuery(tenantId, 'q'));
+
+    expect(isQueryFailure(r)).toBe(true);
+    if (!isQueryFailure(r)) return;
+    expect(r.code).toBe('EXECUTION_FAILED');
+    expect(r.retryable).toBe(false);
+    expect(r.details?.programmerError).toBe(true);
+    expect((r.details?.cause as { name: string }).name).toBe('TypeError');
+  });
+
+  it('marks RangeError as programmerError', async () => {
+    const exec = new ThrowingExecutor(new RangeError('out of range'));
+    const r = await exec.execute(createNLQuery(tenantId, 'q'));
+
+    expect(isQueryFailure(r)).toBe(true);
+    if (!isQueryFailure(r)) return;
+    expect(r.details?.programmerError).toBe(true);
+    expect((r.details?.cause as { name: string }).name).toBe('RangeError');
+  });
+
+  it('translates AbortError into CANCELLED (retryable=false)', async () => {
+    const abortErr = Object.assign(new Error('aborted'), { name: 'AbortError' });
+    const exec = new ThrowingExecutor(abortErr);
+    const r = await exec.execute(createNLQuery(tenantId, 'q'));
+
+    expect(isQueryFailure(r)).toBe(true);
+    if (!isQueryFailure(r)) return;
+    expect(r.code).toBe('CANCELLED');
+    expect(r.retryable).toBe(false);
+    expect((r.details?.cause as { name: string }).name).toBe('AbortError');
+  });
+
+  it('translates TimeoutError into TIMEOUT (retryable=true)', async () => {
+    const timeoutErr = Object.assign(new Error('took too long'), { name: 'TimeoutError' });
+    const exec = new ThrowingExecutor(timeoutErr);
+    const r = await exec.execute(createNLQuery(tenantId, 'q'));
+
+    expect(isQueryFailure(r)).toBe(true);
+    if (!isQueryFailure(r)) return;
+    expect(r.code).toBe('TIMEOUT');
+    expect(r.retryable).toBe(true);
+  });
+
+  it('leaves generic Error without programmerError flag but still records cause', async () => {
+    // Simulates a transient network error — caller should be free to retry.
+    const exec = new ThrowingExecutor(new Error('ECONNRESET'));
+    const r = await exec.execute(createNLQuery(tenantId, 'q'));
+
+    expect(isQueryFailure(r)).toBe(true);
+    if (!isQueryFailure(r)) return;
+    expect(r.code).toBe('EXECUTION_FAILED');
+    expect(r.details?.programmerError).toBeUndefined();
+    expect((r.details?.cause as { name: string }).name).toBe('Error');
+  });
+
+  it('handles non-Error throws by tagging cause.name as NonError', async () => {
+    const exec = new ThrowingExecutor('plain string throw');
+    const r = await exec.execute(createNLQuery(tenantId, 'q'));
+
+    expect(isQueryFailure(r)).toBe(true);
+    if (!isQueryFailure(r)) return;
+    expect(r.code).toBe('EXECUTION_FAILED');
+    expect((r.details?.cause as { name: string }).name).toBe('NonError');
+  });
+});

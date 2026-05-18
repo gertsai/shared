@@ -232,7 +232,27 @@ export abstract class BaseQueryExecutor<
   }
 
   /**
-   * Helper: Wrap execution with error handling
+   * Helper: Wrap execution with error handling.
+   *
+   * Closes EVID-059 H-2: previous behaviour returned the same `EXECUTION_FAILED`
+   * shape regardless of root cause, so callers could not distinguish a transient
+   * network/IO failure (retry helpful) from a programmer error such as a
+   * `TypeError` / `RangeError` / `ReferenceError` (retry would never help).
+   *
+   * Now the failure carries `details.cause.name` (the original error
+   * constructor name) plus a programmer-error flag, and abort/timeout errors
+   * are mapped to dedicated codes:
+   *   - `AbortError`              → code `CANCELLED`, retryable=false
+   *   - `TimeoutError`            → code `TIMEOUT`,    retryable=true
+   *   - `TypeError`/`RangeError`/
+   *     `ReferenceError`/`SyntaxError`/`URIError`/`EvalError`
+   *                               → code `EXECUTION_FAILED`,
+   *                                 retryable=false,
+   *                                 details.programmerError=true
+   *   - any other `Error`         → code `EXECUTION_FAILED`, retryable=false
+   *
+   * `details.cause` always includes `name` and `message`. Stack is intentionally
+   * omitted so failure objects stay serialisable / log-safe.
    */
   protected async safeExecute(
     fn: () => Promise<QueryResult<TData, TMeta>>
@@ -243,11 +263,52 @@ export abstract class BaseQueryExecutor<
       if (error instanceof QueryError) {
         return error.toFailure();
       }
-      return queryFailure(
-        'EXECUTION_FAILED',
-        error instanceof Error ? error.message : String(error),
-        { retryable: false }
-      );
+
+      if (!(error instanceof Error)) {
+        return queryFailure('EXECUTION_FAILED', String(error), {
+          retryable: false,
+          details: {
+            cause: { name: 'NonError', message: String(error) },
+          },
+        });
+      }
+
+      const name = error.name;
+      const cause: Record<string, unknown> = { name, message: error.message };
+
+      // Abort & timeout — well-defined retry semantics
+      if (name === 'AbortError') {
+        return queryFailure('CANCELLED', error.message || 'Operation aborted', {
+          retryable: false,
+          details: { cause },
+        });
+      }
+      if (name === 'TimeoutError') {
+        return queryFailure('TIMEOUT', error.message || 'Operation timed out', {
+          retryable: true,
+          details: { cause },
+        });
+      }
+
+      // Programmer errors — retry will never help; callers can branch on
+      // `details.programmerError` or `details.cause.name`.
+      const PROGRAMMER_ERROR_NAMES = new Set([
+        'TypeError',
+        'RangeError',
+        'ReferenceError',
+        'SyntaxError',
+        'URIError',
+        'EvalError',
+      ]);
+      const isProgrammerError = PROGRAMMER_ERROR_NAMES.has(name);
+
+      return queryFailure('EXECUTION_FAILED', error.message, {
+        retryable: false,
+        details: {
+          cause,
+          ...(isProgrammerError && { programmerError: true }),
+        },
+      });
     }
   }
 

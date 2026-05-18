@@ -98,7 +98,9 @@ export class GraphRAGSessionContext implements IDestroyable {
   private readonly _tenantId: string;
   private readonly _operator: Operator;
   private readonly _requestMeta: RequestMeta;
-  private readonly _graphRagSettings: GraphRAGSettings;
+  // EVID-059 H-4: NOT `readonly` — `updateSettings` reassigns this field to
+  // a fresh frozen object so previously captured snapshots stay immutable.
+  private _graphRagSettings: GraphRAGSettings;
   private _tenantConfig: unknown;
 
   // Mutable state
@@ -125,10 +127,14 @@ export class GraphRAGSessionContext implements IDestroyable {
       ...(config.clientVersion !== undefined && { clientVersion: config.clientVersion }),
     };
 
-    this._graphRagSettings = {
+    // EVID-059 H-4: freeze the initial settings object so the getter contract
+    // `Readonly<GraphRAGSettings>` is enforced at runtime, not just at the
+    // type level. `updateSettings` reassigns this field to a fresh frozen
+    // object rather than mutating in place.
+    this._graphRagSettings = Object.freeze({
       ...DEFAULT_GRAPHRAG_SETTINGS,
       ...config.graphRagSettings,
-    };
+    });
 
     this._abortController = new AbortController();
 
@@ -261,10 +267,19 @@ export class GraphRAGSessionContext implements IDestroyable {
   // ========== Settings Update ==========
 
   /**
-   * Update GraphRAG settings for this session
+   * Update GraphRAG settings for this session.
+   *
+   * Closes EVID-059 H-4: the previous implementation used `Object.assign`,
+   * which mutated `_graphRagSettings` in place. Callers that had captured a
+   * "read-only" reference (`session.graphRagSettings`) would see the
+   * snapshot silently change. We now produce a brand-new frozen object so
+   * previous references remain immutable.
    */
   updateSettings(settings: Partial<GraphRAGSettings>): void {
-    Object.assign(this._graphRagSettings, settings);
+    this._graphRagSettings = Object.freeze({
+      ...this._graphRagSettings,
+      ...settings,
+    });
   }
 
   /**

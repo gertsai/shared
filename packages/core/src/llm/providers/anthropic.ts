@@ -268,7 +268,30 @@ export class AnthropicProvider extends BaseLLM {
       // Handle tool calls if present and available functions provided
       if (llmResponse.toolCalls && llmResponse.toolCalls.length > 0 && options?.availableFunctions) {
         for (const toolCall of llmResponse.toolCalls) {
-          const args = JSON.parse(toolCall.function.arguments);
+          // H-10 (EVID-059): symmetric with OpenAIProvider — skip + report
+          // malformed arguments instead of throwing mid-loop and leaking the
+          // raw model payload through the surrounding catch.
+          let args: Record<string, unknown>;
+          try {
+            const parsed: unknown = JSON.parse(toolCall.function.arguments);
+            if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+              throw new SyntaxError('Tool arguments did not decode to a plain object');
+            }
+            args = parsed as Record<string, unknown>;
+          } catch (parseError) {
+            const errorMsg =
+              parseError instanceof Error ? parseError.message : String(parseError);
+            this.emitToolFailed(
+              toolCall.function.name,
+              `Malformed tool arguments: ${errorMsg}`,
+              Date.now(),
+            );
+            console.warn('Skipping tool call with malformed JSON arguments', {
+              toolName: toolCall.function.name,
+              error: errorMsg,
+            });
+            continue;
+          }
           await this.handleToolExecution(
             toolCall.function.name,
             args,
@@ -502,12 +525,18 @@ export class AnthropicProvider extends BaseLLM {
       }
     }
 
-    // Ensure first message is from user (Anthropic requirement)
-    if (formattedMessages.length === 0) {
-      formattedMessages.push({ role: 'user', content: 'Hello' });
-    } else if (formattedMessages[0]!.role !== 'user') {
-      // formattedMessages.length > 0 verified above
-      formattedMessages.unshift({ role: 'user', content: 'Hello' });
+    // H-11 (EVID-059): Anthropic requires the conversation to start with a
+    // `user` turn. Previously the provider silently fabricated `{role:'user',
+    // content:'Hello'}` when (a) the transformed array was empty, or (b) the
+    // first message was an assistant turn. The model then "saw" content the
+    // caller never supplied — unacceptable for regulated / audited domains and
+    // a silent source of hallucinated context elsewhere. Fail loud instead;
+    // callers must hand us a real opening user turn.
+    if (formattedMessages.length === 0 || formattedMessages[0]!.role !== 'user') {
+      throw new Error(
+        'AnthropicProvider: empty or assistant-led conversation — ' +
+          'caller must supply at least one user message as the first turn',
+      );
     }
 
     return { formattedMessages, systemMessage };

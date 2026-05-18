@@ -157,8 +157,28 @@ export class OpenAIProvider extends BaseLLM {
     if (config.organization !== undefined) this.organization = config.organization;
     if (config.project !== undefined) this.project = config.project;
     if (config.reasoningEffort !== undefined) this.reasoningEffort = config.reasoningEffort;
-    this.isO1Model =
-      config.model.toLowerCase().includes('o1') || config.model.toLowerCase().includes('o3');
+    this.isO1Model = OpenAIProvider.isO1FamilyModel(config.model);
+  }
+
+  /**
+   * H-8 (EVID-059, CWE-697): the previous implementation used
+   * `.includes('o1') || .includes('o3')` against the lowercased model name,
+   * which matched any string containing `o1`/`o3` as a substring — including
+   * `gpt-4o-1106`, `gpt-4o-3-mini`, and custom names like `gpto1-eval` —
+   * silently disabling temperature / function calling / stop words for those
+   * non-reasoning models.
+   *
+   * The reasoning family naming convention is `o<digit>` (`o1`, `o1-mini`,
+   * `o3`, `o3-mini`, future `o5`, etc.). Anchor the match to the start of the
+   * model name with an optional `openai/` provider prefix and require either
+   * end-of-string or `-` after the family digit. Family digits 1 and 3 today;
+   * use `[13]` to keep the surface minimal while leaving room for future
+   * extension via a single regex character class.
+   */
+  private static readonly O1_FAMILY_RE = /^(?:openai\/)?o[13](?:-|$)/;
+
+  private static isO1FamilyModel(model: string): boolean {
+    return OpenAIProvider.O1_FAMILY_RE.test(model.toLowerCase());
   }
 
   /**
@@ -227,7 +247,30 @@ export class OpenAIProvider extends BaseLLM {
       // Handle tool calls if present and available functions provided
       if (llmResponse.toolCalls && options?.availableFunctions) {
         for (const toolCall of llmResponse.toolCalls) {
-          const args = JSON.parse(toolCall.function.arguments);
+          // H-10 (EVID-059): a malformed `arguments` string previously threw a
+          // SyntaxError mid-loop, leaking the raw model output into the error
+          // message and aborting the remaining tool calls. Now: skip the bad
+          // call, surface it via the standard tool-failure event (so
+          // observability still sees it), and continue dispatching siblings.
+          let args: Record<string, unknown>;
+          try {
+            const parsed: unknown = JSON.parse(toolCall.function.arguments);
+            if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+              throw new SyntaxError('Tool arguments did not decode to a plain object');
+            }
+            args = parsed as Record<string, unknown>;
+          } catch (parseError) {
+            const errorMsg =
+              parseError instanceof Error ? parseError.message : String(parseError);
+            // Use the same emission path as runtime tool failures so consumers
+            // wire a single observer. Cost is one synchronous emit.
+            this.emitToolFailed(toolCall.function.name, `Malformed tool arguments: ${errorMsg}`, Date.now());
+            console.warn('Skipping tool call with malformed JSON arguments', {
+              toolName: toolCall.function.name,
+              error: errorMsg,
+            });
+            continue;
+          }
           await this.handleToolExecution(toolCall.function.name, args, options.availableFunctions);
         }
       }

@@ -20,6 +20,41 @@ import type {
 import { getAllSupportedTypes } from './executor.js';
 
 // ============================================================================
+// Internal helpers
+// ============================================================================
+
+/**
+ * Safely narrow a `custom` metadata value (typed `unknown`) to an object that
+ * is safe to spread into the merged result.
+ *
+ * Closes EVID-059 H-1: previous code did `...(custom as object)` which
+ *   1. cast string values (e.g. `'hello'`) to objects and produced
+ *      `{ '0': 'h', '1': 'e', ... }` (own-property leakage); and
+ *   2. accepted post-`JSON.parse` payloads that carry an own `__proto__`
+ *      key, copying that own property onto the merged metadata
+ *      (prototype-property smuggling).
+ *
+ * This helper returns an empty object for non-plain inputs and strips the
+ * three prototype-pollution keys (`__proto__`, `constructor`, `prototype`)
+ * before returning the sanitised copy.
+ *
+ * @internal
+ */
+function safeSpreadCustom(custom: unknown): Record<string, unknown> {
+  if (typeof custom !== 'object' || custom === null || Array.isArray(custom)) {
+    return {};
+  }
+  const out: Record<string, unknown> = {};
+  for (const key of Object.keys(custom as Record<string, unknown>)) {
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+      continue;
+    }
+    out[key] = (custom as Record<string, unknown>)[key];
+  }
+  return out;
+}
+
+// ============================================================================
 // Query Selection
 // ============================================================================
 
@@ -317,7 +352,7 @@ export class QueryRouter implements IQueryExecutor<QueryRequest, unknown> {
         metadata: {
           ...result.metadata,
           custom: {
-            ...(result.metadata.custom as object),
+            ...safeSpreadCustom(result.metadata.custom),
             routing: {
               selector: this.selector.name,
               executor: selection.executorName,
@@ -365,7 +400,7 @@ export class QueryRouter implements IQueryExecutor<QueryRequest, unknown> {
           metadata: {
             ...result.metadata,
             custom: {
-              ...(result.metadata.custom as object),
+              ...safeSpreadCustom(result.metadata.custom),
               routing: {
                 selector: this.selector.name,
                 executor: selection.executorName,

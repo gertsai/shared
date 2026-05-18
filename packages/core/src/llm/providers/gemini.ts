@@ -255,8 +255,19 @@ export class GeminiProvider extends BaseLLM {
       contents.push({ role, parts: [{ text: contentText }] });
     }
 
-    if (contents.length === 0) {
-      contents.push({ role: 'user', parts: [{ text: 'Hello' }] });
+    // H-11 (EVID-059): previously the provider silently fabricated
+    // `{role:'user', parts:[{text:'Hello'}]}` when the caller-supplied
+    // conversation reduced to zero usable turns (e.g. only a system message,
+    // empty contents). This leaked invented input to the model — unacceptable
+    // for regulated / audited domains. Fail loud and force the caller to
+    // supply a real opening user turn. The assistant-led case is covered too
+    // for symmetry with AnthropicProvider, since Gemini's API likewise expects
+    // the first non-system turn to be from the user.
+    if (contents.length === 0 || contents[0]!.role !== 'user') {
+      throw new Error(
+        'GeminiProvider: empty or assistant-led conversation — ' +
+          'caller must supply at least one user message as the first turn',
+      );
     }
 
     const systemInstruction =

@@ -2157,105 +2157,171 @@ export const DEFAULT_TENANT_CONFIG: Omit<TenantConfig, 'tenantId' | 'llm' | 'emb
 // ============================================================================
 
 /**
+ * Forbidden keys that, when copied as own properties onto a plain object,
+ * pollute the object prototype chain or override the constructor link.
+ *
+ * Closes EVID-059 H-6: `mergeTenantConfigWithDefaults` and
+ * `applyTenantConfigUpdate` previously deep-spread caller-controlled config
+ * via raw `{...DEFAULT, ...config.section}`. If `config.section` came from
+ * `JSON.parse` of attacker-controlled input that included an own `__proto__`
+ * key (V8 preserves `__proto__` as a real own property when produced by
+ * `JSON.parse`), the key was copied as an own property onto the merged
+ * result. `isTenantConfig` only checks `tenantId`/`llm`/`embedding`, so
+ * such a payload would pass validation.
+ */
+const FORBIDDEN_PROTO_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/**
+ * Spread-merge that filters out prototype-polluting keys
+ * (`__proto__`, `constructor`, `prototype`) from every source.
+ *
+ * Behaves like `{...sources[0], ...sources[1], ...}` except:
+ *   - `undefined` / `null` sources are skipped (instead of throwing on
+ *     `Object.keys(null)`); and
+ *   - own keys matching `FORBIDDEN_PROTO_KEYS` are dropped before assignment.
+ *
+ * The output is a brand-new plain object whose prototype is
+ * `Object.prototype`, regardless of any source's prototype chain.
+ *
+ * @internal Used by `mergeTenantConfigWithDefaults` and
+ *   `applyTenantConfigUpdate` for every nested section spread.
+ */
+function safeSpread<T>(
+  ...sources: Array<Partial<T> | T | undefined | null>
+): T {
+  const out: Record<string, unknown> = {};
+  for (const src of sources) {
+    if (src === undefined || src === null) continue;
+    for (const key of Object.keys(src as object)) {
+      if (FORBIDDEN_PROTO_KEYS.has(key)) continue;
+      out[key] = (src as Record<string, unknown>)[key];
+    }
+  }
+  return out as T;
+}
+
+/**
  * Merge tenant config with defaults
  *
  * @param config - Partial tenant config
  * @returns Complete tenant config with defaults applied
  */
 export function mergeTenantConfigWithDefaults(config: TenantConfigCreate): TenantConfig {
-  return {
-    ...config,
-    graphRag: {
-      ...DEFAULT_TENANT_CONFIG.graphRag,
-      ...config.graphRag,
-    },
-    locale: {
-      ...DEFAULT_TENANT_CONFIG.locale,
-      ...config.locale,
-    },
-    rateLimits: {
-      ...DEFAULT_TENANT_CONFIG.rateLimits,
-      ...config.rateLimits,
-    },
-    features: {
-      ...DEFAULT_TENANT_CONFIG.features,
-      ...config.features,
-    },
-    ingestion: {
-      ...DEFAULT_TENANT_CONFIG.ingestion,
-      ...config.ingestion,
-    },
-    memory: {
-      ...DEFAULT_TENANT_CONFIG.memory,
-      ...config.memory,
-      disposition: {
-        ...DEFAULT_TENANT_CONFIG.memory?.disposition,
-        ...config.memory?.disposition,
-      },
-      llm: {
-        ...DEFAULT_TENANT_CONFIG.memory?.llm,
-        ...config.memory?.llm,
-      },
-    },
-    observe: {
-      ...DEFAULT_TENANT_CONFIG.observe,
-      ...config.observe,
-    },
-    tracing: {
-      ...DEFAULT_TENANT_CONFIG.tracing,
-      ...config.tracing,
-    },
-    aclSync: {
-      ...DEFAULT_TENANT_CONFIG.aclSync,
-      ...config.aclSync,
-      publicDocs: {
-        ...DEFAULT_TENANT_CONFIG.aclSync?.publicDocs,
-        ...config.aclSync?.publicDocs,
-      },
-    },
-    denyLedger: {
-      ...DEFAULT_TENANT_CONFIG.denyLedger,
-      ...config.denyLedger,
-    },
-    entityResolution: {
-      ...DEFAULT_TENANT_CONFIG.entityResolution,
-      ...config.entityResolution,
-      thresholds: {
-        ...DEFAULT_TENANT_CONFIG.entityResolution?.thresholds,
-        ...config.entityResolution?.thresholds,
-      },
-    },
-    multilingual: {
-      ...DEFAULT_TENANT_CONFIG.multilingual,
-      ...config.multilingual,
-    },
-    vectorSearch: {
-      ...DEFAULT_TENANT_CONFIG.vectorSearch,
-      ...config.vectorSearch,
-    },
-    eval: {
-      ...DEFAULT_TENANT_CONFIG.eval,
-      ...config.eval,
-      thresholds: {
-        ...DEFAULT_TENANT_CONFIG.eval?.thresholds,
-        ...config.eval?.thresholds,
-      },
-    },
-    agentReasoning: {
-      ...DEFAULT_TENANT_CONFIG.agentReasoning!,
-      ...config.agentReasoning,
-      toolRankerWeights: {
-        ...DEFAULT_TENANT_CONFIG.agentReasoning!.toolRankerWeights,
-        ...config.agentReasoning?.toolRankerWeights,
-      },
-      defaultBudget: {
-        ...DEFAULT_TENANT_CONFIG.agentReasoning!.defaultBudget,
-        ...config.agentReasoning?.defaultBudget,
-      },
-    },
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
+  // EVID-059 H-6: every nested spread goes through `safeSpread` so own
+  // `__proto__`/`constructor`/`prototype` keys carried by `config.*` cannot
+  // leak onto the merged result.
+  const memoryMerged = safeSpread<NonNullable<TenantConfig['memory']>>(
+    DEFAULT_TENANT_CONFIG.memory,
+    config.memory,
+  );
+  type MemoryT = NonNullable<TenantConfig['memory']>;
+  type DispositionT = NonNullable<MemoryT['disposition']>;
+  type MemoryLlmT = NonNullable<MemoryT['llm']>;
+  memoryMerged.disposition = safeSpread<DispositionT>(
+    DEFAULT_TENANT_CONFIG.memory?.disposition,
+    config.memory?.disposition,
+  );
+  memoryMerged.llm = safeSpread<MemoryLlmT>(
+    DEFAULT_TENANT_CONFIG.memory?.llm,
+    config.memory?.llm,
+  );
+
+  type AclSyncT = NonNullable<TenantConfig['aclSync']>;
+  type PublicDocsT = NonNullable<AclSyncT['publicDocs']>;
+  const aclSyncMerged = safeSpread<AclSyncT>(DEFAULT_TENANT_CONFIG.aclSync, config.aclSync);
+  aclSyncMerged.publicDocs = safeSpread<PublicDocsT>(
+    DEFAULT_TENANT_CONFIG.aclSync?.publicDocs,
+    config.aclSync?.publicDocs,
+  );
+
+  type EntityResT = NonNullable<TenantConfig['entityResolution']>;
+  type EntityResThresholdsT = NonNullable<EntityResT['thresholds']>;
+  const entityResolutionMerged = safeSpread<EntityResT>(
+    DEFAULT_TENANT_CONFIG.entityResolution,
+    config.entityResolution,
+  );
+  entityResolutionMerged.thresholds = safeSpread<EntityResThresholdsT>(
+    DEFAULT_TENANT_CONFIG.entityResolution?.thresholds,
+    config.entityResolution?.thresholds,
+  );
+
+  type EvalT = NonNullable<TenantConfig['eval']>;
+  type EvalThresholdsT = NonNullable<EvalT['thresholds']>;
+  const evalMerged = safeSpread<EvalT>(DEFAULT_TENANT_CONFIG.eval, config.eval);
+  evalMerged.thresholds = safeSpread<EvalThresholdsT>(
+    DEFAULT_TENANT_CONFIG.eval?.thresholds,
+    config.eval?.thresholds,
+  );
+
+  type AgentReasT = NonNullable<TenantConfig['agentReasoning']>;
+  type ToolRankerT = AgentReasT['toolRankerWeights'];
+  type DefaultBudgetT = AgentReasT['defaultBudget'];
+  const agentReasoningMerged = safeSpread<AgentReasT>(
+    DEFAULT_TENANT_CONFIG.agentReasoning!,
+    config.agentReasoning,
+  );
+  agentReasoningMerged.toolRankerWeights = safeSpread<ToolRankerT>(
+    DEFAULT_TENANT_CONFIG.agentReasoning!.toolRankerWeights,
+    config.agentReasoning?.toolRankerWeights,
+  );
+  agentReasoningMerged.defaultBudget = safeSpread<DefaultBudgetT>(
+    DEFAULT_TENANT_CONFIG.agentReasoning!.defaultBudget,
+    config.agentReasoning?.defaultBudget,
+  );
+
+  // Top-level: filter `config` so that own `__proto__` etc. cannot land on
+  // the returned object. We rebuild via safeSpread, then layer the
+  // already-sanitised nested sections on top.
+  const top = safeSpread<TenantConfig>(config as unknown as TenantConfig);
+  top.graphRag = safeSpread<NonNullable<TenantConfig['graphRag']>>(
+    DEFAULT_TENANT_CONFIG.graphRag,
+    config.graphRag,
+  );
+  top.locale = safeSpread<NonNullable<TenantConfig['locale']>>(
+    DEFAULT_TENANT_CONFIG.locale,
+    config.locale,
+  );
+  top.rateLimits = safeSpread<NonNullable<TenantConfig['rateLimits']>>(
+    DEFAULT_TENANT_CONFIG.rateLimits,
+    config.rateLimits,
+  );
+  top.features = safeSpread<NonNullable<TenantConfig['features']>>(
+    DEFAULT_TENANT_CONFIG.features,
+    config.features,
+  );
+  top.ingestion = safeSpread<NonNullable<TenantConfig['ingestion']>>(
+    DEFAULT_TENANT_CONFIG.ingestion,
+    config.ingestion,
+  );
+  top.memory = memoryMerged;
+  top.observe = safeSpread<NonNullable<TenantConfig['observe']>>(
+    DEFAULT_TENANT_CONFIG.observe,
+    config.observe,
+  );
+  top.tracing = safeSpread<NonNullable<TenantConfig['tracing']>>(
+    DEFAULT_TENANT_CONFIG.tracing,
+    config.tracing,
+  );
+  top.aclSync = aclSyncMerged;
+  top.denyLedger = safeSpread<NonNullable<TenantConfig['denyLedger']>>(
+    DEFAULT_TENANT_CONFIG.denyLedger,
+    config.denyLedger,
+  );
+  top.entityResolution = entityResolutionMerged;
+  top.multilingual = safeSpread<NonNullable<TenantConfig['multilingual']>>(
+    DEFAULT_TENANT_CONFIG.multilingual,
+    config.multilingual,
+  );
+  top.vectorSearch = safeSpread<NonNullable<TenantConfig['vectorSearch']>>(
+    DEFAULT_TENANT_CONFIG.vectorSearch,
+    config.vectorSearch,
+  );
+  top.eval = evalMerged;
+  top.agentReasoning = agentReasoningMerged;
+  top.createdAt = new Date().toISOString();
+  top.updatedAt = new Date().toISOString();
+
+  return top;
 }
 
 /**
@@ -2269,122 +2335,199 @@ export function applyTenantConfigUpdate(
   existing: TenantConfig,
   update: TenantConfigUpdate,
 ): TenantConfig {
+  // EVID-059 H-6: every nested spread routes through `safeSpread`, which
+  // strips own `__proto__`/`constructor`/`prototype` keys carried by either
+  // `existing` (already-stored, possibly tainted) or `update` (raw caller
+  // input). Defaults from `DEFAULT_TENANT_CONFIG.*` are still merged in for
+  // sections that previously layered them.
+  //
   // Compute each deep-merged optional field separately. We use conditional
   // spread to only emit keys whose merged value is defined — required under
   // exactOptionalPropertyTypes: TenantConfig declares these as `field?: T`
   // (NOT `field?: T | undefined`), so writing `field: undefined` is rejected.
-  const prompts = update.prompts ? { ...existing.prompts, ...update.prompts } : existing.prompts;
+  const prompts = update.prompts
+    ? (safeSpread(
+        existing.prompts as Record<string, unknown> | undefined,
+        update.prompts as Record<string, unknown> | undefined,
+      ) as TenantConfig['prompts'])
+    : existing.prompts;
   const graphRag = update.graphRag
-    ? { ...existing.graphRag, ...update.graphRag }
+    ? (safeSpread(
+        existing.graphRag as Record<string, unknown> | undefined,
+        update.graphRag as Record<string, unknown> | undefined,
+      ) as TenantConfig['graphRag'])
     : existing.graphRag;
-  const locale = update.locale ? { ...existing.locale, ...update.locale } : existing.locale;
+  const locale = update.locale
+    ? (safeSpread(
+        existing.locale as Record<string, unknown> | undefined,
+        update.locale as Record<string, unknown> | undefined,
+      ) as TenantConfig['locale'])
+    : existing.locale;
   const rateLimits = update.rateLimits
-    ? { ...existing.rateLimits, ...update.rateLimits }
+    ? (safeSpread(
+        existing.rateLimits as Record<string, unknown> | undefined,
+        update.rateLimits as Record<string, unknown> | undefined,
+      ) as TenantConfig['rateLimits'])
     : existing.rateLimits;
   const features = update.features
-    ? { ...existing.features, ...update.features }
+    ? (safeSpread(
+        existing.features as Record<string, unknown> | undefined,
+        update.features as Record<string, unknown> | undefined,
+      ) as TenantConfig['features'])
     : existing.features;
   const ingestion = update.ingestion
-    ? { ...existing.ingestion, ...update.ingestion }
+    ? (safeSpread(
+        existing.ingestion as Record<string, unknown> | undefined,
+        update.ingestion as Record<string, unknown> | undefined,
+      ) as TenantConfig['ingestion'])
     : existing.ingestion;
   const memory = update.memory
-    ? {
-        ...existing.memory,
-        ...update.memory,
-        disposition: {
-          ...existing.memory?.disposition,
-          ...update.memory?.disposition,
-        },
-        llm: {
-          ...existing.memory?.llm,
-          ...update.memory?.llm,
-        },
-      }
+    ? (() => {
+        type MemoryT2 = NonNullable<TenantConfig['memory']>;
+        type DispositionT2 = NonNullable<MemoryT2['disposition']>;
+        type MemoryLlmT2 = NonNullable<MemoryT2['llm']>;
+        const merged = safeSpread<MemoryT2>(
+          existing.memory,
+          update.memory,
+        );
+        merged.disposition = safeSpread<DispositionT2>(
+          existing.memory?.disposition,
+          update.memory?.disposition,
+        );
+        merged.llm = safeSpread<MemoryLlmT2>(
+          existing.memory?.llm,
+          update.memory?.llm,
+        );
+        return merged;
+      })()
     : existing.memory;
   const observe = update.observe
-    ? { ...existing.observe, ...update.observe }
+    ? (safeSpread(
+        existing.observe as Record<string, unknown> | undefined,
+        update.observe as Record<string, unknown> | undefined,
+      ) as TenantConfig['observe'])
     : existing.observe;
   const tracing = update.tracing
-    ? { ...existing.tracing, ...update.tracing }
+    ? (safeSpread(
+        existing.tracing as Record<string, unknown> | undefined,
+        update.tracing as Record<string, unknown> | undefined,
+      ) as TenantConfig['tracing'])
     : existing.tracing;
   const aclSync = update.aclSync
     ? (() => {
         const mergedPublicDocs = update.aclSync.publicDocs
-          ? { ...existing.aclSync?.publicDocs, ...update.aclSync.publicDocs }
+          ? (safeSpread(
+              existing.aclSync?.publicDocs as Record<string, unknown> | undefined,
+              update.aclSync.publicDocs as Record<string, unknown> | undefined,
+            ) as NonNullable<TenantConfig['aclSync']>['publicDocs'])
           : existing.aclSync?.publicDocs;
-        return {
-          ...existing.aclSync,
-          ...update.aclSync,
-          ...(mergedPublicDocs !== undefined && { publicDocs: mergedPublicDocs }),
-        };
+        const merged = safeSpread(
+          existing.aclSync as Record<string, unknown> | undefined,
+          update.aclSync as Record<string, unknown> | undefined,
+        ) as NonNullable<TenantConfig['aclSync']>;
+        if (mergedPublicDocs !== undefined) {
+          merged.publicDocs = mergedPublicDocs;
+        }
+        return merged;
       })()
     : existing.aclSync;
   const denyLedger = update.denyLedger
-    ? { ...existing.denyLedger, ...update.denyLedger }
+    ? (safeSpread(
+        existing.denyLedger as Record<string, unknown> | undefined,
+        update.denyLedger as Record<string, unknown> | undefined,
+      ) as TenantConfig['denyLedger'])
     : existing.denyLedger;
   const entityResolution = update.entityResolution
-    ? {
-        ...DEFAULT_TENANT_CONFIG.entityResolution,
-        ...existing.entityResolution,
-        ...update.entityResolution,
-        thresholds: {
-          ...DEFAULT_TENANT_CONFIG.entityResolution?.thresholds,
-          ...existing.entityResolution?.thresholds,
-          ...update.entityResolution?.thresholds,
-        },
-      }
+    ? (() => {
+        const merged = safeSpread(
+          DEFAULT_TENANT_CONFIG.entityResolution as Record<string, unknown> | undefined,
+          existing.entityResolution as Record<string, unknown> | undefined,
+          update.entityResolution as Record<string, unknown> | undefined,
+        ) as NonNullable<TenantConfig['entityResolution']>;
+        merged.thresholds = safeSpread(
+          DEFAULT_TENANT_CONFIG.entityResolution?.thresholds as
+            | Record<string, unknown>
+            | undefined,
+          existing.entityResolution?.thresholds as Record<string, unknown> | undefined,
+          update.entityResolution?.thresholds as Record<string, unknown> | undefined,
+        ) as NonNullable<TenantConfig['entityResolution']>['thresholds'];
+        return merged;
+      })()
     : existing.entityResolution;
   const multilingual = update.multilingual
-    ? { ...DEFAULT_TENANT_CONFIG.multilingual, ...existing.multilingual, ...update.multilingual }
+    ? (safeSpread(
+        DEFAULT_TENANT_CONFIG.multilingual as Record<string, unknown> | undefined,
+        existing.multilingual as Record<string, unknown> | undefined,
+        update.multilingual as Record<string, unknown> | undefined,
+      ) as TenantConfig['multilingual'])
     : existing.multilingual;
   const vectorSearch = update.vectorSearch
-    ? { ...DEFAULT_TENANT_CONFIG.vectorSearch, ...existing.vectorSearch, ...update.vectorSearch }
+    ? (safeSpread(
+        DEFAULT_TENANT_CONFIG.vectorSearch as Record<string, unknown> | undefined,
+        existing.vectorSearch as Record<string, unknown> | undefined,
+        update.vectorSearch as Record<string, unknown> | undefined,
+      ) as TenantConfig['vectorSearch'])
     : existing.vectorSearch;
   const reranker = update.reranker
-    ? { ...DEFAULT_TENANT_CONFIG.reranker, ...existing.reranker, ...update.reranker }
+    ? (safeSpread(
+        DEFAULT_TENANT_CONFIG.reranker as Record<string, unknown> | undefined,
+        existing.reranker as Record<string, unknown> | undefined,
+        update.reranker as Record<string, unknown> | undefined,
+      ) as TenantConfig['reranker'])
     : existing.reranker;
   const qualityMonitoring: QualityMonitoringConfig | undefined = update.qualityMonitoring
-    ? {
-        enabled: false,
-        samplerCron: '0 2 * * *',
-        driftAlpha: 0.3,
-        driftWarningThreshold: 0.05,
-        driftCriticalThreshold: 0.1,
-        ...existing.qualityMonitoring,
-        ...update.qualityMonitoring,
-      }
+    ? (safeSpread(
+        {
+          enabled: false,
+          samplerCron: '0 2 * * *',
+          driftAlpha: 0.3,
+          driftWarningThreshold: 0.05,
+          driftCriticalThreshold: 0.1,
+        } as Record<string, unknown>,
+        existing.qualityMonitoring as Record<string, unknown> | undefined,
+        update.qualityMonitoring as Record<string, unknown> | undefined,
+      ) as QualityMonitoringConfig)
     : existing.qualityMonitoring;
   const evalCfg = update.eval
-    ? {
-        ...DEFAULT_TENANT_CONFIG.eval,
-        ...existing.eval,
-        ...update.eval,
-        thresholds: {
-          ...DEFAULT_TENANT_CONFIG.eval?.thresholds,
-          ...existing.eval?.thresholds,
-          ...update.eval?.thresholds,
-        },
-      }
+    ? (() => {
+        const merged = safeSpread(
+          DEFAULT_TENANT_CONFIG.eval as Record<string, unknown> | undefined,
+          existing.eval as Record<string, unknown> | undefined,
+          update.eval as Record<string, unknown> | undefined,
+        ) as NonNullable<TenantConfig['eval']>;
+        merged.thresholds = safeSpread(
+          DEFAULT_TENANT_CONFIG.eval?.thresholds as Record<string, unknown> | undefined,
+          existing.eval?.thresholds as Record<string, unknown> | undefined,
+          update.eval?.thresholds as Record<string, unknown> | undefined,
+        ) as NonNullable<TenantConfig['eval']>['thresholds'];
+        return merged;
+      })()
     : existing.eval;
   const agentReasoning = update.agentReasoning
-    ? {
-        ...DEFAULT_TENANT_CONFIG.agentReasoning!,
-        ...existing.agentReasoning,
-        ...update.agentReasoning,
-        toolRankerWeights: {
-          ...DEFAULT_TENANT_CONFIG.agentReasoning!.toolRankerWeights,
-          ...existing.agentReasoning?.toolRankerWeights,
-          ...update.agentReasoning?.toolRankerWeights,
-        },
-        defaultBudget: {
-          ...DEFAULT_TENANT_CONFIG.agentReasoning!.defaultBudget,
-          ...existing.agentReasoning?.defaultBudget,
-          ...update.agentReasoning?.defaultBudget,
-        },
-      }
+    ? (() => {
+        const merged = safeSpread(
+          DEFAULT_TENANT_CONFIG.agentReasoning! as unknown as Record<string, unknown>,
+          existing.agentReasoning as Record<string, unknown> | undefined,
+          update.agentReasoning as Record<string, unknown> | undefined,
+        ) as NonNullable<TenantConfig['agentReasoning']>;
+        merged.toolRankerWeights = safeSpread(
+          DEFAULT_TENANT_CONFIG.agentReasoning!.toolRankerWeights as Record<string, unknown>,
+          existing.agentReasoning?.toolRankerWeights as Record<string, unknown> | undefined,
+          update.agentReasoning?.toolRankerWeights as Record<string, unknown> | undefined,
+        ) as NonNullable<TenantConfig['agentReasoning']>['toolRankerWeights'];
+        merged.defaultBudget = safeSpread(
+          DEFAULT_TENANT_CONFIG.agentReasoning!.defaultBudget as Record<string, unknown>,
+          existing.agentReasoning?.defaultBudget as Record<string, unknown> | undefined,
+          update.agentReasoning?.defaultBudget as Record<string, unknown> | undefined,
+        ) as NonNullable<TenantConfig['agentReasoning']>['defaultBudget'];
+        return merged;
+      })()
     : existing.agentReasoning;
   const metadata = update.metadata
-    ? { ...existing.metadata, ...update.metadata }
+    ? (safeSpread(
+        existing.metadata as Record<string, unknown> | undefined,
+        update.metadata as Record<string, unknown> | undefined,
+      ) as TenantConfig['metadata'])
     : existing.metadata;
 
   // Strip update fields that we've already deep-merged into typed locals
@@ -2436,14 +2579,26 @@ export function applyTenantConfigUpdate(
   void _agentReasoning;
   void _metadata;
 
+  // EVID-059 H-6: rebuild base via safeSpread so any tainted own keys on
+  // `existing` (e.g. previously stored via a vulnerable path) or
+  // `updateRest` (raw caller fields not already deep-merged) are dropped.
+  const base = safeSpread<TenantConfig>(
+    existing as unknown as TenantConfig,
+    updateRest as unknown as Partial<TenantConfig>,
+  );
+
+  const llm = update.llm
+    ? safeSpread<TenantConfig['llm']>(existing.llm, update.llm)
+    : existing.llm;
+  const embedding = update.embedding
+    ? safeSpread<TenantConfig['embedding']>(existing.embedding, update.embedding)
+    : existing.embedding;
+
   return {
-    ...existing,
-    ...updateRest,
+    ...base,
     // Deep-merged non-optional fields
-    llm: update.llm ? { ...existing.llm, ...update.llm } : existing.llm,
-    embedding: update.embedding
-      ? { ...existing.embedding, ...update.embedding }
-      : existing.embedding,
+    llm,
+    embedding,
     // Optional fields applied via conditional spread (EOPT-safe)
     ...(prompts !== undefined && { prompts }),
     ...(graphRag !== undefined && { graphRag }),
