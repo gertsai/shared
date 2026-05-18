@@ -1,7 +1,14 @@
 /**
  * Resilient Redis adapter with retry policy and circuit breaker
  * This is a proposed improvement for better fault tolerance
+ *
+ * Wave 14.1 (PRD-044 / EVID-057): the inline private `LRUCache<K, V>`
+ * class was consolidated into the shared `LruMap` kernel from
+ * `@gertsai/utils/lru`. Public API of `ResilientRedisAdapter` is
+ * unchanged — the cache was module-private, no external consumers.
  */
+
+import { LruMap } from '@gertsai/utils/lru';
 
 import type { RLRRedis } from '../utils/types';
 
@@ -144,49 +151,12 @@ class RetryPolicy {
 }
 
 /**
- * Simple LRU cache implementation
- */
-class LRUCache<K, V> {
-  private cache = new Map<K, V>();
-
-  constructor(private readonly maxSize: number) {}
-
-  get(key: K): V | undefined {
-    const value = this.cache.get(key);
-    if (value !== undefined) {
-      // Move to end (most recently used)
-      this.cache.delete(key);
-      this.cache.set(key, value);
-    }
-    return value;
-  }
-
-  set(key: K, value: V): void {
-    // Remove if exists to update position
-    if (this.cache.has(key)) {
-      this.cache.delete(key);
-    } else if (this.cache.size >= this.maxSize) {
-      // Remove least recently used (first item)
-      const firstKey = this.cache.keys().next().value;
-      if (firstKey !== undefined) {
-        this.cache.delete(firstKey);
-      }
-    }
-    this.cache.set(key, value);
-  }
-
-  clear(): void {
-    this.cache.clear();
-  }
-}
-
-/**
  * Resilient Redis adapter with fault tolerance mechanisms
  */
 export class ResilientRedisAdapter implements StorageAdapter {
   private readonly circuitBreaker: CircuitBreaker;
   private readonly retryPolicy: RetryPolicy;
-  private readonly cache: LRUCache<string, CachedResult>;
+  private readonly cache: LruMap<string, CachedResult>;
   private readonly options: Required<ResilienceOptions>;
 
   constructor(
@@ -215,7 +185,7 @@ export class ResilientRedisAdapter implements StorageAdapter {
       this.options.retryBackoff,
     );
 
-    this.cache = new LRUCache(this.options.cacheSize);
+    this.cache = new LruMap<string, CachedResult>({ maxSize: this.options.cacheSize });
   }
 
   async incrementSW(

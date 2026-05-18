@@ -1,5 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
+/**
+ * @fileoverview Per-host circuit breaker.
+ *
+ * Wave 14.1 (PRD-044 / EVID-057): the bespoke LRU `hosts` Map + private
+ * `touch()` / `create()` helpers were consolidated into the shared
+ * `LruMap` kernel from `@gertsai/utils/lru`. Public API + ADR-009
+ * Amendment 1.2.1 default `maxHosts: 1000` (CWE-770/401) are unchanged.
+ */
 import { UpstreamFailureError } from '@gertsai/errors';
+import { LruMap } from '@gertsai/utils/lru';
 import type { CircuitBreakerConfig } from './types.js';
 
 export type CircuitState = 'closed' | 'open' | 'half-open';
@@ -15,8 +24,8 @@ const DEFAULT_RESET_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_HOSTS = 1000;
 
 /**
- * Per-host circuit breaker backed by an LRU `Map<host, HostState>` per
- * ADR-009 Amendment 1.2.1 (CWE-770/401 protection — bounded memory).
+ * Per-host circuit breaker backed by a bounded LRU map per ADR-009
+ * Amendment 1.2.1 (CWE-770/401 protection — bounded memory).
  *
  * State machine:
  *   - closed: pass-through; failures increment a counter.
@@ -27,12 +36,14 @@ const DEFAULT_MAX_HOSTS = 1000;
  *
  * Eviction: when `maxHosts` is exceeded, the least-recently-used host
  * entry is dropped (closed-by-default semantics on next access).
+ * Recency is bumped on every `preflight`/`recordSuccess`/`recordFailure`
+ * call via `LruMap.get` (touches recency).
  */
 export class CircuitBreaker {
   private readonly failureThreshold: number;
   private readonly resetTimeoutMs: number;
   private readonly maxHosts: number;
-  private readonly hosts = new Map<string, HostState>();
+  private readonly hosts: LruMap<string, HostState>;
   private opensCount = 0;
   private evictionsCount = 0;
 
@@ -40,6 +51,7 @@ export class CircuitBreaker {
     this.failureThreshold = config?.failureThreshold ?? DEFAULT_FAILURE_THRESHOLD;
     this.resetTimeoutMs = config?.resetTimeoutMs ?? DEFAULT_RESET_TIMEOUT_MS;
     this.maxHosts = config?.maxHosts ?? DEFAULT_MAX_HOSTS;
+    this.hosts = new LruMap<string, HostState>({ maxSize: this.maxHosts });
   }
 
   /**
@@ -48,7 +60,7 @@ export class CircuitBreaker {
    * `resetTimeoutMs`.
    */
   preflight(host: string): void {
-    const state = this.touch(host);
+    const state = this.hosts.get(host);
     if (state === undefined) return;
 
     if (state.state === 'open') {
@@ -65,7 +77,7 @@ export class CircuitBreaker {
   }
 
   recordSuccess(host: string): void {
-    const state = this.touch(host);
+    const state = this.hosts.get(host);
     if (state === undefined) return;
     state.failures = 0;
     if (state.state !== 'closed') {
@@ -74,7 +86,7 @@ export class CircuitBreaker {
   }
 
   recordFailure(host: string): void {
-    let state = this.touch(host);
+    let state = this.hosts.get(host);
     if (state === undefined) {
       state = this.create(host);
     }
@@ -91,7 +103,8 @@ export class CircuitBreaker {
   }
 
   getState(host: string): CircuitState {
-    const state = this.hosts.get(host);
+    // Observability getter — uses `peek` to avoid perturbing LRU order.
+    const state = this.hosts.peek(host);
     if (state === undefined) return 'closed';
     if (state.state === 'open') {
       const elapsed = Date.now() - state.openedAtMs;
@@ -114,27 +127,19 @@ export class CircuitBreaker {
     this.evictionsCount = 0;
   }
 
-  /** Touch an existing entry (LRU bump) and return it. Undefined if absent. */
-  private touch(host: string): HostState | undefined {
-    const state = this.hosts.get(host);
-    if (state === undefined) return undefined;
-    // Re-insert to bump recency (Map preserves insertion order).
-    this.hosts.delete(host);
-    this.hosts.set(host, state);
-    return state;
-  }
-
-  /** Create a closed-by-default entry; evict LRU if over capacity. */
+  /**
+   * Create a closed-by-default entry. `LruMap.set` already handles
+   * oldest-entry eviction when `size >= maxSize`; we observe that via
+   * size delta to maintain `evictionsCount` for metrics.
+   */
   private create(host: string): HostState {
-    if (this.hosts.size >= this.maxHosts) {
-      const oldestKey = this.hosts.keys().next().value;
-      if (oldestKey !== undefined) {
-        this.hosts.delete(oldestKey);
-        this.evictionsCount += 1;
-      }
-    }
+    const sizeBefore = this.hosts.size;
     const state: HostState = { state: 'closed', failures: 0, openedAtMs: 0 };
     this.hosts.set(host, state);
+    if (sizeBefore === this.maxHosts) {
+      // LruMap dropped an entry to make room.
+      this.evictionsCount += 1;
+    }
     return state;
   }
 }

@@ -384,6 +384,9 @@ importers:
       '@gertsai/api-core':
         specifier: workspace:*
         version: link:../api-core
+      '@gertsai/utils':
+        specifier: workspace:*
+        version: link:../utils
       consola:
         specifier: ^3.4.2
         version: 3.4.2
@@ -484,6 +487,9 @@ importers:
       '@gertsai/core':
         specifier: workspace:*
         version: link:../core
+      '@gertsai/utils':
+        specifier: workspace:*
+        version: link:../utils
       '@openfga/sdk':
         specifier: ^0.8.1
         version: 0.8.1(debug@4.4.3)
@@ -496,6 +502,10 @@ importers:
         version: 3.2.4(@types/node@22.19.17)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4)
 
   packages/collection:
+    dependencies:
+      '@gertsai/utils':
+        specifier: workspace:*
+        version: link:../utils
     devDependencies:
       vite-tsconfig-paths:
         specifier: ^5.1.4
@@ -849,6 +859,9 @@ importers:
       '@gertsai/logger-factory':
         specifier: workspace:*
         version: link:../logger-factory
+      '@gertsai/utils':
+        specifier: workspace:*
+        version: link:../utils
       vitest:
         specifier: ^3.0.0
         version: 3.2.4(@types/node@22.19.17)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4)

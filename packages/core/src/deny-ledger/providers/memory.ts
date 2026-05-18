@@ -1,3 +1,7 @@
+// Wave 14.2 (PRD-044 / EVID-057): MemoryDenyLedger now consumes the
+// canonical core/lru-cache.LRUCache instead of inlining doubly-linked-
+// list logic. Same-package consolidation — no cross-tier impact.
+
 /**
  * Memory Deny Ledger Provider
  *
@@ -13,6 +17,7 @@
  */
 
 import { randomUUID } from 'crypto';
+import { LRUCache, toCacheKey } from '../../lru-cache';
 import type { DenyLedgerProvider } from '../interface';
 import type {
   DenyEntry,
@@ -44,88 +49,35 @@ function buildKey(
 }
 
 /**
- * LRU Node for doubly-linked list
- */
-interface LRUNode {
-  key: string;
-  entry: DenyEntry;
-  prev: LRUNode | null;
-  next: LRUNode | null;
-}
-
-/**
- * Memory-based Deny Ledger Provider
+ * Memory-based Deny Ledger Provider.
  *
- * Uses LRU cache for O(1) lookups with automatic eviction.
+ * Backed by the shared {@link LRUCache} primitive for O(1) lookups with
+ * automatic capacity eviction. Entry-level expiration is enforced by
+ * `DenyEntry.expiresAt` (Date) rather than `LRUCache`'s numeric TTL, so
+ * semantics match the pre-Wave-14 inline implementation. Hit/miss counters
+ * are tracked at the ledger level (denial-checks, not per-key probes).
  */
 export class MemoryDenyLedger implements DenyLedgerProvider {
-  private readonly maxSize: number;
-  private readonly cache: Map<string, LRUNode> = new Map();
+  private readonly cache: LRUCache<DenyEntry>;
   private readonly byId: Map<string, DenyEntry> = new Map();
-  private head: LRUNode | null = null;
-  private tail: LRUNode | null = null;
   private initialized = false;
 
-  // Stats
+  // Stats (denial-check level, not per-key cache probe)
   private hits = 0;
   private misses = 0;
 
   constructor(config?: Partial<DenyLedgerConfig>) {
-    this.maxSize = config?.maxCacheSize ?? DEFAULT_DENY_LEDGER_CONFIG.maxCacheSize;
-  }
-
-  // ==========================================================================
-  // LRU Operations (private)
-  // ==========================================================================
-
-  private moveToHead(node: LRUNode): void {
-    if (node === this.head) return;
-
-    // Remove from current position
-    if (node.prev) node.prev.next = node.next;
-    if (node.next) node.next.prev = node.prev;
-    if (node === this.tail) this.tail = node.prev;
-
-    // Move to head
-    node.prev = null;
-    node.next = this.head;
-    if (this.head) this.head.prev = node;
-    this.head = node;
-    if (!this.tail) this.tail = node;
-  }
-
-  private addToHead(node: LRUNode): void {
-    node.prev = null;
-    node.next = this.head;
-    if (this.head) this.head.prev = node;
-    this.head = node;
-    if (!this.tail) this.tail = node;
-  }
-
-  private removeTail(): LRUNode | null {
-    if (!this.tail) return null;
-    const node = this.tail;
-    this.tail = node.prev;
-    if (this.tail) this.tail.next = null;
-    if (node === this.head) this.head = null;
-    return node;
-  }
-
-  private removeNode(node: LRUNode): void {
-    if (node.prev) node.prev.next = node.next;
-    if (node.next) node.next.prev = node.prev;
-    if (node === this.head) this.head = node.next;
-    if (node === this.tail) this.tail = node.prev;
-  }
-
-  private evictIfNeeded(): void {
-    while (this.cache.size >= this.maxSize) {
-      const removed = this.removeTail();
-      if (removed) {
-        this.cache.delete(removed.key);
-        this.byId.delete(removed.entry.id);
-      }
-    }
+    const maxSize = config?.maxCacheSize ?? DEFAULT_DENY_LEDGER_CONFIG.maxCacheSize;
+    this.cache = new LRUCache<DenyEntry>({
+      maxSize,
+      // Keep secondary byId index in sync on every eviction trigger
+      // (capacity/ttl/pattern/manual). Guard against same-key overwrite races:
+      // only drop byId when it still points to THIS evicted entry instance.
+      onEvict: (_key, value) => {
+        const entry = value as DenyEntry;
+        if (this.byId.get(entry.id) === entry) this.byId.delete(entry.id);
+      },
+    });
   }
 
   // ==========================================================================
@@ -158,29 +110,29 @@ export class MemoryDenyLedger implements DenyLedgerProvider {
     const now = new Date();
 
     for (const key of checks) {
-      const node = this.cache.get(key);
-      if (node) {
-        const entry = node.entry;
+      // Peek first to avoid promoting LRU position on a miss-then-match
+      // chain (we only want to promote the key that actually matched).
+      const entry = this.cache.peek(toCacheKey(key));
+      if (!entry) continue;
 
-        // Check expiration
-        if (entry.expiresAt && entry.expiresAt < now) {
-          // Expired - remove and continue
-          this.removeNode(node);
-          this.cache.delete(key);
-          this.byId.delete(entry.id);
-          continue;
-        }
-
-        // Found active denial
-        this.hits++;
-        this.moveToHead(node);
-
-        return {
-          denied: true,
-          entry,
-          message: `Access denied: ${entry.reason}`,
-        };
+      // Check expiration (semantics: DenyEntry.expiresAt is canonical, not
+      // LRUCache's internal TTL)
+      if (entry.expiresAt && entry.expiresAt < now) {
+        // Expired - remove and continue checking subsequent keys
+        this.cache.delete(toCacheKey(key));
+        // byId is removed via onEvict callback
+        continue;
       }
+
+      // Found active denial — promote this key to MRU position via get()
+      this.cache.get(toCacheKey(key));
+      this.hits++;
+
+      return {
+        denied: true,
+        entry,
+        message: `Access denied: ${entry.reason}`,
+      };
     }
 
     this.misses++;
@@ -202,23 +154,19 @@ export class MemoryDenyLedger implements DenyLedgerProvider {
       entry.resourceId,
     );
 
-    // Evict if needed
-    this.evictIfNeeded();
-
-    // Check if exists
-    const existing = this.cache.get(key);
-    if (existing) {
-      // Update existing
-      existing.entry = entry;
-      this.byId.set(entry.id, entry);
-      this.moveToHead(existing);
-    } else {
-      // Add new
-      const node: LRUNode = { key, entry, prev: null, next: null };
-      this.cache.set(key, node);
-      this.byId.set(entry.id, entry);
-      this.addToHead(node);
+    // Update byId BEFORE cache.set so that if set triggers a capacity
+    // eviction, the onEvict handler sees byId in its expected state for
+    // the evicted (old) entry. The newly-inserted entry's byId mapping
+    // is set right after.
+    const existingNode = this.cache.peek(toCacheKey(key));
+    if (existingNode) {
+      // Same-key overwrite: clear stale byId entry first so the new id
+      // replaces the old without triggering the onEvict same-instance
+      // guard incorrectly.
+      this.byId.delete(existingNode.id);
     }
+    this.byId.set(entry.id, entry);
+    this.cache.set(toCacheKey(key), entry);
 
     return entry;
   }
@@ -231,31 +179,23 @@ export class MemoryDenyLedger implements DenyLedgerProvider {
     resourceId?: string,
   ): Promise<void> {
     const key = buildKey(tenantId, subjectType, subjectId, resourceType, resourceId);
-    const node = this.cache.get(key);
-    if (node) {
-      this.removeNode(node);
-      this.cache.delete(key);
-      this.byId.delete(node.entry.id);
-    }
+    this.cache.delete(toCacheKey(key));
+    // byId cleanup via onEvict
   }
 
   async allowById(id: string): Promise<void> {
     const entry = this.byId.get(id);
-    if (entry) {
-      const key = buildKey(
-        entry.tenantId,
-        entry.subjectType,
-        entry.subjectId,
-        entry.resourceType,
-        entry.resourceId,
-      );
-      const node = this.cache.get(key);
-      if (node) {
-        this.removeNode(node);
-        this.cache.delete(key);
-      }
-      this.byId.delete(id);
-    }
+    if (!entry) return;
+    const key = buildKey(
+      entry.tenantId,
+      entry.subjectType,
+      entry.subjectId,
+      entry.resourceType,
+      entry.resourceId,
+    );
+    this.cache.delete(toCacheKey(key));
+    // Force byId cleanup in case the cache key didn't match (defensive)
+    this.byId.delete(id);
   }
 
   // ==========================================================================
@@ -329,11 +269,13 @@ export class MemoryDenyLedger implements DenyLedgerProvider {
     const now = new Date();
     let removed = 0;
 
-    for (const [key, node] of this.cache.entries()) {
-      if (node.entry.expiresAt && node.entry.expiresAt < now) {
-        this.removeNode(node);
-        this.cache.delete(key);
-        this.byId.delete(node.entry.id);
+    // Snapshot keys first since deletion mutates the underlying cache
+    const keys = this.cache.keys();
+    for (const key of keys) {
+      const entry = this.cache.peek(toCacheKey(key));
+      if (entry?.expiresAt && entry.expiresAt < now) {
+        this.cache.delete(toCacheKey(key));
+        // byId cleanup via onEvict
         removed++;
       }
     }
@@ -396,8 +338,6 @@ export class MemoryDenyLedger implements DenyLedgerProvider {
   async close(): Promise<void> {
     this.cache.clear();
     this.byId.clear();
-    this.head = null;
-    this.tail = null;
     this.initialized = false;
   }
 
@@ -425,14 +365,10 @@ export class MemoryDenyLedger implements DenyLedgerProvider {
       );
 
       // Skip if already exists
-      if (this.cache.has(key)) continue;
+      if (this.cache.has(toCacheKey(key))) continue;
 
-      this.evictIfNeeded();
-
-      const node: LRUNode = { key, entry, prev: null, next: null };
-      this.cache.set(key, node);
       this.byId.set(entry.id, entry);
-      this.addToHead(node);
+      this.cache.set(toCacheKey(key), entry);
     }
   }
 
@@ -449,6 +385,7 @@ export class MemoryDenyLedger implements DenyLedgerProvider {
   resetStats(): void {
     this.hits = 0;
     this.misses = 0;
+    this.cache.resetStats();
   }
 
   /**
