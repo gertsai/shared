@@ -1,5 +1,90 @@
 # @gertsai-examples/m9s-example-api-types
 
+## 0.0.6
+
+### Patch Changes
+
+- 6ea3af4: Wave 12.E-fix-2 Phase 1 — close 3 CRITICALs from EVID-053.
+
+  **CRIT-1 (CWE-613) — FR-003 Redis rotation store wired but never consumed.**
+  `examples/m9s-example/src/services/auth/src/actions/{login,refresh}.action.ts`
+  used static imports from `../rotation-store` (a module-level `Map`),
+  bypassing `infrastructure.rotationStore` (which picks `RedisRotationStore`
+  when `REDIS_URL` is set). Multi-instance prod deploys silently failed
+  reuse-detection across nodes; process restarts wiped the in-memory map.
+
+  Fix: actions now consume `service.rotationStore` (`IRotationStore` injected
+  by `services/auth/lifecycle.ts` from `composition/infrastructure.ts`).
+  Legacy module-level `Map` + functions removed from `rotation-store.ts`
+  (file kept with deprecation notice to anchor grep references).
+  `InMemoryRotationStore` class moved into `src/infrastructure/` so the
+  periodic pruner can be started exactly once in `buildInfrastructure()`.
+
+  **CRIT-4 — Generated `openapi-schema.d.ts` shipped contradicting reality.**
+  `IngestDocumentResponse` declared `{mode: 'sync' | 'queued', chunksIndexed?}`
+  but backend emits `{docId, jobId, mode: 'queued' | 'inline', chunkCount: number | null}`.
+  `SearchQueryResponse` declared `{results: [{docId, text, similarity}], took_ms}`
+  but backend emits `{results: [{docId, chunkIdx, text, score}]}`.
+
+  Fix: hand-aligned `examples/m9s-example-api-types/src/generated/openapi-schema.d.ts`
+
+  - `openapi.json` to mirror typia-validated backend handler types. Same edit
+    shape as Wave 12.E-fix-1 `SearchHit` extraction (FR-013-style).
+
+  **CRIT-5 — Generator exported but unused — guaranteed drift.**
+  `examples/m9s-example-api-types/src/openapi/generator.ts` had a 683-LOC
+  `generateOpenAPISchema` function with NO first-party consumer. Backend
+  uses `buildOpenApiSchema()` in `m9s-example/src/openapi/schema.ts` instead.
+
+  Fix: deleted the dead generator (`generator.ts` 683 LOC + companion
+  `scripts/generate-openapi-contract.mjs` 436 LOC). Removed
+  `openapi-typescript` / `@samchon/openapi` / `typia` from `package.json`
+  deps (no longer used). README updated to document the hand-aligned
+  snapshot procedure.
+
+  Total: ~1,203 LOC removed, ~444 LOC modified. No `@gertsai/*` package
+  surface changes.
+
+  **Deferred to Wave 12.E-fix-2 Phase 2:** 10 HIGHs (backend H-1..H-4,
+  frontend H-5/H-6, cross-app H-8..H-13, security H-14..H-16) +
+  backend `m9s-example/src/openapi/schema.ts` static-schema realignment
+  (Teammate B flagged — `/openapi/schema.json` endpoint still serves
+  broken contract even though the api-types snapshot is now correct).
+
+  Refs: PRD-039, EVID-053 (CRIT-1, CRIT-4, CRIT-5 closures).
+
+- e5c8465: Wave 12.E-fix-2 Phase 2 — close all 13 remaining HIGHs + 1 newly-flagged backend H from EVID-053.
+
+  **Backend (Teammate C):**
+
+  - **H-1** — `services/auth/lifecycle.ts`: JWT_SECRET now hard-fails at boot (matches `examples/m9s-example-web/src/lib/server/jwt.ts:43-46` contract). Pre-fix the lifecycle emitted a "warning" then threw on first request — fail-fast guarantee was missed.
+  - **H-2** — `services/ingest/src/queues/ingest-chunk.worker.ts`: queued ingest now emits the same 4-frame SSE lifecycle as inline (`started` → `embedding` → `persisted` → `done`). Pre-fix queued mode emitted only `started`; UX looked like phantom timeout.
+  - **H-3** — `ingest-chunk.worker.ts`: `_destroyed` re-check after every significant `await` (Wave 12.D-fix L-5 contract). `ingest/lifecycle.ts` flips `_destroyed = true` on stop so workers short-circuit mid-await on broker shutdown.
+  - **H-4** — `composition/errors.ts` HTTP scrubber: wired `appErrorToHttpResponse` into the catch blocks of `ingest-document.action.ts` + `delete-document.action.ts` for `AuthenticationRequiredError` + `TenantScopeViolationError` + defensive `isAppError` fallback. Pre-fix scrubber was declared, never invoked — handlers leaked `userId/url/originalKind`.
+  - **Newly-flagged backend openapi/schema.ts realignment** — backend static `buildOpenApiSchema()` was still declaring the broken shape (`chunksIndexed`, `took_ms`, `similarity`, `mode: 'sync' | 'queued'`, `limit`). `GET /openapi/schema.json` now serves the same contract as the typia-validated handlers (mirrors Wave 12.E-fix-2 Phase 1 CRIT-4 api-types snapshot).
+
+  **Frontend + cross-app (Teammate D):**
+
+  - **H-5** — `routes/ingest/+page.svelte`: XHR upload now hits `${apiConfig.baseUrl}/api/v1/ingest/upload` with `X-Tenant-ID` header + `withCredentials = true`. Pre-fix XHR bypassed tenant scope + auth.
+  - **H-6** — `lib/sse-client.ts`: `EventSource` now uses `apiConfig.baseUrl` + `tenantId` query param + `withCredentials: true`. EventSource doesn't support custom headers, so tenantId rides query string.
+  - **H-8** — new `m9s-example-api-types/src/auth-types.ts` exports canonical `AuthUser`, `LoginRequest/Response`, `RefreshRequest/Response`, `LogoutRequest/Response`. Frontend `login/+page.server.ts` now imports `LoginResponse` instead of inline duplicate.
+  - **H-9** — `m9s-example-api-types/src/openapi/types.ts`: tightened `OpenApiGeneratorOptions.schema: any` to `Record<string, unknown>` + added `OpenApiServerEntry` for `servers[]` array.
+  - **H-10** — dist of `m9s-example-api-types` no longer leaks `typia` + `@samchon/openapi` types (CRIT-5 deletion + `pnpm run clean && run build` for stale artifacts).
+  - **H-13** — `m9s-example-web/src/lib/api/client.ts` + `routes/{ingest,search}/+page.server.ts`: dropped `PlaceholderPaths` alias + `as never` casts. Frontend imports real `paths` + canonical types from `@gertsai-examples/m9s-example-api-types`.
+
+  **Security (Teammate D):**
+
+  - **H-14** — `mol-services/sse-ingest.handler.ts`: SSE handler now reads `auth_token` cookie, calls `verifyToken`, rejects 401 on missing/invalid + 403 on tenant mismatch. Closes CWE-639 IDOR (client-supplied tenantId without session cross-check).
+  - **H-15** — `sse-ingest.handler.ts`: per-IP burst (`SSE_RATE_LIMIT_IP_BURST=10/min`) + per-tenant concurrent open-stream cap (`SSE_RATE_LIMIT_TENANT_OPEN=50`). Closes CWE-770 SSE DoS. Slots released in cleanup path.
+
+  **Browser-safe `apiConfig` extraction** — new `m9s-example-web/src/lib/api/config.ts` so `node:async_hooks` (pulled in by api client's ALS) doesn't bleed into the client bundle. Required by H-5 (XHR import path).
+
+  **Deferred:** H-16 (bcryptjs → native bcrypt) deferred — requires native module which complicates cross-platform builds; revisit in Wave 13 or beyond. H-11/H-12 alignment already covered between Wave 12.E-fix-1 + Phase 1 (handler/api-types) + this Phase 2 (backend openapi/schema.ts).
+
+  Total: 17 files modified + 2 new files, +630/-132 LOC. No `@gertsai/*` package surface changes. All 3 example apps build/typecheck green. m9s-example baseline tests unchanged (15/17 test files pass, 79 tests pass, 0 fail — e2e ioredis hook timeout pre-existing).
+
+  Refs: PRD-039, RFC-026, EVID-053, EVID-055 (Phase 1 precedent).
+
 ## 0.0.5
 
 ### Patch Changes
