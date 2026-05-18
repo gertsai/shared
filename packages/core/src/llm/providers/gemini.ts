@@ -324,8 +324,14 @@ export class GeminiProvider extends BaseLLM {
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
     try {
+      // H-9 (EVID-059): encodeURIComponent prevents a model name containing
+      // `/`, `?`, `#`, or `:` (e.g. from tenant config) from rerouting the
+      // request to an unintended endpoint and leaking the API key onto the
+      // wrong host. The `:generateContent` action suffix is appended after
+      // encoding so it remains a path-level operator.
+      const encodedModel = encodeURIComponent(this.model);
       const response = await fetch(
-        `${this.getBaseUrl()}/models/${this.model}:generateContent`,
+        `${this.getBaseUrl()}/models/${encodedModel}:generateContent`,
         {
           method: 'POST',
           headers: this.getHeaders(),

@@ -125,11 +125,27 @@ interface AnthropicStreamEvent {
  * ]);
  * ```
  */
+/**
+ * Metadata key for caller-supplied previous-turn thinking blocks.
+ *
+ * CRIT-1 (EVID-059 fix, Wave 13.A): previously the provider cached the
+ * last response's thinking blocks on instance state (`this.previousThinkingBlocks`),
+ * which leaked one tenant's chain-of-thought into the next tenant's prompt
+ * when the provider was pooled (e.g. via `ModelRouter`'s module-level singleton).
+ *
+ * The state has been removed. Callers that need to thread extended-thinking
+ * blocks across turns must now pass them explicitly per call via
+ * `options.metadata[ANTHROPIC_PREVIOUS_THINKING_BLOCKS_KEY]`. This makes the
+ * cross-call dependency explicit and contains thinking-block lifetime to the
+ * caller's own session/tenant scope.
+ */
+export const ANTHROPIC_PREVIOUS_THINKING_BLOCKS_KEY =
+  '__gertsai_anthropic_previous_thinking_blocks__' as const;
+
 export class AnthropicProvider extends BaseLLM {
   private topP?: number;
   private topK?: number;
   private thinking?: AnthropicThinkingConfig;
-  private previousThinkingBlocks: AnthropicContentBlock[] = [];
 
   constructor(config: AnthropicConfig, eventBus?: EventBus) {
     const resolvedApiKey = config.apiKey ?? process.env.ANTHROPIC_API_KEY;
@@ -187,7 +203,13 @@ export class AnthropicProvider extends BaseLLM {
     this.emitCallStarted(messages, options?.tools);
 
     try {
-      const { formattedMessages, systemMessage } = this.formatMessagesForAnthropic(messages);
+      // CRIT-1 (EVID-059): previous-turn thinking blocks are now caller-supplied
+      // per call (no instance state). See ANTHROPIC_PREVIOUS_THINKING_BLOCKS_KEY.
+      const previousThinkingBlocks = this.extractPreviousThinkingBlocks(options);
+      const { formattedMessages, systemMessage } = this.formatMessagesForAnthropic(
+        messages,
+        previousThinkingBlocks,
+      );
       const params = this.prepareParams(formattedMessages, systemMessage, options);
 
       if (!this.apiKey) {
@@ -207,13 +229,13 @@ export class AnthropicProvider extends BaseLLM {
       const content = textBlocks.map((block) => block.text ?? '').join('');
       const processedContent = this.applyStopWords(content);
 
-      // Store thinking blocks for multi-turn conversations
-      const thinkingBlocks = response.content.filter(
-        (block) => block.type === 'thinking' || block.type === 'redacted_thinking'
-      );
-      if (thinkingBlocks.length > 0) {
-        this.previousThinkingBlocks = thinkingBlocks;
-      }
+      // NOTE (CRIT-1, EVID-059): instance-level caching of `thinking` /
+      // `redacted_thinking` blocks was removed to prevent cross-tenant
+      // chain-of-thought leakage when the provider is pooled. Callers that
+      // need multi-turn extended thinking must extract blocks from
+      // `response.content` themselves (out of this provider's hot path) and
+      // re-supply them on the next call via
+      // `options.metadata[ANTHROPIC_PREVIOUS_THINKING_BLOCKS_KEY]`.
 
       const usage: TokenUsage = {
         promptTokens: response.usage.input_tokens,
@@ -398,7 +420,42 @@ export class AnthropicProvider extends BaseLLM {
    * - Messages must alternate between user and assistant
    * - First message must be from user
    */
-  private formatMessagesForAnthropic(messages: LLMMessage[]): {
+  /**
+   * Extract caller-supplied previous-turn thinking blocks from request metadata.
+   *
+   * CRIT-1 fix: previously cached on `this.previousThinkingBlocks` (instance
+   * state). Now sourced per-call from `options.metadata` so that pooled
+   * providers cannot leak one tenant's chain-of-thought into another's prompt.
+   *
+   * Defensive: only accepts an array of objects with the expected
+   * Anthropic content-block shape. Unknown shapes are dropped silently
+   * (a malformed metadata field must not become a prompt-injection vector).
+   */
+  private extractPreviousThinkingBlocks(
+    options?: LLMCallOptions,
+  ): AnthropicContentBlock[] {
+    const raw = options?.metadata?.[ANTHROPIC_PREVIOUS_THINKING_BLOCKS_KEY];
+    if (!Array.isArray(raw)) return [];
+
+    const out: AnthropicContentBlock[] = [];
+    for (const item of raw) {
+      if (item && typeof item === 'object') {
+        const candidate = item as { type?: unknown };
+        if (
+          candidate.type === 'thinking' ||
+          candidate.type === 'redacted_thinking'
+        ) {
+          out.push(item as AnthropicContentBlock);
+        }
+      }
+    }
+    return out;
+  }
+
+  private formatMessagesForAnthropic(
+    messages: LLMMessage[],
+    previousThinkingBlocks: AnthropicContentBlock[] = [],
+  ): {
     formattedMessages: AnthropicMessage[];
     systemMessage: string | null;
   } {
@@ -429,12 +486,13 @@ export class AnthropicProvider extends BaseLLM {
         const role = message.role === 'user' ? 'user' : 'assistant';
         const content = typeof message.content === 'string' ? message.content : '';
 
-        // For assistant messages with thinking enabled, include thinking blocks
-        if (role === 'assistant' && this.thinking && this.previousThinkingBlocks.length > 0) {
+        // For assistant messages with thinking enabled, include caller-supplied
+        // thinking blocks (per-call only — no instance state per CRIT-1 fix).
+        if (role === 'assistant' && this.thinking && previousThinkingBlocks.length > 0) {
           formattedMessages.push({
             role,
             content: [
-              ...this.previousThinkingBlocks,
+              ...previousThinkingBlocks,
               { type: 'text', text: content },
             ],
           });

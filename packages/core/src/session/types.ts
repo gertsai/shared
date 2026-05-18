@@ -195,18 +195,24 @@ export const DEFAULT_TIMEOUT = 30000;
 
 /**
  * Create RequestMeta with defaults
+ *
+ * Defaults are applied AFTER spreading `options` to prevent the
+ * spread-after-literal bug where `{ timeout: undefined }` would clobber
+ * the defaulted value and silently disable the abort scheduler downstream
+ * (`if (timeout > 0)` no-ops on undefined). See EVID-059 H-3.
  */
 export function createRequestMeta(
   requestId: string,
   clientPlatform: string,
   options: Partial<Omit<RequestMeta, 'requestId' | 'clientPlatform'>> = {},
 ): RequestMeta {
+  const { startedAt: rawStartedAt, timeout: rawTimeout, ...rest } = options;
   return {
+    ...rest,
     requestId,
     clientPlatform,
-    startedAt: options.startedAt ?? new Date(),
-    timeout: options.timeout ?? DEFAULT_TIMEOUT,
-    ...options,
+    startedAt: rawStartedAt ?? new Date(),
+    timeout: rawTimeout ?? DEFAULT_TIMEOUT,
   };
 }
 

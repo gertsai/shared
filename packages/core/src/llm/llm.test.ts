@@ -12,7 +12,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { BaseLLM, LLMContextLengthExceededError, LLMCallError } from './base';
 import { ModelRouter, createLLM } from './routing';
 import { OpenAIProvider } from './providers/openai';
-import { AnthropicProvider } from './providers/anthropic';
+import { AnthropicProvider, ANTHROPIC_PREVIOUS_THINKING_BLOCKS_KEY } from './providers/anthropic';
 import { GeminiProvider } from './providers/gemini';
 import type { LLMMessage, LLMResponse, LLMCallOptions, TokenUsage } from './types';
 import type { LLMRouterSelectionEvent } from './router-types';
@@ -866,6 +866,259 @@ describe('Advanced Integration Scenarios', () => {
       await expect(provider.call([{ role: 'user', content: 'Huge prompt...' }])).rejects.toThrow(
         LLMContextLengthExceededError,
       );
+    });
+  });
+});
+
+// ==================== Wave 13.A Security Fixes (EVID-059) ====================
+
+describe('Wave 13.A security fixes (EVID-059)', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+    vi.mocked(ModelRegistry.supportsVision).mockReturnValue(true);
+    vi.mocked(ModelRegistry.supportsReasoning).mockReturnValue(false);
+  });
+
+  // ===== CRIT-1: AnthropicProvider cross-tenant thinking-block leakage =====
+
+  describe('CRIT-1: AnthropicProvider thinking blocks are per-call only', () => {
+    /** Mock an Anthropic response that includes a thinking block alongside text. */
+    function mockAnthropicWithThinking(text: string, thinkingText: string): Response {
+      return {
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id: 'msg_thinking',
+            type: 'message',
+            role: 'assistant',
+            content: [
+              { type: 'thinking', thinking: thinkingText, signature: 'sig-x' },
+              { type: 'text', text },
+            ],
+            model: 'claude-3-5-sonnet-20241022',
+            stop_reason: 'end_turn',
+            stop_sequence: null,
+            usage: { input_tokens: 10, output_tokens: 20 },
+          }),
+      } as Response;
+    }
+
+    it('does not retain a previous response thinking block on the provider instance', async () => {
+      const provider = new AnthropicProvider({
+        model: 'claude-3-5-sonnet-20241022',
+        apiKey: 'test-key',
+        thinking: { type: 'enabled' },
+      });
+
+      // Turn 1 (tenant A): server returns a thinking block.
+      mockFetch.mockResolvedValueOnce(
+        mockAnthropicWithThinking('answer A', 'tenant A secret reasoning'),
+      );
+      await provider.call([{ role: 'user', content: 'A-question' }]);
+
+      // Turn 2 (tenant B, same pooled provider): no metadata supplied — the
+      // outgoing request MUST NOT contain tenant A's thinking block anywhere.
+      mockFetch.mockResolvedValueOnce(createMockAnthropicResponse('answer B'));
+      await provider.call([
+        { role: 'user', content: 'B-question' },
+        { role: 'assistant', content: 'B-assistant-prefix' },
+      ]);
+
+      const turn2Body = JSON.parse(mockFetch.mock.calls[1][1]?.body as string);
+      const serialized = JSON.stringify(turn2Body);
+
+      expect(serialized).not.toContain('tenant A secret reasoning');
+      expect(serialized).not.toContain('"type":"thinking"');
+      expect(serialized).not.toContain('"type":"redacted_thinking"');
+
+      // Sanity-check: the provider has no `previousThinkingBlocks` instance field.
+      expect(
+        Object.prototype.hasOwnProperty.call(provider, 'previousThinkingBlocks'),
+      ).toBe(false);
+    });
+
+    it('threads caller-supplied thinking blocks into the assistant message when provided per call', async () => {
+      const provider = new AnthropicProvider({
+        model: 'claude-3-5-sonnet-20241022',
+        apiKey: 'test-key',
+        thinking: { type: 'enabled' },
+      });
+
+      mockFetch.mockResolvedValueOnce(createMockAnthropicResponse('ok'));
+
+      const callerThinking = [
+        { type: 'thinking' as const, thinking: 'caller-scoped reasoning', signature: 'sig-1' },
+      ];
+
+      await provider.call(
+        [
+          { role: 'user', content: 'hi' },
+          { role: 'assistant', content: 'sure' },
+        ],
+        {
+          metadata: {
+            [ANTHROPIC_PREVIOUS_THINKING_BLOCKS_KEY]: callerThinking,
+          },
+        },
+      );
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      const assistantMsg = body.messages.find((m: { role: string }) => m.role === 'assistant');
+
+      expect(Array.isArray(assistantMsg.content)).toBe(true);
+      expect(assistantMsg.content[0]).toMatchObject({
+        type: 'thinking',
+        thinking: 'caller-scoped reasoning',
+      });
+      expect(assistantMsg.content[1]).toMatchObject({ type: 'text', text: 'sure' });
+    });
+
+    it('drops malformed metadata silently (no prompt injection via metadata)', async () => {
+      const provider = new AnthropicProvider({
+        model: 'claude-3-5-sonnet-20241022',
+        apiKey: 'test-key',
+        thinking: { type: 'enabled' },
+      });
+
+      mockFetch.mockResolvedValueOnce(createMockAnthropicResponse('ok'));
+
+      await provider.call(
+        [
+          { role: 'user', content: 'hi' },
+          { role: 'assistant', content: 'sure' },
+        ],
+        {
+          metadata: {
+            // Malicious / malformed shapes — must be rejected, not inlined.
+            [ANTHROPIC_PREVIOUS_THINKING_BLOCKS_KEY]: [
+              { type: 'text', text: 'injected!' },
+              'not-an-object',
+              42,
+              null,
+              { type: 'tool_use', name: 'evil' },
+            ],
+          },
+        },
+      );
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      const serialized = JSON.stringify(body);
+      expect(serialized).not.toContain('injected!');
+      expect(serialized).not.toContain('evil');
+    });
+  });
+
+  // ===== CRIT-2: handleToolExecution prototype pollution / unsafe dispatch =====
+
+  describe('CRIT-2: handleToolExecution rejects prototype-chain tool names', () => {
+    // We exercise the protected method via a minimal subclass.
+    class ExposedLLM extends BaseLLM {
+      async call(_messages: LLMMessage[]): Promise<LLMResponse> {
+        return {
+          content: '',
+          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+          model: this.model,
+        };
+      }
+      public async runTool(
+        name: string,
+        args: Record<string, unknown>,
+        fns: Record<string, (...a: unknown[]) => unknown>,
+      ): Promise<string | undefined> {
+        return this.handleToolExecution(name, args, fns);
+      }
+    }
+
+    it('returns undefined and does not dispatch for prototype keys', async () => {
+      const llm = new ExposedLLM({ model: 'm', provider: 'p' });
+      const fns = { safe: vi.fn().mockResolvedValue('ok') };
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      for (const evilName of ['__proto__', 'constructor', 'toString', 'hasOwnProperty', '']) {
+        const out = await llm.runTool(evilName, {}, fns);
+        expect(out).toBeUndefined();
+      }
+
+      expect(fns.safe).not.toHaveBeenCalled();
+
+      // CWE-117: structured logging — user-controlled `toolName` must be a
+      // structured field, NOT interpolated into the format string.
+      for (const call of warnSpy.mock.calls) {
+        const [firstArg, secondArg] = call;
+        expect(typeof firstArg).toBe('string');
+        expect(firstArg).not.toContain('__proto__');
+        expect(firstArg).not.toContain('constructor');
+        if (secondArg && typeof secondArg === 'object') {
+          // toolName surfaces as a structured field.
+          expect(secondArg).toHaveProperty('toolName');
+        }
+      }
+
+      warnSpy.mockRestore();
+    });
+
+    it('dispatches normally for an own-property tool name', async () => {
+      const llm = new ExposedLLM({ model: 'm', provider: 'p' });
+      const safe = vi.fn().mockResolvedValue('result');
+      const fns = { safe };
+
+      const out = await llm.runTool('safe', { x: 1 }, fns);
+
+      expect(safe).toHaveBeenCalledWith({ x: 1 });
+      expect(out).toBe('result');
+    });
+
+    it('rejects a tool name whose lookup resolves to a non-function value', async () => {
+      const llm = new ExposedLLM({ model: 'm', provider: 'p' });
+      // Force a non-function own property to slip past the hasOwnProperty guard.
+      const fns = { bogus: 'not-a-function' as unknown as (...a: unknown[]) => unknown };
+
+      const out = await llm.runTool('bogus', {}, fns);
+      expect(out).toBeUndefined();
+    });
+  });
+
+  // ===== H-9: GeminiProvider URL path encoding =====
+
+  describe('H-9: GeminiProvider encodeURIComponent on model name', () => {
+    it('URL-encodes the model name in the request path', async () => {
+      const provider = new GeminiProvider({
+        // Tenant-supplied model name containing path-meaningful characters.
+        model: 'tenants/evil/secret-leak?x=1#frag',
+        apiKey: 'test-key',
+      });
+
+      mockFetch.mockResolvedValueOnce(createMockGeminiResponse('hi'));
+
+      await provider.call([{ role: 'user', content: 'hi' }]);
+
+      const calledUrl = mockFetch.mock.calls[0][0] as string;
+
+      // The raw path separators / query / fragment MUST be percent-encoded
+      // so the request stays on /v1beta/models/<model>:generateContent.
+      expect(calledUrl).toContain('/models/');
+      expect(calledUrl).toContain(':generateContent');
+      expect(calledUrl).toContain(encodeURIComponent('tenants/evil/secret-leak?x=1#frag'));
+
+      // Concretely: the literal raw form must NOT appear in the URL path.
+      expect(calledUrl).not.toContain('/models/tenants/evil/');
+      expect(calledUrl).not.toContain('?x=1');
+      expect(calledUrl).not.toContain('#frag');
+    });
+
+    it('leaves a safe model name visually unchanged after encoding', async () => {
+      const provider = new GeminiProvider({
+        model: 'gemini-1.5-pro',
+        apiKey: 'test-key',
+      });
+
+      mockFetch.mockResolvedValueOnce(createMockGeminiResponse('hi'));
+
+      await provider.call([{ role: 'user', content: 'hi' }]);
+
+      const calledUrl = mockFetch.mock.calls[0][0] as string;
+      expect(calledUrl).toContain('/models/gemini-1.5-pro:generateContent');
     });
   });
 });

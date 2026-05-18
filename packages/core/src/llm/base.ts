@@ -427,9 +427,24 @@ export abstract class BaseLLM {
     toolArgs: Record<string, unknown>,
     availableFunctions: Record<string, (...args: unknown[]) => unknown>
   ): Promise<string | undefined> {
+    // CRIT-2 (EVID-059, CWE-1321): Guard against prototype-chain lookups so an
+    // LLM-controlled `toolName` like `__proto__`, `constructor`, or
+    // `toString` cannot dispatch to inherited functions / prototype methods.
+    // Also rejects the empty string defensively.
+    if (
+      typeof toolName !== 'string' ||
+      toolName.length === 0 ||
+      !Object.prototype.hasOwnProperty.call(availableFunctions, toolName)
+    ) {
+      // Structured logging — do NOT interpolate user-controlled strings into
+      // the format / template arg (CWE-117 log-injection protection).
+      console.warn('Tool not found in available functions', { toolName });
+      return undefined;
+    }
+
     const fn = availableFunctions[toolName];
-    if (!fn) {
-      console.warn(`Function '${toolName}' not found in available functions`);
+    if (typeof fn !== 'function') {
+      console.warn('Tool resolved to a non-function value', { toolName });
       return undefined;
     }
 
@@ -443,7 +458,7 @@ export abstract class BaseLLM {
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       this.emitToolFailed(toolName, errorMsg, startTime);
-      console.error(`Error executing function '${toolName}':`, errorMsg);
+      console.error('Error executing tool function', { toolName, error: errorMsg });
       return undefined;
     }
   }
