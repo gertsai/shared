@@ -1,5 +1,24 @@
 # @gertsai-examples/m9s-example
 
+## 0.0.11
+
+### Patch Changes
+
+- Updated dependencies [8de6205]
+- Updated dependencies [8f5533f]
+- Updated dependencies [739b3de]
+  - @gertsai/fetch@0.4.1
+  - @gertsai/m9s-cache@0.4.1
+  - @gertsai/api-core@0.3.3
+  - @gertsai/auth-openfga@0.3.2
+  - @gertsai/rest-request-manager@5.0.0
+  - @gertsai/api-rlr@0.3.2
+  - @gertsai/core@0.4.1
+  - @gertsai-examples/m9s-example-api-types@0.0.8
+  - @gertsai/entity-storage@3.0.0
+  - @gertsai/runtime-context@3.0.0
+  - @gertsai/storage-core@2.0.0
+
 ## 0.0.10
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @gertsai/hsm
 
+## 3.0.1
+
+### Patch Changes
+
+- Updated dependencies [739b3de]
+  - @gertsai/core@0.4.1
+
 ## 3.0.0
 
 ### Patch Changes
