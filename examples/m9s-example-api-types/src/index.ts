@@ -3,7 +3,14 @@
  * @gertsai-examples/m9s-example-api-types — Wave 9 typed API contracts.
  *
  * Re-exports the OpenAPI 3.1 `paths` / `components` / `operations` types
- * generated from the live m9s-example backend at `GET /openapi/schema.json`.
+ * for the m9s-example REST API. The snapshot in `src/generated/` is
+ * **hand-aligned** with the typia-validated backend handler types in
+ * `examples/m9s-example/src/services/{ingest,search}/types.ts` after
+ * Wave 12.E-fix-2 (PRD-039 / EVID-053 CRIT-4 + CRIT-5) — the auto-emission
+ * generator path was deleted because no first-party consumer invoked it
+ * (CRIT-5) and the previously-seeded `.d.ts` contradicted handler reality
+ * (CRIT-4). Keep `openapi-schema.d.ts` in lock-step with the backend
+ * handlers by hand until/unless a real typia-driven generator is wired.
  *
  * Frontend (and any other typed consumer) imports `paths` and feeds it to
  * `openapi-fetch`:
@@ -18,28 +25,19 @@
  *   body: { docId: 'd1', text: 'hello world' },
  * });
  * ```
- *
- * Backend wires the runtime side via the `/openapi` subpath:
- *
- * ```ts
- * import { generateOpenAPISchema } from '@gertsai-examples/m9s-example-api-types/openapi';
- * import type { OpenApiMapper, ApiEndpointsGenerator } from '@gertsai-examples/m9s-example-api-types/openapi';
- * ```
- *
- * The generator is idempotent — re-run `pnpm generate:openapi` whenever backend
- * action signatures change. The generated `.d.ts` is committed so frontend
- * consumers can build offline without the backend running.
  */
 
 export type { paths, components, operations } from './generated/openapi-schema';
 
 // Backward-compat alias for Wave 9 pre-seed consumers (Teammate C's m9s-example-web)
 // that imported `PlaceholderPaths` before Teammate B's snapshot landed. Equivalent
-// to `paths` from the real generated schema. Remove in Wave 10 once all consumers
-// migrate to importing `paths` directly.
+// to `paths` from the real generated schema. Kept for source compatibility until
+// every consumer migrates to importing `paths` directly.
 export type { paths as PlaceholderPaths } from './generated/openapi-schema';
 
-export { generateOpenAPISchema } from './openapi/generator';
+// Type-only OpenAPI helper utilities — see `./openapi/types.ts` for the
+// `ApiEndpointsGenerator` / `OpenApiMapper` pipeline (no runtime exports
+// after Wave 12.E-fix-2 / EVID-053 CRIT-5).
 export type {
   ApiEndpointsGenerator,
   EndpointLike,

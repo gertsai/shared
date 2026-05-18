@@ -1,113 +1,38 @@
 // SPDX-License-Identifier: Apache-2.0
+// Wave 12.E-fix-2 (PRD-039 FR-001 / EVID-053 CRIT-1 / CWE-613): rotation
+// store now DI'd; in-memory and Redis modes both wired through composition.
 /**
- * Refresh-token rotation + reuse-detection store — module-level sync facade
- * for the legacy intra-service callers (`login.action.ts` + `refresh.action.ts`).
+ * Refresh-token rotation + reuse-detection — INTENTIONALLY EMPTY.
  *
- * Wave 11.A (PRD-023) extracted the abstract port to
- * `src/domain/ports/IRotationStore.ts` and added a class-based
- * `InMemoryRotationStore` + `RedisRotationStore` in `src/infrastructure/`
- * for the composition-root DI path. This file keeps the original
- * synchronous Map-based implementation in-place so the existing action
- * call sites (which call `consumeJti(...).ok` without `await`) keep working
- * unchanged, AND so the hex-layer boundary (ADR-002) is respected — the
- * services layer must NOT import from `infrastructure/`. New code (e.g.
- * the composition-root path through `SharedInfrastructure.rotationStore`)
- * uses the class-based impls in `infrastructure/` directly.
+ * Wave 12.E-fix-2 (PRD-039 FR-001 / EVID-053 CRIT-1 / CWE-613) closed the
+ * gap where this file hosted a module-level `Map<jti, JtiRecord>` facade
+ * that was static-imported by `login.action.ts` and `refresh.action.ts`
+ * — bypassing the composition root's `IRotationStore` selection. Because
+ * the actions never reached the DI'd `infrastructure.rotationStore`, the
+ * env-driven `RedisRotationStore` (selected when `REDIS_URL` is set) was
+ * wired but never consumed:
  *
- * Three responsibilities (unchanged from Wave 10.E):
+ *   - multi-instance prod deploys failed reuse-detection across nodes;
+ *   - process restarts wiped the in-memory map and treated previously
+ *     issued refresh tokens as `unknown` (silent re-login storm);
+ *   - the Redis impl had zero call sites despite RFC-016 promising it.
  *
- *   1. `registerJti(jti, userId, exp)` — record a freshly-issued refresh
- *      token as `usable`. Called by login + each successful rotate.
+ * Fix: both auth actions now reach `service.rotationStore` (wired by
+ * `services/auth/lifecycle.ts` from `composition/infrastructure.ts`), and
+ * the legacy module-level functions + Map have been removed. The
+ * `InMemoryRotationStore` class (in
+ * `src/infrastructure/in-memory-rotation.store.ts`) remains the canonical
+ * in-memory impl; the periodic pruner is started exactly once in
+ * `buildInfrastructure()`.
  *
- *   2. `consumeJti(jti)` — atomically transition a jti `usable → used`.
- *      Returns the (userId, exp) on success. Returns `{ok: false, reason}`
- *      on reuse / expired / unknown.
+ * This file is kept (rather than deleted outright) so legacy `dist/`
+ * artifacts and external grep references resolve to a single source of
+ * truth that explains the migration.
  *
- *   3. `revokeUser(userId)` — mark every active jti issued to a user as
- *      `used`, forcing re-login. Triggered when reuse is detected.
- *
- * Closes EVID-036 audit finding U-6 (rotation + reuse detection).
- * Closes EVID-039 P2 / W-Security-1 (DoS via unbounded jti map) — the
- * periodic prune timer is below.
+ * @deprecated Use `service.rotationStore` (typed as `IRotationStore` from
+ *   `src/domain/ports/IRotationStore.ts`) inside action handlers. The
+ *   composition root in `src/composition/infrastructure.ts` selects the
+ *   concrete impl based on `REDIS_URL`. For tests, instantiate
+ *   `InMemoryRotationStore` directly.
  */
-
-interface JtiRecord {
-  readonly userId: string;
-  /** Unix seconds. */
-  readonly exp: number;
-  used: boolean;
-}
-
-const store = new Map<string, JtiRecord>();
-
-function nowSeconds(): number {
-  return Math.floor(Date.now() / 1_000);
-}
-
-export function registerJti(jti: string, userId: string, exp: number): void {
-  store.set(jti, { userId, exp, used: false });
-}
-
-export function consumeJti(
-  jti: string,
-): { ok: true; record: JtiRecord } | { ok: false; reason: 'reuse' | 'expired' | 'unknown' } {
-  const record = store.get(jti);
-  if (record === undefined) {
-    return { ok: false, reason: 'unknown' };
-  }
-  if (record.exp <= nowSeconds()) {
-    store.delete(jti);
-    return { ok: false, reason: 'expired' };
-  }
-  if (record.used) {
-    return { ok: false, reason: 'reuse' };
-  }
-  // Atomic transition. Map operations in single-threaded Node are sequenced
-  // — no concurrent mutation between the read above and the assignment here
-  // (no `await` between them).
-  record.used = true;
-  return { ok: true, record };
-}
-
-export function revokeUser(userId: string): number {
-  let count = 0;
-  for (const record of store.values()) {
-    if (record.userId === userId && !record.used) {
-      record.used = true;
-      count += 1;
-    }
-  }
-  return count;
-}
-
-export function pruneJtiStore(): number {
-  const cutoff = nowSeconds();
-  let removed = 0;
-  for (const [jti, record] of store.entries()) {
-    if (record.used || record.exp <= cutoff) {
-      store.delete(jti);
-      removed += 1;
-    }
-  }
-  return removed;
-}
-
-export function __resetRotationStoreForTests(): void {
-  store.clear();
-  if (pruneTimer !== null) {
-    clearInterval(pruneTimer);
-    pruneTimer = null;
-  }
-}
-
-// EVID-039 P2 / W-Security-1 fix: periodic prune timer to bound memory.
-const PRUNE_INTERVAL_MS = 5 * 60 * 1_000;
-let pruneTimer: ReturnType<typeof setInterval> | null = null;
-
-export function startRotationPruner(): void {
-  if (pruneTimer !== null) return;
-  pruneTimer = setInterval(pruneJtiStore, PRUNE_INTERVAL_MS);
-  if (typeof pruneTimer === 'object' && pruneTimer !== null && 'unref' in pruneTimer) {
-    (pruneTimer as { unref(): void }).unref();
-  }
-}
+export {};

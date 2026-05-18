@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
+// Wave 12.E-fix-2 (PRD-039 FR-001 / EVID-053 CRIT-1 / CWE-613): rotation
+// store now DI'd; in-memory and Redis modes both wired through composition.
 /**
  * Login Action — `v1.auth.login` — Wave 11.A real-auth replacement.
  *
@@ -15,7 +17,11 @@
  *      (against a fixed dummy hash) so response timing does not leak
  *      whether the email is registered (CWE-208).
  *
- * Refresh-token rotation (PRD-022 / Wave 10.E) is unchanged.
+ * Refresh-token rotation (PRD-022 / Wave 10.E) is unchanged. Wave 12.E-fix-2
+ * (EVID-053 CRIT-1) routes the freshly-issued jti registration through the
+ * DI'd `service.rotationStore` instead of a module-level Map facade so
+ * multi-instance prod deploys share state across nodes via Redis when
+ * `REDIS_URL` is set.
  */
 import { APIError, ResponseCode } from '@gertsai/api-core/contracts';
 import bcrypt from 'bcryptjs';
@@ -24,7 +30,6 @@ import typia from 'typia';
 import { defineAction } from '@gertsai/api-core/moleculer';
 import { resolveExampleController } from '../../../../lib/example-controller';
 import { signAccessToken, signRefreshToken } from '../jwt';
-import { registerJti } from '../rotation-store';
 import {
   InMemoryUserRepo,
   seedDemoUsers,
@@ -87,7 +92,7 @@ export const login = defineAction(controller.register('login', {
   responseCode: ResponseCode.SUCCESS,
   responseMessage: 'Login successful',
 
-  async handler({ params, logger, respond }) {
+  async handler({ params, service, logger, respond }) {
     const { email, password } = params;
 
     if (!email || !password) {
@@ -128,8 +133,17 @@ export const login = defineAction(controller.register('login', {
     const { token, expiresAt } = signAccessToken(user);
     // Wave 10.E (PRD-022): refresh token carries a jti registered in the
     // rotation store so the refresh action can detect reuse.
+    //
+    // Wave 12.E-fix-2 (EVID-053 CRIT-1 / CWE-613): the store is now
+    // DI'd via `service.rotationStore` so the env-driven
+    // InMemory/Redis selection in `composition/infrastructure.ts`
+    // is actually honoured.
     const { token: refreshToken, jti } = signRefreshToken(user);
-    registerJti(jti, user.id, Math.floor(Date.now() / 1_000) + REFRESH_TTL_SECONDS);
+    await service.rotationStore.registerJti(
+      jti,
+      user.id,
+      Math.floor(Date.now() / 1_000) + REFRESH_TTL_SECONDS,
+    );
 
     // EVID-036 audit fix (P2 / W-Security-7, CWE-532): log userId + tenantId
     // only — email is PII and the user record is recoverable from the userId
