@@ -10,7 +10,12 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { BaseLLM, LLMContextLengthExceededError, LLMCallError } from './base';
-import { ModelRouter, createLLM } from './routing';
+import {
+  ModelRouter,
+  createLLM,
+  getDefaultRouter,
+  __resetDefaultRouterForTests,
+} from './routing';
 import { OpenAIProvider } from './providers/openai';
 import { AnthropicProvider, ANTHROPIC_PREVIOUS_THINKING_BLOCKS_KEY } from './providers/anthropic';
 import { GeminiProvider } from './providers/gemini';
@@ -1119,6 +1124,310 @@ describe('Wave 13.A security fixes (EVID-059)', () => {
 
       const calledUrl = mockFetch.mock.calls[0][0] as string;
       expect(calledUrl).toContain('/models/gemini-1.5-pro:generateContent');
+    });
+  });
+});
+
+// ==================== Wave 13.B Security Fixes (EVID-059) ====================
+
+describe('Wave 13.B security fixes (EVID-059)', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+  });
+
+  // ===== H-7: getDefaultRouter fail-loud on mismatched config =====
+
+  describe('H-7: getDefaultRouter rejects mismatched second-call config', () => {
+    beforeEach(() => {
+      // Singleton is module-level — reset between tests so each scenario starts
+      // from a clean slate.
+      __resetDefaultRouterForTests();
+    });
+
+    it('returns the cached router when called a second time with no config', () => {
+      const first = getDefaultRouter({ defaultProvider: 'openai' });
+      const second = getDefaultRouter();
+      expect(second).toBe(first);
+    });
+
+    it('returns the cached router when called a second time with equivalent config', () => {
+      const bus = new SimpleEventBus();
+      const first = getDefaultRouter({ defaultProvider: 'openai', eventBus: bus });
+      const second = getDefaultRouter({ defaultProvider: 'openai', eventBus: bus });
+      expect(second).toBe(first);
+    });
+
+    it('throws when a second call passes a different eventBus instance', () => {
+      const busA = new SimpleEventBus();
+      const busB = new SimpleEventBus();
+      getDefaultRouter({ eventBus: busA });
+      expect(() => getDefaultRouter({ eventBus: busB })).toThrow(/config mismatch/);
+    });
+
+    it('throws when a second call passes a different defaultProvider', () => {
+      getDefaultRouter({ defaultProvider: 'openai' });
+      expect(() => getDefaultRouter({ defaultProvider: 'anthropic' })).toThrow(
+        /config mismatch/,
+      );
+    });
+
+    it('throws when a second call passes structurally different fallbacks', () => {
+      getDefaultRouter({
+        fallbacks: {
+          openai: ['gpt-4o-mini'],
+          anthropic: [],
+          gemini: [],
+          azure: [],
+          bedrock: [],
+          groq: [],
+          mistral: [],
+          ollama: [],
+        },
+      });
+      expect(() =>
+        getDefaultRouter({
+          fallbacks: {
+            openai: ['gpt-4o'],
+            anthropic: [],
+            gemini: [],
+            azure: [],
+            bedrock: [],
+            groq: [],
+            mistral: [],
+            ollama: [],
+          },
+        }),
+      ).toThrow(/config mismatch/);
+    });
+  });
+
+  // ===== H-8: OpenAIProvider.isO1Model anchored regex =====
+
+  describe('H-8: OpenAIProvider isO1Model regex is anchored to family prefix', () => {
+    it.each([
+      ['o1', true],
+      ['o1-mini', true],
+      ['o1-preview', true],
+      ['o3', true],
+      ['o3-mini', true],
+      ['openai/o1', true],
+      ['openai/o3-mini', true],
+    ])('classifies %s as o-family reasoning model (=> %s)', (model, expected) => {
+      const provider = new OpenAIProvider({ model, apiKey: 'test-key' });
+      const caps = provider.getCapabilities();
+      // Reasoning family disables function calling + stop words.
+      expect(caps.supportsFunctionCalling).toBe(!expected);
+      expect(caps.supportsStopWords).toBe(!expected);
+    });
+
+    it.each([
+      ['gpt-4o-1106'],
+      ['gpt-4o-3-mini'],
+      ['gpt-4'],
+      ['gpt-4o'],
+      ['gpt-4-turbo'],
+      ['gpto1-eval'],
+      ['claude-3-opus'],
+      ['so1-something'],
+    ])('classifies %s as NON-reasoning (regular model)', (model) => {
+      const provider = new OpenAIProvider({ model, apiKey: 'test-key' });
+      const caps = provider.getCapabilities();
+      expect(caps.supportsFunctionCalling).toBe(true);
+      expect(caps.supportsStopWords).toBe(true);
+    });
+  });
+
+  // ===== H-10: malformed tool-call arguments don't abort sibling tool calls =====
+
+  describe('H-10: malformed tool arguments are reported and skipped', () => {
+    it('OpenAIProvider: drops the malformed call but still dispatches the valid one', async () => {
+      const provider = new OpenAIProvider({ model: 'gpt-4o', apiKey: 'test-key' });
+
+      // Response with two tool calls: one valid JSON, one malformed.
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id: 'chatcmpl-x',
+            object: 'chat.completion',
+            created: Date.now(),
+            model: 'gpt-4o',
+            choices: [
+              {
+                index: 0,
+                message: {
+                  role: 'assistant',
+                  content: null,
+                  tool_calls: [
+                    {
+                      id: 'call_bad',
+                      type: 'function',
+                      function: { name: 'bad_tool', arguments: '{not valid json' },
+                    },
+                    {
+                      id: 'call_good',
+                      type: 'function',
+                      function: { name: 'good_tool', arguments: '{"x":1}' },
+                    },
+                  ],
+                },
+                finish_reason: 'tool_calls',
+              },
+            ],
+            usage: { prompt_tokens: 5, completion_tokens: 5, total_tokens: 10 },
+          }),
+      } as Response);
+
+      const good = vi.fn().mockResolvedValue('ok');
+      const bad = vi.fn().mockResolvedValue('should-not-run');
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const result = await provider.call([{ role: 'user', content: 'do stuff' }], {
+        availableFunctions: { good_tool: good, bad_tool: bad },
+      });
+
+      // The valid tool dispatched; the malformed one did NOT.
+      expect(good).toHaveBeenCalledWith({ x: 1 });
+      expect(bad).not.toHaveBeenCalled();
+
+      // No SyntaxError surfaced to the caller — call resolved successfully.
+      expect(result.toolCalls).toHaveLength(2);
+
+      // The malformed payload was logged with structured fields (no raw model
+      // output interpolated into the format string).
+      const malformedCall = warnSpy.mock.calls.find(
+        (c) =>
+          typeof c[0] === 'string' &&
+          c[0].includes('malformed') &&
+          c[1] &&
+          typeof c[1] === 'object' &&
+          'toolName' in (c[1] as Record<string, unknown>),
+      );
+      expect(malformedCall).toBeDefined();
+      warnSpy.mockRestore();
+    });
+
+    it('AnthropicProvider: drops the malformed call but still dispatches the valid one', async () => {
+      const provider = new AnthropicProvider({
+        model: 'claude-3-5-sonnet-20241022',
+        apiKey: 'test-key',
+      });
+
+      // Inject a `toJSON` that returns a non-object primitive — when the
+      // provider serialises `block.input` and then JSON.parses it back, the
+      // round-trip yields a non-object value which our H-10 guard rejects as
+      // "did not decode to a plain object". This exercises the same error
+      // branch a real malformed arguments string would hit.
+      const badInput = {
+        toJSON(): unknown {
+          return 'not-an-object';
+        },
+      } as Record<string, unknown>;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id: 'msg_x',
+            type: 'message',
+            role: 'assistant',
+            content: [
+              { type: 'tool_use', id: 'tu_bad', name: 'bad_tool', input: badInput },
+              { type: 'tool_use', id: 'tu_good', name: 'good_tool', input: { x: 1 } },
+            ],
+            model: 'claude-3-5-sonnet-20241022',
+            stop_reason: 'tool_use',
+            stop_sequence: null,
+            usage: { input_tokens: 5, output_tokens: 5 },
+          }),
+      } as Response);
+
+      const good = vi.fn().mockResolvedValue('ok');
+      const bad = vi.fn().mockResolvedValue('should-not-run');
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const result = await provider.call([{ role: 'user', content: 'do stuff' }], {
+        availableFunctions: { good_tool: good, bad_tool: bad },
+      });
+
+      expect(good).toHaveBeenCalledWith({ x: 1 });
+      expect(bad).not.toHaveBeenCalled();
+      expect(result.toolCalls).toHaveLength(2);
+
+      const malformedCall = warnSpy.mock.calls.find(
+        (c) =>
+          typeof c[0] === 'string' &&
+          c[0].includes('malformed') &&
+          c[1] &&
+          typeof c[1] === 'object' &&
+          'toolName' in (c[1] as Record<string, unknown>),
+      );
+      expect(malformedCall).toBeDefined();
+      warnSpy.mockRestore();
+    });
+  });
+
+  // ===== H-11: no fabricated "Hello" user message =====
+
+  describe('H-11: providers refuse empty / assistant-led conversations', () => {
+    it('AnthropicProvider: throws on a fully-empty message list', async () => {
+      const provider = new AnthropicProvider({
+        model: 'claude-3-5-sonnet-20241022',
+        apiKey: 'test-key',
+      });
+      await expect(provider.call([])).rejects.toThrow(
+        /empty or assistant-led conversation/,
+      );
+    });
+
+    it('AnthropicProvider: throws when the first non-system message is from assistant', async () => {
+      const provider = new AnthropicProvider({
+        model: 'claude-3-5-sonnet-20241022',
+        apiKey: 'test-key',
+      });
+      await expect(
+        provider.call([
+          { role: 'system', content: 'you are helpful' },
+          { role: 'assistant', content: 'I was already speaking' },
+        ]),
+      ).rejects.toThrow(/empty or assistant-led conversation/);
+    });
+
+    it('GeminiProvider: throws on a fully-empty message list', async () => {
+      const provider = new GeminiProvider({
+        model: 'gemini-1.5-pro',
+        apiKey: 'test-key',
+      });
+      await expect(provider.call([])).rejects.toThrow(
+        /empty or assistant-led conversation/,
+      );
+    });
+
+    it('GeminiProvider: throws when transformation yields no usable turns (system-only)', async () => {
+      const provider = new GeminiProvider({
+        model: 'gemini-1.5-pro',
+        apiKey: 'test-key',
+      });
+      await expect(
+        provider.call([{ role: 'system', content: 'you are helpful' }]),
+      ).rejects.toThrow(/empty or assistant-led conversation/);
+    });
+
+    it('AnthropicProvider: does NOT fabricate "Hello" — verified by inspecting outbound body for valid input', async () => {
+      const provider = new AnthropicProvider({
+        model: 'claude-3-5-sonnet-20241022',
+        apiKey: 'test-key',
+      });
+      mockFetch.mockResolvedValueOnce(createMockAnthropicResponse('ack'));
+
+      await provider.call([{ role: 'user', content: 'real user content' }]);
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      const serialized = JSON.stringify(body);
+      // "Hello" must not appear unless the caller supplied it.
+      expect(serialized).not.toContain('"Hello"');
+      expect(body.messages[0].role).toBe('user');
+      expect(body.messages[0].content).toBe('real user content');
     });
   });
 });
