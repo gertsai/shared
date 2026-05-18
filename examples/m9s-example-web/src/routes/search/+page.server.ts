@@ -4,20 +4,24 @@
  *
  * Posts the query to `POST /api/v1/search/query` and returns a normalized
  * `{ success, results, query, error? }` shape. The page renders each hit as
- * a card (docId + text snippet + similarity score).
+ * a card (docId + chunk index + text snippet + score).
  *
- * Results are intentionally untyped at the call-site (PlaceholderPaths
- * fallback) until Teammate B's snapshot commit lands. The runtime shape is
- * defined by RFC-011 §4.2 + SPEC-019 §3:
- *   { results: Array<{ docId: string; text: string; similarity: number }> }
+ * Wave 12.E-fix-1 (PRD-038 FR-003 / EVID-053 CRIT-3) — backend handler
+ * actually returns `{ docId, chunkIdx, text, score }` per `services/search/
+ * types.ts:53-60` + `domain/chunk.ts:22-27`. The pre-fix code declared
+ * `{ docId, text, similarity }` and the page rendered `hit.similarity.toFixed(3)`
+ * which crashed at runtime because the field doesn't exist on the wire.
+ * The `as never` casts that masked this drift are kept ONLY where openapi-fetch
+ * paths typing isn't aligned yet (FR-018 follow-up).
  */
 import type { Actions } from './$types';
 import { api } from '$lib/api/client';
 
 export type SearchHit = {
   docId: string;
+  chunkIdx: number;
   text: string;
-  similarity: number;
+  score: number;
 };
 
 type SearchResponseBody = {
@@ -39,7 +43,8 @@ export const actions: Actions = {
     }
 
     try {
-      const body = { query, limit: 10 };
+      // Wave 12.E-fix-1 FR-017: backend reads `topK`, not `limit`.
+      const body = { query, topK: 10 };
       const { data, error } = await api.POST(
         '/api/v1/search/query' as never,
         { body } as never,

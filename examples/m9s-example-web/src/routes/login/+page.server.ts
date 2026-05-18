@@ -47,6 +47,13 @@ function unwrap(body: unknown): LoginSuccessResponse | null {
  */
 function safeNextRedirect(raw: string | null): string {
   if (raw === null || raw.length === 0) return '/';
+  // Wave 12.E-fix-1 (PRD-038 FR-012 / EVID-053 H-7): reject control chars
+  // and NUL bytes. Browsers normalise `\t` / `\n` / `\r` / `\x00` inside
+  // URL strings; pre-fix the validator only checked for backslash and `:`
+  // before the first slash, leaving `/\tjavascript:alert(1)` etc. as
+  // bypass payloads even though `redirect(303)` does its own validation.
+  // Defense-in-depth — fail fast at the trust boundary.
+  if (/[\x00-\x1F\x7F]/.test(raw)) return '/';
   if (!raw.startsWith('/')) return '/';
   if (raw.startsWith('//')) return '/';
   // Reject backslash tricks like `/\evil.com` that browsers normalise.

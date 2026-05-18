@@ -64,13 +64,15 @@ export const deleteDocument = defineAction(controller.register('delete-document'
   async handler({ params, ctx, service, logger, respond }) {
     const { docId } = params;
     try {
-      // Session-guard FIRST (Wave 9.0.1 invariant).
+      // Wave 12.E-fix-1 (PRD-038 FR-002 / EVID-053 CRIT-2 / CWE-862):
+      // Authentication is now MANDATORY. Pre-fix the guard was conditional
+      // (`if (session !== undefined) { assertAuthenticated(session); }`)
+      // which let unauthenticated POST /api/v1/ingest/delete delete any
+      // tenant's documents. The session-guard now fails closed.
       const { session, expectedTenantId } = tryGetRequestContextFromCtx(ctx);
-      if (session !== undefined) {
-        assertAuthenticated(session);
-        if (expectedTenantId !== undefined) {
-          assertSessionInTenant(session, expectedTenantId);
-        }
+      assertAuthenticated(session);
+      if (expectedTenantId !== undefined) {
+        assertSessionInTenant(session, expectedTenantId);
       }
 
       // Soft-delete is idempotent — the port returns void and missing ids
@@ -79,8 +81,7 @@ export const deleteDocument = defineAction(controller.register('delete-document'
       await service.docStore.softDelete(docId);
 
       // No PII in logs — only docId + actor identifier.
-      const actor = session !== undefined ? session.operatorUuid : 'anonymous';
-      logger.info('[v1.ingest.delete-document] soft-deleted', { docId, userId: actor });
+      logger.info('[v1.ingest.delete-document] soft-deleted', { docId, userId: session.operatorUuid });
 
       const response: DeleteDocumentResponse = { docId, deleted: true };
       return respond(response, 'Document deleted', ResponseCode.SUCCESS);
