@@ -127,6 +127,13 @@ export function verifyToken(token: string): JwtClaims | null {
   const now = Math.floor(Date.now() / 1_000);
   if (payload.exp <= now) return null;
 
+  // Wave 12.E-fix-1 (PRD-038 FR-022 / EVID-053 H-17): preserve `jti` when
+  // present on the wire. JwtRefreshClaims declares `jti: string` as REQUIRED
+  // (not optional) — pre-fix code dropped this field, breaking downstream
+  // `if (claims.kind === 'refresh') store.consumeJti(claims.jti)` with a
+  // runtime crash because `claims.jti` was always undefined. Backend
+  // `services/auth/src/jwt.ts:147` already spreads jti — this mirror keeps
+  // the contract symmetric.
   return {
     sub: payload.sub,
     email: payload.email,
@@ -135,6 +142,7 @@ export function verifyToken(token: string): JwtClaims | null {
     iat: payload.iat,
     exp: payload.exp,
     iss: payload.iss,
+    ...(typeof payload.jti === 'string' && payload.jti.length > 0 && { jti: payload.jti }),
   };
 }
 

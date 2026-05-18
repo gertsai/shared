@@ -56,3 +56,13 @@ export type {
   JwtRefreshClaims,
   JwtKind,
 } from './jwt-claims';
+
+// Wave 12.E-fix-1 (PRD-038 FR-003 / EVID-053 CRIT-3) — canonical search
+// contract. Single source of truth for `SearchHit` so frontend and backend
+// cannot drift (pre-fix: frontend `.similarity` vs backend `.score` runtime
+// crash).
+export type {
+  SearchHit,
+  SearchQueryRequest,
+  SearchQueryResponse,
+} from './search-types';

@@ -67,9 +67,9 @@
               class="bg-white border border-slate-200 rounded-lg p-4 shadow-sm"
             >
               <div class="flex items-center justify-between gap-3 mb-2">
-                <code class="font-mono text-sm font-semibold text-blue-700">{hit.docId}</code>
+                <code class="font-mono text-sm font-semibold text-blue-700">{hit.docId}#{hit.chunkIdx}</code>
                 <span class="text-xs font-medium text-slate-500">
-                  {m.search_result_similarity_label()} <span class="text-slate-900 font-mono">{hit.similarity.toFixed(3)}</span>
+                  {m.search_result_similarity_label()} <span class="text-slate-900 font-mono">{hit.score.toFixed(3)}</span>
                 </span>
               </div>
               <p class="text-sm text-slate-700 whitespace-pre-wrap">{hit.text}</p>
