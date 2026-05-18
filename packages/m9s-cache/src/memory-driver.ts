@@ -34,14 +34,26 @@ export interface MemoryCacheDriverOptions {
 }
 
 /**
- * In-memory cache driver for development and testing.
+ * In-memory cache driver — **FIFO eviction (NOT LRU)**.
+ *
+ * Wave 14.5 (PRD-045 / EVID-057 §LRU §m9s-cache): clarified eviction
+ * semantics. This driver does NOT touch recency on `get()` — it evicts
+ * by **insertion order** (`keys().next().value`). For true LRU
+ * semantics, consume `@gertsai/utils/lru.LruMap` or
+ * `@gertsai/utils/lru.LruTtlMap` in a custom driver instead.
+ *
+ * Rationale: `MemoryCacheDriver` is the in-memory fallback for the
+ * Moleculer cacher protocol, which itself defines FIFO semantics for
+ * parity with its Redis driver. Don't change to LRU without aligning
+ * the contract upstream.
  *
  * Features:
- * - Full CacheDriver API compatibility
+ * - Full `CacheDriver` API compatibility
  * - TTL support with lazy expiration
  * - Optional periodic cleanup
  * - Pattern matching with regex caching
  * - Hash operations support
+ * - FIFO eviction when `maxEntries` is set
  *
  * @example
  * ```typescript
