@@ -317,13 +317,41 @@ export function isGraphRAGSettings(value: unknown): value is GraphRAGSettings {
 }
 
 /**
+ * Clamp a numeric value to an inclusive [min, max] range.
+ *
+ * FR-D-2: shared helper used by `createGraphRAGSettings` so factory output
+ * stays within bounds enforced by `isGraphRAGSettings`. Defined inline (not
+ * exported) to keep the public surface stable.
+ */
+function clampGraphRagNumber(value: unknown, fallback: number, min: number, max: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+  if (value < min) return min;
+  if (value > max) return max;
+  return value;
+}
+
+/**
  * Create GraphRAGSettings with defaults
+ *
+ * FR-D-2: clamp `maxHops`, `topK`, and `communityLevel` to the same ranges
+ * enforced by `isGraphRAGSettings` so the factory cannot produce values the
+ * guard rejects. Previously `{...DEFAULT, ...options}` allowed callers to
+ * push `maxHops: 99` or `topK: 0` and observe a guard mismatch.
  */
 export function createGraphRAGSettings(options: Partial<GraphRAGSettings> = {}): GraphRAGSettings {
-  return {
+  const merged: GraphRAGSettings = {
     ...DEFAULT_GRAPHRAG_SETTINGS,
     ...options,
   };
+  merged.maxHops = clampGraphRagNumber(merged.maxHops, DEFAULT_GRAPHRAG_SETTINGS.maxHops, 1, 5);
+  merged.topK = clampGraphRagNumber(merged.topK, DEFAULT_GRAPHRAG_SETTINGS.topK, 1, 100);
+  merged.communityLevel = clampGraphRagNumber(
+    merged.communityLevel,
+    DEFAULT_GRAPHRAG_SETTINGS.communityLevel,
+    0,
+    3,
+  );
+  return merged;
 }
 
 // ============================================================================

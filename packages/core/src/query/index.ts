@@ -68,6 +68,7 @@ export type {
   ExecutorMetadata,
   QueryToolOptions,
   IQueryExecutor,
+  AnyQueryExecutor,
   ExecutorFactory,
   ExecutorRegistryEntry,
 } from './executor.js';
@@ -143,6 +144,7 @@ export {
 export type {
   QuerySelection,
   IQuerySelector,
+  QueryRouterAsTool,
 } from './router.js';
 
 export {

@@ -15,14 +15,14 @@ import type {
   ITool,
 } from './agent';
 
-describe('FR-015: IAgent.run accepts string | unknown', () => {
-  it('accepts a string literal directly (no narrowing needed)', async () => {
+describe('FR-015: IAgent.run accepts unknown (EVID-059 FR-E-6: collapsed from "string | unknown")', () => {
+  it('accepts a string literal directly (caller narrows internally)', async () => {
     const agent: IAgent = {
       getId: () => 'a1',
       getRole: () => 'r',
       getGoal: () => 'g',
       tenantId: 't1',
-      run: async (input: string | unknown): Promise<AgentRunResult> => ({
+      run: async (input: unknown): Promise<AgentRunResult> => ({
         status: 'completed',
         content: typeof input === 'string' ? input : 'non-string',
         sessionId: 's1',
@@ -39,7 +39,7 @@ describe('FR-015: IAgent.run accepts string | unknown', () => {
       getRole: () => 'r',
       getGoal: () => 'g',
       tenantId: 't1',
-      run: async (input: string | unknown): Promise<AgentRunResult> => {
+      run: async (input: unknown): Promise<AgentRunResult> => {
         // typeof narrowing — proves the input type is NOT `any` (which
         // would let you pass to ANY function unchecked).
         let s: string;

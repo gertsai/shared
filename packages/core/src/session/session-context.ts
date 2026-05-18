@@ -7,7 +7,7 @@ import type {
   ClientPlatform,
   IDestroyable,
 } from './types';
-import { UserType } from './types';
+import { UserType, isOperator } from './types';
 
 /**
  * Configuration for creating a new session context
@@ -315,10 +315,25 @@ export class GraphRAGSessionContext implements IDestroyable {
 
   /**
    * Throw if session is aborted
+   *
+   * FR-D-6: `AbortSignal.reason` is `unknown` per the WHATWG spec — callers
+   * can pass any value to `abort(reason)`. The previous `throw signal.reason
+   * || new Error(...)` would propagate non-Error values (strings, plain
+   * objects, even `false`/`0` after fallback). We normalise to an Error
+   * instance so downstream `catch (e: unknown)` / `e instanceof Error`
+   * narrowing works uniformly. The fallback handles `signal.reason === undefined`
+   * (which can happen on legacy abort paths that did not set a reason).
    */
   throwIfAborted(): void {
     if (this.isAborted) {
-      throw this._abortController.signal.reason || new Error('Session aborted');
+      const reason: unknown = this._abortController.signal.reason;
+      if (reason instanceof Error) {
+        throw reason;
+      }
+      if (reason === undefined || reason === null) {
+        throw new Error('Session aborted');
+      }
+      throw new Error(typeof reason === 'string' ? reason : String(reason));
     }
   }
 
@@ -379,10 +394,28 @@ export class GraphRAGSessionContext implements IDestroyable {
   }
 
   /**
-   * Deserialize from JSON string
+   * Deserialize from JSON string.
+   *
+   * FR-D-7: validate the parsed payload with `isSerializedSessionContext`
+   * (a schema-shaped guard) before handing off to `deserialize`. Previously
+   * `JSON.parse` could produce any shape (`null`, missing fields, wrong
+   * types) and the call would crash inside the constructor with an opaque
+   * `TypeError` — making this a denial-of-service surface for any caller
+   * that round-trips session payloads from an untrusted boundary
+   * (Moleculer meta, WebSocket frames, queue messages).
+   *
+   * Now: `SyntaxError` from `JSON.parse` propagates as-is; structural
+   * mismatches throw a typed `TypeError` with a clear message before any
+   * downstream side effect.
    */
   static fromJSON(json: string): GraphRAGSessionContext {
-    return GraphRAGSessionContext.deserialize(JSON.parse(json));
+    const parsed: unknown = JSON.parse(json);
+    if (!isSerializedSessionContext(parsed)) {
+      throw new TypeError(
+        'GraphRAGSessionContext.fromJSON: payload does not match SerializedSessionContext shape',
+      );
+    }
+    return GraphRAGSessionContext.deserialize(parsed);
   }
 
   // ========== Audit ==========
@@ -442,6 +475,59 @@ export class GraphRAGSessionContext implements IDestroyable {
       this._abortController.abort(new Error('Session destroyed'));
     }
   }
+}
+
+/**
+ * Validate a `SerializedSessionContext` payload (FR-D-7).
+ *
+ * Used by {@link GraphRAGSessionContext.fromJSON} to gate untrusted JSON
+ * round-trips before the constructor runs. Defends against malformed payloads
+ * coming from `ctx.meta`, WebSocket frames, or queue messages.
+ *
+ * Shape match (loose, JSON-friendly):
+ *   - `version === 1`
+ *   - `tenantId: string`
+ *   - `operator` passes `isOperator`
+ *   - `requestMeta.requestId: string`, `requestMeta.clientPlatform: string`,
+ *     `requestMeta.timeout: number` (post-JSON-parse `startedAt` is a string,
+ *     not a `Date` — `deserialize` never reads it, so we don't validate it).
+ *   - `graphRagSettings: object`
+ *   - `entities/queries/actions: string[]`
+ *
+ * Intentionally NOT calling `isRequestMeta` here: that guard requires
+ * `startedAt instanceof Date`, which is impossible on a JSON-parsed payload
+ * (JSON has no Date type — it becomes an ISO string). `deserialize` discards
+ * `startedAt` anyway, so the relaxed shape check is the right contract.
+ */
+export function isSerializedSessionContext(value: unknown): value is SerializedSessionContext {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as Record<string, unknown>;
+
+  if (v.version !== 1) return false;
+  if (typeof v.tenantId !== 'string') return false;
+  if (!isOperator(v.operator)) return false;
+
+  // requestMeta — JSON-parsed shape (startedAt is a string after round-trip).
+  if (typeof v.requestMeta !== 'object' || v.requestMeta === null) return false;
+  const rm = v.requestMeta as Record<string, unknown>;
+  if (typeof rm.requestId !== 'string') return false;
+  if (typeof rm.clientPlatform !== 'string') return false;
+  if (typeof rm.timeout !== 'number' || !Number.isFinite(rm.timeout)) return false;
+  if (rm.traceId !== undefined && typeof rm.traceId !== 'string') return false;
+  if (rm.clientVersion !== undefined && typeof rm.clientVersion !== 'string') return false;
+
+  // graphRagSettings — structural check only (constructor reshapes via spread).
+  if (typeof v.graphRagSettings !== 'object' || v.graphRagSettings === null) return false;
+
+  // tenantConfigHash is optional
+  if (v.tenantConfigHash !== undefined && typeof v.tenantConfigHash !== 'string') return false;
+
+  // entities / queries / actions: string arrays
+  if (!Array.isArray(v.entities) || !v.entities.every((e) => typeof e === 'string')) return false;
+  if (!Array.isArray(v.queries) || !v.queries.every((q) => typeof q === 'string')) return false;
+  if (!Array.isArray(v.actions) || !v.actions.every((a) => typeof a === 'string')) return false;
+
+  return true;
 }
 
 // ========== Factory Functions (Orchestra compatibility) ==========
