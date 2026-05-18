@@ -1,6 +1,6 @@
 {
   "name": "@gertsai-examples/m9s-example-web",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "private": true,
   "description": "SvelteKit 2 frontend for m9s-example reference application (Wave 9)",
   "license": "Apache-2.0",
