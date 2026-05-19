@@ -3,8 +3,13 @@
 import type { Message, Subscription, SubscriptionOptions } from '@google-cloud/pubsub';
 import type { OrchestraSession } from '@gertsai/core';
 import { UserType, defaultSession } from '@gertsai/core';
-import { Queue, Worker } from 'bullmq';
-import type { Job } from 'bullmq';
+import {
+  bootQueueWorkers,
+  createQueueSchemaFragment,
+  createQueueServiceMethods,
+  stopQueueWorkers,
+  stopQueues,
+} from '@gertsai/api-queue';
 import color from 'colorts';
 import _forIn from 'lodash.forin';
 import type Moleculer from 'moleculer';
@@ -42,7 +47,6 @@ import type {
   ApiControllerSubscribedTopics,
   ApiControllerSubscriptions,
   CoreServiceSchema,
-  JobDataWithTraceContext,
   LifecycleHandler,
   LifecycleHandlerContext,
   QueueHandler,
@@ -879,105 +883,27 @@ export class ApiController<
     };
   }
 
+  /**
+   * Build the per-queue schema fragment attached under `schema.queues[<name>]`.
+   *
+   * Wave 15.B (PRD-051 / EVID-067 §15.B): delegates to
+   * `@gertsai/api-queue.createQueueSchemaFragment`. The api-core-specific
+   * APIError scrub semantics are preserved via the `errorTranslator`
+   * adapter — identical behaviour to the pre-extraction inline implementation.
+   */
   _createQueueSchema(queue: ApiControllerRegisteredQueue<any, any>) {
-    return {
-      ...(queue.name && { name: queue.name }),
-      ...(queue.on && { on: queue.on }),
-      handlers: queue.handlers.map((handler) => {
-        return {
-          ...(handler.name && { name: handler.name }),
-          ...(handler.concurrency && { concurrency: handler.concurrency }),
-          // Store original handler for BullMQ Worker to call with proper context
-          _originalHandler: handler.handler,
-          handler: async function (this: Moleculer.Service, job: Job): Promise<unknown> {
-            // Extract trace context from job data (propagated from parent request)
-            // Uses JobDataWithTraceContext intersection type for type safety
-            const jobData = (job.data || {}) as JobDataWithTraceContext;
-            const traceContext: QueueTraceContext | undefined = jobData._traceContext;
-
-            // Create span for queue job processing (links to parent trace)
-            const tracer = this.broker.tracer;
-            const span =
-              traceContext?.sampled && tracer
-                ? tracer.startSpan(`queue.${queue.name || 'unknown'}.${handler.name || job.name}`, {
-                    parentID: traceContext.parentId,
-                    traceID: traceContext.traceId,
-                    sampled: traceContext.sampled,
-                    tags: {
-                      'queue.name': queue.name || 'unknown',
-                      'queue.job.id': job.id,
-                      'queue.job.name': job.name,
-                      'queue.handler': handler.name || 'anonymous',
-                    },
-                  })
-                : null;
-
-            try {
-              const result = await handler.handler.call(this, {
-                job,
-                /**
-                 * Call function with trace context propagation.
-                 * Automatically passes trace context in meta for downstream services.
-                 *
-                 * Note: @ts-ignore is used because QueueActionCallFunction has complex
-                 * generics for registered actions, but here we need a simpler signature
-                 * for cross-service calls. See types.ts:198-225 for the full type.
-                 */
-                // @ts-ignore - Simplified call signature for queue context
-                call: (...args: [string, Record<string, unknown>, Record<string, unknown>?]) => {
-                  const [action, params, opts = {}] = args;
-                  // Propagate trace context via meta for downstream calls
-                  const existingMeta = (opts as { meta?: Record<string, unknown> })?.meta ?? {};
-                  const callOpts = traceContext
-                    ? {
-                        ...opts,
-                        parentSpan: span || undefined,
-                        meta: {
-                          ...existingMeta,
-                          $traceContext: traceContext,
-                        },
-                      }
-                    : opts;
-                  return this.broker
-                    .call(action, params, callOpts)
-                    .then((res: unknown) => (res as { data: unknown }).data);
-                },
-                logger: this.logger,
-                traceContext,
-              });
-
-              // Mark span as successful
-              span?.finish();
-              return result;
-            } catch (err: unknown) {
-              // Mark span with error
-              if (err instanceof Error) {
-                span?.setError(err);
-              }
-              span?.finish();
-
-              if (err instanceof APIError) {
-                throw err;
-              }
-
-              // @ts-ignore
-              if (err.__ORCHESTRA_ERROR__ === true) {
-                // @ts-ignore
-                throw APIError.fromJSON(err);
-              }
-
-              if (err instanceof Error) {
-                throw APIError.fromError(err);
-              }
-
-              this.logger?.error('Unknown error occurred', err);
-
-              throw new APIError(ResponseCode.INTERNAL_ERROR);
-            }
-          },
-        };
-      }),
-    };
+    return createQueueSchemaFragment(queue, {
+      errorTranslator: (err: unknown): Error => {
+        if (err instanceof APIError) return err;
+        // @ts-ignore - duck-type check for Orchestra-flavoured cross-service errors
+        if (err && (err as { __ORCHESTRA_ERROR__?: boolean }).__ORCHESTRA_ERROR__ === true) {
+          // @ts-ignore
+          return APIError.fromJSON(err);
+        }
+        if (err instanceof Error) return APIError.fromError(err);
+        return new APIError(ResponseCode.INTERNAL_ERROR);
+      },
+    });
   }
 
   _createSubscriberSchema(subscription: ApiControllerSubscribedTopics<any, any, any>) {
@@ -1079,41 +1005,10 @@ export class ApiController<
         {},
       ),
       methods: {
-        ...(ApiController._config.queue && {
-          /**
-           * Get a queue by name (BullMQ)
-           *
-           * @param {String} name - Queue's name
-           * @returns {Queue}
-           */
-          getQueue(name: string): Queue {
-            const queues = this.$queues;
-            if (!queues[name]) {
-              const queueCfg = ApiController._config.queue!;
-              queues[name] = new Queue(name, {
-                connection: queueCfg.connection,
-                ...(queueCfg.defaultJobOptions !== undefined && {
-                  defaultJobOptions: queueCfg.defaultJobOptions,
-                }),
-                ...(queueCfg.prefix !== undefined && { prefix: queueCfg.prefix }),
-              });
-            }
-            return queues[name];
-          },
-          /**
-           * Add a job to the queue (BullMQ)
-           *
-           * @param {String} name - Queue name
-           * @param {String} jobName - Job name
-           * @param {Any} payload - Job data
-           * @param {Any} opts - Job options
-           * @returns {Promise<Job>}
-           */
-          async addJob(name: string, jobName: string, payload: any, opts: any): Promise<Job> {
-            const queue = this.getQueue(name);
-            return queue.add(jobName || '*', payload || {}, opts || {});
-          },
-        }),
+        // BullMQ queue methods (getQueue + addJob) extracted to
+        // `@gertsai/api-queue` in Wave 15.B. Spreads empty when `queue` is
+        // unconfigured — matches the pre-extraction conditional behaviour.
+        ...createQueueServiceMethods(ApiController._config.queue),
         ...(ApiController._config.pubSub && {
           async getSubscription(
             subscriptionName: string,
@@ -1211,156 +1106,16 @@ export class ApiController<
           }
         }
 
-        // BullMQ: Create workers for each registered queue handler
-        // Skip if workersEnabled=false (API Gateway mode - only adds jobs, doesn't process)
+        // BullMQ: Create workers for each registered queue handler.
+        // Wave 15.B (PRD-051 / EVID-067 §15.B): worker boot delegated to
+        // `@gertsai/api-queue.bootQueueWorkers`. Selective worker-mode
+        // semantics (workersEnabled / enabledWorkers) preserved verbatim —
+        // see SPEC-018 for the API Gateway vs Worker Node deployment matrix.
         if (ApiController._config.queue && this.schema.queues) {
-          // `service` aliases `this` so we can pass the Moleculer-bound service
-          // reference into BullMQ Worker callbacks (which use their own `this`)
-          // and across nested arrow scopes that capture by reference.
-          // oxlint-disable-next-line typescript/no-this-alias
-          const service = this;
-
-          _forIn(this.schema.queues, (fn: any, queueName: string) => {
-            // Ensure queue exists for addJob (always needed for job creation)
-            this.getQueue(queueName);
-
-            // Skip worker creation if workers are disabled (API Gateway mode)
-            if (!ApiController._workersEnabled) {
-              this.logger?.info(`⏭️  Skipping worker: ${queueName} (WORKERS_ENABLED=false)`);
-              return;
-            }
-
-            // Skip worker if not in enabledWorkers list (selective worker mode)
-            if (ApiController._enabledWorkers && !ApiController._enabledWorkers.has(queueName)) {
-              this.logger?.info(`⏭️  Skipping worker: ${queueName} (not in WORKERS)`);
-              return;
-            }
-
-            // Build handlers map for routing (use _originalHandler for proper context)
-            const handlersMap = new Map<string, { handler: any; concurrency: number }>();
-            let maxConcurrency = 1;
-            fn.handlers.forEach((handlerConfig: any) => {
-              const handlerName = handlerConfig.name || '*';
-              const originalHandler = handlerConfig._originalHandler || handlerConfig.handler;
-              const concurrency = handlerConfig.concurrency || 1;
-              handlersMap.set(handlerName, { handler: originalHandler, concurrency });
-              maxConcurrency = Math.max(maxConcurrency, concurrency);
-            });
-
-            // Get worker lock configuration with defaults optimized for LLM operations
-            const workerLockConfig = ApiController._config.queue!.workerLock ?? {};
-            const lockDuration = workerLockConfig.lockDuration ?? 300000; // 5 minutes default for LLM
-            const stalledInterval = workerLockConfig.stalledInterval ?? 60000; // Check every minute
-            const lockRenewTime = workerLockConfig.lockRenewTime ?? 30000; // Renew every 30 seconds
-            const maxStalledCount = workerLockConfig.maxStalledCount ?? 3; // Mark failed after 3 stalls
-
-            // Create ONE worker per queue with internal routing
-            const worker = new Worker(
-              queueName,
-              async (job: Job) => {
-                // Find handler for this job name (exact match or wildcard)
-                let handlerConfig = handlersMap.get(job.name);
-                if (!handlerConfig) {
-                  handlerConfig = handlersMap.get('*');
-                }
-
-                if (!handlerConfig) {
-                  throw new Error(`No handler found for job "${job.name}" in queue "${queueName}"`);
-                }
-
-                // Extract trace context for child job propagation (safely handle undefined data)
-                const jobData = (job.data || {}) as { _traceContext?: QueueTraceContext };
-                const traceContext = jobData._traceContext;
-
-                // Build meta for S2S auth: propagate $caller and tenantId from job data
-                const jobMeta: Record<string, unknown> = {
-                  $caller: service.fullName || service.name,
-                };
-                // Propagate tenantId from job data if available (BullMQ workers don't inherit meta)
-                const rawJobData = (job.data || {}) as Record<string, unknown>;
-                if (rawJobData.tenantId && typeof rawJobData.tenantId === 'string') {
-                  jobMeta.tenantId = rawJobData.tenantId;
-
-                  // Pre-load tenant config once per job to avoid N+1 in session middleware.
-                  // Each S2S call from worker inherits this meta, so middleware sees
-                  // tenantConfigLoaded !== undefined and skips redundant loads.
-                  try {
-                    const configResult = (await service.broker.call(
-                      'v1.tenant-config.get',
-                      { tenantId: rawJobData.tenantId },
-                      {
-                        meta: {
-                          $caller: service.fullName || service.name,
-                          tenantId: rawJobData.tenantId,
-                          tenantConfigLoaded: true,
-                        },
-                      },
-                    )) as { success: boolean; data?: Record<string, unknown> };
-
-                    if (configResult.success && configResult.data) {
-                      jobMeta.tenantConfig = configResult.data;
-                      jobMeta.tenantConfigLoaded = true;
-                    } else {
-                      jobMeta.tenantConfigLoaded = false;
-                    }
-                  } catch {
-                    // Non-fatal: if config service is down, let middleware handle it per-call
-                    jobMeta.tenantConfigLoaded = false;
-                  }
-                }
-
-                // Call the handler with Orchestra-compatible context
-                return handlerConfig.handler.call(service, {
-                  job,
-                  call: (action: string, params?: Record<string, any>) =>
-                    service.broker
-                      .call(action, params, { meta: jobMeta })
-                      .then((res: any) => res?.data ?? res),
-                  logger: service.logger,
-                  traceContext,
-                  // Queue methods for dispatching child jobs
-                  getQueue: (name: string) => service.getQueue(name),
-                  addJob: async (qName: string, jName: string, data: any, opts?: any) => {
-                    // Auto-inject parent trace context for distributed tracing
-                    const enrichedData = traceContext
-                      ? { _traceContext: traceContext, ...data }
-                      : data;
-                    return service.addJob(qName, jName, enrichedData, opts);
-                  },
-                });
-              },
-              {
-                connection: ApiController._config.queue!.connection,
-                concurrency: maxConcurrency,
-                ...(ApiController._config.queue!.prefix !== undefined && {
-                  prefix: ApiController._config.queue!.prefix,
-                }),
-                // Lock configuration for long-running LLM operations
-                lockDuration,
-                stalledInterval,
-                lockRenewTime,
-                maxStalledCount,
-              },
-            );
-
-            // Attach event handlers to worker
-            if (fn.on) {
-              Object.entries(fn.on).forEach(([event, eventHandler]) => {
-                // @ts-ignore - BullMQ worker events
-                worker.on(event, (...args: any[]) => {
-                  // @ts-ignore
-                  eventHandler.call(service, ...args);
-                });
-              });
-            }
-
-            // Store worker for cleanup
-            this.$workers[queueName] = worker;
-
-            const handlerNames = Array.from(handlersMap.keys()).join(', ');
-            this.logger?.info(
-              `🚀 BullMQ Worker started: ${queueName} (handlers: ${handlerNames}, concurrency: ${maxConcurrency})`,
-            );
+          bootQueueWorkers(this as any, {
+            workersEnabled: ApiController._workersEnabled,
+            enabledWorkers: ApiController._enabledWorkers,
+            queueConfig: ApiController._config.queue,
           });
         }
 
@@ -1409,38 +1164,13 @@ export class ApiController<
           }
         }
 
-        // BullMQ: Close all workers first
-        if (this.$workers) {
-          await Promise.all(
-            Object.entries(this.$workers).map(async ([key, worker]) => {
-              try {
-                // Remove all event listeners to prevent memory leaks
-                // @ts-ignore
-                worker.removeAllListeners();
-                // @ts-ignore
-                await worker.close();
-                this.logger?.info(`🛑 BullMQ Worker stopped: ${key}`);
-              } catch (error) {
-                this.logger?.error(`Error closing worker ${key}:`, error);
-              }
-              delete this.$workers[key];
-            }),
-          );
-        }
-
-        // BullMQ: Close all queues
-        if (ApiController._config?.queue && this.$queues) {
-          await Promise.all(
-            Object.entries(this.$queues).map(async ([name, queue]) => {
-              try {
-                // @ts-ignore
-                await queue.close();
-              } catch (error) {
-                this.logger?.error(`Error closing queue ${name}:`, error);
-              }
-              delete this.$queues[name];
-            }),
-          );
+        // BullMQ teardown — Wave 15.B (PRD-051 / EVID-067 §15.B): delegated
+        // to `@gertsai/api-queue.{stopQueueWorkers, stopQueues}`. Identical
+        // semantics — close workers first (to stop consuming jobs), then
+        // close queue connections. Errors logged per-instance, never aborted.
+        await stopQueueWorkers(this as any);
+        if (ApiController._config?.queue) {
+          await stopQueues(this as any);
         }
         if (ApiController._config.pubSub && this.$subscriptions) {
           const subss = Object.entries(this.$subscriptions);
