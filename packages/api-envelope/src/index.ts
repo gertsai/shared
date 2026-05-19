@@ -1,23 +1,17 @@
 /**
- * RFC-030 Envelope Module — back-compat shim.
+ * @gertsai/api-envelope — RFC-030 Envelope Shared Kernel
  *
- * Wave 15.A (PRD-050 / EVID-067 §15.A): the envelope cluster has been
- * extracted into the new Tier-1 package `@gertsai/api-envelope`. This file
- * is now a thin re-export shim that preserves the public surface previously
- * exposed at `@gertsai/api-core/lib/envelope/*`, including the deliberate
- * non-re-exports below.
+ * Browser-safe Tier-1 package extracted from `@gertsai/api-core/lib/envelope/`
+ * in Wave 15.A (PRD-050 / EVID-067 §15.A).
  *
- * @see @gertsai/api-envelope
- *
- * NOTE: Some names are excluded to avoid collisions with api-core's own
- * exports:
- *   - validationError, notFoundError, rateLimitError, internalError, authError
- *     (api-core has its own versions in ./error/helpers.ts returning APIError)
- *   - GertsProcessingStage (already in ./apiResponse/types.ts)
- * These are still available via direct import from `@gertsai/api-envelope`.
+ * Provides response and error wrapping for unified API format.
  *
  * @packageDocumentation
  */
+
+// ============================================================================
+// Envelope Type Definitions (source of truth)
+// ============================================================================
 
 // --- Response types ---
 export {
@@ -34,29 +28,34 @@ export {
   assertGertsResponse,
   isGertsResponse,
   isSuccessResponse,
-} from '@gertsai/api-envelope';
+} from './types/response';
 
-// --- Error types (excluding colliding convenience creators) ---
+// --- Error types (full surface; api-core shim filters collisions) ---
 export {
   type GertsErrorType,
   type GertsErrorCode,
-  // GertsProcessingStage excluded — already in apiResponse/types.ts
+  type GertsProcessingStage,
   type GertsErrorDetail,
   type GertsErrorResponse,
+  type ProblemDetailsLike,
   ERROR_STATUS_CODES,
   RETRYABLE_ERROR_CODES,
   generateRequestId,
   createGertsError,
   getStatusCode,
   isRetryable,
-  // Convenience creators excluded — collide with api-core error helpers:
-  // validationError, notFoundError, authError, rateLimitError, internalError
+  validationError,
+  notFoundError,
+  authError,
+  rateLimitError,
+  internalError,
   validateGertsError,
   validateGertsErrorEquals,
   assertGertsError,
   isGertsError,
+  toProblemDetails,
   isErrorResponse,
-} from '@gertsai/api-envelope';
+} from './types/error';
 
 // --- List types ---
 export {
@@ -76,13 +75,13 @@ export {
   validateGertsListResponse,
   isGertsListResponse,
   isListResponse,
-} from '@gertsai/api-envelope';
+} from './types/list';
 
 // --- Combined types ---
-export { type GertsAnyResponse, isAnySuccessResponse } from '@gertsai/api-envelope';
+export { type GertsAnyResponse, isAnySuccessResponse } from './types';
 
 // ============================================================================
-// Response Wrapping (api-core specific)
+// Response Wrapping
 // ============================================================================
 export {
   // Response wrapper
@@ -96,7 +95,7 @@ export {
   // Types
   type WrapResponseOptions,
   type WrapErrorOptions,
-} from '@gertsai/api-envelope';
+} from './response-wrapper';
 
 export {
   // Type helpers
@@ -108,6 +107,7 @@ export {
   isTenantContextMeta,
   extractTenantId,
   extractTraceId,
+  extractRequestId,
   isUsageInfo,
   extractUsageInfo,
   extractPackageInfo,
@@ -120,4 +120,16 @@ export {
   type TenantContextMeta,
   type RequestLike,
   type PackageJsonLike,
-} from '@gertsai/api-envelope';
+} from './type-guards';
+
+// ============================================================================
+// Orchestra structural shims
+// ============================================================================
+//
+// These are local structural counterparts of api-core's
+// `OrchestraApiResponse<CODE>` and `ResponseCode`. Real api-core instances
+// satisfy them via duck-typing. Exported for downstream packages that build
+// adapters over the envelope without taking a hard dep on api-core.
+//
+// Wave 15.A (PRD-050 / EVID-067 §15.A).
+export type { OrchestraApiResponseLike, ResponseCodeLike } from './orchestra-shim';

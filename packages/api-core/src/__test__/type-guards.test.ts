@@ -21,7 +21,7 @@ import {
   validateTenantIdFormat,
   isTenantIdValid,
   TENANT_ID_REGEX,
-} from '../lib/envelope/type-guards';
+} from '@gertsai/api-envelope';
 
 // ============================================================================
 // OrchestraInfo Tests

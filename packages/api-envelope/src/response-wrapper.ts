@@ -16,8 +16,11 @@ import type {
 } from './types';
 import { generateId, generateRequestId, RETRYABLE_ERROR_CODES } from './types';
 
-import type { OrchestraApiResponse } from '../apiResponse/OrchestraApiResponse.class';
-import type { ResponseCode } from '../apiResponse/types';
+// Wave 15.A (PRD-050 / EVID-067 §15.A): `OrchestraApiResponse` / `ResponseCode`
+// were originally imported as type-only from `../apiResponse/*` inside
+// `@gertsai/api-core`. To keep `@gertsai/api-envelope` Tier-1 browser-safe
+// (no api-core dep), we substitute structural shims defined locally.
+import type { OrchestraApiResponseLike, ResponseCodeLike } from './orchestra-shim';
 import {
   getOrchestraInfo,
   extractTenantId,
@@ -210,7 +213,7 @@ export interface WrapResponseOptions {
     meta: Record<string, unknown>;
   };
   /** Original Orchestra response - accepts any ResponseCode subtype */
-  orchResponse: OrchestraApiResponse<ResponseCode>;
+  orchResponse: OrchestraApiResponseLike<ResponseCodeLike>;
   /** Request path for type detection */
   path?: string;
   /** Package info for app metadata */
@@ -295,7 +298,7 @@ export interface WrapErrorOptions {
     meta: Record<string, unknown>;
   };
   /** Original Orchestra response or error - accepts any ResponseCode subtype */
-  orchResponse: OrchestraApiResponse<ResponseCode>;
+  orchResponse: OrchestraApiResponseLike<ResponseCodeLike>;
   /** Original error (if available) */
   error?: Error;
   /** Request path */
