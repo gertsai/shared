@@ -1,8 +1,14 @@
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
-import type { Message, Subscription, SubscriptionOptions } from '@google-cloud/pubsub';
+import type { SubscriptionOptions } from '@google-cloud/pubsub';
 import type { OrchestraSession } from '@gertsai/core';
 import { UserType, defaultSession } from '@gertsai/core';
+import {
+  bootPubsubSubscriptions,
+  createPubsubServiceMethods,
+  createSubscriberSchemaFragment,
+  stopPubsubSubscriptions,
+} from '@gertsai/api-pubsub';
 import {
   bootQueueWorkers,
   createQueueSchemaFragment,
@@ -10,8 +16,9 @@ import {
   stopQueueWorkers,
   stopQueues,
 } from '@gertsai/api-queue';
+import { createLogger, type Logger as GertsLogger } from '@gertsai/logger-factory';
+import { buildTraceparent } from '@gertsai/otel/moleculer';
 import color from 'colorts';
-import _forIn from 'lodash.forin';
 import type Moleculer from 'moleculer';
 import type { BrokerOptions, LoggerInstance, ServiceSchema } from 'moleculer';
 import { ServiceBroker } from 'moleculer';
@@ -58,7 +65,6 @@ import type {
   ServiceNameToPath,
   SubscribeHandler,
   SubscribeOptions,
-  SubscriberHandlerCtx,
 } from './types';
 
 /**
@@ -74,19 +80,51 @@ const respond = <C>(data: C, message?: string, code?: ResponseCode) => ({
 });
 
 /**
- * Simple fallback logger for use before MoleculerJS Broker is available
+ * Simple fallback logger for use before MoleculerJS Broker is available.
+ *
+ * Wave 15.C (PRD-052 FR-003): delegates to `@gertsai/logger-factory.createLogger`
+ * with a `LogContext` that records the service identity. The returned object
+ * adapts the structured `Logger` API back to the variadic `LoggerInstance`
+ * shape that Moleculer ships, so calling code stays unchanged. Default-on
+ * redaction from `@gertsai/logger-factory` (per ADR-009 I-17) now protects
+ * the fallback log path against accidental secret-leaks.
  */
 const createSimpleFallbackLogger = (
   serviceName: string,
   serviceVersion: string,
-): LoggerInstance => ({
-  fatal: (...args: any[]) => console.error(`[${serviceVersion}.${serviceName}] FATAL:`, ...args),
-  error: (...args: any[]) => console.error(`[${serviceVersion}.${serviceName}] ERROR:`, ...args),
-  warn: (...args: any[]) => console.warn(`[${serviceVersion}.${serviceName}] WARN:`, ...args),
-  info: (...args: any[]) => console.info(`[${serviceVersion}.${serviceName}] INFO:`, ...args),
-  debug: (...args: any[]) => console.debug(`[${serviceVersion}.${serviceName}] DEBUG:`, ...args),
-  trace: (...args: any[]) => console.trace(`[${serviceVersion}.${serviceName}] TRACE:`, ...args),
-});
+): LoggerInstance => {
+  const structured: GertsLogger = createLogger({
+    baseContext: { service: `${serviceVersion}.${serviceName}` },
+  });
+
+  // The Moleculer `LoggerInstance` is variadic — first arg is the "message",
+  // remaining args become structured context. Reduce them into a single
+  // record so `redactDetails` can scrub keys recursively.
+  const adapt =
+    (level: keyof GertsLogger) =>
+    (...args: any[]): void => {
+      const [first, ...rest] = args;
+      const msg = typeof first === 'string' ? first : '';
+      const detailsPayload = typeof first === 'string' ? rest : args;
+      const ctx =
+        detailsPayload.length > 0
+          ? { args: detailsPayload as readonly unknown[] }
+          : undefined;
+      // `level` is narrowed to a callable LogLevel method on the structured
+      // logger; the indirection is to keep one factory for all 6 levels.
+      // oxlint-disable-next-line @typescript-eslint/no-explicit-any
+      (structured[level] as any).call(structured, msg, ctx);
+    };
+
+  return {
+    fatal: adapt('fatal'),
+    error: adapt('error'),
+    warn: adapt('warn'),
+    info: adapt('info'),
+    debug: adapt('debug'),
+    trace: adapt('trace'),
+  };
+};
 
 /**
  * ApiController - Main class for registering actions, queues, and subscriptions.
@@ -770,29 +808,16 @@ export class ApiController<
           }
 
           // Extract trace context for auto-injection into jobs.
-          // Build a W3C traceparent header so that queue workers can link
-          // their spans back to this HTTP request trace via propagation.extract().
-          // Format: "00-{traceId32hex}-{spanId16hex}-{flags}"
-          // Uses ctx.requestID as traceId and ctx.id as spanId (the current action span).
-          const traceContext: QueueTraceContext | undefined = ctx.tracing
-            ? (() => {
-                const rawTraceId = (ctx.requestID ?? '').replace(/-/g, '');
-                const rawSpanId = (ctx.id ?? '').replace(/-/g, '');
-                const traceId = rawTraceId.padEnd(32, '0').slice(0, 32);
-                const spanId = rawSpanId.padEnd(16, '0').slice(0, 16);
-                // W3C spec: traceId must be non-zero
-                const safeTraceId = traceId === '0'.repeat(32) ? '0'.repeat(31) + '1' : traceId;
-                const safeSpanId = spanId === '0'.repeat(16) ? '0'.repeat(15) + '1' : spanId;
-                const reqId = ctx.requestID;
-                const parId = ctx.parentID;
-                return {
-                  ...(typeof reqId === 'string' && { traceId: reqId }),
-                  ...(typeof parId === 'string' && { parentId: parId }),
-                  ...(ctx.tracing === true && { sampled: ctx.tracing }),
-                  traceparent: `00-${safeTraceId}-${safeSpanId}-01`,
-                };
-              })()
-            : undefined;
+          // Wave 15.C (PRD-052 FR-004): delegated to
+          // `@gertsai/otel/moleculer.buildTraceparent` — identical W3C
+          // semantics (00-traceId-spanId-01 with non-zero enforcement),
+          // now centrally maintained alongside `withMoleculerTracing`.
+          const traceContext: QueueTraceContext | undefined = buildTraceparent({
+            ...(ctx.requestID !== undefined && { requestID: ctx.requestID }),
+            ...(ctx.id !== undefined && { id: ctx.id }),
+            ...(ctx.parentID !== undefined && { parentID: ctx.parentID }),
+            ...(ctx.tracing !== undefined && { tracing: ctx.tracing }),
+          });
 
           const { code, message, data, raw } = await action.options.handler.call(this, {
             session,
@@ -906,54 +931,28 @@ export class ApiController<
     });
   }
 
+  /**
+   * Build the per-topic schema fragment attached under `schema.subscriptions[<topic>]`.
+   *
+   * Wave 15.C (PRD-052 / EVID-067 §15.C): delegates to
+   * `@gertsai/api-pubsub.createSubscriberSchemaFragment`. The api-core-specific
+   * `APIError` scrub semantics are preserved via the `errorTranslator`
+   * adapter — identical behaviour to the pre-extraction inline implementation.
+   */
   _createSubscriberSchema(subscription: ApiControllerSubscribedTopics<any, any, any>) {
-    return {
-      ...(subscription.options.name && {
-        subscriptionName: subscription.options.name,
-      }),
-      ...(subscription.options.on && { on: subscription.options.on }),
-      handler: async function (
-        this: Moleculer.Service,
-        sub: Subscription,
-        message: Message,
-      ): Promise<SubscriberHandlerCtx> {
-        try {
-          return await subscription.options.handler.call(this, {
-            subscription: sub,
-            meta: {
-              isEmulator: ApiController._config.pubSub?.isEmulator ?? false,
-              topic_name: subscription.topicName,
-              subscription_name: subscription.options.name,
-            },
-            message,
-            addJob: this.addJob,
-            getQueue: this.getQueue,
-            // @ts-ignore
-            call: (...args: [string, Record<string, any>]) =>
-              this.broker.call(...args).then((res: any) => res.data),
-            logger: this.logger,
-          });
-        } catch (err: unknown) {
-          if (err instanceof APIError) {
-            throw err;
-          }
-
+    return createSubscriberSchemaFragment(subscription, {
+      isEmulator: ApiController._config.pubSub?.isEmulator ?? false,
+      errorTranslator: (err: unknown): Error => {
+        if (err instanceof APIError) return err;
+        // @ts-ignore - duck-type check for Orchestra-flavoured cross-service errors
+        if (err && (err as { __ORCHESTRA_ERROR__?: boolean }).__ORCHESTRA_ERROR__ === true) {
           // @ts-ignore
-          if (err.__ORCHESTRA_ERROR__ === true) {
-            // @ts-ignore
-            throw APIError.fromJSON(err);
-          }
-
-          if (err instanceof Error) {
-            throw APIError.fromError(err);
-          }
-
-          this.logger?.error('Unknown error occurred', err);
-
-          throw new APIError(ResponseCode.INTERNAL_ERROR);
+          return APIError.fromJSON(err);
         }
+        if (err instanceof Error) return APIError.fromError(err);
+        return new APIError(ResponseCode.INTERNAL_ERROR);
       },
-    };
+    });
   }
 
   /**
@@ -1009,59 +1008,27 @@ export class ApiController<
         // `@gertsai/api-queue` in Wave 15.B. Spreads empty when `queue` is
         // unconfigured — matches the pre-extraction conditional behaviour.
         ...createQueueServiceMethods(ApiController._config.queue),
-        ...(ApiController._config.pubSub && {
-          async getSubscription(
-            subscriptionName: string,
-            topicName: string,
-          ): Promise<Subscription> {
-            if (!ApiController._config.pubSub) {
-              throw new APIError(ResponseCode.INTERNAL_ERROR);
-            }
-            const topic = ApiController._config.pubSub.topic(topicName);
-            const [exists] = await topic.exists();
-
-            if (!exists) {
-              await ApiController._config.pubSub.createTopic(topicName);
-              this.logger?.info(
-                `Topic created: `,
-                // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
-                color(topicName).red.underline + '',
-              );
-            } else {
-              this.logger?.info(
-                `Topic exists: `,
-                // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
-                color(topicName).green.underline + '',
-              );
-            }
-
-            let subscription = topic.subscription(subscriptionName);
-            const [existsSubs] = await subscription.exists();
-
-            if (!existsSubs) {
-              [subscription] = await topic.createSubscription(subscriptionName, {
-                enableMessageOrdering: true,
-              });
-              this.logger?.info(
-                `Subscription created: `,
-                // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
-                color(subscriptionName).black.bgWhite + '',
-              );
-            } else {
-              this.logger?.info(
-                `Subscription exists: `,
-                // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
-                color(subscriptionName).black.bgWhite + ' ',
-              );
-            }
-
-            const subscriptions = this.$subscriptions;
-            if (!subscriptions[subscriptionName]) {
-              subscriptions[subscriptionName] = subscription;
-            }
-            return subscriptions[subscriptionName];
-          },
-        }),
+        // Pub/Sub method (getSubscription) extracted to `@gertsai/api-pubsub`
+        // in Wave 15.C (PRD-052 / EVID-067 §15.C). Spreads empty when
+        // `pubSub` is unconfigured. The `colorize` callbacks keep `colorts`
+        // formatting inside api-core without leaking the dep downstream.
+        ...createPubsubServiceMethods(
+          ApiController._config.pubSub
+            ? {
+                pubSub: ApiController._config.pubSub,
+                colorize: {
+                  // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
+                  topicCreated: (n: string) => color(n).red.underline + '',
+                  // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
+                  topicExists: (n: string) => color(n).green.underline + '',
+                  // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
+                  subscriptionCreated: (n: string) => color(n).black.bgWhite + '',
+                  // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
+                  subscriptionExists: (n: string) => color(n).black.bgWhite + ' ',
+                },
+              }
+            : undefined,
+        ),
       },
       async started() {
         this.$queues = {};
@@ -1120,26 +1087,13 @@ export class ApiController<
         }
 
         this.$subscriptions = {};
+        // Pub/Sub: boot every registered topic subscription.
+        // Wave 15.C (PRD-052 / EVID-067 §15.C): delegated to
+        // `@gertsai/api-pubsub.bootPubsubSubscriptions`. Identical semantics —
+        // resolve topic+subscription via `getSubscription`, attach `message`
+        // and optional event handlers.
         if (ApiController._config.pubSub && this.schema.subscriptions) {
-          _forIn(this.schema.subscriptions, async (fn: any, name: string) => {
-            const subscription: Subscription = await this.getSubscription(
-              fn.subscriptionName,
-              name,
-            );
-            subscription.on('message', (message) => fn.handler.call(this, subscription, message));
-
-            if (fn.on) {
-              Object.entries(fn.on).forEach(([event, handler]) => {
-                if (event !== 'message' && handler) {
-                  //@ts-expect-error
-                  subscription.on(event, (args) =>
-                    //@ts-expect-error
-                    handler.call(this, args),
-                  );
-                }
-              });
-            }
-          });
+          bootPubsubSubscriptions(this as any);
         }
 
         // @ts-ignore
@@ -1172,32 +1126,15 @@ export class ApiController<
         if (ApiController._config?.queue) {
           await stopQueues(this as any);
         }
+        // Pub/Sub teardown — Wave 15.C (PRD-052 / EVID-067 §15.C +
+        // §Doctor Strange #5): delegated to
+        // `@gertsai/api-pubsub.stopPubsubSubscriptions`. The ~17 lines of
+        // commented-out `detachSubscription()` cleanup that lived here
+        // pre-extraction were deleted — they referenced a Pub/Sub Lite API
+        // that does not exist on the standard `PubSub` client. See the
+        // `@gertsai/api-pubsub` README for the full rationale.
         if (ApiController._config.pubSub && this.$subscriptions) {
-          const subss = Object.entries(this.$subscriptions);
-          await Promise.all(
-            subss.map(([name, subscription]) => {
-              if (ApiController._config.pubSub && subscription) {
-                // console.log('subscription --->', subscription);
-                // // @ts-expect-error
-                // const [detached] = await subscription.detached();
-                // console.log(
-                //   `Subscription ${name} 'before' detached status: ${detached}`,
-                // );
-                //
-                // if (!detached) {
-                //   await ApiController._config?.pubSub.detachSubscription(name);
-                //   console.log(`Subscription ${name} detach request was sent.`);
-                //   // @ts-expect-error
-                //   const [updatedDetached] = await subscription.detached();
-                //   console.log(
-                //     `Subscription ${name} 'after' detached status: ${updatedDetached}`,
-                //   );
-                // }
-
-                delete this.$subscriptions[name];
-              }
-            }),
-          );
+          await stopPubsubSubscriptions(this as any);
         }
       },
     };

@@ -86,9 +86,12 @@
   },
   "dependencies": {
     "@gertsai/api-envelope": "workspace:*",
+    "@gertsai/api-pubsub": "workspace:*",
     "@gertsai/api-queue": "workspace:*",
     "@gertsai/auth-openfga": "workspace:*",
     "@gertsai/core": "workspace:*",
+    "@gertsai/logger-factory": "workspace:*",
+    "@gertsai/otel": "workspace:*",
     "@standard-schema/spec": "^1.1.0",
     "@google-cloud/logging-bunyan": "^5.1.0",
     "@r2d2bzh/moleculer-healthcheck-middleware": "^1.0.6",
