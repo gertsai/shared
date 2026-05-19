@@ -287,6 +287,9 @@ importers:
       '@gertsai/api-envelope':
         specifier: workspace:*
         version: link:../api-envelope
+      '@gertsai/api-pubsub':
+        specifier: workspace:*
+        version: link:../api-pubsub
       '@gertsai/api-queue':
         specifier: workspace:*
         version: link:../api-queue
@@ -296,6 +299,12 @@ importers:
       '@gertsai/core':
         specifier: workspace:*
         version: link:../core
+      '@gertsai/logger-factory':
+        specifier: workspace:*
+        version: link:../logger-factory
+      '@gertsai/otel':
+        specifier: workspace:*
+        version: link:../otel
       '@google-cloud/logging-bunyan':
         specifier: ^5.1.0
         version: 5.1.0(bunyan@1.8.15)
@@ -400,6 +409,28 @@ importers:
       vite-tsconfig-paths:
         specifier: ^5.1.4
         version: 5.1.4(typescript@5.9.3)(vite@7.3.2(@types/node@22.19.17)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4))
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/node@22.19.17)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4)
+
+  packages/api-pubsub:
+    dependencies:
+      lodash.forin:
+        specifier: ^4.4.0
+        version: 4.4.0
+    devDependencies:
+      '@google-cloud/pubsub':
+        specifier: ^4.11.0
+        version: 4.11.0
+      '@types/lodash.forin':
+        specifier: ^4.4.9
+        version: 4.4.9
+      bullmq:
+        specifier: ^5.34.8
+        version: 5.76.5
+      moleculer:
+        specifier: ^0.14.35
+        version: 0.14.35(bunyan@1.8.15)(debug@4.4.3)(ioredis@5.10.1)(nats@2.29.3)(pino@9.14.0)(protobufjs@7.5.6)(redlock@5.0.0-beta.2)(winston@3.19.0)
       vitest:
         specifier: ^3.2.4
         version: 3.2.4(@types/node@22.19.17)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4)

@@ -1,15 +1,8 @@
 import type { Readable } from 'stream';
 
-import type {
-  DebugMessage,
-  Message,
-  PubSub,
-  Subscription,
-  SubscriptionOptions,
-} from '@google-cloud/pubsub';
-import type { StatusError } from '@google-cloud/pubsub/build/src/message-stream';
+import type { PubSub } from '@google-cloud/pubsub';
 import type { OrchestraSession, UserType } from '@gertsai/core';
-import type { Job, Queue, JobsOptions } from 'bullmq';
+import type { Job, Queue } from 'bullmq';
 import type { ServiceSchema } from 'moleculer';
 import type Moleculer from 'moleculer';
 
@@ -37,6 +30,17 @@ import type {
   TracedJobData,
 } from '@gertsai/api-queue';
 
+// Wave 15.C (PRD-052 / EVID-067 §15.C): Pub/Sub-specific types live in
+// `@gertsai/api-pubsub` now. Re-exported below for source-level back-compat.
+import type {
+  ApiControllerSubscribedTopics,
+  ApiControllerSubscriptions,
+  SubscribeHandler,
+  SubscribeOptions,
+  SubscriberHandlerCtx,
+  SubscriptionProcessingEvents,
+} from '@gertsai/api-pubsub';
+
 // Public re-exports (preserve existing import sites in m9s-example + downstream).
 export type {
   ApiControllerQueues,
@@ -52,6 +56,13 @@ export type {
   QueueProcessingStatus,
   QueueTraceContext,
   TracedJobData,
+  // Wave 15.C — Pub/Sub re-exports
+  ApiControllerSubscribedTopics,
+  ApiControllerSubscriptions,
+  SubscribeHandler,
+  SubscribeOptions,
+  SubscriberHandlerCtx,
+  SubscriptionProcessingEvents,
 };
 
 // =============================================================================
@@ -622,77 +633,12 @@ export enum ProcessingEvents {
   REMOVE_LISTENER = 'removeListener',
 }
 
-/**
- * Subscription handlers
- */
-export type SubscriptionProcessingEvents = {
-  error?: (error: StatusError) => void;
-  close?: () => void;
-  debug?: (msg: DebugMessage) => void;
-  newListener?: (event: string | symbol, listener: any) => void;
-  removeListener?: (event: string | symbol, listener: any) => void;
-};
-
-/**
- * Action Handler Call Params
- * @description Hello desc
- * @param id - Unique identification
- * @param name - Name of worker
- */
-export type SubscriberHandlerCtx = {
-  call: QueueActionCallFunction;
-  message: Message;
-  subscription: Subscription;
-  logger: CtxLoggerType;
-  addJob: (name: string, jobName?: string, payload?: any, opts?: any) => Promise<Job>;
-  getQueue: (jobName: string) => Job;
-  meta: {
-    isEmulator: boolean;
-    topic_name: string;
-    subscription_name: string;
-  };
-};
-
-/**
- * Subscribe handler
- */
-export type SubscribeHandler = (this: Moleculer.Service, params: SubscriberHandlerCtx) => any;
-
-/**
- * Parameters to transfer to the subscription
- */
-export type SubscribeOptions<
-  SubscriptionName extends string,
-  Options extends SubscriptionOptions,
-  Handler extends SubscribeHandler = any,
-  SubscriptionEvent extends SubscriptionProcessingEvents = any,
-> = {
-  name: SubscriptionName;
-  options: Options;
-  handler: Handler;
-  on?: SubscriptionEvent;
-};
-
-/**
- * The type of queue registration in the API controller
- */
-export type ApiControllerSubscribedTopics<
-  TopicName extends string,
-  Options extends SubscriptionOptions,
-  SubscriptionEvent extends SubscriptionProcessingEvents = any,
-> = {
-  topicName: TopicName;
-  options: SubscribeOptions<TopicName, Options, SubscribeHandler>;
-  /**
-   * Event handlers
-   */
-  on?: SubscriptionEvent;
-};
-
-/**
- * Registered subscribed on topics in the controller
- */
-export type ApiControllerSubscriptions = Record<string, ApiControllerSubscribedTopics<any, any>>;
+// SubscriptionProcessingEvents / SubscriberHandlerCtx / SubscribeHandler /
+// SubscribeOptions / ApiControllerSubscribedTopics / ApiControllerSubscriptions
+// moved to `@gertsai/api-pubsub` in Wave 15.C (PRD-052 / EVID-067 §15.C).
+// Re-exported at the top of this file for source-level back-compat — every
+// existing `from '@gertsai/api-core/moleculer'` import keeps resolving with
+// no consumer change.
 
 /**
  * Lifecycle handler context for started/stopped events
