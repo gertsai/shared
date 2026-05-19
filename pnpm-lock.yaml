@@ -284,6 +284,9 @@ importers:
 
   packages/api-core:
     dependencies:
+      '@gertsai/api-envelope':
+        specifier: workspace:*
+        version: link:../api-envelope
       '@gertsai/auth-openfga':
         specifier: workspace:*
         version: link:../auth-openfga
@@ -372,6 +375,25 @@ importers:
       '@types/oauth2-server':
         specifier: ^3.0.18
         version: 3.0.18
+      vite-tsconfig-paths:
+        specifier: ^5.1.4
+        version: 5.1.4(typescript@5.9.3)(vite@7.3.2(@types/node@22.19.17)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4))
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/node@22.19.17)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4)
+
+  packages/api-envelope:
+    dependencies:
+      '@standard-schema/spec':
+        specifier: ^1.1.0
+        version: 1.1.0
+      typia:
+        specifier: ^9.7.0
+        version: 9.7.2(@types/node@22.19.17)(typescript@5.9.3)
+    devDependencies:
+      '@ryoppippi/unplugin-typia':
+        specifier: ^2.6.5
+        version: 2.6.5(rollup@4.60.3)(svelte@5.55.5(@typescript-eslint/types@8.59.2))(typescript@5.9.3)(typia@9.7.2(@types/node@22.19.17)(typescript@5.9.3))(vite@7.3.2(@types/node@22.19.17)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4))
       vite-tsconfig-paths:
         specifier: ^5.1.4
         version: 5.1.4(typescript@5.9.3)(vite@7.3.2(@types/node@22.19.17)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4))

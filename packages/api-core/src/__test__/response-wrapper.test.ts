@@ -12,7 +12,7 @@ import {
   wrapSuccessResponse,
   wrapErrorResponse,
   buildResponsePayload,
-} from '../lib/envelope/response-wrapper';
+} from '@gertsai/api-envelope';
 import { OrchestraApiResponse } from '../lib/apiResponse/OrchestraApiResponse.class';
 import { ResponseCode } from '../lib/apiResponse/types';
 

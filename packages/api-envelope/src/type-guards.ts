@@ -11,37 +11,43 @@
 
 import type { UsageInfo } from './types';
 
-import type { OrchestraApiResponse } from '../apiResponse/OrchestraApiResponse.class';
-import type { ResponseCode } from '../apiResponse/types';
+// Wave 15.A (PRD-050 / EVID-067 §15.A): structural shims replace type-only
+// imports from `@gertsai/api-core/lib/apiResponse/*`. See ./orchestra-shim.ts.
+import type { OrchestraApiResponseLike, ResponseCodeLike } from './orchestra-shim';
 
 // ============================================================================
 // Orchestra Response Type Helpers
 // ============================================================================
 
 /**
- * Convert a specific OrchestraApiResponse<CODE> to base OrchestraApiResponse<ResponseCode>.
+ * Convert a specific OrchestraApiResponseLike<CODE> to the base
+ * OrchestraApiResponseLike<ResponseCodeLike>.
  *
  * This is a safe cast because:
- * - `CODE extends ResponseCode` guarantees CODE is a valid ResponseCode
+ * - `CODE extends ResponseCodeLike` guarantees CODE is a valid response code
  * - At runtime, the object structure is identical
  * - TypeScript's structural typing doesn't allow direct assignment due to
  *   generic invariance, but the cast is semantically correct
  *
+ * Original real-class signature (`OrchestraApiResponse<ResponseCode>`) is
+ * preserved structurally — callers passing actual `OrchestraApiResponse`
+ * instances satisfy this interface by duck-typing.
+ *
  * @param response - Orchestra response with specific response code
- * @returns Orchestra response typed with base ResponseCode
+ * @returns Orchestra response typed with base ResponseCodeLike
  *
  * @example
  * ```typescript
  * const specificResponse = new OrchestraApiResponse(ResponseCode.SUCCESS, data);
  * const baseResponse = toBaseResponse(specificResponse);
- * // baseResponse: OrchestraApiResponse<ResponseCode>
+ * // baseResponse: OrchestraApiResponseLike<ResponseCodeLike>
  * ```
  */
-export function toBaseResponse<CODE extends ResponseCode>(
-  response: OrchestraApiResponse<CODE>,
-): OrchestraApiResponse<ResponseCode> {
-  // Safe cast: CODE extends ResponseCode guarantees structural compatibility
-  return response as unknown as OrchestraApiResponse<ResponseCode>;
+export function toBaseResponse<CODE extends ResponseCodeLike>(
+  response: OrchestraApiResponseLike<CODE>,
+): OrchestraApiResponseLike<ResponseCodeLike> {
+  // Safe cast: CODE extends ResponseCodeLike guarantees structural compatibility
+  return response as OrchestraApiResponseLike<ResponseCodeLike>;
 }
 
 // ============================================================================
