@@ -1,6 +1,6 @@
 {
   "name": "@gertsai/otel",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "OpenTelemetry setup for @gertsai/* services. Lazy peer-deps; minimal coupling.",
   "license": "Apache-2.0",
   "type": "module",

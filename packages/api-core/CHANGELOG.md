@@ -1,5 +1,128 @@
 # @orchdev/api-core
 
+## 0.3.5
+
+### Patch Changes
+
+- 20c748f: Wave 15.A — Extract envelope cluster from `@gertsai/api-core` into new Tier-1 `@gertsai/api-envelope` package per EVID-067 §15.A.
+
+  **Rationale**: api-core's envelope cluster (~1,901 LOC across 6 files: `types/{error,response,list,index}.ts` + `response-wrapper.ts` + `type-guards.ts`) is pure typia tagged interfaces + helpers — browser-safe, zero Moleculer coupling. Its prior location in api-core (Tier-4) blocked consumption by FastAPI / Rust ts-types generators (already advertised in `contracts/index.ts` JSDoc).
+
+  **New package**: `@gertsai/api-envelope@0.1.0` (Tier-1, browser-safe).
+
+  - Deps: `typia ^9.7.0`, `@standard-schema/spec ^1.1.0`. NO `@gertsai/*` deps.
+  - Includes 9 files moved via `git mv` (6 production + 3 co-located test files).
+  - Plus new `orchestra-shim.ts` (41 LOC) — structural counterparts of api-core's `OrchestraApiResponse<CODE>` / `ResponseCode`. Solves the type-only cross-boundary dep that previously bound the envelope to api-core's `apiResponse/` subsystem. Real `OrchestraApiResponse` instances duck-type into the shim, so existing api-core callers compile and run unchanged.
+
+  **api-core changes**:
+
+  - `packages/api-core/src/lib/envelope/index.ts` → thin re-export shim from `@gertsai/api-envelope`. Preserves deliberate non-re-exports per EVID-067 §Doctor Strange #1 (`validationError`, `notFoundError`, `authError`, `rateLimitError`, `internalError`, `GertsProcessingStage` — fossil of incomplete RFC-030 migration).
+  - `packages/api-core/package.json` → adds `@gertsai/api-envelope: workspace:*` dep.
+  - 2 api-core test files updated to import directly from `@gertsai/api-envelope` (was `'../lib/envelope/...'`).
+
+  **Behaviour**: zero change. All existing `import { ... } from '@gertsai/api-core/contracts'` / `'@gertsai/api-core'` continue resolving identically via shim.
+
+  **Tests**: 95 envelope tests now run in api-envelope package; 284 + 95 = 379 total preserved across api-core + api-envelope (was 379 in api-core alone). Workspace typecheck 0 errors across 39 packages + 3 example apps.
+
+  **Workspace size**: 38 packages + 3 examples → **39 packages + 3 examples**.
+
+  Net diff: 22 files / +379 insertions / -35 deletions (mostly scaffold for new package; moved files show as renames with 0 line delta via git's rename-detection).
+
+  Refs: PRD-050, EVID-067 (Wave 15 audit — §15.A recommendation), EVID-058 (Wave 12.G top-ranked action).
+
+- 4d5145f: Wave 15.B — Extract BullMQ queue/worker lifecycle from `@gertsai/api-core/ApiController` into new Tier-2 `@gertsai/api-queue` package per EVID-067 §15.B.
+
+  **Rationale**: `ApiController.class.ts` (1,511 LOC god-class per EVID-067 §1) had ~540 LOC of BullMQ queue/worker lifecycle (selective worker-mode, `_registeredQueues`, `_bootWorkers()`, `_addJob()`, `_getQueue()`) entangled with action pipeline logic. Plus ~190 LOC of BullMQ types in `controller/types.ts`. Extraction enables consumers needing only queue lifecycle without api-core's Moleculer transport plumbing.
+
+  **New package** `@gertsai/api-queue@0.1.0` (Tier-2):
+
+  - Deps: `@gertsai/queue: workspace:*` (Tier-1 BullMQ wrappers) + `lodash.forin`
+  - Peer deps: `moleculer` + `bullmq` (lazy-required)
+  - 4 src files (+935 LOC):
+    - `types.ts` (425 LOC) — all BullMQ types moved from api-core
+    - `schema.ts` (167 LOC) — `createQueueSchemaFragment(queue, opts)` pure function with `QueueErrorTranslator` for api-core's `APIError`-scrub semantics
+    - `methods.ts` (82 LOC) — `createQueueServiceMethods(queueConfig)` factory for `getQueue`/`addJob` mixin
+    - `lifecycle.ts` (281 LOC) — `bootQueueWorkers/stopQueueWorkers/stopQueues` honouring `workersEnabled`/`enabledWorkers`
+  - `methods.test.ts` (4 smoke tests pass)
+
+  **Approach: pure functional extraction** (chosen over class composition / mixin). New package exports stateless helpers; state stays on `ApiController` (registry + selective-mode flags tied to controller lifecycle). Preserves existing `ApiController.registerWorker(...)` / `ApiController.Start({workersEnabled, enabledWorkers})` public surface verbatim — zero consumer change.
+
+  **api-core changes**:
+
+  - `ApiController.class.ts`: 1511 → 1241 (**-270 LOC**, -18%). `_createQueueSchema()` delegates to `createQueueSchemaFragment`; `started()` worker boot → `bootQueueWorkers(this, {workersEnabled, enabledWorkers, queueConfig})`; `stopped()` teardown → `stopQueueWorkers/stopQueues`. Removed unused bullmq imports (Queue/Worker/Job/JobDataWithTraceContext).
+  - `controller/types.ts`: 1037 → 760 (**-277 LOC**, -27%). 10 type declarations removed; re-exported from `@gertsai/api-queue` for back-compat.
+  - `package.json`: +`@gertsai/api-queue: workspace:*` dep.
+
+  **SPEC-020 created**: documents selective worker-mode contract (API Gateway vs Worker Node deployment patterns) per EVID-067 §Doctor Strange #2. Previously undocumented; now in `.forgeplan/specs/`.
+
+  **Behaviour**: zero change. All existing `ApiController.registerWorker()` / `service.addJob()` / `service.getQueue()` public methods preserved.
+
+  **Tests**: 284/284 api-core tests pass + 4 new api-queue tests. Workspace typecheck 0 errors across 40 packages + 3 example apps (svelte-check 1079 files / 0 errors).
+
+  **Workspace size**: 39 packages + 3 examples → **40 packages + 3 examples**.
+
+  **Concern flagged**: `QueueActionCallFunction` declared twice (api-queue simplified + api-core full generic with RegisteredActions declaration-merge). Internal-only; consumers see no change. Worth a one-line note if surfaces during Wave 15.C.
+
+  **After Wave 15.A+B**: api-core source shrinks ~22% (toward EVID-067's 33% Wave 15 total goal). Remaining 15.C — Pub/Sub extraction (~250 LOC, ~1.5d).
+
+  Refs: PRD-051, SPEC-020, EVID-067 (Wave 15 audit), EVID-068 (Wave 15.A precedent).
+
+- 11f825b: Wave 15.C — Extract Pub/Sub lifecycle to new Tier-2 + adopt logger-factory + otel/moleculer. **Completes Wave 15 cycle** per EVID-067 §15.C.
+
+  **Final Wave 15 cumulative result**: `ApiController.class.ts` shrinks **1511 → 1178 LOC** (-333, -22% from baseline). api-core source down ~25-30% overall after 15.A+B+C. Workspace **38 → 41 packages**.
+
+  **New package** `@gertsai/api-pubsub@0.1.0` (Tier-2):
+
+  - Optional peer: `@google-cloud/pubsub` + `bullmq` (lazy-required)
+  - 4 src files + 2 test files (+922 total LOC):
+    - `types.ts` (171) — SubscriberHandlerCtx, SubscribeHandler, SubscribeOptions, ApiControllerSubscribedTopics, SubscriptionProcessingEvents
+    - `schema.ts` (110) — `createSubscriberSchemaFragment` with `errorTranslator` injection (preserves api-core APIError-scrub semantics outside this package)
+    - `methods.ts` (118) — `createPubsubServiceMethods` with optional `colorize` callbacks (keeps colorts in api-core)
+    - `lifecycle.ts` (126) — `bootPubsubSubscriptions` + `stopPubsubSubscriptions`; module JSDoc documents §Doctor Strange #5 resolution
+  - 7 tests pass (4 methods + 3 lifecycle including §Doctor Strange #5 closure assertion)
+
+  **§Doctor Strange #5 resolved — DELETE + document**:
+
+  Per EVID-067 §Doctor Strange #5, `stopped()` had 17 lines of commented-out `pubSub.detachSubscription(name)` code. Investigation revealed:
+
+  - `detachSubscription` is **Pub/Sub Lite** API, NOT standard `@google-cloud/pubsub`
+  - If un-commented at runtime: `TypeError: pubSub.detachSubscription is not a function`
+  - Standard Pub/Sub subscriptions are server-owned; client only closes streaming-pull
+  - Required behaviour (drop cached `Subscription` from `$subscriptions`) preserved in `stopPubsubSubscriptions`
+
+  Deleted the dead code. Future opt-in hook (e.g. emulator-recycle) can be added as `stopPubsubSubscriptions(service, { onDetach })` callback without breaking the public API. Closure rationale documented verbatim in `packages/api-pubsub/src/lifecycle.ts` module JSDoc + README. Dedicated `lifecycle.test.ts` test asserts `$subscriptions` is emptied.
+
+  **api-core changes**:
+
+  - `ApiController.class.ts`: 1241 → **1178 LOC** (-63 this PR). Adopted `bootPubsubSubscriptions`/`stopPubsubSubscriptions`/`createPubsubServiceMethods`/`createSubscriberSchemaFragment` from api-pubsub. Replaced inline traceparent IIFE (~22 LOC) with `buildTraceparent` from `@gertsai/otel/moleculer`. Replaced `createSimpleFallbackLogger` with `@gertsai/logger-factory.createLogger` adapter (**default-on redaction now active for fallback logs**). Removed `_forIn` import + inline `colorts` body. Deleted 17 lines of commented-out detached-subscription code per §Doctor Strange #5.
+  - `controller/types.ts`: **-106 LOC**. Removed 6 Pub/Sub type body definitions; re-exported from `@gertsai/api-pubsub` for source-level back-compat.
+  - `package.json`: `+@gertsai/api-pubsub`, `+@gertsai/logger-factory`, `+@gertsai/otel` deps.
+
+  **`@gertsai/otel` enhancement** (minor bump):
+
+  - Added `buildTraceparent(input: BuildTraceparentInput): BuiltTraceparent | undefined` to `moleculer` subpath (~90 LOC). Centralises W3C trace-header assembly. Structural input shape (`{ requestID, id, parentID, tracing }`) — non-Moleculer hosts can use it too.
+  - +4 unit tests (undefined-on-falsy-tracing, W3C assembly, non-zero enforcement, dash-stripping/right-padding).
+
+  **Behaviour**: zero change for users not using Pub/Sub. All existing `ApiController.subscribePubsub()` / topic registration / `stopped()` lifecycle hook work identically.
+
+  **Tests**: 284/284 api-core pass + 7 new api-pubsub tests + 13/13 otel pass (was 9, +4 new for buildTraceparent). Workspace typecheck 0 errors across 41 packages + 3 example apps (svelte-check 1080 files / 0 errors).
+
+  **Workspace size**: 40 packages + 3 examples → **41 packages + 3 examples**.
+
+  **Surfacing barrier**: `@gertsai/otel/moleculer` was missing the per-action traceparent helper (pre-Wave-15.C only exported broker-level `withMoleculerTracing`). Resolved additively by adding `buildTraceparent` to otel — small, fully tested, preserves all existing behaviour.
+
+  **After Wave 15.A+B+C**: api-core surfaces cleaned, three new packages give consumers granular dependency control. v1.0.0 prep stronger. Total ~5.5d effort delivered.
+
+  Refs: PRD-052, EVID-067 (Wave 15 audit), EVID-068 (15.A), EVID-069 (15.B), SPEC-020 (selective worker-mode from 15.B).
+
+- Updated dependencies [20c748f]
+- Updated dependencies [4d5145f]
+- Updated dependencies [11f825b]
+  - @gertsai/api-envelope@0.2.0
+  - @gertsai/api-queue@0.2.0
+  - @gertsai/api-pubsub@0.2.0
+  - @gertsai/otel@0.2.0
+
 ## 0.3.4
 
 ### Patch Changes

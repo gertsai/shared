@@ -1,6 +1,6 @@
 {
   "name": "@gertsai/api-pubsub",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Tier-2 Google Cloud Pub/Sub topic-subscription lifecycle for @gertsai/api-core — registry + Moleculer service-schema fragment + boot/teardown. Per PRD-052 / EVID-067 §15.C.",
   "license": "Apache-2.0",
   "type": "module",

@@ -1,6 +1,6 @@
 {
   "name": "@gertsai/config",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Configuration loading shim for @gertsai/* monorepo. Re-exports loadConfig and friends from @gertsai/api-core/runtime/node. Provides a named extraction point per PRD-001 FR-016 + ADR-004.",
   "license": "Apache-2.0",
   "type": "module",
