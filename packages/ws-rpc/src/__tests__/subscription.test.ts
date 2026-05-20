@@ -3,7 +3,11 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { SubscriptionManager } from '../subscription.js';
+import {
+  SubscriptionManager,
+  InvalidSubscriptionPatternError,
+  MAX_DOUBLE_STAR_SEGMENTS,
+} from '../subscription.js';
 
 describe('SubscriptionManager', () => {
   let manager: SubscriptionManager;
@@ -284,6 +288,56 @@ describe('SubscriptionManager', () => {
 
       expect(manager.has(id)).toBe(true);
       expect(manager.has('unknown')).toBe(false);
+    });
+  });
+
+  // FR-W2 (EVID-076 H-WS-2) — wildcardMatch ReDoS protection.
+  describe('DoS protection (FR-W2)', () => {
+    it('accepts legitimate patterns with up to MAX_DOUBLE_STAR_SEGMENTS **', () => {
+      // Sanity: the cap allows realistic patterns (one or two `**`).
+      expect(() => manager.subscribe('a.**.b', vi.fn())).not.toThrow();
+      expect(() => manager.subscribe('a.**.b.**.c', vi.fn())).not.toThrow();
+      expect(MAX_DOUBLE_STAR_SEGMENTS).toBeGreaterThanOrEqual(2);
+    });
+
+    it('rejects patterns with more than MAX_DOUBLE_STAR_SEGMENTS **', () => {
+      // 10 `**` segments is exponential fan-out for the recursive matcher;
+      // we reject at subscribe time so the dispatch path never sees it.
+      const adversarial = Array(10).fill('**').join('.');
+      expect(() => manager.subscribe(adversarial, vi.fn())).toThrow(
+        InvalidSubscriptionPatternError,
+      );
+    });
+
+    it('rejects patterns with absurd segment counts', () => {
+      // 200 segments — far beyond any legitimate topic hierarchy.
+      const huge = Array(200).fill('x').join('.');
+      expect(() => manager.subscribe(huge, vi.fn())).toThrow(
+        InvalidSubscriptionPatternError,
+      );
+    });
+
+    it('safely bails on deep wildcard recursion without hanging', () => {
+      // Subscribe with a legitimate `**` pattern, then dispatch a deeply
+      // segmented topic. The matcher's depth bound must return false
+      // rather than recurse indefinitely.
+      const callback = vi.fn();
+      manager.subscribe('a.**.z', callback);
+      const longTopic = 'a.' + Array(50).fill('mid').join('.') + '.z';
+
+      // Time-bound the dispatch to catch any DoS regression — a runaway
+      // recursive matcher would blow the call stack or take seconds.
+      const t0 = Date.now();
+      manager.dispatch(longTopic, { x: 1 });
+      const elapsed = Date.now() - t0;
+      expect(elapsed).toBeLessThan(500);
+    });
+
+    it('subscribe with the maximum allowed ** count succeeds', () => {
+      const pattern = Array(MAX_DOUBLE_STAR_SEGMENTS)
+        .fill('**')
+        .join('.');
+      expect(() => manager.subscribe(pattern, vi.fn())).not.toThrow();
     });
   });
 });

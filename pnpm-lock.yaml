@@ -889,6 +889,9 @@ importers:
 
   packages/pg-client:
     devDependencies:
+      '@gertsai/entity-audit':
+        specifier: workspace:*
+        version: link:../entity-audit
       '@gertsai/entity-storage':
         specifier: workspace:*
         version: link:../entity-storage

@@ -676,4 +676,123 @@ describe('WsRpcClient', () => {
       expect((c as unknown as { headers: unknown }).headers).toBeUndefined();
     });
   });
+
+  // FR-W1 (EVID-076 H-WS-1) — pre-onopen reconnect rescue.
+  // When `createWebSocket()` rejects (DNS, ECONNREFUSED, ws-lib import
+  // failure) BEFORE `onopen` fires, there is no `onclose` event to drive
+  // the reconnect chain. The client must synthesise `handleClose` so the
+  // reconnect timer re-arms.
+  describe('reconnect on pre-onopen failure (FR-W1)', () => {
+    it('schedules a reconnect when createWebSocket() rejects', async () => {
+      // Spy on the private `createWebSocket` to force rejection.
+      const failingClient = new WsRpcClient({
+        url: 'ws://localhost:3023/ws',
+        reconnect: { enabled: true, maxAttempts: 5, delay: 100, jitter: false },
+      });
+      // Replace the private method via cast.
+      const cw = vi
+        .spyOn(failingClient as unknown as { createWebSocket: () => Promise<WebSocket> }, 'createWebSocket')
+        .mockRejectedValue(new Error('ECONNREFUSED'));
+
+      const reconnectingHandler = vi.fn();
+      failingClient.on('reconnecting', reconnectingHandler);
+
+      // Initial connect rejects.
+      await expect(failingClient.connect()).rejects.toThrow('ECONNREFUSED');
+
+      // Synthetic-close microtask must run; advance enough to fire any
+      // setTimeout(0) + the initial reconnect delay.
+      await vi.advanceTimersByTimeAsync(10);
+
+      // Reconnect should be scheduled — the strategy says "yes" and the
+      // client emitted 'reconnecting'.
+      expect(reconnectingHandler).toHaveBeenCalled();
+
+      // Clean up: prevent the spy from leaking into other tests.
+      cw.mockRestore();
+      failingClient.destroy();
+    });
+
+    it('does NOT schedule a reconnect when client is already destroyed', async () => {
+      const failingClient = new WsRpcClient({
+        url: 'ws://localhost:3023/ws',
+        reconnect: { enabled: true, maxAttempts: 5, delay: 100, jitter: false },
+      });
+      const cw = vi
+        .spyOn(failingClient as unknown as { createWebSocket: () => Promise<WebSocket> }, 'createWebSocket')
+        .mockRejectedValue(new Error('boom'));
+
+      const reconnectingHandler = vi.fn();
+      failingClient.on('reconnecting', reconnectingHandler);
+
+      const p = failingClient.connect();
+      failingClient.destroy(); // user gives up before pending synth-close fires
+      await expect(p).rejects.toThrow('boom');
+
+      await vi.advanceTimersByTimeAsync(50);
+
+      expect(reconnectingHandler).not.toHaveBeenCalled();
+      cw.mockRestore();
+    });
+  });
+
+  // FR-W3 (EVID-076 H-WS-3) — Node protocol-level ping/pong heartbeat.
+  // In Node we MUST use the WebSocket protocol-level ping frames the `ws`
+  // library exposes — they detect dead connections far faster than the
+  // default 2-hour OS TCP keepalive, and they require no server-side
+  // ping handler. We white-box the feature-detect by augmenting the
+  // already-mocked socket with `ping`/`on` (the Node-only EventEmitter
+  // API surface) and then directly invoking the private heartbeat path.
+  describe('heartbeat — Node protocol ping (FR-W3)', () => {
+    it('uses ws.ping() in Node when the underlying socket exposes it', async () => {
+      client = new WsRpcClient({
+        url: 'ws://localhost:3023/ws',
+        heartbeatInterval: 1000,
+        environment: 'node',
+      });
+      const p = client.connect();
+      await vi.advanceTimersByTimeAsync(50);
+      await p;
+
+      // Augment the already-connected MockWebSocket with the Node `ws`
+      // shape so the feature-detect inside `startHeartbeat()` treats it
+      // as a Node socket.
+      const pingSpy = vi.fn();
+      const onSpy = vi.fn();
+      const ws = (client as unknown as { ws: MockWebSocket & { ping?: unknown; on?: unknown } }).ws;
+      ws.ping = pingSpy;
+      ws.on = onSpy;
+
+      // Re-arm heartbeat with the augmented socket so the Node path wires.
+      (client as unknown as { startHeartbeat: () => void }).startHeartbeat();
+
+      // Pong handler must be wired.
+      expect(onSpy).toHaveBeenCalledWith('pong', expect.any(Function));
+
+      // Advance one heartbeat interval — ping() should fire.
+      await vi.advanceTimersByTimeAsync(1100);
+      expect(pingSpy).toHaveBeenCalled();
+    });
+
+    it('falls back to JSON-RPC notify when the socket has no ping()', async () => {
+      // Default MockWebSocket has no `ping`/`on` — falls back to legacy
+      // app-level heartbeat (this exercises the browser-equivalent path
+      // in a Node test runner).
+      client = new WsRpcClient({
+        url: 'ws://localhost:3023/ws',
+        heartbeatInterval: 1000,
+      });
+      const p = client.connect();
+      await vi.advanceTimersByTimeAsync(50);
+      await p;
+
+      const ws = (client as unknown as { ws: MockWebSocket }).ws;
+      const before = ws.getSentMessages().length;
+
+      await vi.advanceTimersByTimeAsync(1100);
+      const sent = ws.getSentMessages();
+      const pingMessages = sent.slice(before).filter((m) => m.includes('"ping"'));
+      expect(pingMessages.length).toBeGreaterThan(0);
+    });
+  });
 });

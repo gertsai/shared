@@ -20,6 +20,17 @@
  *    `array-contains`, `array-contains-any`.
  *  - OrderBy: stable sort over indexed field, asc/desc.
  *  - Limit: trailing slice.
+ *  - LimitToLast (Wave 21 / EVID-076 FR-X4): take the last `n` of the
+ *    sorted result. Mirrors the SQL pattern `reverse-orderBy + LIMIT n`
+ *    and matches how the constraint is documented at the query-dsl
+ *    layer (see {@link types.LimitToLastConstraint}). When no
+ *    `orderBy` is present the constraint still slices the trailing `n`
+ *    elements (insertion order) — same degraded behaviour as the
+ *    reference SQL compiler would produce if it supported the
+ *    constraint.
+ *  - Offset (Wave 21 / EVID-076 FR-X3): skip the first `n` rows after
+ *    sort + cursors, before applying `limit`. Mirrors the SQL pipeline
+ *    `WHERE → ORDER BY → OFFSET → LIMIT` honoured by `compileToSql`.
  *  - Cursors (`startAt` / `startAfter` / `endAt` / `endBefore`): lexicographic
  *    over the values aligned to the preceding `orderBy` clauses. When no
  *    `orderBy` is present the cursors degrade to no-ops (mirrors the
@@ -27,7 +38,10 @@
  *    "no-op for v0.1.0").
  *
  * Constraint application order matches the SQL pipeline implied by
- * `compileToSql`: WHERE → ORDER BY → cursors → LIMIT.
+ * `compileToSql`: WHERE → ORDER BY → cursors → OFFSET → LIMIT →
+ * limitToLast. `limit` + `limitToLast` are mutually exclusive in
+ * practice (the SQL compiler refuses `limitToLast` outright); if both
+ * are supplied the trailing slice is computed last and wins.
  */
 
 import type { Query, StorageMetadata } from '@gertsai/storage-core';
@@ -63,12 +77,22 @@ interface LimitC {
   readonly value: number;
 }
 
+interface LimitToLastC {
+  readonly kind: 'limitToLast';
+  readonly value: number;
+}
+
+interface OffsetC {
+  readonly kind: 'offset';
+  readonly value: number;
+}
+
 interface CursorC {
   readonly kind: 'startAt' | 'startAfter' | 'endAt' | 'endBefore';
   readonly values: ReadonlyArray<unknown>;
 }
 
-type AnyConstraint = WhereC | OrderByC | LimitC | CursorC;
+type AnyConstraint = WhereC | OrderByC | LimitC | LimitToLastC | OffsetC | CursorC;
 
 function readField(doc: unknown, field: string): unknown {
   if (doc === null || typeof doc !== 'object') return undefined;
@@ -241,13 +265,47 @@ export function applyQueryFilter<Meta extends StorageMetadata>(
     }
   }
 
-  // 4. LIMIT (last `limit` wins if multiple are declared — matches Firestore).
+  // 4. OFFSET — skip the first N rows after sort + cursors but before
+  //    LIMIT, matching the `compileToSql` pipeline (`SELECT ... ORDER BY
+  //    ... OFFSET ... LIMIT ...`). Wave 21 / EVID-076 FR-X3 closure.
+  //    Last `offset` wins if multiple are declared (mirrors `limit`).
+  let offset: number | null = null;
+  for (const c of constraints) {
+    if (c.kind === 'offset') offset = c.value;
+  }
+  if (offset !== null && offset > 0) {
+    result = offset >= result.length ? [] : result.slice(offset);
+  }
+
+  // 5. LIMIT (last `limit` wins if multiple are declared — matches Firestore).
   let limit: number | null = null;
   for (const c of constraints) {
     if (c.kind === 'limit') limit = c.value;
   }
   if (limit !== null && limit >= 0 && result.length > limit) {
     result = result.slice(0, limit);
+  }
+
+  // 6. LIMIT-TO-LAST — Wave 21 / EVID-076 FR-X4 closure. Take the
+  //    trailing `n` rows of the (already-windowed) result. Applied
+  //    AFTER offset+limit so combinations behave as
+  //    "take first L starting at O, then keep last N" — semantically
+  //    consistent with the SQL pattern `reverse-orderBy + LIMIT n`.
+  //    Last `limitToLast` wins if multiple are declared.
+  //
+  //    NOTE: the reference Postgres compiler throws on `limitToLast`;
+  //    this divergence is documented at the package level via
+  //    `IN_MEMORY_QUERY_CAPABILITIES` vs `POSTGRES_QUERY_CAPABILITIES`
+  //    in `@gertsai/query-dsl` (see {@link QueryCapabilities}).
+  //    Callers running the same query against both backends should
+  //    consult those constants before mixing `limitToLast` into
+  //    portable code paths.
+  let limitToLast: number | null = null;
+  for (const c of constraints) {
+    if (c.kind === 'limitToLast') limitToLast = c.value;
+  }
+  if (limitToLast !== null && limitToLast >= 0 && result.length > limitToLast) {
+    result = result.slice(result.length - limitToLast);
   }
 
   return result;

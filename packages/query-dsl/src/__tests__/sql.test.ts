@@ -31,7 +31,10 @@ describe('compileToSql whereField + orderBy + limit', () => {
       whereField<InvoiceMeta, 'status'>('status', '==', 'paid'),
     ];
     const { sql, params } = compileToSql(q, 'invoices');
-    expect(sql).toBe('SELECT * FROM invoices WHERE status = $1');
+    // Identifiers are emitted double-quoted (FR-W6, EVID-076 M-QDS-1)
+    // so reserved-word column names like `order` / `select` produce
+    // valid SQL.
+    expect(sql).toBe('SELECT * FROM invoices WHERE "status" = $1');
     expect(params).toEqual(['paid']);
   });
 
@@ -40,7 +43,7 @@ describe('compileToSql whereField + orderBy + limit', () => {
       whereField<InvoiceMeta, 'status'>('status', '!=', 'cancelled'),
     ];
     const { sql, params } = compileToSql(q, 'invoices');
-    expect(sql).toBe('SELECT * FROM invoices WHERE status <> $1');
+    expect(sql).toBe('SELECT * FROM invoices WHERE "status" <> $1');
     expect(params).toEqual(['cancelled']);
   });
 
@@ -51,7 +54,7 @@ describe('compileToSql whereField + orderBy + limit', () => {
     ];
     const { sql, params } = compileToSql(q, 'invoices');
     expect(sql).toBe(
-      'SELECT * FROM invoices WHERE total >= $1 ORDER BY total DESC',
+      'SELECT * FROM invoices WHERE "total" >= $1 ORDER BY "total" DESC',
     );
     expect(params).toEqual([100]);
   });
@@ -63,7 +66,7 @@ describe('compileToSql whereField + orderBy + limit', () => {
     ];
     const { sql, params } = compileToSql(q, 'invoices');
     expect(sql).toBe(
-      'SELECT * FROM invoices WHERE status = $1 LIMIT $2',
+      'SELECT * FROM invoices WHERE "status" = $1 LIMIT $2',
     );
     expect(params).toEqual(['paid', 25]);
   });
@@ -80,7 +83,7 @@ describe('compileToSql IN / array-contains', () => {
     ];
     const { sql, params } = compileToSql(q, 'invoices');
     expect(sql).toBe(
-      'SELECT * FROM invoices WHERE status IN ($1, $2, $3)',
+      'SELECT * FROM invoices WHERE "status" IN ($1, $2, $3)',
     );
     expect(params).toEqual(['paid', 'pending', 'failed']);
   });
@@ -90,7 +93,7 @@ describe('compileToSql IN / array-contains', () => {
       whereField<InvoiceMeta, 'tags'>('tags', 'array-contains', 'urgent'),
     ];
     const { sql, params } = compileToSql(q, 'invoices');
-    expect(sql).toBe('SELECT * FROM invoices WHERE tags @> $1::jsonb');
+    expect(sql).toBe('SELECT * FROM invoices WHERE "tags" @> $1::jsonb');
     expect(params).toEqual([JSON.stringify(['urgent'])]);
   });
 });
@@ -106,7 +109,7 @@ describe('compileToSql multi-constraint composition', () => {
     ];
     const { sql, params } = compileToSql(q, 'invoices');
     expect(sql).toBe(
-      'SELECT * FROM invoices WHERE status = $1 AND total > $2 ORDER BY total ASC, uid ASC LIMIT $3',
+      'SELECT * FROM invoices WHERE "status" = $1 AND "total" > $2 ORDER BY "total" ASC, "uid" ASC LIMIT $3',
     );
     expect(params).toEqual(['paid', 0, 10]);
   });
@@ -121,7 +124,7 @@ describe('compileToSql offset / limitToLast', () => {
     ];
     const { sql, params } = compileToSql(q, 'invoices');
     expect(sql).toBe(
-      'SELECT * FROM invoices WHERE status = $1 ORDER BY total ASC OFFSET $2',
+      'SELECT * FROM invoices WHERE "status" = $1 ORDER BY "total" ASC OFFSET $2',
     );
     expect(params).toEqual(['paid', 20]);
   });
@@ -134,7 +137,7 @@ describe('compileToSql offset / limitToLast', () => {
     ];
     const { sql, params } = compileToSql(q, 'invoices');
     expect(sql).toBe(
-      'SELECT * FROM invoices ORDER BY total ASC LIMIT $1 OFFSET $2',
+      'SELECT * FROM invoices ORDER BY "total" ASC LIMIT $1 OFFSET $2',
     );
     expect(params).toEqual([10, 5]);
   });
@@ -180,5 +183,44 @@ describe('compileToSql identifier guards', () => {
     expect(() => compileToSql(q, 'invoices')).toThrow(
       /not a valid SQL identifier/,
     );
+  });
+});
+
+describe('compileToSql quoteIdent (FR-W6, EVID-076 M-QDS-1)', () => {
+  it('wraps a legitimate identifier in double quotes', () => {
+    const q: Query<InvoiceMeta> = [
+      whereField<InvoiceMeta, 'status'>('status', '==', 'paid'),
+    ];
+    const { sql } = compileToSql(q, 'invoices');
+    expect(sql).toContain('"status"');
+  });
+
+  it('emits valid SQL for a column named after a Postgres reserved word', () => {
+    // `order` is a reserved word in Postgres. Without double-quoting the
+    // emitted SQL would be `WHERE order = $1` — a syntax error at runtime.
+    interface OrderMeta extends StorageMetadata<
+      { order: string },
+      { order: string },
+      'order'
+    > {}
+    const q = [
+      whereField<OrderMeta, 'order'>('order', '==', 'asc'),
+    ] as Query<OrderMeta>;
+    const { sql, params } = compileToSql(q, 'history');
+    expect(sql).toBe('SELECT * FROM history WHERE "order" = $1');
+    expect(params).toEqual(['asc']);
+  });
+
+  it('quotes orderBy identifiers consistently', () => {
+    interface SelectMeta extends StorageMetadata<
+      { select: string },
+      { select: string },
+      'select'
+    > {}
+    const q = [
+      orderBy<SelectMeta, 'select'>('select', 'desc'),
+    ] as Query<SelectMeta>;
+    const { sql } = compileToSql(q, 'rows');
+    expect(sql).toBe('SELECT * FROM rows ORDER BY "select" DESC');
   });
 });

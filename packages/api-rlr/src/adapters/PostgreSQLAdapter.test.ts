@@ -454,15 +454,18 @@ describe('PostgreSQLAdapter (mock)', () => {
     });
 
     it('should return allow=0 when at limit', async () => {
-      const now = Date.now();
+      // Wave 21 flake fix: pin `now` for deterministic window math.
+      const now = 1_700_000_000_000;
       const timestamps = Array(10)
         .fill(0)
         .map((_, i) => BigInt(now - i * 100));
 
-      const prisma = createMockPrisma([{ key: 'test', timestamps, expires_at: new Date() }]);
+      const prisma = createMockPrisma([
+        { key: 'test', timestamps, expires_at: new Date(now + 60_000) },
+      ]);
       const adapter = new PostgreSQLAdapter({ prisma });
 
-      const [allow, hits, remaining] = await adapter.incrementSW('test', 60000, 10, now);
+      const [allow, hits, remaining] = await adapter.incrementSW('test', 60_000, 10, now);
 
       expect(allow).toBe(0);
       expect(hits).toBe(10);
@@ -470,18 +473,21 @@ describe('PostgreSQLAdapter (mock)', () => {
     });
 
     it('should filter old timestamps', async () => {
-      const now = Date.now();
-      const timeFrame = 60000;
+      // Wave 21 flake fix: pin `now` for deterministic window math.
+      const now = 1_700_000_000_000;
+      const timeFrame = 60_000;
 
       // Mix of old and current timestamps
       const timestamps = [
-        BigInt(now - 200000), // Old (should be filtered)
-        BigInt(now - 100000), // Old (should be filtered)
-        BigInt(now - 1000), // Current window
+        BigInt(now - 200_000), // Old (should be filtered)
+        BigInt(now - 100_000), // Old (should be filtered)
+        BigInt(now - 1_000), // Current window
         BigInt(now - 500), // Current window
       ];
 
-      const prisma = createMockPrisma([{ key: 'test', timestamps, expires_at: new Date() }]);
+      const prisma = createMockPrisma([
+        { key: 'test', timestamps, expires_at: new Date(now + timeFrame) },
+      ]);
       const adapter = new PostgreSQLAdapter({ prisma });
 
       const [allow, hits] = await adapter.incrementSW('test', timeFrame, 10, now);

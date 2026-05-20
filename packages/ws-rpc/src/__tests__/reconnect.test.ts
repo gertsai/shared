@@ -230,4 +230,38 @@ describe('ReconnectStrategy', () => {
       expect(strategy.getDelay()).toBe(900); // 100 * 3^2
     });
   });
+
+  // FR-W5 (EVID-076 M-WS-1) — exponent off-by-one regression guard.
+  // The bug was in the CALLER (client.ts) which incremented `attempts`
+  // BEFORE reading `getDelay`, so the first retry waited `factor*delay`
+  // instead of `delay`. The strategy itself was always correct; we
+  // simply pin the contract here so any future refactor that moves
+  // ordering around can't silently regress.
+  describe('exponent ordering contract (FR-W5)', () => {
+    it('first call to getDelay() returns initialDelay (attempts=0)', () => {
+      const strategy = new ReconnectStrategy({
+        delay: 1000,
+        factor: 2,
+        jitter: false,
+      });
+      expect(strategy.getAttempts()).toBe(0);
+      expect(strategy.getDelay()).toBe(1000);
+    });
+
+    it('getDelay() uses factor^attempts — never factor^(attempts+1)', () => {
+      const strategy = new ReconnectStrategy({
+        delay: 1000,
+        factor: 2,
+        jitter: false,
+      });
+      // attempts=0 ⇒ delay = 1000 * 2^0 = 1000
+      expect(strategy.getDelay()).toBe(1000);
+      strategy.recordAttempt();
+      // attempts=1 ⇒ delay = 1000 * 2^1 = 2000
+      expect(strategy.getDelay()).toBe(2000);
+      strategy.recordAttempt();
+      // attempts=2 ⇒ delay = 1000 * 2^2 = 4000
+      expect(strategy.getDelay()).toBe(4000);
+    });
+  });
 });

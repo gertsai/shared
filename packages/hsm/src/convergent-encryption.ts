@@ -184,18 +184,31 @@ export class ConvergentEncryption {
     // Decrypt using provider
     const result = await this.provider.decrypt(ciphertext, contentHash);
 
-    // Verify hash if enabled
+    // FR-W4 (EVID-076 H-HSM-1): when `verifyOnDecrypt` is enabled we
+    // ALWAYS recompute the SHA-256 of the plaintext and compare against
+    // the caller-supplied `contentHash`, even if the provider already
+    // returned `verified: true`. Trusting the provider's flag means a
+    // buggy or compromised provider could return `verified: true` for
+    // tampered plaintext — defeating the defence-in-depth purpose of
+    // the option. On mismatch we throw an INVALID_CONTEXT-class HSMError
+    // rather than returning a record with `verified: false`: callers
+    // should NEVER continue to consume plaintext whose hash diverges
+    // from the expected content hash.
     let verified = result.verified;
-    if (this.verifyOnDecrypt && !verified) {
+    if (this.verifyOnDecrypt) {
       const computedHash = createHash('sha256').update(result.plaintext).digest('hex');
-      verified = computedHash === contentHash;
-
-      if (!verified) {
+      const matches = computedHash === contentHash;
+      if (!matches) {
         this.logger.warn('Content hash verification failed', {
           expected: contentHash.slice(0, 8),
           computed: computedHash.slice(0, 8),
         });
+        throw new HSMError(
+          'Content hash verification failed: decrypted plaintext does not match expected contentHash',
+          HSMErrorCodes.INVALID_CONTEXT,
+        );
       }
+      verified = true;
     }
 
     this.logger.debug('Decryption complete', {

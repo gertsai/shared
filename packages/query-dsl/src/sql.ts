@@ -242,11 +242,27 @@ function expandArrayParam(
   return placeholders;
 }
 
+/**
+ * Render a column identifier safely for Postgres.
+ *
+ * FR-W6 (EVID-076 M-QDS-1): the previous implementation validated with
+ * `IDENT_RE` but emitted the identifier unquoted. That made the compiled
+ * SQL fragile when callers named an indexed field after a Postgres
+ * reserved word (`select`, `from`, `order`, `desc`, ...): the regex
+ * accepts them, but the resulting SQL is a syntax error
+ * (`WHERE order = $1`). We now always wrap the identifier in
+ * double-quotes — Postgres treats `"order"` as a delimited identifier
+ * even when `order` is reserved — and escape any embedded double quotes
+ * by doubling them, per the SQL standard. The regex check is retained
+ * as defence-in-depth against malicious column names sneaked in via
+ * hand-built `QueryConstraint` objects (the type system already
+ * prevents the common case).
+ */
 function quoteIdent(name: string): string {
   if (!IDENT_RE.test(name)) {
     throw new TypeError(
       `compileToSql: column name '${name}' is not a valid SQL identifier`,
     );
   }
-  return name;
+  return '"' + name.replace(/"/g, '""') + '"';
 }

@@ -55,7 +55,11 @@ export { WsRpcClient } from './client.js';
 // ============================================================================
 
 export { ReconnectStrategy } from './reconnect.js';
-export { SubscriptionManager } from './subscription.js';
+export {
+  SubscriptionManager,
+  InvalidSubscriptionPatternError,
+  MAX_DOUBLE_STAR_SEGMENTS,
+} from './subscription.js';
 
 // ============================================================================
 // Types

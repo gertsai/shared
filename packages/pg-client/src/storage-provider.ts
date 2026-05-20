@@ -33,8 +33,20 @@ import {
   TransactionConflictError,
 } from '@gertsai/storage-core';
 import { compileToSql } from '@gertsai/query-dsl/sql';
+import { AUDIT_FIELDS } from '@gertsai/entity-audit';
 
 import type { PgClient } from './index';
+
+/**
+ * jsonb-strip fragment used by `upsertDoc` to exclude create-time
+ * audit columns from the UPDATE branch of `INSERT ... ON CONFLICT`.
+ * Wave 21 / EVID-076 CP-1: built from {@link AUDIT_FIELDS} rather than
+ * hard-coded string literals. The values are not user input — they
+ * come from a frozen const exported by `@gertsai/entity-audit` — so
+ * direct interpolation is safe. The fragment lives at module scope so
+ * we do not rebuild it per call.
+ */
+const CREATOR_AUDIT_STRIP_FRAGMENT = `(EXCLUDED.data - '${AUDIT_FIELDS.creator_uuid}' - '${AUDIT_FIELDS.created_at}')`;
 
 /**
  * Optional path → table-name overrides. Default: identity mapping.
@@ -338,7 +350,8 @@ export class PgStorageProvider<Meta extends StorageMetadata>
   /**
    * Wave 6.5 / PRD-007 + Wave 7.2 audit-aware native 1-RTT upsert.
    *
-   * SQL contract:
+   * SQL contract (with `${AUDIT_FIELDS.creator_uuid}` /
+   * `${AUDIT_FIELDS.created_at}` substituted from the constant):
    *
    * ```sql
    * INSERT INTO <table> (id, data) VALUES ($1, $2)
@@ -361,9 +374,10 @@ export class PgStorageProvider<Meta extends StorageMetadata>
    * One round-trip vs. the Sprint 3.5 `getDoc → update` two-RTT path,
    * audit-correct.
    *
-   * Field names match the `@gertsai/entity-audit` convention. If the
-   * convention changes, update both this method AND the matching
-   * `InMemoryStorageProvider.upsertDoc`.
+   * Field names: built from {@link AUDIT_FIELDS} (Wave 21 / EVID-076
+   * CP-1). A future rename in `@gertsai/entity-audit` propagates
+   * through the constant rather than requiring a synchronised edit in
+   * both `InMemoryStorageProvider.upsertDoc` and this method.
    */
   async upsertDoc(
     path: string,
@@ -375,7 +389,7 @@ export class PgStorageProvider<Meta extends StorageMetadata>
       this._client,
       `INSERT INTO ${table} (id, data) VALUES ($1, $2) ` +
         `ON CONFLICT (id) DO UPDATE SET ` +
-        `data = ${table}.data || (EXCLUDED.data - 'creator_uuid' - 'created_at')`,
+        `data = ${table}.data || ${CREATOR_AUDIT_STRIP_FRAGMENT}`,
       [id, data],
     );
     return { id };

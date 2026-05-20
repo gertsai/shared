@@ -56,10 +56,14 @@
     "lint": "eslint . --max-warnings 0"
   },
   "peerDependencies": {
+    "@gertsai/entity-audit": "workspace:^",
     "@gertsai/storage-core": "workspace:^",
     "@gertsai/query-dsl": "workspace:^"
   },
   "peerDependenciesMeta": {
+    "@gertsai/entity-audit": {
+      "optional": true
+    },
     "@gertsai/storage-core": {
       "optional": true
     },
@@ -68,6 +72,7 @@
     }
   },
   "devDependencies": {
+    "@gertsai/entity-audit": "workspace:*",
     "@gertsai/entity-storage": "workspace:*",
     "@gertsai/query-dsl": "workspace:*",
     "@gertsai/storage-core": "workspace:*",

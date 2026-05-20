@@ -240,6 +240,107 @@ describe('applyQueryFilter — cursors', () => {
   });
 });
 
+describe('applyQueryFilter — offset (Wave 21 / EVID-076 FR-X3)', () => {
+  it('skips the first N rows of the sorted set', () => {
+    const out = applyQueryFilter<UserMeta>(
+      users,
+      q([
+        { kind: 'orderBy', field: 'age', direction: 'asc' },
+        { kind: 'offset', value: 2 },
+      ]),
+    );
+    expect(out.map((u) => u.age)).toEqual([30, 35, 40]);
+  });
+
+  it('offset >= length yields empty result', () => {
+    const out = applyQueryFilter<UserMeta>(
+      users,
+      q([
+        { kind: 'orderBy', field: 'age', direction: 'asc' },
+        { kind: 'offset', value: 100 },
+      ]),
+    );
+    expect(out).toEqual([]);
+  });
+
+  it('offset = 0 is a no-op (matches SQL semantics)', () => {
+    const out = applyQueryFilter<UserMeta>(
+      users,
+      q([
+        { kind: 'orderBy', field: 'age', direction: 'asc' },
+        { kind: 'offset', value: 0 },
+      ]),
+    );
+    expect(out.length).toBe(5);
+  });
+
+  it('offset applies AFTER orderBy + cursors but BEFORE limit', () => {
+    // age asc: 25, 25, 30, 35, 40
+    // startAt(25): 25, 25, 30, 35, 40
+    // offset(1): 25, 30, 35, 40
+    // limit(2): 25, 30
+    const out = applyQueryFilter<UserMeta>(
+      users,
+      q([
+        { kind: 'orderBy', field: 'age', direction: 'asc' },
+        { kind: 'startAt', values: [25] },
+        { kind: 'offset', value: 1 },
+        { kind: 'limit', value: 2 },
+      ]),
+    );
+    expect(out.map((u) => u.age)).toEqual([25, 30]);
+  });
+});
+
+describe('applyQueryFilter — limitToLast (Wave 21 / EVID-076 FR-X4)', () => {
+  it('returns trailing N rows of the sorted result', () => {
+    const out = applyQueryFilter<UserMeta>(
+      users,
+      q([
+        { kind: 'orderBy', field: 'age', direction: 'asc' },
+        { kind: 'limitToLast', value: 2 },
+      ]),
+    );
+    expect(out.map((u) => u.age)).toEqual([35, 40]);
+  });
+
+  it('limitToLast > result length is a no-op (returns full set)', () => {
+    const out = applyQueryFilter<UserMeta>(
+      users,
+      q([
+        { kind: 'orderBy', field: 'age', direction: 'asc' },
+        { kind: 'limitToLast', value: 100 },
+      ]),
+    );
+    expect(out.length).toBe(5);
+  });
+
+  it('limitToLast = 0 yields empty result', () => {
+    const out = applyQueryFilter<UserMeta>(
+      users,
+      q([
+        { kind: 'orderBy', field: 'age', direction: 'asc' },
+        { kind: 'limitToLast', value: 0 },
+      ]),
+    );
+    expect(out).toEqual([]);
+  });
+
+  it('limitToLast combines with where + orderBy desc', () => {
+    // age >= 25 desc: 40, 35, 30, 25, 25
+    // limitToLast(2): 25, 25
+    const out = applyQueryFilter<UserMeta>(
+      users,
+      q([
+        { kind: 'where', field: 'age', op: '>=', value: 25 },
+        { kind: 'orderBy', field: 'age', direction: 'desc' },
+        { kind: 'limitToLast', value: 2 },
+      ]),
+    );
+    expect(out.map((u) => u.age)).toEqual([25, 25]);
+  });
+});
+
 describe('applyQueryFilter — combined where + orderBy + limit', () => {
   it('applies WHERE first, then ORDER BY, then LIMIT (matches SQL pipeline)', () => {
     const out = applyQueryFilter<UserMeta>(
