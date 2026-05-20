@@ -44,6 +44,16 @@ export class CircuitBreaker {
   private readonly resetTimeoutMs: number;
   private readonly maxHosts: number;
   private readonly hosts: LruMap<string, HostState>;
+  /**
+   * Per-host "probe in flight" set. Tracks which hosts have admitted a
+   * single half-open probe and are awaiting the
+   * `recordSuccess`/`recordFailure` resolution. Wave 24 / PRD-061
+   * FR-Y3 (closes EVID-078 H-3) — without this guard, two callers
+   * crossing the `resetTimeoutMs` boundary simultaneously would both
+   * pass `preflight` and defeat the textbook "single probe" semantic
+   * of half-open hysteresis.
+   */
+  private readonly probesInFlight: Set<string> = new Set();
   private opensCount = 0;
   private evictionsCount = 0;
 
@@ -58,6 +68,12 @@ export class CircuitBreaker {
    * Throws `UpstreamFailureError` if the circuit for `host` is open.
    * Updates LRU recency on access. Transitions open → half-open after
    * `resetTimeoutMs`.
+   *
+   * Wave 24 / PRD-061 FR-Y3 (closes EVID-078 H-3): half-open enforces
+   * the textbook **single-probe** semantic. On the open → half-open
+   * transition the host is marked `probesInFlight`; subsequent
+   * concurrent callers throw `UpstreamFailureError` until
+   * `recordSuccess`/`recordFailure` clears the flag.
    */
   preflight(host: string): void {
     const state = this.hosts.get(host);
@@ -66,7 +82,9 @@ export class CircuitBreaker {
     if (state.state === 'open') {
       const elapsed = Date.now() - state.openedAtMs;
       if (elapsed >= this.resetTimeoutMs) {
+        // Open → half-open transition. Admit exactly one probe.
         state.state = 'half-open';
+        this.probesInFlight.add(host);
         return;
       }
       throw new UpstreamFailureError({
@@ -74,9 +92,20 @@ export class CircuitBreaker {
         details: { upstream: host, state: 'open' },
       });
     }
+
+    // Already in half-open with a probe in flight — short-circuit.
+    if (state.state === 'half-open' && this.probesInFlight.has(host)) {
+      throw new UpstreamFailureError({
+        message: `Circuit breaker half-open (probe in flight) for ${host}`,
+        details: { upstream: host, state: 'half-open' },
+      });
+    }
   }
 
   recordSuccess(host: string): void {
+    // Clear probe-in-flight regardless of state — defensive: even if
+    // the host entry has been evicted, the probe semantics must reset.
+    this.probesInFlight.delete(host);
     const state = this.hosts.get(host);
     if (state === undefined) return;
     state.failures = 0;
@@ -86,6 +115,7 @@ export class CircuitBreaker {
   }
 
   recordFailure(host: string): void {
+    this.probesInFlight.delete(host);
     let state = this.hosts.get(host);
     if (state === undefined) {
       state = this.create(host);
@@ -123,6 +153,7 @@ export class CircuitBreaker {
 
   reset(): void {
     this.hosts.clear();
+    this.probesInFlight.clear();
     this.opensCount = 0;
     this.evictionsCount = 0;
   }

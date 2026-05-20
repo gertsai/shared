@@ -1,5 +1,31 @@
 # @gertsai/session-guard
 
+## 2.0.1
+
+### Patch Changes
+
+- Wave 24 Teammate Z — close EVID-078 H-4 (doc-vs-code drift) + MED-6
+  (assertImpersonating bare Error taxonomy).
+
+  - **FR-Z1 (H-4) — doc sync.** README + Security section now describe
+    `isImpersonating` as a fail-closed predicate (returns `false` on
+    `undefined`/`null`, destroyed sessions, empty UUIDs, and the equal-
+    UUIDs case). The previous claim — that the predicate throws
+    `DataAccessUuidMissingError` per ADR-007 I-19 — was superseded by
+    Wave 12.D-fix (PRD-036 FR-018 / EVID-051 L-2) but the docs were not
+    updated. The Assertions and Result-shape tables now also list
+    `assertImpersonating` and `checkImpersonating` so consumers who need
+    throw / structured-error semantics have a documented entry point.
+    No code change to `isImpersonating` itself.
+  - **FR-Z2 (MED-6) — `assertImpersonating` error taxonomy.** The bare
+    `new Error(...)` thrown when both UUIDs are present but equal is
+    replaced with a new typed `NotImpersonatingError` (extends
+    `ConflictError<{ operatorUuid: string }>` from `@gertsai/errors`),
+    so `errorToHttpResponse` / `errorToGrpcStatus` mappers translate the
+    case to HTTP 409 / gRPC `FAILED_PRECONDITION` rather than the
+    fall-through 500. Message text and ordering of the assertion's
+    other throws are preserved.
+
 ## 2.0.0
 
 ### Minor Changes

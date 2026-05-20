@@ -84,7 +84,17 @@ function buildResponse(session, tenantId) {
 | `isAuthenticated` | `(session: Session \| undefined \| null) => session is Session` | — |
 | `hasOperatorType` | `(session: Session, type: OperatorType \| OperatorType[]) => boolean` | — |
 | `isInTenant` | `(session: Session, tenantId: string) => boolean` | — |
-| `isImpersonating` | `(session: Session) => boolean` | `DataAccessUuidMissingError` (per ADR-007 I-19) |
+| `isImpersonating` | `(session: Session \| undefined \| null) => boolean` | — (pure predicate — see note below) |
+
+> **`isImpersonating` is a pure predicate** — it returns `false` for
+> `undefined`/`null`, destroyed sessions, empty / undefined `operatorUuid`,
+> empty / undefined `dataAccessUuid`, and the equal-UUIDs case (CWE-1188
+> fail-closed default). Wave 12.D-fix (PRD-036 FR-018, EVID-051 L-2)
+> intentionally superseded ADR-007 I-19's throw contract for this
+> predicate. Callers that need a structured error on missing UUIDs MUST
+> use [`assertImpersonating`](#assertions) (imperative) or
+> [`checkImpersonating`](#result-shape-variants) (functional) — see
+> [Security](#security) below for the audit-trail rationale.
 
 ### Assertions (TypeScript `asserts` signature where applicable)
 
@@ -95,6 +105,7 @@ function buildResponse(session, tenantId) {
 | `assertOperatorType` | `(session: Session, ...types: OperatorType[]) => void` | `OperatorTypeMismatchError` |
 | `assertSessionInTenant` | `(session: Session, tenantId: string) => void` | `TenantScopeViolationError` |
 | `assertNotDestroyed` | `(session: Session) => void` | `SessionDestroyedError` |
+| `assertImpersonating` | `(session: Session) => void` | `DataAccessUuidMissingError` (empty UUIDs); plain `Error` (UUIDs equal) |
 
 ### Result-shape variants
 
@@ -103,6 +114,7 @@ function buildResponse(session, tenantId) {
 | `checkAuthenticated` | `(session: Session \| undefined \| null) => CheckResult<{ session: Session }>` | `AuthenticationRequiredError` |
 | `checkOperatorType` | `(session: Session, ...types: OperatorType[]) => CheckResult<{}>` | `OperatorTypeMismatchError` |
 | `checkSessionInTenant` | `(session: Session, tenantId: string) => CheckResult<{}>` | `TenantScopeViolationError` |
+| `checkImpersonating` | `(session: Session \| undefined \| null) => CheckResult<{ impersonating: boolean }>` | `AuthenticationRequiredError` (missing/destroyed session); `DataAccessUuidMissingError` (empty UUIDs) |
 
 `CheckResult<TOk>` is a discriminated union:
 
@@ -125,6 +137,7 @@ errors patch). Each preserves its parent's `kind` so wire-format mappers
 | `OperatorTypeMismatchError` | `ForbiddenError<{ expected: readonly string[]; actual: string }>` | `FORBIDDEN` |
 | `TenantScopeViolationError` | `ForbiddenError<{ requested: string; sessionTenant: string }>` | `FORBIDDEN` |
 | `SessionDestroyedError` | `ConflictError<{ contextField: 'session' }>` | `CONFLICT` |
+| `NotImpersonatingError` | `ConflictError<{ operatorUuid: string }>` | `CONFLICT` |
 
 ## Security
 
@@ -149,12 +162,24 @@ errors patch). Each preserves its parent's `kind` so wire-format mappers
   This blocks the silent cross-tenant bypass where both arguments happen
   to be undefined under naive `===` equality.
 
-- **Impersonation post-condition (ADR-007 I-13 + I-19).** `isImpersonating`
-  throws `DataAccessUuidMissingError` if either `operatorUuid` or
-  `dataAccessUuid` is empty / undefined. Audit logs that gate on a `false`
-  return from a naive equality check would otherwise miss the case where
-  both UUIDs are blank — the worst possible defaulting behaviour for an
-  audit trail.
+- **Impersonation predicate vs. assertion (ADR-007 I-13 + I-19 ⇢
+  superseded by PRD-036 FR-018 / EVID-051 L-2).** `isImpersonating` is a
+  **fail-closed predicate** (CWE-1188): it returns `false` for
+  `undefined` / `null` sessions, destroyed sessions, empty / undefined
+  UUIDs, and the equal-UUIDs case. It NEVER throws. This makes the
+  predicate safe to use inline (`if (isImpersonating(s)) audit.log(...)`)
+  without try/catch boilerplate; the fail-closed default ensures a
+  corrupt session does not accidentally read as "impersonating" and
+  trigger an unintended audit branch.
+
+  **Audit-trail rule.** A `false` return from `isImpersonating` does NOT
+  prove the session is *not* impersonating — only that the package
+  cannot determine impersonation from the data it has. If your audit
+  pipeline must distinguish "not impersonating" from "cannot tell",
+  use the throwing companion {@link assertImpersonating} (imperative) or
+  the structured-result companion {@link checkImpersonating} (functional)
+  instead — both surface `DataAccessUuidMissingError` for the malformed-
+  UUID case and let the caller branch deliberately.
 
 - **Wire redaction.** All five errors inherit `@gertsai/errors` HTTP / gRPC
   mappers. `details` keys matching the central `REDACTION_KEYS` list are

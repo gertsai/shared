@@ -6,6 +6,7 @@
  */
 
 import { getFgaClient } from '../client.js';
+import type { CheckPermissionOptions } from '../queries/index.js';
 import type {
   FgaTupleKey,
   FgaResourceType,
@@ -26,28 +27,50 @@ import {
 
 /**
  * Writes relationship tuples to OpenFGA.
+ *
+ * Wave 24 / PRD-061 FR-Y1 (closes EVID-078 H-1): accepts the same
+ * `opts?: CheckPermissionOptions` escape hatch as
+ * {@link checkPermission} so multi-tenant consumers can thread their
+ * per-tenant FGA client through. When `opts.client` is omitted, falls
+ * through to the default singleton — preserves pre-Wave-24 behaviour
+ * for single-store callers.
  */
-export async function writeTuples(tuples: FgaTupleKey[]): Promise<void> {
-  const client = getFgaClient();
+export async function writeTuples(
+  tuples: FgaTupleKey[],
+  opts?: CheckPermissionOptions,
+): Promise<void> {
+  const client = opts?.client ?? getFgaClient();
   await client.writeTuples(tuples);
 }
 
 /**
  * Deletes relationship tuples from OpenFGA.
+ *
+ * Wave 24 / PRD-061 FR-Y1 — see {@link writeTuples} for scoping
+ * semantics.
  */
-export async function deleteTuples(tuples: FgaTupleKey[]): Promise<void> {
-  const client = getFgaClient();
+export async function deleteTuples(
+  tuples: FgaTupleKey[],
+  opts?: CheckPermissionOptions,
+): Promise<void> {
+  const client = opts?.client ?? getFgaClient();
   await client.deleteTuples(tuples);
 }
 
 /**
  * Writes and deletes tuples in a single transaction.
+ *
+ * Wave 24 / PRD-061 FR-Y1 — see {@link writeTuples} for scoping
+ * semantics.
  */
-export async function writeTransaction(options: {
-  writes?: FgaTupleKey[];
-  deletes?: FgaTupleKey[];
-}): Promise<void> {
-  const client = getFgaClient();
+export async function writeTransaction(
+  options: {
+    writes?: FgaTupleKey[];
+    deletes?: FgaTupleKey[];
+  },
+  opts?: CheckPermissionOptions,
+): Promise<void> {
+  const client = opts?.client ?? getFgaClient();
   await client.write(options);
 }
 
@@ -446,8 +469,9 @@ export async function bulkRevokeFromResources(
 export async function bulkWriteTuples(
   tuples: FgaTupleKey[],
   options?: BulkOperationOptions,
+  opts?: CheckPermissionOptions,
 ): Promise<BulkOperationResult> {
-  const client = getFgaClient();
+  const client = opts?.client ?? getFgaClient();
   const result: BulkOperationResult = {
     processed: 0,
     failed: [],
@@ -502,8 +526,9 @@ export async function bulkWriteTuples(
 export async function bulkDeleteTuples(
   tuples: FgaTupleKey[],
   options?: BulkOperationOptions,
+  opts?: CheckPermissionOptions,
 ): Promise<BulkOperationResult> {
-  const client = getFgaClient();
+  const client = opts?.client ?? getFgaClient();
   const result: BulkOperationResult = {
     processed: 0,
     failed: [],

@@ -16,6 +16,7 @@
  * @module @gertsai/auth-openfga/deny
  */
 
+import { LruTtlMap, type LruTtlMapOptions } from '@gertsai/utils/lru';
 import type { FgaResourceType } from '../types.js';
 import type { DenyLedgerProvider as CoreDenyLedgerProvider } from '@gertsai/core';
 
@@ -74,13 +75,52 @@ export interface DenyCheckResult {
 // =============================================================================
 
 /**
+ * Configuration for {@link InMemoryDenyLedger}.
+ *
+ * Wave 24 / PRD-061 FR-Y2 (closes EVID-078 H-2 — CWE-770 unbounded
+ * resource consumption).
+ */
+export interface InMemoryDenyLedgerOptions {
+  /**
+   * Max distinct deny keys before LRU eviction. Defaults to 10_000 —
+   * a generous ceiling for dev/test workloads while still bounding
+   * memory. Production deployments should use
+   * `RedisDenyLedgerAdapter`; this knob is the fail-safe.
+   */
+  readonly maxSize?: number;
+  /**
+   * Optional TTL in milliseconds on the LRU layer itself. `0` (default)
+   * disables LRU-level TTL — deny entries still honour their own
+   * `expiresAt` field in {@link check}; this knob exists only to bound
+   * memory growth in pathological-churn workloads.
+   */
+  readonly ttlMs?: number;
+}
+
+/**
  * Simple in-memory deny ledger.
  * Use RedisDenyLedger for production.
+ *
+ * Wave 24 / PRD-061 FR-Y2 (closes EVID-078 H-2): backing store
+ * migrated from unbounded `Map<>` to {@link LruTtlMap} from
+ * `@gertsai/utils/lru` to defend against CWE-770 unbounded resource
+ * consumption in long-lived processes that never switch to Redis.
+ * Preserves API surface (`deny`/`allow`/`check`/`listForUser`/`clear`/
+ * `size`) — the change is opaque to consumers except for the new
+ * `InMemoryDenyLedgerOptions` constructor arg.
  *
  * @deprecated Use RedisDenyLedgerAdapter for production to persist deny entries.
  */
 export class InMemoryDenyLedger {
-  private entries: Map<string, DenyEntry> = new Map();
+  private entries: LruTtlMap<string, DenyEntry>;
+
+  constructor(options?: InMemoryDenyLedgerOptions) {
+    const lruOpts: LruTtlMapOptions = {
+      maxSize: options?.maxSize ?? 10_000,
+      ttlMs: options?.ttlMs ?? 0,
+    };
+    this.entries = new LruTtlMap<string, DenyEntry>(lruOpts);
+  }
 
   /**
    * Generates key for the ledger.

@@ -231,6 +231,7 @@ export type {
   DenyCheckResult,
   DenyLedger,
   RedisDenyLedgerAdapterConfig,
+  InMemoryDenyLedgerOptions,
 } from './deny/index.js';
 
 // Permission Cache (B3.3: Event-Driven Invalidation)
