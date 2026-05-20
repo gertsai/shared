@@ -89,3 +89,49 @@ describe('svelteReactiveAdapter — Proxy notify integration', () => {
     expect(result).toBe(target);
   });
 });
+
+// Wave 19 / EVID-074 M-R2 (svelte parity) — pin markRaw non-reversibility.
+describe('svelteReactiveAdapter — markRaw non-reversibility (Wave 19)', () => {
+  it('markRaw() installs a non-configurable, non-writable brand (one-way)', () => {
+    const value = { secret: 1 };
+    svelteReactiveAdapter.markRaw(value);
+    const rawSym = Object.getOwnPropertySymbols(value).find(
+      (s) => s.toString() === 'Symbol(raw)',
+    );
+    expect(rawSym).toBeDefined();
+    const desc = Object.getOwnPropertyDescriptor(value, rawSym!);
+    expect(desc?.configurable).toBe(false);
+    expect(desc?.writable).toBe(false);
+    expect(desc?.enumerable).toBe(false);
+    expect(desc?.value).toBe(true);
+  });
+
+  it('markRaw() brand cannot be overwritten via Object.defineProperty', () => {
+    const value = { secret: 1 };
+    svelteReactiveAdapter.markRaw(value);
+    const rawSym = Object.getOwnPropertySymbols(value).find(
+      (s) => s.toString() === 'Symbol(raw)',
+    );
+    expect(() =>
+      Object.defineProperty(value, rawSym!, {
+        value: false,
+        configurable: true,
+      }),
+    ).toThrow();
+  });
+
+  it('markRaw() brand cannot be deleted (strict-mode delete throws)', () => {
+    const value: Record<symbol, unknown> = { secret: 1 } as unknown as Record<
+      symbol,
+      unknown
+    >;
+    svelteReactiveAdapter.markRaw(value);
+    const rawSym = Object.getOwnPropertySymbols(value).find(
+      (s) => s.toString() === 'Symbol(raw)',
+    );
+    expect(() => {
+      // @ts-expect-error — deleting a symbol-keyed own property
+      delete value[rawSym!];
+    }).toThrow();
+  });
+});

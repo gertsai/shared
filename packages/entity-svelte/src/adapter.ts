@@ -76,6 +76,22 @@ function notify(target: object): void {
   }
 }
 
+/**
+ * Svelte `ReactiveAdapter` implementation backed by `Proxy` + sibling
+ * `writable` stores in a module-private `WeakMap`.
+ *
+ * **Notify timing**: `sync` — `writable.set({...target})` fires inside the
+ * mutating Proxy trap (`set` / `defineProperty` / `deleteProperty`) BEFORE
+ * the trap returns to the outer caller. Svelte's `writable` itself notifies
+ * subscribers synchronously, so consumers of `getStore(target)` /
+ * `entityStore(entity)` see the new value before the outer write site
+ * resumes. A subscriber that re-enters the same target is gated by a
+ * boolean re-entrancy guard (CWE-674): the inner `writable.set(...)` call
+ * is suppressed so subscribers see only the outer mutation; see the
+ * re-entrancy test for the pinned contract. See `ReactiveAdapter` JSDoc in
+ * `@gertsai/entity/types` for the cross-adapter timing contract (Wave 19,
+ * EVID-074 H-V1).
+ */
 export const svelteReactiveAdapter: ReactiveAdapter = {
   reactive<T extends object>(target: T): T {
     if (target === null || typeof target !== 'object') return target;

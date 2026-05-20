@@ -35,6 +35,34 @@ export type WithTypename<T, Name extends string> = T & {
  * The default `plainReactiveAdapter` is a no-op pass-through suitable for
  * server-side / framework-free consumers. The optional Vue adapter lives in
  * `@gertsai/entity/vue` and uses `shallowReactive` / `markRaw` / `isReactive`.
+ *
+ * ### Notify-timing contract (Wave 19 / EVID-074 H-V1)
+ *
+ * Implementations MAY notify subscribers **synchronously** (inside the
+ * mutating Proxy trap, before the trap returns) OR **asynchronously** via a
+ * microtask / framework-scheduler. Consumers MUST NOT rely on observable
+ * ordering across adapter swaps — a callback that observes a write before
+ * the outer caller resumes is acceptable with one adapter but not another.
+ *
+ * Adapter-specific timings shipped under `@gertsai/*`:
+ *  - `plainReactiveAdapter` — no notifications at all (identity adapter).
+ *  - `@gertsai/entity-react`'s `reactReactiveAdapter` — **synchronous**
+ *    notify inside `set` / `defineProperty` / `deleteProperty` traps.
+ *  - `@gertsai/entity-svelte`'s `svelteReactiveAdapter` — **synchronous**
+ *    notify (`writable.set({...target})` inside the trap).
+ *  - `@gertsai/entity-solid`'s `solidReactiveAdapter` — synchronous from the
+ *    trap's perspective but routed through Solid's reactive graph
+ *    (`setStore(produce(...))`); Solid 1.x batches downstream signal
+ *    recomputation. Treat as "sync inside trap; downstream observability
+ *    follows Solid".
+ *  - `@gertsai/entity-vue`'s `vueReactiveAdapter` — **microtask** via Vue's
+ *    flush queue (`shallowReactive` delegates to Vue's `effect` scheduler).
+ *    Subscribers observe the new value but only after the current
+ *    microtask boundary.
+ *
+ * If a consumer needs deterministic timing across all adapters they should
+ * `await Promise.resolve()` (or `await nextTick()` in Vue) between the
+ * mutation and the read.
  */
 export interface ReactiveAdapter {
   /** Wrap `target` in the adapter's reactive proxy (or return as-is). */

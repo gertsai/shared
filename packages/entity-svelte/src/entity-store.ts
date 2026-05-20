@@ -29,7 +29,24 @@ export function entityStore<Data extends object>(
   // and returns the same object reference — adequate for adapter wrapping
   // without breaching the protected contract (ADR-008 I-14).
   const target = entity.$data as Data;
-  svelteReactiveAdapter.reactive(target);
+
+  // Wave 19 / EVID-074 M-Sv1 — refuse to silently produce a single-emission
+  // store for an Entity that was NOT constructed with `svelteReactiveAdapter`.
+  // Without this guard, calling `entityStore(entity)` on an entity built with
+  // (e.g.) `plainReactiveAdapter` returns a store that emits the initial
+  // value once and never again, because subsequent `entity.$patch(...)`
+  // writes bypass svelte's notify channel. Better to fail loudly.
+  if (!svelteReactiveAdapter.isReactive(target)) {
+    throw new Error(
+      'entityStore() requires the entity to be constructed with svelteReactiveAdapter. ' +
+        'The entity\'s $data was not produced by this adapter — calling entityStore() on ' +
+        'an entity built with a different ReactiveAdapter (e.g. plainReactiveAdapter, ' +
+        'reactReactiveAdapter, solidReactiveAdapter) would emit only the initial value ' +
+        'and never react to subsequent mutations. Pass `reactive: svelteReactiveAdapter` ' +
+        'to the Entity constructor.',
+    );
+  }
+
   const store = getStore(target);
 
   return {

@@ -15,6 +15,17 @@ describe('vueReactiveAdapter — peer-dep gate', () => {
     vi.resetModules();
   });
 
+  // Wave 19 / EVID-074 M-V1 — test seam parity with svelte/solid.
+  it('__resetVueCacheForTests clears cached references so loadVue re-resolves', async () => {
+    const mod = await import('../index');
+    // Force lazy load (warm cache).
+    mod.vueReactiveAdapter.reactive({ a: 1 });
+    // Reset clears the cached references — no throw, no return value.
+    expect(() => mod.__resetVueCacheForTests()).not.toThrow();
+    // After reset the adapter still works (re-resolves on demand).
+    expect(() => mod.vueReactiveAdapter.reactive({ b: 2 })).not.toThrow();
+  });
+
   it('throws a clear error containing the install hint when @vue/runtime-core is missing', async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const M = Module as any;
