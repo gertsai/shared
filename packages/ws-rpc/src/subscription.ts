@@ -6,6 +6,47 @@
 import type { Subscription, SubscriptionCallback } from './types.js';
 
 // ============================================================================
+// DoS protection (FR-W2, EVID-076 H-WS-2)
+// ============================================================================
+
+/**
+ * Maximum number of `**` (multi-segment) wildcards permitted in a single
+ * subscription pattern. Each extra `**` multiplies the recursion fan-out
+ * exponentially, so we cap aggressively. Legitimate patterns rarely need
+ * more than one or two — `'a.**.b'` or `'a.**.b.**.c'` are the realistic
+ * upper bound. An adversarial server pushing topic strings against a
+ * pattern with many `**`s would otherwise CPU-DoS the client.
+ */
+export const MAX_DOUBLE_STAR_SEGMENTS = 3;
+
+/**
+ * Maximum recursion depth inside {@link SubscriptionManager.wildcardMatch}.
+ * Defence-in-depth: even with the `**` cap, deeply nested topics could in
+ * theory produce a long recursion chain. 100 levels is far above any
+ * legitimate topic hierarchy.
+ */
+const MAX_WILDCARD_RECURSION_DEPTH = 100;
+
+/**
+ * Maximum number of segments (dots + 1) in a single subscription pattern
+ * or dispatched topic. Bounds the input to {@link wildcardMatch} so an
+ * attacker cannot send `'a.a.a.…'` to multiply the per-call cost.
+ */
+const MAX_TOPIC_SEGMENTS = 64;
+
+/**
+ * Thrown when a {@link SubscriptionManager.subscribe} call passes an
+ * adversarial pattern: too many `**` wildcards or too many segments.
+ */
+export class InvalidSubscriptionPatternError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidSubscriptionPatternError';
+    Object.setPrototypeOf(this, InvalidSubscriptionPatternError.prototype);
+  }
+}
+
+// ============================================================================
 // Subscription Manager
 // ============================================================================
 
@@ -47,6 +88,11 @@ export class SubscriptionManager {
     topic: string,
     callback: SubscriptionCallback<T>
   ): string {
+    // FR-W2 (H-WS-2): reject adversarial patterns at subscribe time —
+    // catching the DoS at the entry point is cheaper than bounding the
+    // recursion every dispatch.
+    this.assertSafePattern(topic);
+
     const id = this.generateId();
     const isWildcard = topic.includes('*');
 
@@ -60,6 +106,29 @@ export class SubscriptionManager {
     this.subscriptions.set(id, subscription as Subscription<unknown>);
 
     return id;
+  }
+
+  /**
+   * Validate a subscription pattern against DoS-resistance caps. Throws
+   * {@link InvalidSubscriptionPatternError} on violation. Called from
+   * {@link subscribe} (FR-W2, EVID-076 H-WS-2).
+   */
+  private assertSafePattern(pattern: string): void {
+    const parts = pattern.split('.');
+    if (parts.length > MAX_TOPIC_SEGMENTS) {
+      throw new InvalidSubscriptionPatternError(
+        `Subscription pattern has ${parts.length} segments, exceeds limit ${MAX_TOPIC_SEGMENTS}`,
+      );
+    }
+    let doubleStarCount = 0;
+    for (const p of parts) {
+      if (p === '**') doubleStarCount++;
+    }
+    if (doubleStarCount > MAX_DOUBLE_STAR_SEGMENTS) {
+      throw new InvalidSubscriptionPatternError(
+        `Subscription pattern has ${doubleStarCount} '**' segments, exceeds limit ${MAX_DOUBLE_STAR_SEGMENTS}`,
+      );
+    }
   }
 
   /**
@@ -139,10 +208,37 @@ export class SubscriptionManager {
    * Supports:
    * - `*` matches any single segment
    * - `**` matches any number of segments
+   *
+   * FR-W2 (EVID-076 H-WS-2): bounded recursion depth to defend against
+   * adversarial topic strings that could otherwise CPU-DoS the client.
+   * Patterns are already validated at {@link subscribe} time against
+   * `MAX_DOUBLE_STAR_SEGMENTS`; this is defence-in-depth for the dispatch
+   * path where the topic comes from the (potentially untrusted) server.
+   *
+   * @param depth Current recursion depth (internal — callers pass 0).
    */
-  private wildcardMatch(pattern: string, topic: string): boolean {
+  private wildcardMatch(
+    pattern: string,
+    topic: string,
+    depth = 0,
+  ): boolean {
+    if (depth > MAX_WILDCARD_RECURSION_DEPTH) {
+      // Bail rather than throw — dispatch path treats a no-match as
+      // "skip this subscriber" so an attacker cannot crash the client.
+      return false;
+    }
+
     const patternParts = pattern.split('.');
     const topicParts = topic.split('.');
+
+    // Bound input size — a topic with hundreds of segments is itself
+    // suspicious and shouldn't tax the matcher.
+    if (
+      patternParts.length > MAX_TOPIC_SEGMENTS ||
+      topicParts.length > MAX_TOPIC_SEGMENTS
+    ) {
+      return false;
+    }
 
     let pi = 0; // pattern index
     let ti = 0; // topic index
@@ -167,7 +263,8 @@ export class SubscriptionManager {
           if (
             this.wildcardMatch(
               remainingPattern,
-              remainingTopic
+              remainingTopic,
+              depth + 1,
             )
           ) {
             return true;

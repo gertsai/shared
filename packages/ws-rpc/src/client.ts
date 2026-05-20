@@ -110,6 +110,25 @@ export class WsRpcClient extends EventEmitter<WsRpcEvents> {
   private idCounter = 0;
   private heartbeatTimer: NodeJS.Timeout | undefined;
   private reconnectTimer: NodeJS.Timeout | undefined;
+  /**
+   * Synthetic-close timer scheduled by the `connect()` catch path
+   * (FR-W1) for pre-onopen failures. Tracked separately from
+   * {@link reconnectTimer} so {@link stopReconnection} can cancel it on
+   * user-initiated `disconnect()` and avoid an unwanted reconnect storm.
+   */
+  private pendingSyntheticCloseTimer: NodeJS.Timeout | undefined;
+  /**
+   * Pong-watchdog timer (FR-W3). When the Node protocol-level ping path
+   * is active, we expect a `pong` within `heartbeatInterval` of sending
+   * the ping; otherwise we treat the connection as half-open and force
+   * a close so the existing reconnect logic re-arms.
+   */
+  private pongWatchdogTimer: NodeJS.Timeout | undefined;
+  /**
+   * True iff the Node protocol-level ping/pong path is wired (FR-W3).
+   * Set after we successfully attach a `pong` handler to the `ws` lib.
+   */
+  private wsProtocolHeartbeat = false;
   private isDestroyed = false;
 
   /**
@@ -187,7 +206,26 @@ export class WsRpcClient extends EventEmitter<WsRpcEvents> {
         })
         .catch((error) => {
           this.state = WebSocketState.CLOSED;
-          reject(error instanceof Error ? error : new Error(String(error)));
+          const err = error instanceof Error ? error : new Error(String(error));
+          // FR-W1 (H-WS-1, EVID-076): if `createWebSocket()` rejects
+          // BEFORE `onopen` ever fires (DNS error, ECONNREFUSED, ws-lib
+          // import failure, …) no `onclose` event is ever produced, so
+          // the reconnect chain dies silently. Synthesise `handleClose`
+          // here so the standard reconnect-on-close path re-arms the
+          // timer. We schedule via `setTimeout(0)` to release the
+          // microtask queue and avoid recursing into `connect()` while
+          // `connecting` is still held by the current promise. The
+          // timer handle is tracked so a user-initiated `disconnect()`
+          // before it fires can cancel the unwanted reconnect.
+          if (!this.isDestroyed && this.pendingSyntheticCloseTimer === undefined) {
+            this.pendingSyntheticCloseTimer = setTimeout(() => {
+              this.pendingSyntheticCloseTimer = undefined;
+              if (!this.isDestroyed) {
+                this.handleClose(1006, 'connect-failed');
+              }
+            }, 0);
+          }
+          reject(err);
         });
     });
 
@@ -525,15 +563,29 @@ export class WsRpcClient extends EventEmitter<WsRpcEvents> {
   }
 
   /**
-   * Schedule reconnection attempt
+   * Schedule reconnection attempt.
+   *
+   * Order matters: we read the delay BEFORE bumping `attempts` so the
+   * first retry actually waits `initialDelay * factor^0 = initialDelay`,
+   * not `initialDelay * factor^1`. See Wave 21 fix for FR-W5 (M-WS-1
+   * off-by-one in audit EVID-076).
+   *
+   * If `createWebSocket()` rejects synchronously (DNS error,
+   * ECONNREFUSED, ws-lib import failure), no `onclose` is emitted —
+   * `handleClose` would never fire and the reconnect chain would die.
+   * We rescue that path by calling `handleClose(1006, '...')` here, so
+   * the existing reconnect-on-close logic re-arms the timer. See FR-W1
+   * (H-WS-1) in EVID-076.
    */
   private scheduleReconnection(): void {
     if (this.reconnectTimer) {
       return; // Already scheduled
     }
 
-    this.reconnectStrategy.recordAttempt();
+    // Compute the delay BEFORE recording the attempt so the exponent is
+    // `attempts` (0 on the very first retry) rather than `attempts + 1`.
     const delay = this.reconnectStrategy.getDelay();
+    this.reconnectStrategy.recordAttempt();
     const attempt = this.reconnectStrategy.getAttempts();
 
     this.emit('reconnecting', attempt, delay);
@@ -545,18 +597,26 @@ export class WsRpcClient extends EventEmitter<WsRpcEvents> {
           this.emit('reconnected');
         })
         .catch(() => {
-          // Will trigger another reconnection attempt via handleClose
+          // The `connect()` catch path itself schedules a synthetic
+          // `handleClose(1006)` for pre-onopen rejections (FR-W1), so
+          // we do NOT re-arm here to avoid double-scheduling.
         });
     }, delay);
   }
 
   /**
-   * Stop reconnection attempts
+   * Stop reconnection attempts. Also cancels any synthetic-close timer
+   * queued by the {@link connect}-catch FR-W1 path so a user-initiated
+   * `disconnect()` is not undone by a subsequent reconnect storm.
    */
   private stopReconnection(): void {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = undefined;
+    }
+    if (this.pendingSyntheticCloseTimer) {
+      clearTimeout(this.pendingSyntheticCloseTimer);
+      this.pendingSyntheticCloseTimer = undefined;
     }
   }
 
@@ -565,7 +625,20 @@ export class WsRpcClient extends EventEmitter<WsRpcEvents> {
   // ============================================================================
 
   /**
-   * Start heartbeat
+   * Start heartbeat.
+   *
+   * FR-W3 (EVID-076 H-WS-3): in Node we prefer the WebSocket
+   * protocol-level ping/pong frames exposed by the `ws` library
+   * (`ws.ping()` + `'pong'` event). Protocol-level pings let the OS TCP
+   * stack — and any intermediate proxies — detect dead connections far
+   * faster than waiting for a 2-hour OS keepalive on a half-open socket,
+   * and they require no server-side handler. We additionally arm a
+   * pong-watchdog that force-closes the socket when no pong arrives in
+   * 2x the heartbeat interval, so the existing reconnect chain re-arms.
+   *
+   * The browser `WebSocket` API does NOT expose protocol-level ping, so
+   * the legacy app-level `notify('ping')` path remains for that
+   * environment.
    */
   private startHeartbeat(): void {
     if (this.heartbeatInterval <= 0) {
@@ -574,6 +647,68 @@ export class WsRpcClient extends EventEmitter<WsRpcEvents> {
 
     this.stopHeartbeat();
 
+    // Detect the Node `ws` library: it exposes `ping(...)` and an
+    // `on('pong', ...)` EventEmitter API which the browser WebSocket
+    // does not. `typeof window === 'undefined'` is a fast structural
+    // probe, but we also feature-detect to be safe in mixed runtimes
+    // (e.g. JSDOM-on-Node where `window` exists but `ws` is in use).
+    const ws = this.ws as
+      | (WebSocket & {
+          ping?: (data?: unknown, mask?: boolean, cb?: (err?: Error) => void) => void;
+          on?: (event: string, cb: (...args: unknown[]) => void) => unknown;
+        })
+      | undefined;
+    const isNodeWs =
+      this.environment === 'node' &&
+      typeof ws?.ping === 'function' &&
+      typeof ws?.on === 'function';
+
+    if (isNodeWs && ws) {
+      // Wire pong handler once per socket. Each pong cancels the
+      // watchdog — if no pong arrives before the next interval, the
+      // watchdog fires `disconnect(1001)` to trigger reconnect.
+      this.wsProtocolHeartbeat = true;
+      ws.on?.('pong', () => {
+        if (this.pongWatchdogTimer) {
+          clearTimeout(this.pongWatchdogTimer);
+          this.pongWatchdogTimer = undefined;
+        }
+      });
+
+      this.heartbeatTimer = setInterval(() => {
+        if (this.state !== WebSocketState.OPEN) {
+          return;
+        }
+        try {
+          ws.ping?.();
+        } catch {
+          // ws.ping can throw if the socket is already closing — let
+          // the close handler drive the reconnect path.
+          return;
+        }
+        // Arm watchdog: if no pong within 2x interval, declare dead.
+        if (this.pongWatchdogTimer) {
+          clearTimeout(this.pongWatchdogTimer);
+        }
+        this.pongWatchdogTimer = setTimeout(() => {
+          this.pongWatchdogTimer = undefined;
+          if (this.state === WebSocketState.OPEN && this.ws) {
+            try {
+              this.ws.close(1001, 'pong-timeout');
+            } catch {
+              // Defensive — `close()` should not throw, but if the lib
+              // misbehaves we synthesise the close ourselves so the
+              // reconnect chain still re-arms.
+              this.handleClose(1001, 'pong-timeout');
+            }
+          }
+        }, this.heartbeatInterval * 2);
+      }, this.heartbeatInterval);
+      return;
+    }
+
+    // Browser / fallback path — app-level JSON-RPC ping notification.
+    this.wsProtocolHeartbeat = false;
     this.heartbeatTimer = setInterval(() => {
       if (this.state === WebSocketState.OPEN) {
         // Send ping notification
@@ -583,13 +718,18 @@ export class WsRpcClient extends EventEmitter<WsRpcEvents> {
   }
 
   /**
-   * Stop heartbeat
+   * Stop heartbeat (and cancel any in-flight pong watchdog).
    */
   private stopHeartbeat(): void {
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = undefined;
     }
+    if (this.pongWatchdogTimer) {
+      clearTimeout(this.pongWatchdogTimer);
+      this.pongWatchdogTimer = undefined;
+    }
+    this.wsProtocolHeartbeat = false;
   }
 
   // ============================================================================

@@ -32,3 +32,11 @@ export {
 export type { BoundQueryConstraints } from './constraints';
 
 export { validateQuery } from './validate';
+
+export {
+  FULL_QUERY_CAPABILITIES,
+  IN_MEMORY_QUERY_CAPABILITIES,
+  MINIMAL_QUERY_CAPABILITIES,
+  POSTGRES_QUERY_CAPABILITIES,
+} from './capabilities';
+export type { QueryCapabilities } from './capabilities';

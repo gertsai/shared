@@ -4,8 +4,16 @@ import { describe, expect, it } from 'vitest';
 
 import type { StorageMetadata } from '@gertsai/storage-core';
 import {
+  FULL_QUERY_CAPABILITIES,
+  IN_MEMORY_QUERY_CAPABILITIES,
+  MINIMAL_QUERY_CAPABILITIES,
+  POSTGRES_QUERY_CAPABILITIES,
+} from '../capabilities';
+import {
   endAt,
   limit,
+  limitToLast,
+  offset,
   orderBy,
   startAt,
   whereField,
@@ -101,6 +109,87 @@ describe('validateQuery rejection', () => {
       { kind: 'limitToLast', value: 5 },
       { kind: 'offset', value: 10 },
     ] as unknown as Query<OrderMeta>;
+    expect(() => validateQuery(q)).not.toThrow();
+  });
+});
+
+// Wave 21 / EVID-076 FR-X5 — capability matrix gating.
+describe('validateQuery capability gating', () => {
+  it('throws when offset is supplied against MINIMAL_QUERY_CAPABILITIES', () => {
+    const q: Query<OrderMeta> = [
+      orderBy<OrderMeta, 'total'>('total', 'asc'),
+      offset<OrderMeta>(10),
+    ];
+    expect(() => validateQuery(q, MINIMAL_QUERY_CAPABILITIES)).toThrow(
+      /offset/,
+    );
+  });
+
+  it('accepts offset against POSTGRES_QUERY_CAPABILITIES (Pg honours OFFSET)', () => {
+    const q: Query<OrderMeta> = [
+      orderBy<OrderMeta, 'total'>('total', 'asc'),
+      offset<OrderMeta>(10),
+    ];
+    expect(() => validateQuery(q, POSTGRES_QUERY_CAPABILITIES)).not.toThrow();
+  });
+
+  it('throws when limitToLast is supplied against POSTGRES_QUERY_CAPABILITIES', () => {
+    const q: Query<OrderMeta> = [
+      orderBy<OrderMeta, 'total'>('total', 'asc'),
+      limitToLast<OrderMeta>(5),
+    ];
+    expect(() => validateQuery(q, POSTGRES_QUERY_CAPABILITIES)).toThrow(
+      /limitToLast/,
+    );
+  });
+
+  it('accepts limitToLast against IN_MEMORY_QUERY_CAPABILITIES', () => {
+    const q: Query<OrderMeta> = [
+      orderBy<OrderMeta, 'total'>('total', 'asc'),
+      limitToLast<OrderMeta>(5),
+    ];
+    expect(() => validateQuery(q, IN_MEMORY_QUERY_CAPABILITIES)).not.toThrow();
+  });
+
+  it('throws when cursors are supplied against POSTGRES_QUERY_CAPABILITIES (cursors=unsupported)', () => {
+    const q: Query<OrderMeta> = [
+      orderBy<OrderMeta, 'total'>('total', 'asc'),
+      startAt<OrderMeta>(100),
+    ];
+    expect(() => validateQuery(q, POSTGRES_QUERY_CAPABILITIES)).toThrow(
+      /cursor/,
+    );
+  });
+
+  it('accepts cursors against IN_MEMORY_QUERY_CAPABILITIES (cursors=native)', () => {
+    const q: Query<OrderMeta> = [
+      orderBy<OrderMeta, 'total'>('total', 'asc'),
+      startAt<OrderMeta>(100),
+      endAt<OrderMeta>(200),
+    ];
+    expect(() => validateQuery(q, IN_MEMORY_QUERY_CAPABILITIES)).not.toThrow();
+  });
+
+  it('FULL_QUERY_CAPABILITIES accepts every constraint kind', () => {
+    const q: Query<OrderMeta> = [
+      whereField<OrderMeta, 'status'>('status', '==', 'paid'),
+      orderBy<OrderMeta, 'total'>('total', 'asc'),
+      startAt<OrderMeta>(100),
+      endAt<OrderMeta>(500),
+      offset<OrderMeta>(2),
+      limit<OrderMeta>(10),
+      limitToLast<OrderMeta>(3),
+    ];
+    expect(() => validateQuery(q, FULL_QUERY_CAPABILITIES)).not.toThrow();
+  });
+
+  it('omitting capabilities preserves pre-Wave 21 behaviour (no gating)', () => {
+    const q: Query<OrderMeta> = [
+      orderBy<OrderMeta, 'total'>('total', 'asc'),
+      limitToLast<OrderMeta>(5),
+      offset<OrderMeta>(2),
+      startAt<OrderMeta>(100),
+    ];
     expect(() => validateQuery(q)).not.toThrow();
   });
 });

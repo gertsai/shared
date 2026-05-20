@@ -20,9 +20,31 @@
  *   read-during-tx records the observed version; commit re-reads the
  *   current version and throws `TransactionConflictError` on mismatch.
  *   This mirrors Firestore optimistic-concurrency semantics.
- * - **Batches are atomic via clone-on-throw**: the mutation log is
- *   applied to a snapshot copy first; on success the live map swaps to
- *   the snapshot. On throw the live map is untouched.
+ *
+ *   **Concurrency caveat (Wave 21 / EVID-076 FR-X1 closure).** Prior to
+ *   Wave 21 the runner tracked only `tx.get()`-observed versions; blind
+ *   writes (writes never preceded by a `tx.get()` of the same key) were
+ *   NOT version-checked, and commit replaced the whole collection map
+ *   with the transaction's snapshot — silently clobbering concurrent
+ *   commits. The current implementation closes both holes:
+ *
+ *     1. Every write (`set` / `update` / `delete`) implicitly snapshots
+ *        the doc's pre-mutation version on the first queue operation
+ *        for that `(path, id)`. The recorded version is included in
+ *        the conflict-check phase alongside reads.
+ *     2. Commit performs a **per-key merge** into the live store
+ *        rather than swapping the whole collection map. Concurrent
+ *        transactions that touch disjoint keys no longer clobber each
+ *        other.
+ *
+ *   The InMemory fixture now mirrors PG MVCC semantics: blind writes
+ *   that race a concurrent mutation throw {@link TransactionConflictError}.
+ * - **Batches use per-key merge + write-set conflict checks** identical
+ *   to transactions (Wave 21 / EVID-076 FR-X1). The pre-batch version
+ *   of every written key is snapshotted at queue time; on commit, the
+ *   live versions are re-verified before the deltas are applied. A
+ *   concurrent batch / single-doc write that bumped the version
+ *   throws.
  */
 import type {
   IBatchRunner,
@@ -33,6 +55,7 @@ import type {
   StorageMetadata,
 } from '@gertsai/storage-core';
 import { TransactionConflictError } from '@gertsai/storage-core';
+import { AUDIT_FIELDS } from '@gertsai/entity-audit';
 import { applyQueryFilter } from './applyQueryFilter';
 
 interface VersionedDoc {
@@ -183,9 +206,10 @@ export class InMemoryStorageProvider<
    * path. This keeps `capabilities.upsert.preservesCreatorAudit: true`
    * honest.
    *
-   * Field names: hard-coded to `creator_uuid` + `created_at` per the
-   * `@gertsai/entity-audit` convention (Sprint 3.4). Future schema
-   * change → update both this provider AND `PgStorageProvider.upsertDoc`.
+   * Field names: pulled from {@link AUDIT_FIELDS} (Wave 21 / EVID-076
+   * CP-1). A future rename in `@gertsai/entity-audit` propagates through
+   * the type system rather than requiring synchronised string edits in
+   * every storage adapter.
    */
   async upsertDoc(
     path: string,
@@ -199,11 +223,11 @@ export class InMemoryStorageProvider<
       const existingDoc = (existing as { data: Record<string, unknown> }).data;
       const incoming = data as Record<string, unknown>;
       const merged = { ...incoming } as Record<string, unknown>;
-      if ('creator_uuid' in existingDoc) {
-        merged.creator_uuid = existingDoc.creator_uuid;
+      if (AUDIT_FIELDS.creator_uuid in existingDoc) {
+        merged[AUDIT_FIELDS.creator_uuid] = existingDoc[AUDIT_FIELDS.creator_uuid];
       }
-      if ('created_at' in existingDoc) {
-        merged.created_at = existingDoc.created_at;
+      if (AUDIT_FIELDS.created_at in existingDoc) {
+        merged[AUDIT_FIELDS.created_at] = existingDoc[AUDIT_FIELDS.created_at];
       }
       this._writeOnto(coll, id, merged as Meta['write']);
     } else {
@@ -317,52 +341,110 @@ export class InMemoryStorageProvider<
     };
   }
 
+  // ─────────────────── Shared atomic-commit machinery (Wave 21 FR-X1) ───────────────────
+  //
+  // Both runBatch and runTransaction need:
+  //   - a per-key delta queue (kind + payload) — preserves queue order
+  //     so the same key can be set+updated within a single block;
+  //   - a per-key version snapshot taken at the FIRST queue / read on
+  //     that key (so blind writes are version-checked too — closes the
+  //     pre-Wave-21 H-ENT-1/H-ENT-2 hazard);
+  //   - a commit phase that (a) re-verifies every snapshotted version
+  //     against the live store, throwing TransactionConflictError on
+  //     mismatch, and (b) applies the deltas per-key into the live
+  //     collection map (NOT a whole-map swap — concurrent commits no
+  //     longer clobber).
+  //
+  // The shape is shared between batch + transaction so audit fixes only
+  // need to land in one place.
+
+  /**
+   * A single queued write inside a batch/transaction. `delete` carries
+   * no payload; `set` carries the full data; `update` carries the
+   * partial. `version` is the doc's pre-block version at the moment
+   * this op was queued — only used when this op is the FIRST touch on
+   * the key (subsequent ops re-use the first-touch snapshot).
+   */
+  private _applyDeltas(
+    deltas: ReadonlyMap<string, ReadonlyArray<DeltaOp>>,
+    pathOf: (key: string) => readonly [string, string],
+  ): void {
+    for (const [key, ops] of deltas) {
+      const [path, id] = pathOf(key);
+      const coll = this._coll(path);
+      for (const op of ops) {
+        if (op.kind === 'set') {
+          this._writeOnto(coll, id, op.data);
+        } else if (op.kind === 'update') {
+          this._updateOnto(coll, id, op.partial);
+        } else {
+          coll.delete(id);
+        }
+      }
+    }
+  }
+
   // ─────────────────── IStorageProvider — Batches ───────────────────
 
   async runBatch<R>(fn: (batch: IBatchRunner<Meta>) => Promise<R>): Promise<R> {
-    // Snapshot of every collection touched (deep map copy of the inner map).
-    const snapshots = new Map<string, Map<string, VersionedDoc>>();
-    const ensureSnap = (path: string): Map<string, VersionedDoc> => {
-      let s = snapshots.get(path);
-      if (!s) {
-        s = new Map(this._coll(path));
-        snapshots.set(path, s);
-      }
-      return s;
-    };
-    const touched = new Set<string>(); // `${path}::${id}`
+    // Per-key version snapshot taken at the FIRST queue op on that key.
+    // null = absent at snapshot time. Wave 21 closes H-ENT-2: blind
+    // writes are now version-checked.
+    const versions = new Map<string, number | null>();
+    // Per-key ordered op queue. Multiple ops on the same key are
+    // applied in queue order at commit time.
+    const deltas = new Map<string, DeltaOp[]>();
     const touchedColls = new Set<string>();
+
+    const snapshot = (path: string, id: string): void => {
+      const key = `${path}::${id}`;
+      if (!versions.has(key)) {
+        const cur = this._coll(path).get(id);
+        versions.set(key, cur ? cur.version : null);
+      }
+    };
+    const queue = (path: string, id: string, op: DeltaOp): void => {
+      const key = `${path}::${id}`;
+      snapshot(path, id);
+      let q = deltas.get(key);
+      if (!q) {
+        q = [];
+        deltas.set(key, q);
+      }
+      q.push(op);
+      touchedColls.add(path);
+    };
+
     const runner: IBatchRunner<Meta> = {
       set: (path, id, data): void => {
-        this._writeOnto(ensureSnap(path), id, data);
-        touched.add(`${path}::${id}`);
-        touchedColls.add(path);
+        queue(path, id, { kind: 'set', data });
       },
       update: (path, id, partial): void => {
-        this._updateOnto(
-          ensureSnap(path),
-          id,
-          partial as Record<string, unknown>,
-        );
-        touched.add(`${path}::${id}`);
-        touchedColls.add(path);
+        queue(path, id, {
+          kind: 'update',
+          partial: partial as Record<string, unknown>,
+        });
       },
       delete: (path, id): void => {
-        ensureSnap(path).delete(id);
-        touched.add(`${path}::${id}`);
-        touchedColls.add(path);
+        queue(path, id, { kind: 'delete' });
       },
     };
     const result = await fn(runner);
-    // Commit: swap snapshots into the live store atomically.
-    for (const [path, snap] of snapshots) {
-      this._store.set(path, snap);
-    }
+
+    // Wave 21 / EVID-076 FR-X1 — verify the write-set version snapshot
+    // against the live store BEFORE applying any deltas. Same
+    // optimistic-concurrency semantics as runTransaction; in a batch
+    // the entire queued write-set is the "implicit read-set".
+    this._verifyVersions(versions);
+
+    // Wave 21 / EVID-076 FR-X1 — per-key merge into the live store. No
+    // whole-collection-map swap; concurrent batches touching disjoint
+    // keys no longer clobber each other.
+    this._applyDeltas(deltas, parseKey);
+
     // Emit listeners after commit succeeds.
-    for (const key of touched) {
-      const sep = key.indexOf('::');
-      const path = key.slice(0, sep);
-      const id = key.slice(sep + 2);
+    for (const key of deltas.keys()) {
+      const [path, id] = parseKey(key);
       this._emitDoc(path, id);
     }
     for (const path of touchedColls) {
@@ -376,54 +458,118 @@ export class InMemoryStorageProvider<
   async runTransaction<R>(
     fn: (tx: ITransactionRunner<Meta>) => Promise<R>,
   ): Promise<R> {
-    const reads = new Map<string, number | null>(); // version observed (null = absent)
-    const snapshots = new Map<string, Map<string, VersionedDoc>>();
-    const ensureSnap = (path: string): Map<string, VersionedDoc> => {
-      let s = snapshots.get(path);
-      if (!s) {
-        s = new Map(this._coll(path));
-        snapshots.set(path, s);
-      }
-      return s;
-    };
-    const touched = new Set<string>();
+    // Reads: version observed at the time of tx.get (null = absent).
+    const reads = new Map<string, number | null>();
+    // Writes: pre-tx version snapshot at first queue op on each key.
+    const writeVersions = new Map<string, number | null>();
+    // Local view of the snapshot — reads inside the tx see writes
+    // queued by the tx itself. Map<path::id, {data | null, present}>.
+    const localView = new Map<string, { readonly doc: VersionedDoc | null }>();
+    const deltas = new Map<string, DeltaOp[]>();
     const touchedColls = new Set<string>();
+
+    const snapRead = (path: string, id: string): VersionedDoc | null => {
+      const key = `${path}::${id}`;
+      const cached = localView.get(key);
+      if (cached) return cached.doc;
+      const live = this._coll(path).get(id) ?? null;
+      localView.set(key, { doc: live });
+      if (!reads.has(key)) {
+        reads.set(key, live ? live.version : null);
+      }
+      return live;
+    };
+    const snapWrite = (path: string, id: string): void => {
+      const key = `${path}::${id}`;
+      if (!writeVersions.has(key)) {
+        const cur = this._coll(path).get(id);
+        writeVersions.set(key, cur ? cur.version : null);
+      }
+    };
+    const queue = (path: string, id: string, op: DeltaOp): void => {
+      const key = `${path}::${id}`;
+      snapWrite(path, id);
+      let q = deltas.get(key);
+      if (!q) {
+        q = [];
+        deltas.set(key, q);
+      }
+      q.push(op);
+      touchedColls.add(path);
+      // Update the local view so subsequent tx.get reflects the queued
+      // write. We carry only the data, not a synthetic version — the
+      // version that matters at commit time is the live-store one.
+      if (op.kind === 'delete') {
+        localView.set(key, { doc: null });
+      } else if (op.kind === 'set') {
+        const prev = localView.get(key)?.doc;
+        const nextVer = (prev?.version ?? 0) + 1;
+        localView.set(key, { doc: { version: nextVer, data: op.data } });
+      } else {
+        const prev = localView.get(key)?.doc;
+        const merged = {
+          ...(prev?.data as Record<string, unknown> | undefined),
+          ...op.partial,
+        };
+        const nextVer = (prev?.version ?? 0) + 1;
+        localView.set(key, { doc: { version: nextVer, data: merged } });
+      }
+    };
+
     const runner: ITransactionRunner<Meta> = {
       get: async (path, id): Promise<Meta['read'] | null> => {
-        const snap = ensureSnap(path);
-        const doc = snap.get(id);
-        const key = `${path}::${id}`;
-        if (!reads.has(key)) {
-          reads.set(key, doc ? doc.version : null);
-        }
+        const doc = snapRead(path, id);
         return (doc?.data ?? null) as Meta['read'] | null;
       },
       set: (path, id, data): void => {
-        this._writeOnto(ensureSnap(path), id, data);
-        touched.add(`${path}::${id}`);
-        touchedColls.add(path);
+        queue(path, id, { kind: 'set', data });
       },
       update: (path, id, partial): void => {
-        this._updateOnto(
-          ensureSnap(path),
-          id,
-          partial as Record<string, unknown>,
-        );
-        touched.add(`${path}::${id}`);
-        touchedColls.add(path);
+        queue(path, id, {
+          kind: 'update',
+          partial: partial as Record<string, unknown>,
+        });
       },
       delete: (path, id): void => {
-        ensureSnap(path).delete(id);
-        touched.add(`${path}::${id}`);
-        touchedColls.add(path);
+        queue(path, id, { kind: 'delete' });
       },
     };
     const result = await fn(runner);
-    // Validate read-set: re-check current versions in the live store.
-    for (const [key, expected] of reads) {
-      const sep = key.indexOf('::');
-      const path = key.slice(0, sep);
-      const id = key.slice(sep + 2);
+
+    // Wave 21 / EVID-076 FR-X1 — verify BOTH the read-set (legacy)
+    // and the write-set (new). Reads pin the version observed via
+    // tx.get; writes pin the version observed at first queue op for
+    // keys that were never read. A mismatch on either set throws
+    // TransactionConflictError before any delta is applied.
+    this._verifyVersions(reads);
+    this._verifyVersions(writeVersions);
+
+    // Wave 21 / EVID-076 FR-X1 — per-key merge commit.
+    this._applyDeltas(deltas, parseKey);
+
+    for (const key of deltas.keys()) {
+      const [path, id] = parseKey(key);
+      this._emitDoc(path, id);
+    }
+    for (const path of touchedColls) {
+      this._emitColl(path);
+    }
+    return result;
+  }
+
+  /**
+   * Re-verify every (`path::id` → version) entry against the current
+   * live store. Throws {@link TransactionConflictError} on the first
+   * mismatch. Used by both `runBatch` and `runTransaction` to enforce
+   * optimistic-concurrency at commit time.
+   *
+   * Wave 21 / EVID-076 FR-X1: covers blind-write hazards (writes
+   * without a prior `tx.get` of the same key) by treating the
+   * write-set's pre-commit version snapshot as an implicit read-set.
+   */
+  private _verifyVersions(versions: ReadonlyMap<string, number | null>): void {
+    for (const [key, expected] of versions) {
+      const [path, id] = parseKey(key);
       const current = this._coll(path).get(id);
       const currentVersion = current ? current.version : null;
       if (currentVersion !== expected) {
@@ -434,19 +580,28 @@ export class InMemoryStorageProvider<
         );
       }
     }
-    // Commit: swap snapshots into the live store.
-    for (const [path, snap] of snapshots) {
-      this._store.set(path, snap);
-    }
-    for (const key of touched) {
-      const sep = key.indexOf('::');
-      const path = key.slice(0, sep);
-      const id = key.slice(sep + 2);
-      this._emitDoc(path, id);
-    }
-    for (const path of touchedColls) {
-      this._emitColl(path);
-    }
-    return result;
   }
 }
+
+/**
+ * Encoded queue key — `${path}::${id}`. The encoding survives `path`
+ * values that themselves contain `::` because `parseKey` splits on the
+ * FIRST occurrence only. (No path value in practice contains `::`, but
+ * splitting on first occurrence is the cheapest defensive choice.)
+ */
+function parseKey(key: string): readonly [string, string] {
+  const sep = key.indexOf('::');
+  return [key.slice(0, sep), key.slice(sep + 2)] as const;
+}
+
+/**
+ * Queue entry inside a batch/transaction. The discriminant tells the
+ * commit phase which write to apply on the per-key merge pass.
+ */
+type DeltaOp =
+  | { readonly kind: 'set'; readonly data: unknown }
+  | {
+      readonly kind: 'update';
+      readonly partial: Record<string, unknown>;
+    }
+  | { readonly kind: 'delete' };
