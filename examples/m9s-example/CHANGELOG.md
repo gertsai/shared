@@ -1,5 +1,17 @@
 # @gertsai-examples/m9s-example
 
+## 0.0.19
+
+### Patch Changes
+
+- Updated dependencies [f219b2c]
+  - @gertsai/session@2.0.1
+  - @gertsai/runtime-context@4.0.1
+  - @gertsai/tenant-resolver@2.0.1
+  - @gertsai/entity-audit@0.2.1
+  - @gertsai/entity-storage@4.0.0
+  - @gertsai/pg-client@3.0.0
+
 ## 0.0.18
 
 ### Patch Changes
