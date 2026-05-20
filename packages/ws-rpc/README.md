@@ -192,6 +192,55 @@ export type {
 surfaces a `ConnectionError`. Call `client.connect()` again to reset the counter — or use
 `ReconnectStrategy` standalone for any other reconnect loop.
 
+## Trust model
+
+> Wave 22 — documents EVID-076 CP-3 (deferred from Wave 21).
+
+`@gertsai/ws-rpc` is a **mutually-trusting client/server** primitive. Its threat model
+assumes:
+
+1. **The server is trusted to send well-formed messages.** The client validates that incoming
+   frames are JSON, that responses correlate to outstanding requests via `id`, and that
+   subscription patterns it ITSELF declared are honored. It does NOT validate the *payload
+   shape* of `result` / `params` against a schema — that's the consumer's responsibility
+   (use `typia`, `zod`, or a hand-written guard at the application layer).
+
+2. **A hostile server CAN attempt to DoS the client.** Mitigations as of Wave 21 (EVID-077):
+   - **Subscription patterns** — `subscribe()` rejects topic strings with more than
+     `MAX_DOUBLE_STAR_SEGMENTS` (default `3`) `**` wildcards or `MAX_TOPIC_SEGMENTS`
+     (default `64`) segments. Recursive `wildcardMatch` is capped at depth `100`. Throws
+     `InvalidSubscriptionPatternError` at subscribe time so the bad pattern never enters
+     the dispatch path.
+   - **Message size** — `maxMessageSize` (default `1MB`) bounds per-frame ingest. Oversized
+     frames trigger a `ConnectionError` and the client closes the socket.
+   - **Pending requests** — `maxPendingRequests` (default `1000`) bounds the outstanding
+     correlation table. Excess `call()`s fail-fast with `BackpressureError`.
+
+3. **There is NO per-method rate limit on the client side.** If you proxy a public
+   front-end through ws-rpc, layer a rate limiter (e.g. `@gertsai/api-rlr`) at the
+   JSON-RPC handler BEFORE calling into ws-rpc; do not rely on the transport.
+
+4. **There is NO backpressure signal towards the server.** If the server floods
+   subscriptions faster than the consumer's `subscribe` callback drains, the EventEmitter
+   queue grows unboundedly. Callbacks should be O(1) and offload heavy work to a separate
+   queue. A future Wave may add explicit `pause()` / `resume()` semantics with credit-based
+   flow control; not today.
+
+5. **Reconnect is best-effort.** After `maxAttempts` exhausted, the client surfaces
+   `ConnectionError` and stays disconnected until the application calls `connect()` again.
+   There is no out-of-band notification ("server is down forever") — that's the
+   application's job to surface to the user.
+
+6. **Heartbeat is liveness, not auth.** WebSocket protocol-level `ping`/`pong` (Node, since
+   Wave 21) or app-level heartbeat messages (browser) detect dead sockets; they do NOT
+   validate that the peer is still authenticated. Use a token-refresh interceptor at the
+   JSON-RPC handler layer for that.
+
+**Threats explicitly NOT in scope**: (a) the server reading client memory via crafted
+responses (mitigated by JSON parser + JS sandbox); (b) the server escalating client
+privileges (the client decides what to send — server can't elevate); (c) the server
+poisoning client storage (ws-rpc itself stores nothing).
+
 ## Status
 
 **v0.1.0 — pre-1.0, stable surface.** Tier 1: zero internal deps, only `eventemitter3`
