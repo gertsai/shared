@@ -104,7 +104,6 @@
     "helmet": "^6.2.0",
     "lodash.forin": "^4.4.0",
     "lodash.merge": "^4.6.2",
-    "oauth2-server": "^3.1.1",
     "openapi-merge": "^1.3.3",
     "typia": "^9.7.0"
   },
@@ -131,7 +130,6 @@
     "@types/bunyan": "^1.8.11",
     "@types/lodash.forin": "^4.4.9",
     "@types/lodash.merge": "^4.6.9",
-    "@types/oauth2-server": "^3.0.18",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^3.2.4"
   }

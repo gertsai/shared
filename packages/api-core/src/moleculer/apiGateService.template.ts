@@ -73,10 +73,10 @@ function parseCorsOrigins(raw: string): string | string[] {
   return list.length === 1 ? (list[0] as string) : list;
 }
 
-// import TestService from './mixins/test.mixin';
-import { OAuthError } from '../lib/oauth';
-
-import { MX } from './oauth.mixin';
+// Wave 16.A — the legacy OAuth module + MX() mixin were removed. The
+// `disableAuth` flag in `OrchestraApiGateOptions` is now a no-op kept
+// only for type-shape backward compatibility; consumers wanting auth
+// mount their own Express-style middleware via `settings.use`.
 import type { OrchestraApiGateOptions, OrchestraApiRouteSchema } from './types';
 
 /**
@@ -290,15 +290,6 @@ export const createApiService = (
           message: err.message,
         },
       );
-    } else if (err instanceof OAuthError) {
-      response = new OrchestraApiResponse(
-        ResponseCode[err.name.toUpperCase() as keyof typeof ResponseCode] ??
-          ResponseCode.INTERNAL_ERROR,
-        (err as OAuthError & { data?: unknown }).data ?? {},
-        {
-          message: err.message,
-        },
-      );
     } else if (
       // Duck typing for AuthenticationError/AuthorizationError from external auth middleware.
       // These have statusCode: 401 or 403, and type: 'AUTHENTICATION_ERROR' | 'AUTHORIZATION_ERROR'
@@ -340,8 +331,12 @@ export const createApiService = (
     return sendResponse(res, response, true, req);
   };
 
-  // Conditionally include OAuth mixin
-  const mixins = options.disableAuth ? [MoleculerWebMixin] : [MoleculerWebMixin, MX({})];
+  // Wave 16.A — legacy OAuth mixin removed. The `disableAuth` field on
+  // `OrchestraApiGateOptions` is preserved for back-compat and is now a
+  // no-op (the only mixin we ever default-mounted was MX(), so dropping
+  // it makes the flag meaningless). Consumers mount their own auth via
+  // `settings.use`.
+  const mixins = [MoleculerWebMixin];
 
   return merge(
     {

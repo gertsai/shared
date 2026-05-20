@@ -125,8 +125,11 @@ export function createDocumentsApiService() {
   return createApiService(
     {
       name: 'api',
-      // OAuth mixin is not needed for the example; disabling it also frees
-      // us from configuring an OAuth model.
+      // Wave 16.A — `disableAuth` is preserved on `OrchestraApiGateOptions`
+      // for type-shape back-compat but is now a no-op (the legacy
+      // `MX()` OAuth mixin was deleted). Auth middleware (if any)
+      // belongs in `settings.use`. We keep the field set explicitly here
+      // so the call site stays readable when grepping for "auth" intent.
       disableAuth: true,
 
       settings: {
