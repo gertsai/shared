@@ -1,4 +1,4 @@
-# @gertsai/otel
+# @gertsai/api-pubsub
 
 ## 0.2.0
 
@@ -51,11 +51,3 @@
   **After Wave 15.A+B+C**: api-core surfaces cleaned, three new packages give consumers granular dependency control. v1.0.0 prep stronger. Total ~5.5d effort delivered.
 
   Refs: PRD-052, EVID-067 (Wave 15 audit), EVID-068 (15.A), EVID-069 (15.B), SPEC-020 (selective worker-mode from 15.B).
-
-## 0.1.0
-
-### Minor Changes
-
-- 23d088a: Initial release of `@gertsai/otel` providing OpenTelemetry SDK setup with lazy peer-deps + `@gertsai/otel/moleculer` subpath with Moleculer broker tracing integration. Per PRD-001 FR-018 + ADR-004 (renamed from @gertsai/observe).
-
-_Initial release pending._

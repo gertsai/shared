@@ -1,6 +1,6 @@
 {
   "name": "@gertsai/api-queue",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Tier-2 BullMQ queue/worker lifecycle for @gertsai/api-core — registry + Moleculer service wiring + selective worker-mode (API Gateway vs Worker Node deployment). Per PRD-051 / EVID-067 §15.B.",
   "license": "Apache-2.0",
   "type": "module",

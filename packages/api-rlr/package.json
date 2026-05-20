@@ -1,6 +1,6 @@
 {
   "name": "@gertsai/api-rlr",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Production-grade rate limit middleware for Moleculer.js APIs — Redis (sliding-window + GCRA via Lua scripts), PostgreSQL (database-agnostic via PgClient interface), and in-memory adapters",
   "engines": {
     "node": ">=22"

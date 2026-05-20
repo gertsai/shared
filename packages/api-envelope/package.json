@@ -1,6 +1,6 @@
 {
   "name": "@gertsai/api-envelope",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Browser-safe RFC-030 envelope shared kernel — GertsResponse, GertsErrorResponse, GertsListResponse + response-wrapper + type-guards (Tier-1, no Moleculer runtime deps)",
   "license": "Apache-2.0",
   "type": "module",
