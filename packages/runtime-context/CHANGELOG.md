@@ -1,5 +1,12 @@
 # @gertsai/runtime-context
 
+## 4.0.0
+
+### Patch Changes
+
+- Updated dependencies [391310d]
+  - @gertsai/session-guard@2.1.0
+
 ## 3.0.0
 
 ### Minor Changes
