@@ -40,9 +40,11 @@ If a Gerts service speaks HTTP, it speaks through this package.
   was removed in Wave 16.A — mount your own auth via `settings.use`.)
 - **OpenAPI merge** — aggregates per-service OpenAPI v3.1 documents across the
   cluster via `openapi-merge`, exposed at `/schema.json` and `/schema.local.json`.
-- **Envelope + type guards** — RFC-030 `GertsResponse` / `GertsErrorResponse` /
-  `GertsListResponse` types, response/error wrappers, cursor pagination,
-  and tenant-context guards (`SEC-002` validation included).
+- **Envelope + type guards** — RFC-030 `GertsResponse` / `GertsListResponse`
+  types, response/error wrappers, cursor pagination, and tenant-context guards
+  (`SEC-002` validation included). Outbound errors use canonical RFC 9457
+  `ProblemDetails` from `@gertsai/errors/http` per ADR-006 §A1.5 (Wave 14.6 /
+  PRD-054 retired the legacy `GertsErrorResponse` envelope).
 - **Diagnostics** — pluggable startup-check registry with a pretty-box renderer,
   so services fail loudly with actionable output instead of cryptic stack traces.
 
@@ -130,7 +132,7 @@ field on the source error — handy for wrapping domain errors (e.g.
 | `ResponseCode` + `responseMetadata` | Hierarchical enum (`401/02/token_expired`); HTTP code + retryable flag from one source     |
 | `OrchestraApiResponse`           | Typed response envelope class consumed by the API gateway                                     |
 | `ApiController`                  | Typed actions / BullMQ queues / Pub/Sub subscriptions → Moleculer `ServiceSchema`             |
-| Envelope (RFC-030)               | `GertsResponse`, `GertsErrorResponse`, `GertsListResponse` + validators, type guards          |
+| Envelope (RFC-030)               | `GertsResponse`, `GertsListResponse` + validators, type guards (errors → RFC 9457 `ProblemDetails`) |
 | Response wrapper                 | `wrapSuccessResponse`, `wrapErrorResponse`, `buildResponsePayload`, `wantsLegacyFormat`       |
 | Type guards                      | `isOrchestraInfo`, `extractTenantId`, `extractTraceId`, `validateTenantIdFormat` (SEC-002)    |
 | `createApiService`               | Moleculer Web gateway template with auth-error → `ResponseCode` mapping                       |
@@ -166,11 +168,11 @@ import {
 ```ts
 import {
   OrchestraApiResponse,
-  type GertsResponse, type GertsErrorResponse, type GertsListResponse,
+  type GertsResponse, type GertsListResponse,
   type GertsAnyResponse, type UsageInfo, type PaginationInfo,
-  createGertsResponse, createGertsError, createGertsListResponse,
+  createGertsResponse, createGertsListResponse,
   validateGertsResponse, isGertsResponse, isSuccessResponse,
-  isErrorResponse, isListResponse,
+  isListResponse,
   wrapSuccessResponse, wrapErrorResponse, buildResponsePayload, wantsLegacyFormat,
   extractTenantId, extractTraceId, extractUsageInfo, extractPackageInfo,
   validateTenantIdFormat, TENANT_ID_REGEX,

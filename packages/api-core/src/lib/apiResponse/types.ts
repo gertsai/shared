@@ -92,14 +92,17 @@ export enum ResponseCode {
 }
 
 // ============================================================================
-// RFC-030 Hybrid: Processing Stage (from GertsErrorResponse)
+// Processing Stage (taxonomy member of the canonical ProblemDetails envelope)
 // ============================================================================
 
 /**
  * Processing stage where error occurred.
- * Helps identify which component failed in the pipeline.
- *
- * @see apps/pipeline/docs/RFC-030-UNIFIED-API-PROTOCOL.md
+ * Helps identify which component failed in the pipeline. Per Wave 14.6
+ * (PRD-054 / EVID-057 §Error Envelope — FINAL) this value lands in
+ * `ProblemDetails.details.stage` rather than the now-removed RFC-030
+ * `GertsErrorResponse.error.stage` field. The `GertsErrorResponse`
+ * envelope itself has been retired in favour of RFC 9457 `ProblemDetails`
+ * from `@gertsai/errors/http` (canonical per ADR-006 §A1.5).
  */
 export type GertsProcessingStage =
   | 'routing'

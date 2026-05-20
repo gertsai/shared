@@ -7,12 +7,20 @@
  * exposed at `@gertsai/api-core/lib/envelope/*`, including the deliberate
  * non-re-exports below.
  *
+ * Wave 14.6 (PRD-054 / EVID-057 §Error Envelope — FINAL): the legacy
+ * RFC-030 `GertsErrorResponse` envelope, `createGertsError`, the four
+ * typia validators (`validateGertsError`, `validateGertsErrorEquals`,
+ * `assertGertsError`, `isGertsError`), `toProblemDetails`, the local
+ * `ProblemDetailsLike` interface, the convenience creators
+ * (`validationError` etc.), and the `isErrorResponse` type guard have
+ * been REMOVED. Canonical error wire format is now
+ * `ProblemDetails` from `@gertsai/errors/http` (build via
+ * `appErrorToHttpResponse(err)`).
+ *
  * @see @gertsai/api-envelope
  *
  * NOTE: Some names are excluded to avoid collisions with api-core's own
  * exports:
- *   - validationError, notFoundError, rateLimitError, internalError, authError
- *     (api-core has its own versions in ./error/helpers.ts returning APIError)
  *   - GertsProcessingStage (already in ./apiResponse/types.ts)
  * These are still available via direct import from `@gertsai/api-envelope`.
  *
@@ -36,26 +44,17 @@ export {
   isSuccessResponse,
 } from '@gertsai/api-envelope';
 
-// --- Error types (excluding colliding convenience creators) ---
+// --- Error taxonomy support (wire format is now `ProblemDetails`
+//     from `@gertsai/errors/http`) ---
 export {
   type GertsErrorType,
   type GertsErrorCode,
   // GertsProcessingStage excluded — already in apiResponse/types.ts
-  type GertsErrorDetail,
-  type GertsErrorResponse,
   ERROR_STATUS_CODES,
   RETRYABLE_ERROR_CODES,
   generateRequestId,
-  createGertsError,
   getStatusCode,
   isRetryable,
-  // Convenience creators excluded — collide with api-core error helpers:
-  // validationError, notFoundError, authError, rateLimitError, internalError
-  validateGertsError,
-  validateGertsErrorEquals,
-  assertGertsError,
-  isGertsError,
-  isErrorResponse,
 } from '@gertsai/api-envelope';
 
 // --- List types ---

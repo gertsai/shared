@@ -149,16 +149,19 @@ export const createApiService = (
 
     // Check if it's an error response
     if (!info.success) {
-      const gertsError = wrapErrorResponse({
+      // Wave 14.6 (PRD-054 / EVID-057 §Error Envelope — FINAL): `wrapErrorResponse`
+      // now returns canonical RFC 9457 `ProblemDetails` (per ADR-006 §A1.5) with
+      // a `_legacy` sidecar. The X-Request-ID lives in `_legacy.request_id`.
+      const problem = wrapErrorResponse({
         ctx: res.$ctx,
         orchResponse: toBaseResponse(orchResponse),
         ...(req?.url !== undefined && { path: req.url }),
       });
 
       const payload = {
-        ...gertsError,
+        ...problem,
         // Keep _legacy for debugging but don't expose by default
-        ...(process.env.NODE_ENV === 'development' ? { _legacy: gertsError._legacy } : {}),
+        ...(process.env.NODE_ENV === 'development' ? { _legacy: problem._legacy } : {}),
       };
 
       // Remove internal _legacy field
@@ -168,8 +171,13 @@ export const createApiService = (
         return payload;
       }
 
-      // Add X-Request-ID header
-      res.setHeader('X-Request-ID', gertsError.request_id);
+      // Add X-Request-ID header (read from `_legacy` sidecar; ProblemDetails
+      // proper does not expose request_id at the top level — it lands in
+      // `details.requestId`).
+      const requestId = problem._legacy.request_id;
+      if (typeof requestId === 'string') {
+        res.setHeader('X-Request-ID', requestId);
+      }
 
       return res.writeHead(info.http_code).end(JSON.stringify(payload));
     }

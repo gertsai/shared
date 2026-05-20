@@ -1,7 +1,7 @@
 {
   "name": "@gertsai/api-envelope",
   "version": "0.2.0",
-  "description": "Browser-safe RFC-030 envelope shared kernel — GertsResponse, GertsErrorResponse, GertsListResponse + response-wrapper + type-guards (Tier-1, no Moleculer runtime deps)",
+  "description": "Browser-safe RFC-030 envelope shared kernel — GertsResponse, GertsListResponse + response-wrapper (errors → RFC 9457 ProblemDetails from @gertsai/errors/http) + type-guards (Tier-1, no Moleculer runtime deps)",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -35,6 +35,7 @@
     "lint": "eslint . --max-warnings 0"
   },
   "dependencies": {
+    "@gertsai/errors": "workspace:*",
     "@standard-schema/spec": "^1.1.0",
     "typia": "^9.7.0"
   },

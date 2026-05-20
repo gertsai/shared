@@ -7,14 +7,21 @@
  * @packageDocumentation
  */
 
+import type { ProblemDetails } from '@gertsai/errors/http';
 import type {
   GertsResponse,
-  GertsErrorResponse,
   GertsObjectType,
   GertsErrorType,
   GertsErrorCode,
+  GertsProcessingStage,
 } from './types';
-import { generateId, generateRequestId, RETRYABLE_ERROR_CODES } from './types';
+import {
+  ERROR_STATUS_CODES,
+  GERTS_TYPE_TO_PROBLEM_URN,
+  RETRYABLE_ERROR_CODES,
+  generateId,
+  generateRequestId,
+} from './types';
 
 // Wave 15.A (PRD-050 / EVID-067 §15.A): `OrchestraApiResponse` / `ResponseCode`
 // were originally imported as type-only from `../apiResponse/*` inside
@@ -287,7 +294,7 @@ export function wrapSuccessResponse<T>(
 }
 
 // ============================================================================
-// Error Transformation
+// Error Transformation (RFC 9457 ProblemDetails per ADR-006 §A1.5)
 // ============================================================================
 
 export interface WrapErrorOptions {
@@ -306,14 +313,24 @@ export interface WrapErrorOptions {
 }
 
 /**
- * Wrap Orchestra error in GertsErrorResponse format.
+ * Wrap Orchestra error in canonical RFC 9457 `ProblemDetails` format.
+ *
+ * Wave 14.6 (PRD-054 / EVID-057 §Error Envelope — FINAL): the legacy
+ * RFC-030 `GertsErrorResponse` envelope has been retired. This builder
+ * now produces an RFC 9457 `ProblemDetails` body whose taxonomy-specific
+ * extras (`code`, `param`, `stage`, `retryable`, `retry_after`,
+ * `request_id`, `tenant_id`, `timestamp`) live in `details` per RFC 9457
+ * §3.2 ("extension members") and ADR-006 §A1.5.
+ *
+ * The returned shape is intentionally extended with a `_legacy` sidecar
+ * for the upstream apiGate adapter — the adapter strips it before write.
  *
  * @param options - Error wrap options
- * @returns GertsErrorResponse with legacy fields
+ * @returns ProblemDetails with `_legacy` sidecar
  */
 export function wrapErrorResponse(
   options: WrapErrorOptions,
-): GertsErrorResponse & { _legacy: Record<string, unknown> } {
+): ProblemDetails & { _legacy: Record<string, unknown> } {
   const { ctx, orchResponse, error, path } = options;
 
   // Extract info using type guard for safe access
@@ -321,13 +338,13 @@ export function wrapErrorResponse(
 
   // Map response code to error type
   const codeStr = String(info.code || '500/internal_error');
-  const errorType =
+  const errorType: GertsErrorType =
     RESPONSE_CODE_TO_ERROR_TYPE[codeStr] ||
     RESPONSE_CODE_TO_ERROR_TYPE[codeStr.split('/').slice(0, 2).join('/')] ||
     'server_error';
 
   // Map to error code
-  const errorCode = RESPONSE_CODE_TO_ERROR_CODE[codeStr] || 'INTERNAL_ERROR';
+  const errorCode: GertsErrorCode = RESPONSE_CODE_TO_ERROR_CODE[codeStr] || 'INTERNAL_ERROR';
 
   // Determine if retryable
   const retryable = RETRYABLE_ERROR_CODES.has(errorCode);
@@ -340,31 +357,37 @@ export function wrapErrorResponse(
   const requestId = ctx ? extractRequestId(ctx.meta) : undefined;
 
   // Detect stage
-  const stage = detectStageFromPath(path);
+  const stage: GertsProcessingStage | undefined = detectStageFromPath(path);
 
-  // Build GertsErrorResponse
-  type ErrorDetail = GertsErrorResponse['error'];
-  const errorDetail: {
-    -readonly [K in keyof ErrorDetail]: ErrorDetail[K];
-  } = {
-    message: info.message || error?.message || 'An error occurred',
+  // Build ProblemDetails.details — RFC 9457 §3.2 extension members
+  const message = info.message || error?.message || 'An error occurred';
+  const status = ERROR_STATUS_CODES[errorType] ?? 500;
+  const finalRequestId = requestId || generateRequestId();
+
+  const details: Record<string, unknown> = {
     type: errorType,
     code: errorCode,
     retryable,
+    requestId: finalRequestId,
+    timestamp: new Date().toISOString(),
   };
   if (errorCode === 'RATE_LIMIT_EXCEEDED') {
-    errorDetail.retry_after = 60 as number & { readonly __type: 'uint32' };
+    details.retryAfter = 60;
   }
   if (stage !== undefined) {
-    errorDetail.stage = stage as Exclude<ErrorDetail['stage'], undefined>;
+    details.stage = stage;
   }
-  const gertsError: GertsErrorResponse = {
-    success: false,
-    error: errorDetail,
-    request_id: requestId || generateRequestId(),
-    timestamp: new Date().toISOString() as GertsErrorResponse['timestamp'],
-    ...(tenantId.length > 0 && { tenant_id: tenantId }),
-    ...(traceId !== undefined && { trace_id: traceId }),
+  if (tenantId.length > 0) {
+    details.tenantId = tenantId;
+  }
+
+  const problem: ProblemDetails = {
+    type: GERTS_TYPE_TO_PROBLEM_URN[errorType] ?? 'urn:gertsai:errors:server',
+    title: message,
+    status,
+    detail: message,
+    details,
+    ...(traceId !== undefined ? { correlationId: traceId } : {}),
   };
 
   // Legacy fields for backward compatibility (ctx may be undefined in early middleware errors)
@@ -373,10 +396,11 @@ export function wrapErrorResponse(
     code: info.code,
     http_code: info.http_code,
     errors: info.errors,
+    request_id: finalRequestId,
   };
 
   return {
-    ...gertsError,
+    ...problem,
     _legacy: legacy,
   };
 }
@@ -384,7 +408,7 @@ export function wrapErrorResponse(
 /**
  * Detect processing stage from request path.
  */
-function detectStageFromPath(path?: string): string | undefined {
+function detectStageFromPath(path?: string): GertsProcessingStage | undefined {
   if (!path) return undefined;
   if (path.includes('/query')) return 'retrieval';
   if (path.includes('/ingest')) return 'extraction';

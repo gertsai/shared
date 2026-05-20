@@ -182,7 +182,9 @@ export interface GertsResponse<T> {
 
   /**
    * Success indicator. Always `true` for successful responses.
-   * For errors, use `GertsErrorResponse` instead.
+   * For errors, the canonical wire format is RFC 9457 `ProblemDetails`
+   * from `@gertsai/errors/http` (built via `appErrorToHttpResponse`)
+   * per ADR-006 §A1.5 — see Wave 14.6 (PRD-054).
    */
   success: true;
 
