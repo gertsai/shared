@@ -35,7 +35,13 @@ export type OrchestraApiGateOptions = {
     authenticate?: OrchestraApiAutHZ;
   };
   /**
-   * If true, disable OAuth mixin (for internal services without auth)
+   * Wave 16.A — kept for type-shape back-compat; the legacy `MX()` OAuth
+   * mixin this flag used to toggle was removed alongside the rest of the
+   * deprecated OAuth module. Setting this field has no runtime effect;
+   * `createApiService` no longer mounts an auth mixin by default. Mount
+   * your own Express-style auth via `settings.use`.
+   *
+   * @deprecated No-op since Wave 16.A. Will be removed at v1.0.0.
    */
   disableAuth?: boolean;
   /**

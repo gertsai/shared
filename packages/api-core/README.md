@@ -35,8 +35,9 @@ If a Gerts service speaks HTTP, it speaks through this package.
   and Pub/Sub subscriptions; auto-generates Moleculer `ServiceSchema`, wires Typia
   validators, coerces query params, and exposes a typed `ServiceContext`.
 - **Moleculer mixins & templates** — drop-in `createApiService`,
-  `createOpenApiService`, `createMoleculerConfig`, plus `MX()` OAuth mixin and an
-  auth-error → `ResponseCode` mapper for the API gateway.
+  `createOpenApiService`, `createMoleculerConfig`, plus an auth-error →
+  `ResponseCode` mapper for the API gateway. (The legacy `MX()` OAuth mixin
+  was removed in Wave 16.A — mount your own auth via `settings.use`.)
 - **OpenAPI merge** — aggregates per-service OpenAPI v3.1 documents across the
   cluster via `openapi-merge`, exposed at `/schema.json` and `/schema.local.json`.
 - **Envelope + type guards** — RFC-030 `GertsResponse` / `GertsErrorResponse` /
@@ -135,7 +136,6 @@ field on the source error — handy for wrapping domain errors (e.g.
 | `createApiService`               | Moleculer Web gateway template with auth-error → `ResponseCode` mapping                       |
 | `createOpenApiService`           | Aggregates OpenAPI v3.1 across the cluster via `openapi-merge`                                |
 | `createMoleculerConfig`          | Broker config with NATS/Redis transports, Bunyan + Google Cloud logging, healthcheck         |
-| `MX()` OAuth mixin               | Legacy OAuth2 server mixin (deprecated — prefer a dedicated auth package)                     |
 | `IP utils`                       | `parseForwarded`, `extractClientIp`, IPv4/IPv6 helpers used by the gateway                    |
 | Typia params                     | `getValidator`, `isTypiaParamsWithSchema`, `TypiaValidator` for typed action parameters       |
 | Coercion                         | `smartCoerce`, `coerceQueryParams` — string → typed primitive for query strings               |
@@ -183,7 +183,7 @@ import {
 import {
   ApiController, type ServiceContextBase, type ActionHandler,
   createApiService, createOpenApiService, createMoleculerConfig,
-  mapAuthErrorToResponseCode, MX,
+  mapAuthErrorToResponseCode,
 } from '@gertsai/api-core';
 ```
 
@@ -204,8 +204,8 @@ import {
 ## Moleculer integration
 
 `createApiService` produces a Moleculer Web gateway `ServiceSchema` that wraps
-every action response in `OrchestraApiResponse`, maps thrown `APIError` /
-`OAuthError` instances to the right HTTP status, and (when `USE_GERTS_ENVELOPE=1`
+every action response in `OrchestraApiResponse`, maps thrown `APIError`
+instances to the right HTTP status, and (when `USE_GERTS_ENVELOPE=1`
 or `options.useGertsEnvelope`) emits the RFC-030 `GertsResponse` envelope. Auth
 middleware errors flow through `mapAuthErrorToResponseCode` so `401/KEY_EXPIRED`,
 `401/UNAUTHORIZED`, and `403/INSUFFICIENT_SCOPES` land on the correct
@@ -242,8 +242,12 @@ await broker.start();
 - **Peer deps**: `moleculer ^0.14.35`, `moleculer-web ^0.10.6`,
   `moleculer-repl ^0.7.3`, `ioredis ^5.8.0`, `nats ^2.13.1`.
 - **Private** workspace package — not published to npm.
-- The `MX()` OAuth mixin (`./lib/oauth`) is **deprecated**; new services should
-  use a dedicated auth package.
+- **Wave 16.A**: the legacy `MX()` OAuth mixin and the entire
+  `./lib/oauth` module were removed. `apiGateService.template.ts` no
+  longer mounts any auth mixin by default — consumers wanting auth must
+  mount their own Express-style middleware via `settings.use`. The
+  `OrchestraApiGateOptions.disableAuth` field is preserved as a no-op
+  for type-shape back-compat (will be removed at v1.0.0).
 - RFC-030 envelope output is opt-in via `USE_GERTS_ENVELOPE=true` or
   `createApiService({ useGertsEnvelope: true })`; legacy
   `OrchestraApiResponse` is the default.
