@@ -248,11 +248,18 @@ export async function canExecuteQuery(
 
 /**
  * Batch check multiple permissions.
+ *
+ * Wave 24 / PRD-061 FR-Y1 (closes EVID-078 H-1): accepts the same
+ * `opts?: CheckPermissionOptions` escape hatch as {@link checkPermission}
+ * so multi-tenant consumers can thread their per-tenant FGA client
+ * through. When `opts.client` is omitted, falls through to the default
+ * singleton — preserves pre-Wave-24 behaviour for single-store callers.
  */
 export async function batchCheckPermissions(
   requests: FgaCheckRequest[],
+  opts?: CheckPermissionOptions,
 ): Promise<Array<{ request: FgaCheckRequest; allowed: boolean }>> {
-  const client = getFgaClient();
+  const client = opts?.client ?? getFgaClient();
   return client.batchCheck(requests);
 }
 
@@ -273,8 +280,9 @@ export async function listAccessibleResources(
   userId: string,
   relation: string,
   resourceType: FgaResourceType,
+  opts?: CheckPermissionOptions,
 ): Promise<string[]> {
-  const client = getFgaClient();
+  const client = opts?.client ?? getFgaClient();
   const objects = await client.listObjects({
     userId,
     relation,
@@ -333,8 +341,9 @@ export async function listUsersWithAccess(
   resourceType: FgaResourceType,
   resourceId: string,
   relation: string,
+  opts?: CheckPermissionOptions,
 ): Promise<string[]> {
-  const client = getFgaClient();
+  const client = opts?.client ?? getFgaClient();
   const users = await client.listUsers({
     resourceType,
     resourceId,
@@ -424,8 +433,11 @@ export async function getAccessSummary(
  * });
  * ```
  */
-export async function expandPermission(request: FgaExpandRequest): Promise<FgaExpandNode> {
-  const client = getFgaClient();
+export async function expandPermission(
+  request: FgaExpandRequest,
+  opts?: CheckPermissionOptions,
+): Promise<FgaExpandNode> {
+  const client = opts?.client ?? getFgaClient();
   return client.expand(request);
 }
 
@@ -444,13 +456,16 @@ export async function expandPermission(request: FgaExpandRequest): Promise<FgaEx
  * // → { allowed: true, reason: 'direct', paths: [...] }
  * ```
  */
-export async function explainAccess(request: FgaCheckRequest): Promise<{
+export async function explainAccess(
+  request: FgaCheckRequest,
+  opts?: CheckPermissionOptions,
+): Promise<{
   allowed: boolean;
   reason: 'direct' | 'inherited' | 'role' | 'team' | 'denied' | 'no_relation';
   paths: string[][];
   expandTree?: FgaExpandNode;
 }> {
-  const client = getFgaClient();
+  const client = opts?.client ?? getFgaClient();
 
   // First check if allowed
   const checkResult = await client.check(request);

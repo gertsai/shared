@@ -251,6 +251,37 @@ describe('RestRequestManager', () => {
     });
   });
 
+  // Wave 24 / PRD-061 FR-Y4 (closes EVID-078 MED-4) — rate-limit
+  // boundary is honoured before circuit-breaker preflight. The PRD's
+  // recommended order is rate-limit-first so the limiter's ceiling
+  // governs even closed-circuit traffic (and conversely: a tripped
+  // rate-limit short-circuits before any breaker probe / state
+  // mutation can happen). This test pins the current order.
+  describe('FR-Y4 — rate-limit ordered before circuit-breaker preflight', () => {
+    it('rate-limit fires first when both rate-limit AND circuit-open apply', async () => {
+      const mgr = new RestRequestManager({
+        retry: { maxAttempts: 1, retryable: () => false },
+        rateLimit: { tokensPerSecond: 1, burst: 1 },
+        circuitBreaker: { failureThreshold: 1, resetTimeoutMs: 60_000 },
+      });
+      // Drive the circuit OPEN for the target host.
+      httpCallerMock.mockResolvedValueOnce(
+        mockResponse({ status: 500, ok: false, body: 'boom' }),
+      );
+      await expect(mgr.get('https://hot.example.com/a')).rejects.toBeInstanceOf(InternalError);
+      // First call also consumed the only available rate-limit token.
+
+      // Next call: rate-limit empty AND circuit open. Expect
+      // `RateLimitedError` (rate-limit checked first), not
+      // `UpstreamFailureError`.
+      await expect(mgr.get('https://hot.example.com/b')).rejects.toBeInstanceOf(RateLimitedError);
+      // And `httpCaller` was not invoked a second time.
+      expect(httpCallerMock).toHaveBeenCalledTimes(1);
+      // Stats: rate-limited counter incremented.
+      expect(mgr.getStats().rateLimitedRequests).toBe(1);
+    });
+  });
+
   describe('logger (PRD-034 FR-002 — local `RestRequestLogger` shape)', () => {
     it('accepts a structural logger with only {debug,warn,error}', async () => {
       const calls: Array<{ level: string; msg: string }> = [];

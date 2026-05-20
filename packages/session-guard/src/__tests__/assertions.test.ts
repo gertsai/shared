@@ -12,6 +12,7 @@ import {
 import {
   AuthenticationRequiredError,
   DataAccessUuidMissingError,
+  NotImpersonatingError,
   OperatorTypeMismatchError,
   SessionDestroyedError,
   TenantScopeViolationError,
@@ -181,9 +182,35 @@ describe('assertImpersonating (Wave 12.D-fix FR-018)', () => {
     );
   });
 
-  it('throws plain Error when not impersonating (UUIDs equal)', () => {
+  it('throws NotImpersonatingError when not impersonating (UUIDs equal, EVID-078 MED-6)', () => {
     const session = makeSession({ operatorUuid: 'op-1' });
     // dataAccessUuid getter falls back to operatorUuid → equal.
+    expect(() => assertImpersonating(session)).toThrow(NotImpersonatingError);
+    // Message text preserved for backward compat with regex-based catches.
     expect(() => assertImpersonating(session)).toThrow(/not impersonating/);
+  });
+
+  it('NotImpersonatingError carries operatorUuid in details (EVID-078 MED-6)', () => {
+    const session = makeSession({ operatorUuid: 'op-1' });
+    try {
+      assertImpersonating(session);
+      expect.fail('should have thrown');
+    } catch (err) {
+      expect(err).toBeInstanceOf(NotImpersonatingError);
+      const not = err as NotImpersonatingError;
+      expect(not.details.operatorUuid).toBe('op-1');
+    }
+  });
+
+  it('NotImpersonatingError is NOT a DataAccessUuidMissingError (EVID-078 MED-6)', () => {
+    const session = makeSession({ operatorUuid: 'op-1' });
+    try {
+      assertImpersonating(session);
+      expect.fail('should have thrown');
+    } catch (err) {
+      // The equal-UUIDs case is semantically different from the empty-UUIDs
+      // case — consumers must be able to discriminate via instanceof.
+      expect(err).not.toBeInstanceOf(DataAccessUuidMissingError);
+    }
   });
 });

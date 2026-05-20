@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { ForbiddenError, UnauthorizedError } from '@gertsai/errors';
+import { ConflictError, ForbiddenError, UnauthorizedError } from '@gertsai/errors';
 
 /**
  * Re-exported from `@gertsai/errors` per ADR-010 Amendment 1 §A1.1
@@ -51,4 +51,21 @@ export class OperatorTypeMismatchError extends ForbiddenError<{
 export class TenantScopeViolationError extends ForbiddenError<{
   requested: string;
   sessionTenant: string;
+}> {}
+
+/**
+ * Thrown by {@link assertImpersonating} when both UUIDs are present and
+ * non-empty but equal — i.e. the session is *not* currently impersonating
+ * another identity. Distinct from {@link DataAccessUuidMissingError}
+ * (malformed / missing UUIDs) so callers can branch on the concrete kind.
+ *
+ * Wave 24 EVID-078 MED-6 closure: replaces the previous bare `Error` that
+ * fell through the AppError taxonomy mappers
+ * (`appErrorToHttpResponse` / `appErrorToGrpcStatus`) to a generic 500.
+ * Reuses {@link ConflictError} so wire-format mapping lands on HTTP 409 /
+ * gRPC `FAILED_PRECONDITION` — semantically "the session state is valid
+ * but not in the configuration the caller required".
+ */
+export class NotImpersonatingError extends ConflictError<{
+  operatorUuid: string;
 }> {}

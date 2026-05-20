@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AuthenticationRequiredError,
   DataAccessUuidMissingError,
+  NotImpersonatingError,
   OperatorTypeMismatchError,
   SessionDestroyedError,
   TenantScopeViolationError,
@@ -91,5 +92,40 @@ describe('SessionDestroyedError', () => {
     expect(err).toBeInstanceOf(ConflictError);
     expect(err.kind).toBe(ErrorKind.CONFLICT);
     expect(err.details.contextField).toBe('session');
+  });
+});
+
+describe('NotImpersonatingError (Wave 24 EVID-078 MED-6)', () => {
+  it('extends ConflictError + AppError + Error', () => {
+    const err = new NotImpersonatingError({
+      message: 'not impersonating',
+      details: { operatorUuid: 'op-1' },
+    });
+    expect(err).toBeInstanceOf(NotImpersonatingError);
+    expect(err).toBeInstanceOf(ConflictError);
+    expect(err).toBeInstanceOf(AppError);
+    expect(err).toBeInstanceOf(Error);
+  });
+
+  it('carries kind=CONFLICT + operatorUuid in details', () => {
+    const err = new NotImpersonatingError({
+      message: 'not impersonating',
+      details: { operatorUuid: 'op-1' },
+    });
+    expect(err.kind).toBe(ErrorKind.CONFLICT);
+    expect(err.details.operatorUuid).toBe('op-1');
+  });
+
+  it('is distinct from SessionDestroyedError (both CONFLICT but different details)', () => {
+    const notImpersonating = new NotImpersonatingError({
+      message: 'not impersonating',
+      details: { operatorUuid: 'op-1' },
+    });
+    const destroyed = new SessionDestroyedError({
+      message: 'destroyed',
+      details: { contextField: 'session' },
+    });
+    expect(notImpersonating).not.toBeInstanceOf(SessionDestroyedError);
+    expect(destroyed).not.toBeInstanceOf(NotImpersonatingError);
   });
 });

@@ -5,6 +5,7 @@ import type { OperatorType } from '@gertsai/session';
 import {
   AuthenticationRequiredError,
   DataAccessUuidMissingError,
+  NotImpersonatingError,
   OperatorTypeMismatchError,
   SessionDestroyedError,
   TenantScopeViolationError,
@@ -121,10 +122,16 @@ export function assertNotDestroyed(session: Session): void {
  * imperative code that wants a structured error when the UUIDs are
  * missing or when the session is not actually impersonating.
  *
+ * Wave 24 EVID-078 MED-6: the "UUIDs equal" branch now throws a typed
+ * {@link NotImpersonatingError} (extends `ConflictError`) instead of a
+ * bare `Error`, so consumers' HTTP / gRPC mappers translate the case
+ * deterministically (HTTP 409 / gRPC `FAILED_PRECONDITION`) rather than
+ * falling through to the generic 500 path.
+ *
  * @throws DataAccessUuidMissingError when `operatorUuid` or
  *   `dataAccessUuid` is empty / undefined.
- * @throws Error when both UUIDs are present but equal (no impersonation
- *   in progress) — distinguishable by message.
+ * @throws NotImpersonatingError when both UUIDs are present and equal
+ *   (no impersonation in progress).
  */
 export function assertImpersonating(session: Session): void {
   const operatorUuid = session.operatorUuid;
@@ -142,8 +149,10 @@ export function assertImpersonating(session: Session): void {
     });
   }
   if (operatorUuid === dataAccessUuid) {
-    throw new Error(
-      'Session is not impersonating: operatorUuid === dataAccessUuid',
-    );
+    throw new NotImpersonatingError({
+      message:
+        'Session is not impersonating: operatorUuid === dataAccessUuid',
+      details: { operatorUuid },
+    });
   }
 }

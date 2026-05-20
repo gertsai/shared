@@ -343,3 +343,87 @@ describe('Deny Layer Convenience Functions', () => {
     expect(ledger1).toBe(ledger2);
   });
 });
+
+// Wave 24 / PRD-061 FR-Y2 (closes EVID-078 H-2 — CWE-770)
+describe('InMemoryDenyLedger — LRU eviction (FR-Y2)', () => {
+  it('evicts the oldest entry when maxSize is exceeded', async () => {
+    const ledger = new InMemoryDenyLedger({ maxSize: 2 });
+    await ledger.deny({
+      userId: 'u1',
+      resourceType: 'project',
+      resourceId: 'p1',
+      relation: 'r',
+      reason: 'first',
+      deniedBy: 'admin',
+      deniedAt: new Date(),
+      expiresAt: null,
+    });
+    await ledger.deny({
+      userId: 'u2',
+      resourceType: 'project',
+      resourceId: 'p2',
+      relation: 'r',
+      reason: 'second',
+      deniedBy: 'admin',
+      deniedAt: new Date(),
+      expiresAt: null,
+    });
+    expect(ledger.size()).toBe(2);
+
+    // 3rd insert exceeds maxSize → oldest (u1/p1) evicted.
+    await ledger.deny({
+      userId: 'u3',
+      resourceType: 'project',
+      resourceId: 'p3',
+      relation: 'r',
+      reason: 'third',
+      deniedBy: 'admin',
+      deniedAt: new Date(),
+      expiresAt: null,
+    });
+    expect(ledger.size()).toBe(2);
+
+    // First entry is gone, second + third remain.
+    const first = await ledger.check({
+      userId: 'u1',
+      resourceType: 'project',
+      resourceId: 'p1',
+      relation: 'r',
+    });
+    expect(first.denied).toBe(false);
+
+    const second = await ledger.check({
+      userId: 'u2',
+      resourceType: 'project',
+      resourceId: 'p2',
+      relation: 'r',
+    });
+    expect(second.denied).toBe(true);
+
+    const third = await ledger.check({
+      userId: 'u3',
+      resourceType: 'project',
+      resourceId: 'p3',
+      relation: 'r',
+    });
+    expect(third.denied).toBe(true);
+  });
+
+  it('defaults to maxSize=10_000 (large enough for dev/test workloads)', async () => {
+    const ledger = new InMemoryDenyLedger();
+    // Insert 100 entries; should fit comfortably.
+    for (let i = 0; i < 100; i++) {
+      await ledger.deny({
+        userId: `u${i}`,
+        resourceType: 'project',
+        resourceId: `p${i}`,
+        relation: 'r',
+        reason: 'test',
+        deniedBy: 'admin',
+        deniedAt: new Date(),
+        expiresAt: null,
+      });
+    }
+    expect(ledger.size()).toBe(100);
+  });
+});

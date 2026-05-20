@@ -2,6 +2,7 @@
 export {
   AuthenticationRequiredError,
   DataAccessUuidMissingError,
+  NotImpersonatingError,
   OperatorTypeMismatchError,
   SessionDestroyedError,
   TenantScopeViolationError,

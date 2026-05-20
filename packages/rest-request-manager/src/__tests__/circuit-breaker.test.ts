@@ -43,6 +43,47 @@ describe('CircuitBreaker', () => {
     expect(cb.getOpensCount()).toBe(2);
   });
 
+  // Wave 24 / PRD-061 FR-Y3 (closes EVID-078 H-3) — half-open
+  // single-probe enforcement. Concurrent callers crossing the
+  // `resetTimeoutMs` boundary previously all transitioned to half-open
+  // and all passed `preflight`. Now: first caller admits the probe,
+  // rest throw `UpstreamFailureError`.
+  it('half-open admits exactly one probe; concurrent callers throw (FR-Y3)', async () => {
+    const cb = new CircuitBreaker({ failureThreshold: 1, resetTimeoutMs: 5 });
+    cb.recordFailure('h-probe');
+    expect(cb.getState('h-probe')).toBe('open');
+    await new Promise((r) => setTimeout(r, 10));
+
+    // First caller passes — single probe admitted.
+    expect(() => cb.preflight('h-probe')).not.toThrow();
+    expect(cb.getState('h-probe')).toBe('half-open');
+
+    // Concurrent callers in the same half-open window throw.
+    expect(() => cb.preflight('h-probe')).toThrowError(UpstreamFailureError);
+    expect(() => cb.preflight('h-probe')).toThrowError(UpstreamFailureError);
+
+    // Probe resolves with success — circuit closes, flag clears.
+    cb.recordSuccess('h-probe');
+    expect(cb.getState('h-probe')).toBe('closed');
+    // Closed → no more half-open guard; preflight is now a no-op.
+    expect(() => cb.preflight('h-probe')).not.toThrow();
+  });
+
+  it('half-open probe failure re-opens; next probe round honours single-probe', async () => {
+    const cb = new CircuitBreaker({ failureThreshold: 1, resetTimeoutMs: 5 });
+    cb.recordFailure('h-probe2');
+    await new Promise((r) => setTimeout(r, 10));
+    cb.preflight('h-probe2'); // admit probe
+    expect(cb.getState('h-probe2')).toBe('half-open');
+    cb.recordFailure('h-probe2'); // probe failed → re-open
+    expect(cb.getState('h-probe2')).toBe('open');
+    await new Promise((r) => setTimeout(r, 10));
+
+    // New probe round — single-probe semantic again.
+    expect(() => cb.preflight('h-probe2')).not.toThrow();
+    expect(() => cb.preflight('h-probe2')).toThrowError(UpstreamFailureError);
+  });
+
   it('LRU eviction: 1001st host insert evicts the least-recently-used entry', () => {
     const cb = new CircuitBreaker({ failureThreshold: 1, resetTimeoutMs: 1000, maxHosts: 1000 });
     for (let i = 0; i < 1000; i++) {

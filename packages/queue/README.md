@@ -101,7 +101,38 @@ const handle = startStandalone({
 });
 
 process.on('SIGTERM', () => handle.shutdown());
+process.on('SIGINT', () => handle.shutdown());
 ```
+
+#### Graceful shutdown with signal + timeout
+
+The runner accepts an optional `AbortSignal`, a bounded
+`shutdownTimeoutMs`, and observability hooks. After the timeout window
+elapses, every worker is force-closed via BullMQ's `close(true)` so a
+hung processor cannot keep the host process alive indefinitely:
+
+```ts
+import { startStandalone, DEFAULT_SHUTDOWN_TIMEOUT_MS } from '@gertsai/queue/standalone';
+
+const ac = new AbortController();
+process.on('SIGTERM', () => ac.abort());
+process.on('SIGINT', () => ac.abort());
+
+const handle = startStandalone({
+  connection: { host: 'localhost', port: 6379 },
+  queues: [/* ... */],
+  signal: ac.signal,
+  shutdownTimeoutMs: DEFAULT_SHUTDOWN_TIMEOUT_MS, // 30s default
+  logger: console,                                 // any { error, warn }
+  onError: (err, queueName) => sentry.captureException(err, { tags: { queueName } }),
+  onFailed: (job, err, queueName) => metrics.increment('queue.failed', { queueName }),
+});
+```
+
+If you do not supply a logger, the runner still installs an `error`
+listener on every Worker — Node ≥15 crashes the process on an unhandled
+`emit('error')`, and the runner's default listener prevents that. Adding
+a logger surfaces what would otherwise be swallowed.
 
 ## API surface
 
@@ -112,8 +143,9 @@ process.on('SIGTERM', () => handle.shutdown());
 | `QueueConnection`, `QueueOpts`, `WorkerOpts` | `@gertsai/queue` | Public option types. |
 | `QueuePeerDepMissingError` | `@gertsai/queue` | Thrown when `bullmq` is not installed at call time. |
 | `Queue`, `Worker`, `Job`, `ConnectionOptions` | `@gertsai/queue` (re-exported from `bullmq`) | Convenience type re-exports. |
-| `startStandalone(opts)` | `@gertsai/queue/standalone` | Spin up N workers, return a shutdown handle. |
-| `StandaloneQueueDef`, `StartStandaloneOpts`, `StandaloneHandle` | `@gertsai/queue/standalone` | Public option types for the runner. |
+| `startStandalone(opts)` | `@gertsai/queue/standalone` | Spin up N workers, return a shutdown handle. Optional `signal`, `shutdownTimeoutMs`, `logger`, `onError` / `onFailed` / `onCompleted`. |
+| `DEFAULT_SHUTDOWN_TIMEOUT_MS` | `@gertsai/queue/standalone` | Default shutdown grace window (30 000 ms) before force-close. |
+| `StandaloneQueueDef`, `StartStandaloneOpts`, `StandaloneHandle`, `StandaloneLogger` | `@gertsai/queue/standalone` | Public option types for the runner. |
 
 ## Design notes
 
@@ -125,8 +157,12 @@ process.on('SIGTERM', () => handle.shutdown());
   v0.x usage. Consumers needing the full ioredis options surface can pass a
   pre-built ioredis client to BullMQ directly.
 - **Standalone runner is intentionally minimal**. Concurrency, lock duration
-  tuning, telemetry hooks, and per-job tracing are deliberately deferred
-  to the Sprint 3.x follow-up that migrates ApiController.
+  tuning, and per-job tracing are deliberately deferred to the Sprint 3.x
+  follow-up that migrates ApiController. As of Wave 24 EVID-078 MED-5, the
+  runner does expose a small operational ergonomics surface
+  (`signal` / `shutdownTimeoutMs` / `logger` / `onError` / `onFailed` /
+  `onCompleted`) — all additive and optional, no breaking changes to the
+  v0.1 / v0.2 API.
 
 ## Related
 
