@@ -1,5 +1,18 @@
 # @gertsai-examples/m9s-example
 
+## 0.0.18
+
+### Patch Changes
+
+- Updated dependencies [391310d]
+  - @gertsai/auth-openfga@0.4.0
+  - @gertsai/rest-request-manager@5.1.0
+  - @gertsai/session-guard@2.1.0
+  - @gertsai/api-core@0.5.1
+  - @gertsai/runtime-context@4.0.0
+  - @gertsai-examples/m9s-example-api-types@0.0.13
+  - @gertsai/api-rlr@0.3.7
+
 ## 0.0.17
 
 ### Patch Changes
