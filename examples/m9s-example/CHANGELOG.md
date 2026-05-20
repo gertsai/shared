@@ -1,5 +1,14 @@
 # @gertsai-examples/m9s-example
 
+## 0.0.17
+
+### Patch Changes
+
+- Updated dependencies [8aa7198]
+  - @gertsai/entity-storage@4.0.0
+  - @gertsai/entity-audit@0.2.0
+  - @gertsai/pg-client@3.0.0
+
 ## 0.0.16
 
 ### Patch Changes
