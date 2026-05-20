@@ -184,7 +184,10 @@ describe('MockHSMProvider', () => {
       await slowProvider.encrypt(content, contentHash);
       const elapsed = Date.now() - start;
 
-      expect(elapsed).toBeGreaterThanOrEqual(50);
+      // Allow 5 ms tolerance: setTimeout(50) + Date.now() resolution
+      // can clock 45-49 ms on busy CI runners. The test still proves
+      // simulatedLatencyMs is honoured (vs an immediate completion).
+      expect(elapsed).toBeGreaterThanOrEqual(45);
 
       await slowProvider.disconnect();
     });
