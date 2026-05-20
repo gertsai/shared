@@ -265,8 +265,15 @@ describe('wrapSuccessResponse', () => {
 // wrapErrorResponse Tests
 // ============================================================================
 
-describe('wrapErrorResponse', () => {
-  it('should wrap error response', () => {
+describe('wrapErrorResponse (RFC 9457 ProblemDetails)', () => {
+  // Wave 14.6 (PRD-054 / EVID-057 §Error Envelope — FINAL): `wrapErrorResponse`
+  // now produces canonical RFC 9457 `ProblemDetails` (per ADR-006 §A1.5). The
+  // RFC-030 hybrid envelope's taxonomy-specific extras (`type`, `code`,
+  // `retryable`, `retry_after`, `stage`, `tenant_id`, `requestId`, `timestamp`)
+  // live in `details` per RFC 9457 §3.2 ("extension members"). `correlationId`
+  // replaces `trace_id`.
+
+  it('should wrap error response as ProblemDetails', () => {
     const ctx = createMockContext({ requestId: 'req_from_ctx' });
     const orchResponse = new OrchestraApiResponse(
       ResponseCode.NOT_FOUND,
@@ -280,73 +287,81 @@ describe('wrapErrorResponse', () => {
       path: '/api/v1/entity/123',
     });
 
-    expect(result.success).toBe(false);
-    expect(result.error.message).toBe('Resource not found');
-    expect(result.error.type).toBe('not_found_error');
-    expect(result.request_id).toBe('req_from_ctx');
-    expect(result.timestamp).toBeDefined();
+    expect(result.status).toBe(404);
+    expect(result.title).toBe('Resource not found');
+    expect(result.detail).toBe('Resource not found');
+    expect(result.type).toBe('urn:gertsai:errors:not-found');
+    expect(result.details?.type).toBe('not_found_error');
+    expect(result.details?.requestId).toBe('req_from_ctx');
+    expect(result.details?.timestamp).toBeDefined();
   });
 
-  it('should map response codes to error types', () => {
+  it('should map response codes to ProblemDetails URN types', () => {
     const ctx = createMockContext();
 
-    // 400 -> bad_request_error
+    // 400 -> validation bucket
     const badRequest = new OrchestraApiResponse(ResponseCode.BAD_REQUEST, {});
-    expect(wrapErrorResponse({ ctx, orchResponse: badRequest }).error.type).toBe(
-      'bad_request_error',
-    );
+    const badRequestResult = wrapErrorResponse({ ctx, orchResponse: badRequest });
+    expect(badRequestResult.type).toBe('urn:gertsai:errors:validation');
+    expect(badRequestResult.details?.type).toBe('bad_request_error');
 
-    // 401 -> authentication_error
+    // 401 -> unauthenticated bucket
     const unauthorized = new OrchestraApiResponse(ResponseCode.NOT_AUTHORIZED, {});
-    expect(wrapErrorResponse({ ctx, orchResponse: unauthorized }).error.type).toBe(
-      'authentication_error',
-    );
+    const unauthorizedResult = wrapErrorResponse({ ctx, orchResponse: unauthorized });
+    expect(unauthorizedResult.type).toBe('urn:gertsai:errors:unauthenticated');
+    expect(unauthorizedResult.details?.type).toBe('authentication_error');
 
-    // 403 -> permission_error
+    // 403 -> permission bucket
     const forbidden = new OrchestraApiResponse(ResponseCode.FORBIDDEN, {});
-    expect(wrapErrorResponse({ ctx, orchResponse: forbidden }).error.type).toBe('permission_error');
+    const forbiddenResult = wrapErrorResponse({ ctx, orchResponse: forbidden });
+    expect(forbiddenResult.type).toBe('urn:gertsai:errors:permission');
+    expect(forbiddenResult.details?.type).toBe('permission_error');
 
-    // 429 -> rate_limit_error
+    // 429 -> rate-limit bucket
     const rateLimit = new OrchestraApiResponse(ResponseCode.TOO_MANY_REQUESTS, {});
-    expect(wrapErrorResponse({ ctx, orchResponse: rateLimit }).error.type).toBe('rate_limit_error');
+    const rateLimitResult = wrapErrorResponse({ ctx, orchResponse: rateLimit });
+    expect(rateLimitResult.type).toBe('urn:gertsai:errors:rate-limit');
+    expect(rateLimitResult.details?.type).toBe('rate_limit_error');
 
-    // 500 -> server_error
+    // 500 -> server bucket
     const internal = new OrchestraApiResponse(ResponseCode.INTERNAL_ERROR, {});
-    expect(wrapErrorResponse({ ctx, orchResponse: internal }).error.type).toBe('server_error');
+    const internalResult = wrapErrorResponse({ ctx, orchResponse: internal });
+    expect(internalResult.type).toBe('urn:gertsai:errors:server');
+    expect(internalResult.details?.type).toBe('server_error');
   });
 
-  it('should map auth response codes to domain error codes', () => {
+  it('should map auth response codes to domain error codes in details', () => {
     const ctx = createMockContext();
 
     const missingApiKey = new OrchestraApiResponse(ResponseCode.NOT_AUTHORIZED, {});
-    expect(wrapErrorResponse({ ctx, orchResponse: missingApiKey }).error.code).toBe(
+    expect(wrapErrorResponse({ ctx, orchResponse: missingApiKey }).details?.code).toBe(
       'MISSING_API_KEY',
     );
 
     const invalidApiKey = new OrchestraApiResponse(ResponseCode.NOT_AUTHORIZED__TOKEN_INVALID, {});
-    expect(wrapErrorResponse({ ctx, orchResponse: invalidApiKey }).error.code).toBe(
+    expect(wrapErrorResponse({ ctx, orchResponse: invalidApiKey }).details?.code).toBe(
       'INVALID_API_KEY',
     );
 
     const insufficientScope = new OrchestraApiResponse(ResponseCode.INSUFFICIENT_SCOPE, {});
-    expect(wrapErrorResponse({ ctx, orchResponse: insufficientScope }).error.code).toBe(
+    expect(wrapErrorResponse({ ctx, orchResponse: insufficientScope }).details?.code).toBe(
       'INSUFFICIENT_SCOPE',
     );
   });
 
-  it('should detect retryable errors', () => {
+  it('should detect retryable errors via details.retryable', () => {
     const ctx = createMockContext();
 
     // Rate limit should be retryable
     const rateLimit = new OrchestraApiResponse(ResponseCode.TOO_MANY_REQUESTS, {});
-    expect(wrapErrorResponse({ ctx, orchResponse: rateLimit }).error.retryable).toBe(true);
+    expect(wrapErrorResponse({ ctx, orchResponse: rateLimit }).details?.retryable).toBe(true);
 
     // 401 should not be retryable
     const unauthorized = new OrchestraApiResponse(ResponseCode.NOT_AUTHORIZED, {});
-    expect(wrapErrorResponse({ ctx, orchResponse: unauthorized }).error.retryable).toBe(false);
+    expect(wrapErrorResponse({ ctx, orchResponse: unauthorized }).details?.retryable).toBe(false);
   });
 
-  it('should include retry_after for rate limit errors', () => {
+  it('should include retryAfter in details for rate limit errors', () => {
     const ctx = createMockContext();
     const orchResponse = new OrchestraApiResponse(ResponseCode.TOO_MANY_REQUESTS, {});
 
@@ -355,10 +370,10 @@ describe('wrapErrorResponse', () => {
       orchResponse,
     });
 
-    expect(result.error.retry_after).toBe(60);
+    expect(result.details?.retryAfter).toBe(60);
   });
 
-  it('should detect stage from path', () => {
+  it('should detect stage from path and store it in details', () => {
     const ctx = createMockContext();
     const orchResponse = new OrchestraApiResponse(ResponseCode.INTERNAL_ERROR, {});
 
@@ -368,7 +383,7 @@ describe('wrapErrorResponse', () => {
         ctx,
         orchResponse,
         path: '/api/v1/query',
-      }).error.stage,
+      }).details?.stage,
     ).toBe('retrieval');
 
     // Ingest path -> extraction stage
@@ -377,7 +392,7 @@ describe('wrapErrorResponse', () => {
         ctx,
         orchResponse,
         path: '/api/v1/ingest/file',
-      }).error.stage,
+      }).details?.stage,
     ).toBe('extraction');
 
     // Auth path -> authentication stage
@@ -386,11 +401,11 @@ describe('wrapErrorResponse', () => {
         ctx,
         orchResponse,
         path: '/api/v1/auth/login',
-      }).error.stage,
+      }).details?.stage,
     ).toBe('authentication');
   });
 
-  it('should include legacy fields', () => {
+  it('should include legacy sidecar fields', () => {
     const ctx = createMockContext();
     const orchResponse = new OrchestraApiResponse(ResponseCode.INTERNAL_ERROR, {
       details: 'error',
@@ -403,9 +418,11 @@ describe('wrapErrorResponse', () => {
 
     expect(result._legacy).toBeDefined();
     expect(result._legacy.tracking_id).toBe('test-context-id');
+    // request_id mirrors into _legacy for apiGate X-Request-ID header
+    expect(typeof result._legacy.request_id).toBe('string');
   });
 
-  it('should use error message when provided', () => {
+  it('should use error message fallback', () => {
     const ctx = createMockContext();
     const orchResponse = new OrchestraApiResponse(ResponseCode.INTERNAL_ERROR, {});
     const error = new Error('Custom error message');
@@ -417,7 +434,8 @@ describe('wrapErrorResponse', () => {
     });
 
     // Should prefer Orchestra message if available, otherwise use error.message
-    expect(result.error.message).toContain('error');
+    expect(result.title).toContain('error');
+    expect(result.detail).toContain('error');
   });
 });
 

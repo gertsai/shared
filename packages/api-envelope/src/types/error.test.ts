@@ -1,26 +1,28 @@
 /**
- * Tests for GertsErrorResponse envelope types
+ * Tests for error taxonomy support (post Wave 14.6 — PRD-054 / EVID-057
+ * §Error Envelope — FINAL).
+ *
+ * The legacy RFC-030 `GertsErrorResponse` envelope, its `createGertsError`
+ * factory, typia validators, the `toProblemDetails` migration helper, the
+ * `ProblemDetailsLike` interface, the convenience creators, and the
+ * `isErrorResponse` type guard have been REMOVED. Canonical wire format is
+ * now RFC 9457 `ProblemDetails` from `@gertsai/errors/http`. Tests covering
+ * those removed APIs were deleted in lockstep; what remains here covers the
+ * taxonomy values + lookup helpers that survive the removal.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  type GertsErrorType,
-  type GertsProcessingStage,
-  type GertsErrorResponse,
   ERROR_STATUS_CODES,
-  RETRYABLE_ERROR_CODES,
+  GERTS_TYPE_TO_PROBLEM_URN,
   generateRequestId,
-  createGertsError,
   getStatusCode,
   isRetryable,
-  validationError,
-  notFoundError,
-  authError,
-  rateLimitError,
-  internalError,
-  isErrorResponse,
+  RETRYABLE_ERROR_CODES,
+  type GertsErrorType,
+  type GertsProcessingStage,
 } from './error';
 
-describe('GertsErrorResponse Envelope', () => {
+describe('Error taxonomy (post Wave 14.6)', () => {
   describe('ERROR_STATUS_CODES', () => {
     it('should map error types to HTTP status codes', () => {
       expect(ERROR_STATUS_CODES.validation_error).toBe(400);
@@ -115,118 +117,6 @@ describe('GertsErrorResponse Envelope', () => {
     });
   });
 
-  describe('GertsErrorResponse', () => {
-    it('should define required fields', () => {
-      const error: GertsErrorResponse = {
-        success: false,
-        error: {
-          message: 'Entity not found',
-          type: 'not_found_error',
-          code: 'ENTITY_NOT_FOUND',
-          retryable: false,
-        },
-        request_id: 'req_abc123def456',
-        timestamp: '2025-01-05T12:00:00.000Z',
-      };
-
-      expect(error.success).toBe(false);
-      expect(error.error.message).toBe('Entity not found');
-      expect(error.error.type).toBe('not_found_error');
-      expect(error.error.code).toBe('ENTITY_NOT_FOUND');
-      expect(error.error.retryable).toBe(false);
-    });
-
-    it('should accept optional fields', () => {
-      const error: GertsErrorResponse = {
-        success: false,
-        error: {
-          message: 'Rate limit exceeded',
-          type: 'rate_limit_error',
-          code: 'RATE_LIMIT_EXCEEDED',
-          retryable: true,
-          retry_after: 60,
-          stage: 'rate_limiting',
-          param: 'requests',
-          details: { limit: 100, current: 150 },
-        },
-        request_id: 'req_abc123def456',
-        timestamp: '2025-01-05T12:00:00.000Z',
-        tenant_id: 'demo',
-        trace_id: 'trace-123',
-        documentation_url: 'https://docs.gerts.ai/errors/rate-limit',
-      };
-
-      expect(error.error.retryable).toBe(true);
-      expect(error.error.retry_after).toBe(60);
-      expect(error.error.stage).toBe('rate_limiting');
-      expect(error.tenant_id).toBe('demo');
-      expect(error.trace_id).toBe('trace-123');
-    });
-  });
-
-  describe('createGertsError', () => {
-    it('should create error with required fields', () => {
-      const error = createGertsError({
-        type: 'not_found_error',
-        code: 'ENTITY_NOT_FOUND',
-        message: 'Entity not found',
-      });
-
-      expect(error.success).toBe(false);
-      expect(error.error.message).toBe('Entity not found');
-      expect(error.error.type).toBe('not_found_error');
-      expect(error.error.code).toBe('ENTITY_NOT_FOUND');
-      expect(error.error.retryable).toBe(false);
-      expect(error.request_id).toMatch(/^req_/);
-      expect(error.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-    });
-
-    it('should auto-detect retryable from code', () => {
-      const retryableError = createGertsError({
-        type: 'rate_limit_error',
-        code: 'RATE_LIMIT_EXCEEDED',
-        message: 'Rate limit exceeded',
-      });
-      expect(retryableError.error.retryable).toBe(true);
-
-      const nonRetryableError = createGertsError({
-        type: 'not_found_error',
-        code: 'ENTITY_NOT_FOUND',
-        message: 'Not found',
-      });
-      expect(nonRetryableError.error.retryable).toBe(false);
-    });
-
-    it('should allow overriding retryable', () => {
-      const error = createGertsError({
-        type: 'server_error',
-        code: 'INTERNAL_ERROR',
-        message: 'Internal error',
-        retryable: true, // Override default
-      });
-      expect(error.error.retryable).toBe(true);
-    });
-
-    it('should include optional fields', () => {
-      const error = createGertsError({
-        type: 'validation_error',
-        code: 'INVALID_PARAMS',
-        message: 'Invalid params',
-        param: 'question',
-        stage: 'validation',
-        details: { field: 'question', reason: 'empty' },
-        tenant_id: 'demo',
-        trace_id: 'trace-123',
-      });
-
-      expect(error.error.param).toBe('question');
-      expect(error.error.stage).toBe('validation');
-      expect(error.error.details?.field).toBe('question');
-      expect(error.tenant_id).toBe('demo');
-      expect(error.trace_id).toBe('trace-123');
-    });
-  });
-
   describe('getStatusCode', () => {
     it('should return correct status codes', () => {
       expect(getStatusCode('validation_error')).toBe(400);
@@ -252,133 +142,20 @@ describe('GertsErrorResponse Envelope', () => {
     });
   });
 
-  describe('convenience error creators', () => {
-    describe('validationError', () => {
-      it('should create validation error', () => {
-        const error = validationError('Invalid email format', 'email');
-
-        expect(error.error.type).toBe('validation_error');
-        expect(error.error.code).toBe('VALIDATION_ERROR');
-        expect(error.error.message).toBe('Invalid email format');
-        expect(error.error.param).toBe('email');
-        expect(error.error.stage).toBe('validation');
-        expect(error.error.retryable).toBe(false);
-      });
-    });
-
-    describe('notFoundError', () => {
-      it('should create not found error', () => {
-        const error = notFoundError('Entity', 'xyz123');
-
-        expect(error.error.type).toBe('not_found_error');
-        expect(error.error.code).toBe('ENTITY_NOT_FOUND');
-        expect(error.error.message).toBe('Entity with ID "xyz123" not found');
-        expect(error.error.retryable).toBe(false);
-      });
-
-      it('should accept custom code', () => {
-        const error = notFoundError('Document', 'doc123', 'DOCUMENT_NOT_FOUND');
-        expect(error.error.code).toBe('DOCUMENT_NOT_FOUND');
-      });
-    });
-
-    describe('authError', () => {
-      it('should create auth error with defaults', () => {
-        const error = authError();
-
-        expect(error.error.type).toBe('authentication_error');
-        expect(error.error.code).toBe('INVALID_API_KEY');
-        expect(error.error.message).toBe('Invalid or missing API key');
-        expect(error.error.stage).toBe('authentication');
-        expect(error.error.retryable).toBe(false);
-      });
-
-      it('should accept custom message', () => {
-        const error = authError('API key expired', 'EXPIRED_API_KEY');
-        expect(error.error.message).toBe('API key expired');
-        expect(error.error.code).toBe('EXPIRED_API_KEY');
-      });
-    });
-
-    describe('rateLimitError', () => {
-      it('should create rate limit error', () => {
-        const error = rateLimitError(60);
-
-        expect(error.error.type).toBe('rate_limit_error');
-        expect(error.error.code).toBe('RATE_LIMIT_EXCEEDED');
-        expect(error.error.retryable).toBe(true);
-        expect(error.error.retry_after).toBe(60);
-        expect(error.error.stage).toBe('rate_limiting');
-      });
-
-      it('should include retry time in default message', () => {
-        const error = rateLimitError(30);
-        expect(error.error.message).toContain('30 seconds');
-      });
-
-      it('should accept custom message', () => {
-        const error = rateLimitError(60, 'Too many requests');
-        expect(error.error.message).toBe('Too many requests');
-      });
-    });
-
-    describe('internalError', () => {
-      it('should create internal error with defaults', () => {
-        const error = internalError();
-
-        expect(error.error.type).toBe('server_error');
-        expect(error.error.code).toBe('INTERNAL_ERROR');
-        expect(error.error.message).toBe('An internal error occurred');
-        expect(error.error.retryable).toBe(false);
-      });
-
-      it('should accept custom message and details', () => {
-        const error = internalError('Database error', { query: 'SELECT...' });
-        expect(error.error.message).toBe('Database error');
-        expect(error.error.details?.query).toBe('SELECT...');
-      });
-    });
-  });
-
-  describe('isErrorResponse', () => {
-    it('should return true for valid error response', () => {
-      const error = createGertsError({
-        type: 'not_found_error',
-        code: 'ENTITY_NOT_FOUND',
-        message: 'Not found',
-      });
-
-      expect(isErrorResponse(error)).toBe(true);
-    });
-
-    it('should return false for success response', () => {
-      const successResponse = {
-        success: true,
-        data: {},
-      };
-
-      expect(isErrorResponse(successResponse)).toBe(false);
-    });
-
-    it('should return false for null', () => {
-      expect(isErrorResponse(null)).toBe(false);
-    });
-
-    it('should return false for undefined', () => {
-      expect(isErrorResponse(undefined)).toBe(false);
-    });
-
-    it('should return false for non-object', () => {
-      expect(isErrorResponse('string')).toBe(false);
-      expect(isErrorResponse(123)).toBe(false);
-    });
-
-    it('should return false for object without success field', () => {
-      expect(isErrorResponse({ error: {} })).toBe(false);
-    });
-
-    it('should return false for object without error field', () => {
-      expect(isErrorResponse({ success: false })).toBe(false);
+  describe('GERTS_TYPE_TO_PROBLEM_URN', () => {
+    it('should map each GertsErrorType to a canonical RFC 9457 URN', () => {
+      expect(GERTS_TYPE_TO_PROBLEM_URN.validation_error).toBe('urn:gertsai:errors:validation');
+      expect(GERTS_TYPE_TO_PROBLEM_URN.bad_request_error).toBe('urn:gertsai:errors:validation');
+      expect(GERTS_TYPE_TO_PROBLEM_URN.authentication_error).toBe(
+        'urn:gertsai:errors:unauthenticated',
+      );
+      expect(GERTS_TYPE_TO_PROBLEM_URN.permission_error).toBe('urn:gertsai:errors:permission');
+      expect(GERTS_TYPE_TO_PROBLEM_URN.not_found_error).toBe('urn:gertsai:errors:not-found');
+      expect(GERTS_TYPE_TO_PROBLEM_URN.conflict_error).toBe('urn:gertsai:errors:conflict');
+      expect(GERTS_TYPE_TO_PROBLEM_URN.rate_limit_error).toBe('urn:gertsai:errors:rate-limit');
+      expect(GERTS_TYPE_TO_PROBLEM_URN.timeout_error).toBe('urn:gertsai:errors:timeout');
+      expect(GERTS_TYPE_TO_PROBLEM_URN.server_error).toBe('urn:gertsai:errors:server');
+      expect(GERTS_TYPE_TO_PROBLEM_URN.service_unavailable).toBe('urn:gertsai:errors:server');
     });
   });
 });

@@ -13,16 +13,20 @@ export * from './list';
 // Combined Types
 // ============================================================================
 
+import type { ProblemDetails } from '@gertsai/errors/http';
 import type { GertsResponse } from './response';
-import type { GertsErrorResponse } from './error';
 import type { GertsListResponse } from './list';
 
 /**
  * Any gerts.ai API response (success, error, or list).
+ *
+ * Wave 14.6 (PRD-054 / EVID-057 §Error Envelope): the error arm is now
+ * canonical RFC 9457 `ProblemDetails` from `@gertsai/errors/http`
+ * (previously the RFC-030 hybrid `GertsErrorResponse`).
  */
 export type GertsAnyResponse<T = unknown> =
   | GertsResponse<T>
-  | GertsErrorResponse
+  | ProblemDetails
   | GertsListResponse<T>;
 
 /**

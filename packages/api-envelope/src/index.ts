@@ -4,7 +4,13 @@
  * Browser-safe Tier-1 package extracted from `@gertsai/api-core/lib/envelope/`
  * in Wave 15.A (PRD-050 / EVID-067 §15.A).
  *
- * Provides response and error wrapping for unified API format.
+ * Provides response wrapping for unified success API format + an error
+ * wrapper that produces canonical RFC 9457 `ProblemDetails` from
+ * `@gertsai/errors/http` (per ADR-006 §A1.5).
+ *
+ * Wave 14.6 (PRD-054 / EVID-057 §Error Envelope — FINAL): the legacy
+ * RFC-030 `GertsErrorResponse` hybrid envelope and its surrounding
+ * factories / typia validators / migration helper have been REMOVED.
  *
  * @packageDocumentation
  */
@@ -30,31 +36,19 @@ export {
   isSuccessResponse,
 } from './types/response';
 
-// --- Error types (full surface; api-core shim filters collisions) ---
+// --- Error taxonomy support (post Wave 14.6 — wire format is now
+//     `ProblemDetails` from `@gertsai/errors/http`; the symbols below
+//     describe the taxonomy used inside `ProblemDetails.details`) ---
 export {
   type GertsErrorType,
   type GertsErrorCode,
   type GertsProcessingStage,
-  type GertsErrorDetail,
-  type GertsErrorResponse,
-  type ProblemDetailsLike,
   ERROR_STATUS_CODES,
   RETRYABLE_ERROR_CODES,
+  GERTS_TYPE_TO_PROBLEM_URN,
   generateRequestId,
-  createGertsError,
   getStatusCode,
   isRetryable,
-  validationError,
-  notFoundError,
-  authError,
-  rateLimitError,
-  internalError,
-  validateGertsError,
-  validateGertsErrorEquals,
-  assertGertsError,
-  isGertsError,
-  toProblemDetails,
-  isErrorResponse,
 } from './types/error';
 
 // --- List types ---

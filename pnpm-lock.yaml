@@ -390,6 +390,9 @@ importers:
 
   packages/api-envelope:
     dependencies:
+      '@gertsai/errors':
+        specifier: workspace:*
+        version: link:../errors
       '@standard-schema/spec':
         specifier: ^1.1.0
         version: 1.1.0
