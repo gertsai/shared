@@ -71,6 +71,36 @@ describe('DefaultProviderContext', () => {
     expect(ctx.get<string>(TOKEN_A)).toBe('from-map');
   });
 
+  describe('bound-to-undefined disambiguation (EVID-080 H2)', () => {
+    it('get<T> returns undefined when a binding explicitly resolves to undefined', () => {
+      const ctx = new DefaultProviderContext({
+        bindings: new Map<symbol, unknown>([[TOKEN_A, undefined]]),
+      });
+      expect(ctx.get<unknown>(TOKEN_A)).toBeUndefined();
+    });
+
+    it('get<T> still throws ProviderNotFoundError when token has no binding at all', () => {
+      const ctx = new DefaultProviderContext({});
+      expect(() => ctx.get<unknown>(TOKEN_A)).toThrow(ProviderNotFoundError);
+    });
+
+    it('getOptional<T> returns undefined for both bound-to-undefined AND unbound', () => {
+      const bound = new DefaultProviderContext({
+        bindings: new Map<symbol, unknown>([[TOKEN_A, undefined]]),
+      });
+      const unbound = new DefaultProviderContext({});
+      expect(bound.getOptional<unknown>(TOKEN_A)).toBeUndefined();
+      expect(unbound.getOptional<unknown>(TOKEN_A)).toBeUndefined();
+    });
+
+    it('get<T> returns null when a binding explicitly resolves to null', () => {
+      const ctx = new DefaultProviderContext({
+        bindings: new Map<symbol, unknown>([[TOKEN_A, null]]),
+      });
+      expect(ctx.get<unknown>(TOKEN_A)).toBeNull();
+    });
+  });
+
   it('exports requestContextIdentifier as a stable Symbol.for', () => {
     expect(typeof requestContextIdentifier).toBe('symbol');
     expect(requestContextIdentifier.toString()).toContain(

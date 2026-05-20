@@ -90,9 +90,22 @@ export class Session extends EventEmitter {
   /**
    * Resolved bearer token via the injected `tokenGetter`. Rejects if the
    * session has already been destroyed so stale callers fail loudly.
+   *
+   * Wave 26 (EVID-080 H1): the destroyed-session rejection uses the canonical
+   * `SessionDestroyedError` from `@gertsai/errors` (matching `$switchOperator`
+   * + `$setDataAccessUuid` per ADR-010 Amendment 1 §A1.1) — previously this
+   * getter threw a bare `new Error('Session destroyed')` and consumers
+   * narrowing via `instanceof SessionDestroyedError` would silently miss it.
    */
   get token(): Promise<string> {
-    if (this._destroyed) return Promise.reject(new Error('Session destroyed'));
+    if (this._destroyed) {
+      return Promise.reject(
+        new SessionDestroyedError({
+          message: 'Cannot read token on destroyed session',
+          details: { contextField: 'session' },
+        }),
+      );
+    }
     return this._tokenGetter();
   }
 

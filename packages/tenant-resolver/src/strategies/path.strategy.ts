@@ -1,8 +1,33 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { HttpRequestLike, TenantResolution, TenantResolverStrategy } from '../strategy.js';
 
+/**
+ * Rejects ASCII control characters and bytes outside the printable ASCII
+ * range (U+0020..U+007E). This is intentionally narrower than the full Unicode
+ * "printable" class — it does NOT permit Cyrillic, CJK, emoji, or any
+ * non-Latin-1 characters. Internationalised tenant IDs (UTF-8 URL paths)
+ * therefore fail-closed here; callers needing IDN support must layer their
+ * own Punycode/NFC normalisation in a custom strategy.
+ *
+ * Wave 26 (EVID-080 M7): documented ASCII-only constraint explicitly so the
+ * fail-closed behaviour is no longer a silent surprise. Behaviour unchanged.
+ */
 const NON_PRINTABLE = /[^\x20-\x7E]/;
 const PARAM_RE = /:([A-Za-z_][A-Za-z0-9_]*)/g;
+
+/**
+ * Internal sentinel for the `...` wildcard transform inside `compilePattern`.
+ *
+ * Wave 26 (EVID-080 M6): the sentinel is a non-printable token built from
+ * Unit-Separator control characters (`\x1F`, U+001F). The previous value
+ * `'___WILDCARD___'` was printable ASCII; a config-author pattern containing
+ * the literal string `___WILDCARD___` would have collided silently after the
+ * regex-escape pass (which does NOT escape underscores), producing a
+ * wrong-regex compile with no warning. The `\x1F` byte cannot appear in any
+ * well-formed JSON/TypeScript-quoted pattern without deliberate injection,
+ * making accidental collision impossible.
+ */
+const WILDCARD_SENTINEL = '\x1FWILDCARD\x1F';
 
 export interface PathStrategyOptions {
   /**
@@ -29,12 +54,15 @@ interface CompiledPattern {
 function compilePattern(pattern: string): CompiledPattern {
   const groups: string[] = [];
   let body = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&');
-  body = body.replace(/\\\.\\\.\\\./g, '___WILDCARD___');
+  // The escaped `\.\.\.` sequence is the post-escape form of `...`.
+  // Replace with a non-printable sentinel that no well-formed pattern can
+  // contain (EVID-080 M6), then expand it to `.*` after `:param` interpolation.
+  body = body.replace(/\\\.\\\.\\\./g, WILDCARD_SENTINEL);
   body = body.replace(PARAM_RE, (_, name: string) => {
     groups.push(name);
     return '([^/]+)';
   });
-  body = body.replace(/___WILDCARD___/g, '.*');
+  body = body.split(WILDCARD_SENTINEL).join('.*');
   return { regex: new RegExp(`^${body}$`), groups };
 }
 

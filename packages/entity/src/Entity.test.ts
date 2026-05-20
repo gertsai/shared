@@ -159,6 +159,18 @@ describe('Entity', () => {
     expect(restored.data).toEqual({ name: 'Bob', age: 0, active: true });
   });
 
+  it('toJSONObject().data is typed Readonly<Data> — direct mutation rejected at compile time (EVID-080 H5)', () => {
+    const e = new TestEntity({ uid: 'u-readonly', data: { name: 'RO' } });
+    const obj = e.toJSONObject();
+    // The `Readonly<UserData>` widening means each property of `data` is
+    // readonly. Direct assignment must fail the TypeScript checker.
+    // @ts-expect-error — Cannot assign to 'name' because it is a read-only property.
+    obj.data.name = 'mutated';
+    // Runtime sanity: the reference itself is unchanged (we only checked that
+    // the TS surface forbids the write; no behavioural assertion needed).
+    expect(obj.data.name).toBe('mutated'); // Mutation does happen at runtime — H5 is type-only nudge.
+  });
+
   // ---------------- F-5: markRaw(this) ----------------
 
   // ---------------- PRD-033 FR-002: prototype-pollution protection ----------------

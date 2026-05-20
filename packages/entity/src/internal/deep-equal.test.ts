@@ -53,4 +53,56 @@ describe('deepEqual', () => {
     expect(deepEqual([], {})).toBe(false);
     expect(deepEqual({ 0: 'a' }, ['a'])).toBe(false);
   });
+
+  // ---------------- EVID-080 M1: Object.is short-circuit ----------------
+
+  it('treats NaN === NaN as equal (Object.is semantics, EVID-080 M1)', () => {
+    expect(deepEqual(NaN, NaN)).toBe(true);
+    expect(deepEqual({ x: NaN }, { x: NaN })).toBe(true);
+    expect(deepEqual([NaN, 1], [NaN, 1])).toBe(true);
+  });
+
+  it('treats +0 and -0 as NOT equal (Object.is semantics, EVID-080 M1)', () => {
+    expect(deepEqual(+0, -0)).toBe(false);
+    expect(deepEqual(-0, +0)).toBe(false);
+    expect(deepEqual({ x: +0 }, { x: -0 })).toBe(false);
+  });
+
+  it('still treats 0 === 0 as equal (no regression on plain zero)', () => {
+    expect(deepEqual(0, 0)).toBe(true);
+    expect(deepEqual(+0, +0)).toBe(true);
+    expect(deepEqual(-0, -0)).toBe(true);
+  });
+
+  // ---------------- EVID-080 M2: disjoint-key-set guard ----------------
+
+  it('rejects objects with disjoint undefined-only keys (EVID-080 M2)', () => {
+    // Both objects have 2 keys, all values undefined, but keys are disjoint.
+    // Without the hasOwnProperty guard on `b`, `a[k]` and `b[k]` would both
+    // read as `undefined` for every `k` and the loop would falsely return true.
+    expect(
+      deepEqual(
+        { a: undefined, b: undefined },
+        { c: undefined, d: undefined },
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects objects with partially overlapping keys (EVID-080 M2)', () => {
+    expect(
+      deepEqual(
+        { a: 1, b: undefined },
+        { a: 1, c: undefined },
+      ),
+    ).toBe(false);
+  });
+
+  it('still equates objects where both share the same undefined-valued keys', () => {
+    expect(
+      deepEqual(
+        { a: undefined, b: undefined },
+        { a: undefined, b: undefined },
+      ),
+    ).toBe(true);
+  });
 });

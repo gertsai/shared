@@ -125,10 +125,13 @@ export abstract class EntityWithMetadata<
       return true;
     }
     let changed = false;
-    for (const key in partial) {
-      // CWE-1321 protection per PRD-033 FR-002.
+    // CWE-1321 protection per PRD-033 FR-002 — `Object.keys` returns OWN
+    // enumerable string keys only. Wave 26 (EVID-080 H4): unified with the
+    // `check === false` branch above; previously this loop used `for...in`
+    // with a `hasOwnProperty` filter, leaving a latent invariant that a
+    // future refactor could break (CWE-1321 prototype-pollution).
+    for (const key of Object.keys(partial)) {
       if (DANGEROUS_KEYS.has(key)) continue;
-      if (!Object.prototype.hasOwnProperty.call(partial, key)) continue;
       const next = (partial as Record<string, unknown>)[key];
       const prev = (this._metadata as Record<string, unknown>)[key];
       if (!deepEqual(prev, next)) {
