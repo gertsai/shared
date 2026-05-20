@@ -464,8 +464,11 @@ describe('LRUCache', () => {
 
       const elapsed = Date.now() - start;
 
-      // Should complete in reasonable time (< 100ms on modern hardware)
-      expect(elapsed).toBeLessThan(100);
+      // Should complete in reasonable time. 500 ms threshold tolerates
+      // GitHub Actions runners under load (observed 113 ms in CI vs ~20 ms
+      // on a local M-series Mac). The test still proves O(1) doesn't
+      // collapse into O(n) under 10k entries.
+      expect(elapsed).toBeLessThan(500);
     });
   });
 });
