@@ -41,13 +41,33 @@ export type RpcProxy<TActionMap extends Record<string, ActionDefinition<unknown,
     : never;
 };
 
-const proxyCache = new WeakMap<object, unknown>();
+/**
+ * Two-level identity cache keyed first on `actions`, then on `transport`.
+ *
+ * Wave 26 (EVID-080 H3): the previous shape `WeakMap<actions, proxy>` ignored
+ * transport identity — `createRpcProxy(transportA, sharedActions)` followed by
+ * `createRpcProxy(transportB, sharedActions)` returned the proxy bound to
+ * `transportA` for both calls, silently dispatching cross-transport. The
+ * nested shape preserves the original "same `(actions, transport)` → same
+ * proxy" identity guarantee while keeping per-transport proxies distinct.
+ *
+ * Both keys must remain weakly held — `transport` is typed as `object` (it is
+ * `RpcTransport`, which is an interface and so structurally an object), and
+ * `actions` is a `Record<string, ActionDefinition>` (also an object). WeakMap
+ * requires keys to be objects/symbols, so we cast on `set`/`get`.
+ */
+const proxyCache = new WeakMap<
+  object,
+  WeakMap<RpcTransport, unknown>
+>();
 
 /**
  * Build a read-only Proxy that dispatches typed action calls through `transport`.
  *
- * Returns the same proxy reference for the same `actions` object (WeakMap cache),
- * so callers may rebuild their map cheaply per request.
+ * Returns the same proxy reference for the same `(actions, transport)` pair
+ * (nested WeakMap cache per EVID-080 H3), so callers may rebuild their map
+ * cheaply per request. Distinct transports always yield distinct proxies even
+ * when sharing the same `actions` object.
  *
  * Invariants (ADR-009):
  *  - I-14: unknown action name throws synchronously — no fail-open / namespace probing.
@@ -57,8 +77,11 @@ const proxyCache = new WeakMap<object, unknown>();
 export function createRpcProxy<
   TActionMap extends Record<string, ActionDefinition<unknown, unknown>>,
 >(transport: RpcTransport, actions: TActionMap): RpcProxy<TActionMap> {
-  const cached = proxyCache.get(actions);
-  if (cached) return cached as RpcProxy<TActionMap>;
+  let perTransport = proxyCache.get(actions);
+  if (perTransport !== undefined) {
+    const cached = perTransport.get(transport);
+    if (cached !== undefined) return cached as RpcProxy<TActionMap>;
+  }
 
   const actionKeys = new Set(Object.keys(actions));
 
@@ -85,7 +108,11 @@ export function createRpcProxy<
     },
   ) as RpcProxy<TActionMap>;
 
-  proxyCache.set(actions, proxy);
+  if (perTransport === undefined) {
+    perTransport = new WeakMap<RpcTransport, unknown>();
+    proxyCache.set(actions, perTransport);
+  }
+  perTransport.set(transport, proxy);
   return proxy;
 }
 

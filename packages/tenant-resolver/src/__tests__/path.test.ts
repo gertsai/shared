@@ -50,4 +50,24 @@ describe('PathStrategy', () => {
   it('throws when pathPattern does not start with /', () => {
     expect(() => new PathStrategy({ pathPattern: 't/:tenantId/...' })).toThrow(/starting with "\/"/);
   });
+
+  it('does not collide with a literal "___WILDCARD___" in user patterns (EVID-080 M6)', async () => {
+    // Wave 26: the wildcard transform sentinel was changed from the printable
+    // string `___WILDCARD___` to a non-printable token. This test asserts the
+    // old sentinel string is treated literally — the regex MUST require the
+    // path to contain `___WILDCARD___` between the tenant and `___WILDCARD___`
+    // segment, and the trailing `...` must still expand to `.*` independently.
+    const s = new PathStrategy({
+      pathPattern: '/t/:tenantId/___WILDCARD___/...',
+    });
+    // Path containing the literal `___WILDCARD___` segment matches.
+    await expect(
+      s.resolve(reqWithUrl('/t/tenantA/___WILDCARD___/anything/here')),
+    ).resolves.toEqual({ tenantId: 'tenantA', strategyName: 'path' });
+    // Path NOT containing it must NOT match (proves the sentinel is treated
+    // literally rather than collapsed to `.*` by sentinel collision).
+    await expect(
+      s.resolve(reqWithUrl('/t/tenantA/something-else/anything')),
+    ).resolves.toBeNull();
+  });
 });

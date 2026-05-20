@@ -114,11 +114,14 @@ export abstract class Entity<Data extends object> extends Model {
       return true;
     }
     let changed = false;
-    for (const key in partial) {
-      // CWE-1321 protection per PRD-033 FR-002 — reject prototype-pollution
-      // vectors before the hasOwnProperty + write step.
+    // CWE-1321 protection per PRD-033 FR-002 — `Object.keys` returns OWN
+    // enumerable string keys only, avoiding inherited / prototype-chain
+    // pollution that `for...in` would expose. Wave 26 (EVID-080 H4): unified
+    // with the `check === false` branch above; previously this loop used
+    // `for...in` with a `hasOwnProperty` filter, leaving a latent invariant
+    // that a future refactor could break.
+    for (const key of Object.keys(partial)) {
       if (DANGEROUS_KEYS.has(key)) continue;
-      if (!Object.prototype.hasOwnProperty.call(partial, key)) continue;
       const next = (partial as Record<string, unknown>)[key];
       const prev = (this._data as Record<string, unknown>)[key];
       if (!deepEqual(prev, next)) {

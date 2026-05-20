@@ -76,14 +76,14 @@ export class DefaultProviderContext implements ProviderContext {
     // rejects every TypedToken caller).
     const sym = isTypedToken(token) ? token.symbol : token;
     assertSymbolToken(sym);
-    const found = this._lookup<T>(sym);
-    if (found === undefined) {
+    const result = this._lookup(sym);
+    if (!result.present) {
       throw new ProviderNotFoundError({
         message: `Provider not bound for token ${this._tokenLabel(sym)}`,
         details: { token: this._tokenLabel(sym) },
       });
     }
-    return found;
+    return result.value as T;
   }
 
   getOptional<T>(token: symbol): T | undefined;
@@ -91,17 +91,28 @@ export class DefaultProviderContext implements ProviderContext {
   getOptional<T>(token: symbol | TypedToken<T>): T | undefined {
     const sym = isTypedToken(token) ? token.symbol : token;
     assertSymbolToken(sym);
-    return this._lookup<T>(sym);
+    const result = this._lookup(sym);
+    return result.present ? (result.value as T) : undefined;
   }
 
-  private _lookup<T>(token: symbol): T | undefined {
+  /**
+   * Discriminated lookup result — `present: true` means the binding (or
+   * resolver) returned a value, even when that value is `undefined`.
+   * Wave 26 (EVID-080 H2): without this discriminator, `get` could not
+   * distinguish "bound to undefined" from "not bound" and threw
+   * `ProviderNotFoundError` in both cases.
+   */
+  private _lookup(token: symbol): { present: boolean; value: unknown } {
     if (this._bindings.has(token)) {
-      return this._bindings.get(token) as T;
+      return { present: true, value: this._bindings.get(token) };
     }
     if (this._resolver !== undefined) {
-      return this._resolver<T>(token);
+      const resolved = this._resolver<unknown>(token);
+      if (resolved !== undefined) {
+        return { present: true, value: resolved };
+      }
     }
-    return undefined;
+    return { present: false, value: undefined };
   }
 
   private _tokenLabel(token: symbol): string {

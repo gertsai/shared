@@ -89,6 +89,48 @@ describe('createRpcProxy', () => {
     expect(a).toBe(b);
   });
 
+  it('returns distinct proxies for different transports sharing the same action map (EVID-080 H3)', async () => {
+    const transportA = makeMockTransport();
+    const transportB = makeMockTransport();
+    const sharedActions = makeActions();
+
+    const proxyA = createRpcProxy(transportA, sharedActions);
+    const proxyB = createRpcProxy(transportB, sharedActions);
+
+    // Distinct proxy identity — the cache must NOT collapse on actions alone.
+    // Compare via Object.is to avoid vitest's pretty-print logic touching the
+    // Proxy's `.constructor` property (which trips the I-14 unknown-action
+    // guard since `constructor` is not in the actions map).
+    expect(Object.is(proxyA, proxyB)).toBe(false);
+
+    // Each proxy dispatches through its own transport.
+    transportA.call.mockResolvedValueOnce({ id: 'A', name: 'A-user' });
+    transportB.call.mockResolvedValueOnce({ id: 'B', name: 'B-user' });
+
+    await proxyA.getUser({ id: 'A' });
+    await proxyB.getUser({ id: 'B' });
+
+    expect(transportA.call).toHaveBeenCalledTimes(1);
+    expect(transportA.call).toHaveBeenCalledWith('getUser', { id: 'A' }, undefined);
+    expect(transportB.call).toHaveBeenCalledTimes(1);
+    expect(transportB.call).toHaveBeenCalledWith('getUser', { id: 'B' }, undefined);
+  });
+
+  it('cache identity still holds when the same (actions, transport) pair is requested twice (EVID-080 H3)', () => {
+    const transportA = makeMockTransport();
+    const transportB = makeMockTransport();
+    const sharedActions = makeActions();
+
+    const a1 = createRpcProxy(transportA, sharedActions);
+    const a2 = createRpcProxy(transportA, sharedActions);
+    const b1 = createRpcProxy(transportB, sharedActions);
+    const b2 = createRpcProxy(transportB, sharedActions);
+
+    expect(Object.is(a1, a2)).toBe(true);
+    expect(Object.is(b1, b2)).toBe(true);
+    expect(Object.is(a1, b1)).toBe(false);
+  });
+
   it('isRpcProxy returns true only for proxies created by this module', () => {
     const transport = makeMockTransport();
     const proxy = createRpcProxy(transport, makeActions());

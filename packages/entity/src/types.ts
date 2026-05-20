@@ -125,22 +125,32 @@ export interface EntityWithMetadataOpts<
  *  - no Firelord `Timestamp.toDate()` `updated_at` fallback (consumers that
  *    need a timestamp should put it in `data` themselves);
  *  - no `metadata` slot (see `EntityWithMetadataJSON`).
+ *
+ * Wave 26 (EVID-080 H5): `data` is typed `Readonly<Data>` to nudge
+ * consumers away from mutating the returned reference — `toJSONObject()`
+ * returns the live `_data` reference (no clone), so a direct mutation
+ * would bypass `$patch`'s `DANGEROUS_KEYS` filter and the change-emit
+ * event. If you need to mutate, take a clone first.
  */
 export interface EntityJSON<Data extends object> {
   readonly _uid: string;
-  readonly data: Data;
+  readonly data: Readonly<Data>;
 }
 
 /**
  * Plain JSON shape produced by `EntityWithMetadata.toJSONObject()`.
  * Extends `EntityJSON<Data>` with the `metadata` payload and the
  * `__typename` discriminator.
+ *
+ * Wave 26 (EVID-080 H5): `metadata` is widened to `Readonly<Metadata>`
+ * for the same reason as `data` — `toJSONObject()` returns the live
+ * `_metadata` reference and consumers must clone before mutating.
  */
 export interface EntityWithMetadataJSON<
   Data extends object,
   Metadata extends object,
   Typename extends string = string,
 > extends EntityJSON<Data> {
-  readonly metadata: Metadata;
+  readonly metadata: Readonly<Metadata>;
   readonly __typename: Typename;
 }

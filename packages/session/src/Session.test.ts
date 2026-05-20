@@ -75,10 +75,20 @@ describe('Session — token', () => {
     expect(tokenGetter).toHaveBeenCalledTimes(1);
   });
 
-  it('rejects after destroy with "Session destroyed"', async () => {
+  it('rejects after destroy with SessionDestroyedError (EVID-080 H1)', async () => {
     const session = new Session(makeOpts());
     session.$destroy();
-    await expect(session.token).rejects.toThrow('Session destroyed');
+    let caught: unknown;
+    try {
+      await session.token;
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(SessionDestroyedError);
+    expect(caught).toBeInstanceOf(Error);
+    const err = caught as SessionDestroyedError;
+    expect(err.message).toBe('Cannot read token on destroyed session');
+    expect(err.details).toEqual({ contextField: 'session' });
   });
 });
 
