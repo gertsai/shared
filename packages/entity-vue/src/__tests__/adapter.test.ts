@@ -64,3 +64,51 @@ describe('vueReactiveAdapter — ReactiveAdapter contract', () => {
     expect(vueReactiveAdapter.isReactive(b)).toBe(true);
   });
 });
+
+/**
+ * Wave 19 / EVID-074 M-R2 parity — markRaw non-reversibility check for Vue.
+ *
+ * Vue's `markRaw` (from `@vue/reactivity`) installs a `__v_skip: true`
+ * property via Vue's internal `def(obj, key, value, writable = false)` helper,
+ * which calls `Object.defineProperty(obj, key, { configurable: true,
+ * enumerable: false, writable: false, value })`. Note: Vue marks the
+ * property as `configurable: true` (NOT `false` like
+ * `@gertsai/entity-react` / `@gertsai/entity-svelte` adapters do for their
+ * own RAW symbol). This is Vue's choice — we honor it here by asserting
+ * the actual Vue contract rather than imposing a stricter shape.
+ *
+ * The invariant we DO pin: once installed, the brand value is `true`,
+ * non-writable, and the brand's presence is what `isReactive` consults
+ * when deciding to skip wrapping.
+ */
+describe('vueReactiveAdapter — markRaw non-reversibility (Wave 19)', () => {
+  it('markRaw() installs Vue\'s __v_skip brand with writable: false, enumerable: false', () => {
+    const value = { secret: 1 };
+    vueReactiveAdapter.markRaw(value);
+    const desc = Object.getOwnPropertyDescriptor(value, '__v_skip');
+    expect(desc).toBeDefined();
+    expect(desc?.value).toBe(true);
+    expect(desc?.writable).toBe(false);
+    expect(desc?.enumerable).toBe(false);
+  });
+
+  it('markRaw() brand value cannot be flipped via direct assignment (writable: false)', () => {
+    const value: Record<string, unknown> = { secret: 1 };
+    vueReactiveAdapter.markRaw(value);
+    // Strict-mode assignment on a writable: false property throws.
+    expect(() => {
+      'use strict';
+      value['__v_skip'] = false;
+    }).toThrow();
+  });
+
+  it('markRaw() once branded keeps the value out of Vue reactive wrapping', () => {
+    // Functional check: even if a downstream call attempts to make the
+    // value reactive, Vue's reactive() respects the brand.
+    const value = { secret: 1 };
+    vueReactiveAdapter.markRaw(value);
+    const result = vueReactiveAdapter.reactive(value);
+    expect(result).toBe(value);
+    expect(vueReactiveAdapter.isReactive(result)).toBe(false);
+  });
+});

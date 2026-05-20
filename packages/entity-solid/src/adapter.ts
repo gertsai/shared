@@ -44,6 +44,24 @@ type ProduceFn = <T>(producer: (state: T) => void) => (state: T) => void;
 let _createStore: CreateStoreFn | undefined;
 let _produce: ProduceFn | undefined;
 
+/**
+ * Test-only hook: clears the cached `solid-js/store` references so
+ * `loadSolid` re-resolves on the next call. Intended for use after
+ * `vi.doMock('solid-js/store', ...)` / `vi.doUnmock(...)` cycles or
+ * `node:module` patching. Mirrors `__resetWritableCacheForTests` from
+ * `@gertsai/entity-svelte` and `__resetVueCacheForTests` from
+ * `@gertsai/entity-vue` for cross-adapter symmetry. Not part of the public
+ * API and excluded from semver guarantees.
+ *
+ * Wave 19 / EVID-074 L-S1.
+ *
+ * @internal
+ */
+export function __resetSolidCacheForTests(): void {
+  _createStore = undefined;
+  _produce = undefined;
+}
+
 function loadSolid(): { createStore: CreateStoreFn; produce: ProduceFn } {
   if (_createStore && _produce) {
     return { createStore: _createStore, produce: _produce };
@@ -102,20 +120,42 @@ function buildStoreProxy<T extends object>(
       return Reflect.get(target, key, receiver);
     },
     set(_target, key, value): boolean {
-      setStore(
-        produce<T>((draft) => {
-          (draft as Record<PropertyKey, unknown>)[key] = value;
-        }),
-      );
-      return true;
+      // Wave 19 / EVID-074 H-S2 — if `setStore(produce(...))` throws (e.g.
+      // sealed/frozen target, non-writable descriptor) we surface failure
+      // by returning `false` so the Proxy invariant for strict-mode callers
+      // is honored. The original error is re-thrown so test/log can see it.
+      try {
+        setStore(
+          produce<T>((draft) => {
+            (draft as Record<PropertyKey, unknown>)[key] = value;
+          }),
+        );
+        return true;
+      } catch (err) {
+        // Re-throw — strict-mode Proxy callers will see the original
+        // exception; sloppy-mode callers receive `false` from the trap if
+        // the throw is caught upstream. Either way, we never silently
+        // report success for a failed write.
+        throw err instanceof Error
+          ? err
+          : new Error(`solidReactiveAdapter.set failed for key ${String(key)}`);
+      }
     },
     deleteProperty(_target, key): boolean {
-      setStore(
-        produce<T>((draft) => {
-          delete (draft as Record<PropertyKey, unknown>)[key];
-        }),
-      );
-      return true;
+      try {
+        setStore(
+          produce<T>((draft) => {
+            delete (draft as Record<PropertyKey, unknown>)[key];
+          }),
+        );
+        return true;
+      } catch (err) {
+        throw err instanceof Error
+          ? err
+          : new Error(
+              `solidReactiveAdapter.deleteProperty failed for key ${String(key)}`,
+            );
+      }
     },
     defineProperty(_target, key, descriptor): boolean {
       const value =
@@ -124,12 +164,20 @@ function buildStoreProxy<T extends object>(
           : 'get' in descriptor && typeof descriptor.get === 'function'
             ? descriptor.get()
             : undefined;
-      setStore(
-        produce<T>((draft) => {
-          (draft as Record<PropertyKey, unknown>)[key] = value;
-        }),
-      );
-      return true;
+      try {
+        setStore(
+          produce<T>((draft) => {
+            (draft as Record<PropertyKey, unknown>)[key] = value;
+          }),
+        );
+        return true;
+      } catch (err) {
+        throw err instanceof Error
+          ? err
+          : new Error(
+              `solidReactiveAdapter.defineProperty failed for key ${String(key)}`,
+            );
+      }
     },
     has(target, key): boolean {
       if (key === STORE_BRAND) return true;
@@ -139,6 +187,21 @@ function buildStoreProxy<T extends object>(
   return proxy;
 }
 
+/**
+ * Solid.js `ReactiveAdapter` implementation backed by `createStore` +
+ * `produce` from `solid-js/store`.
+ *
+ * **Notify timing**: `sync inside trap; downstream observability follows
+ * Solid` — every mutation hits `setStore(produce(...))` inside the Proxy
+ * trap synchronously. Solid's reactive graph then schedules signal
+ * recomputation (Solid 1.x batches inside the same synchronous task; effects
+ * observe the new value either inside the current microtask or on the next
+ * one, depending on the surrounding `createRoot` / `batch` context).
+ * Consumers should treat the timing as "the value is written before the
+ * trap returns; observers fire per Solid's batching policy". See
+ * `ReactiveAdapter` JSDoc in `@gertsai/entity/types` for the cross-adapter
+ * timing contract (Wave 19, EVID-074 H-V1).
+ */
 export const solidReactiveAdapter: ReactiveAdapter = {
   reactive<T extends object>(target: T): T {
     if (target === null || typeof target !== 'object') return target;

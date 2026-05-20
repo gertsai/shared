@@ -108,6 +108,28 @@ describe('entityStore — Readable<Entity<Data>>', () => {
     expect(b).toBe(2);
   });
 
+  // Wave 19 / EVID-074 M-Sv1 — refuse to silently produce a single-emission
+  // store for an Entity built with a non-svelte adapter.
+  it('throws an informative error when entity was constructed with a foreign ReactiveAdapter', () => {
+    // Entity constructed with the default plainReactiveAdapter — its $data
+    // is NOT branded by svelteReactiveAdapter, so entityStore() would
+    // otherwise produce a no-op store. We require it to throw instead.
+    const user = new User({
+      // omit `reactive:` → defaults to plainReactiveAdapter
+      data: { name: 'Ada', email: 'ada@example.com' },
+    });
+    expect(() => entityStore(user)).toThrow(
+      /requires the entity to be constructed with svelteReactiveAdapter/,
+    );
+  });
+
+  it('error message mentions the constructor option name (`reactive`) for actionability', () => {
+    const user = new User({
+      data: { name: 'Ada', email: 'ada@example.com' },
+    });
+    expect(() => entityStore(user)).toThrow(/reactive: svelteReactiveAdapter/);
+  });
+
   it('entityStore() called twice on the same entity does not double-wrap (idempotent reactive())', () => {
     const user = new User({
       reactive: svelteReactiveAdapter,

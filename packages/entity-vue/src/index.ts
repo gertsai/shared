@@ -23,6 +23,25 @@ let _shallowReactive: ShallowReactiveFn | undefined;
 let _markRaw: MarkRawFn | undefined;
 let _isReactive: IsReactiveFn | undefined;
 
+/**
+ * Test-only hook: clears the cached `@vue/runtime-core` references so
+ * `loadVue` re-resolves on the next call. Intended for use after
+ * `vi.doMock('@vue/runtime-core', ...)` / `vi.doUnmock(...)` cycles or
+ * `Module._load` patching. Mirrors `__resetWritableCacheForTests` from
+ * `@gertsai/entity-svelte` and `__resetSolidCacheForTests` from
+ * `@gertsai/entity-solid` for cross-adapter symmetry. Not part of the
+ * public API and excluded from semver guarantees.
+ *
+ * Wave 19 / EVID-074 M-V1.
+ *
+ * @internal
+ */
+export function __resetVueCacheForTests(): void {
+  _shallowReactive = undefined;
+  _markRaw = undefined;
+  _isReactive = undefined;
+}
+
 function loadVue(): {
   shallowReactive: ShallowReactiveFn;
   markRaw: MarkRawFn;
@@ -52,6 +71,17 @@ function loadVue(): {
   }
 }
 
+/**
+ * Vue 3 `ReactiveAdapter` implementation.
+ *
+ * **Notify timing**: `microtask` — Vue's `shallowReactive` delegates to the
+ * Vue effect scheduler, which batches and flushes updates after the current
+ * microtask boundary. Synchronous reads of a freshly-written property on the
+ * proxy will reflect the new value, but downstream `watchEffect` / template
+ * re-renders fire after `await nextTick()`. See `ReactiveAdapter` JSDoc in
+ * `@gertsai/entity/types` for the cross-adapter timing contract (Wave 19,
+ * EVID-074 H-V1).
+ */
 export const vueReactiveAdapter: ReactiveAdapter = {
   reactive<T extends object>(target: T): T {
     return loadVue().shallowReactive(target);

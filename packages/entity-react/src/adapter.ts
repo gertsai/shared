@@ -74,6 +74,21 @@ export function getVersion(target: object): number {
   return v.value;
 }
 
+/**
+ * React `ReactiveAdapter` implementation backed by `Proxy` + per-target
+ * subscriber registry + version counter.
+ *
+ * **Notify timing**: `sync` — subscribers run inside the mutating Proxy trap
+ * (`set` / `defineProperty` / `deleteProperty`) BEFORE the trap returns to
+ * the outer caller. A subscriber that re-enters the same target is gated by
+ * a boolean re-entrancy guard (CWE-674) which intentionally suppresses the
+ * inner notify: subscribers are notified at most once per outer mutation
+ * burst, see `subscribe` JSDoc for the contract. The version counter still
+ * bumps on the outer mutation, so React's `useSyncExternalStore` correctly
+ * re-renders on the next commit. See `ReactiveAdapter` JSDoc in
+ * `@gertsai/entity/types` for the cross-adapter timing contract (Wave 19,
+ * EVID-074 H-V1).
+ */
 export const reactReactiveAdapter: ReactiveAdapter = {
   reactive<T extends object>(target: T): T {
     if (target === null || typeof target !== 'object') return target;

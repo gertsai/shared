@@ -132,7 +132,60 @@ describe('solidReactiveAdapter — module-private symbol (I-11, CWE-1321)', () =
   });
 });
 
+// Wave 19 / EVID-074 M-R2 parity — markRaw non-reversibility for Solid.
+describe('solidReactiveAdapter — markRaw non-reversibility (Wave 19)', () => {
+  it('markRaw() installs a non-configurable, non-writable RAW brand', () => {
+    const value = { secret: 1 };
+    solidReactiveAdapter.markRaw(value);
+    const rawSym = Object.getOwnPropertySymbols(value).find(
+      (s) => s.toString() === 'Symbol(@gertsai/entity-solid:raw)',
+    );
+    expect(rawSym).toBeDefined();
+    const desc = Object.getOwnPropertyDescriptor(value, rawSym!);
+    expect(desc?.configurable).toBe(false);
+    expect(desc?.writable).toBe(false);
+    expect(desc?.enumerable).toBe(false);
+    expect(desc?.value).toBe(true);
+  });
+
+  it('markRaw() brand cannot be overwritten via Object.defineProperty', () => {
+    const value = { secret: 1 };
+    solidReactiveAdapter.markRaw(value);
+    const rawSym = Object.getOwnPropertySymbols(value).find(
+      (s) => s.toString() === 'Symbol(@gertsai/entity-solid:raw)',
+    );
+    expect(() =>
+      Object.defineProperty(value, rawSym!, {
+        value: false,
+        configurable: true,
+      }),
+    ).toThrow();
+  });
+
+  it('markRaw() brand cannot be deleted (strict-mode delete throws)', () => {
+    const value: Record<symbol, unknown> = { secret: 1 } as unknown as Record<
+      symbol,
+      unknown
+    >;
+    solidReactiveAdapter.markRaw(value);
+    const rawSym = Object.getOwnPropertySymbols(value).find(
+      (s) => s.toString() === 'Symbol(@gertsai/entity-solid:raw)',
+    );
+    expect(() => {
+      delete value[rawSym!];
+    }).toThrow();
+  });
+});
+
 describe('solidReactiveAdapter — peer-dep gate (Amendment 1.2.9)', () => {
+  // Wave 19 / EVID-074 L-S1 — test seam parity with svelte/vue.
+  it('__resetSolidCacheForTests clears cached references so loadSolid re-resolves', async () => {
+    const mod = await import('../adapter');
+    mod.solidReactiveAdapter.reactive({ a: 1 });
+    expect(() => mod.__resetSolidCacheForTests()).not.toThrow();
+    expect(() => mod.solidReactiveAdapter.reactive({ b: 2 })).not.toThrow();
+  });
+
   it('throws a descriptive error when solid-js/store cannot be required', async () => {
     // Simulate the peer dep being absent by intercepting the package's
     // resolved location and forcing `require` to fail. We do this through a
