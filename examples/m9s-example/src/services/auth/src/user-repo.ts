@@ -24,7 +24,7 @@
  *     still run a dummy bcrypt compare on `null` to neutralise timing
  *     oracles (see anti-enumeration note in `login.action.ts`).
  */
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcrypt';
 
 import type { DemoUser } from '../types';
 

@@ -11,7 +11,7 @@
  *   4. `bcrypt.compare(correctPassword, hash)` succeeds.
  *   5. `bcrypt.compare(wrongPassword, hash)` fails.
  */
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcrypt';
 import { describe, expect, it } from 'vitest';
 
 import {

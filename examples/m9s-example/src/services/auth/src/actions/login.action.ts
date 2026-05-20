@@ -24,7 +24,7 @@
  * `REDIS_URL` is set.
  */
 import { APIError, ResponseCode } from '@gertsai/api-core/contracts';
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcrypt';
 import typia from 'typia';
 
 import { defineAction } from '@gertsai/api-core/moleculer';
