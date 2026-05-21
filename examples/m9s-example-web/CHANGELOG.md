@@ -1,5 +1,11 @@
 # @gertsai-examples/m9s-example-web
 
+## 0.0.17
+
+### Patch Changes
+
+- @gertsai-examples/m9s-example-api-types@0.0.17
+
 ## 0.0.16
 
 ### Patch Changes
