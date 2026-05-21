@@ -41,6 +41,10 @@ export class HeaderStrategy implements TenantResolverStrategy<HttpRequestLike> {
   }
 
   async resolve(req: HttpRequestLike): Promise<TenantResolution | null> {
+    // When a reverse proxy sets duplicate headers, Node.js may join them into
+    // a comma-separated string or represent them as an array. lookupHeader
+    // returns only the first value when the header is a string[] (proxy-set
+    // duplicates). Recommend explicit proxy config dedup to avoid ambiguity.
     const raw = lookupHeader(req.headers, this.headerName);
     if (typeof raw !== 'string') return null;
     const trimmed = raw.trim();

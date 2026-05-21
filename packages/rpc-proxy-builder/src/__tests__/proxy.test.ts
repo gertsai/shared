@@ -186,4 +186,28 @@ describe('createRpcProxy', () => {
     expect((proxy as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator]).toBeUndefined();
     expect((proxy as { [Symbol.toPrimitive]?: unknown })[Symbol.toPrimitive]).toBeUndefined();
   });
+
+  it('in operator returns true for registered action, false otherwise (FR-12)', () => {
+    const transport = makeMockTransport();
+    const proxy = createRpcProxy(transport, makeActions());
+
+    expect('getUser' in proxy).toBe(true);
+    expect('createUser' in proxy).toBe(true);
+    expect('notRegistered' in proxy).toBe(false);
+  });
+
+  it('Object.keys returns registered action names (FR-12)', () => {
+    const transport = makeMockTransport();
+    const proxy = createRpcProxy(transport, makeActions());
+
+    expect(Object.keys(proxy).sort()).toEqual(['createUser', 'deleteUser', 'getUser']);
+  });
+
+  it('await Promise.resolve(proxy) returns the proxy without throwing — non-thenable (FR-13)', async () => {
+    const transport = makeMockTransport();
+    const proxy = createRpcProxy(transport, makeActions());
+
+    const result = await Promise.resolve(proxy);
+    expect(Object.is(result, proxy)).toBe(true);
+  });
 });

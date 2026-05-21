@@ -43,6 +43,27 @@ describe('timestampFromDate', () => {
   });
 });
 
+describe('negative epoch guard (FR-6)', () => {
+  it('timestampFromMillis throws RangeError for negative ms', () => {
+    expect(() => timestampFromMillis(-1)).toThrow(RangeError);
+    expect(() => timestampFromMillis(-1)).toThrow('audit-primitives: negative epoch ms not supported');
+  });
+
+  it('timestampFromDate throws RangeError for pre-epoch Date', () => {
+    const preEpoch = new Date(-1);
+    expect(() => timestampFromDate(preEpoch)).toThrow(RangeError);
+    expect(() => timestampFromDate(preEpoch)).toThrow('audit-primitives: negative epoch ms not supported');
+  });
+
+  it('timestampFromMillis accepts 0 (epoch boundary)', () => {
+    expect(() => timestampFromMillis(0)).not.toThrow();
+  });
+
+  it('timestampFromDate accepts epoch Date', () => {
+    expect(() => timestampFromDate(new Date(0))).not.toThrow();
+  });
+});
+
 describe('timestampCompare', () => {
   it('returns 0 for equal timestamps', () => {
     const ts: Timestamp = { seconds: 100, nanoseconds: 200 };

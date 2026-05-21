@@ -69,6 +69,16 @@ export function requireAuthContext(ctx: RequestContext): AuthContext {
  *
  * Per ADR-007 Amendment 1.2.9 (post-Build fidelity audit P1-1 fix);
  * Sprint 3.10 W-3-10-11 (semantic clarification).
+ *
+ * @example
+ * ```ts
+ * // Use requireAuthContextWithDataAccess when you only need to guard against
+ * // the explicit empty-string sentinel (the "$setDataAccessUuid('')" case).
+ * // For the intended "operator is impersonating someone else" semantic guard,
+ * // use isImpersonating from @gertsai/session-guard:
+ * //   import { isImpersonating } from '@gertsai/session-guard';
+ * //   if (isImpersonating(session)) { ... }
+ * ```
  */
 export function requireAuthContextWithDataAccess(
   ctx: RequestContext,

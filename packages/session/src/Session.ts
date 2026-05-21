@@ -78,8 +78,7 @@ export class Session extends EventEmitter {
     this._errorHandler =
       opts.errorHandler ??
       ((err) => {
-        // Default: swallow. Consumers wanting visibility must inject one.
-        void err;
+        console.error('[gertsai/session] uncaught error:', err);
       });
     this._dataAccessUuid = opts.dataAccessUuid;
     this._tenantId = opts.tenantId;

@@ -93,6 +93,12 @@ export function createRpcProxy<
           if (prop === RPC_PROXY_BRAND) return true;
           return undefined;
         }
+        // Allow Promise-unwrap detection to treat this proxy as a non-thenable.
+        // Without this, `await Promise.resolve(proxy)` would call the get trap
+        // for 'then', throw "Unknown RPC action: then", and reject the promise.
+        if (prop === 'then' || prop === 'catch' || prop === 'finally') {
+          return undefined;
+        }
         if (!actionKeys.has(prop)) {
           throw new Error(`Unknown RPC action: ${prop}`);
         }
@@ -104,6 +110,18 @@ export function createRpcProxy<
       },
       deleteProperty() {
         return false;
+      },
+      has(_target, prop) {
+        return typeof prop === 'string' && Object.prototype.hasOwnProperty.call(actions, prop);
+      },
+      ownKeys(_target) {
+        return Object.keys(actions);
+      },
+      getOwnPropertyDescriptor(_target, prop) {
+        if (typeof prop === 'string' && prop in actions) {
+          return { enumerable: true, configurable: true, writable: false, value: undefined };
+        }
+        return undefined;
       },
     },
   ) as RpcProxy<TActionMap>;

@@ -70,6 +70,17 @@ describe('EntityWithMetadata', () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
+  it('$markSaved is idempotent — emits "saved" only once on repeated calls (FR-1)', () => {
+    const o = new Order();
+    const handler = vi.fn();
+    o.on('saved', handler);
+
+    o.$markSaved();
+    o.$markSaved();
+    expect(o.$isMockup).toBe(false);
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
   it('$markStaled emits "staled" once (idempotent)', () => {
     const o = new Order();
     const handler = vi.fn();

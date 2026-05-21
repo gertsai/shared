@@ -40,6 +40,9 @@ export class ChainTenantResolver<Source> implements TenantResolverStrategy<Sourc
   }
 
   async resolve(source: Source): Promise<TenantResolution | null> {
+    // Serial by design — per-strategy I/O blocks the chain. Acceptable for CPU-only strategies;
+    // if a future strategy performs blocking I/O, consider a parallel-first variant.
+    // Document this contract on any new strategy.
     for (const strategy of this.strategies) {
       const result = await strategy.resolve(source);
       if (result !== null) {

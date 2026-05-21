@@ -19,6 +19,9 @@ export async function withTimeout<T>(
   timeoutMs: number,
   message?: string,
 ): Promise<T> {
+  // AbortController abort is best-effort fire-and-forget: the signal is NOT
+  // propagated to the wrapped action. The wrapped function is responsible for
+  // observing the signal if it wishes to respond to cancellation.
   const controller = new AbortController();
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
 

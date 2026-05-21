@@ -81,4 +81,19 @@ describe('SubdomainStrategy', () => {
   it('throws when baseDomain is empty', () => {
     expect(() => new SubdomainStrategy({ baseDomain: '   ' })).toThrow(/non-empty baseDomain/);
   });
+
+  describe('IPV4_LITERAL regex (FR-11)', () => {
+    it('rejects out-of-range IPv4 literal 999.999.999.999', async () => {
+      const s = new SubdomainStrategy({ baseDomain: 'gertsai.dev' });
+      // 999.999.999.999 matched the old loose regex but is not a valid IPv4.
+      // With the strict regex it no longer matches IPv4_LITERAL, so the strategy
+      // will fall through to the suffix match check (which also returns null).
+      await expect(s.resolve(reqWithHost('999.999.999.999'))).resolves.toBeNull();
+    });
+
+    it('still rejects valid IPv4 literal 192.168.1.1', async () => {
+      const s = new SubdomainStrategy({ baseDomain: 'gertsai.dev' });
+      await expect(s.resolve(reqWithHost('192.168.1.1'))).resolves.toBeNull();
+    });
+  });
 });

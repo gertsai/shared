@@ -2,7 +2,7 @@
 import type { HttpRequestLike, TenantResolution, TenantResolverStrategy } from '../strategy.js';
 import { extractHostHeader } from './header-lookup.js';
 
-const IPV4_LITERAL = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
+const IPV4_LITERAL = /^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/;
 const TENANT_SEGMENT = /^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/;
 
 export interface SubdomainStrategyOptions {
