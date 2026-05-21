@@ -28,8 +28,8 @@ import type { PipelineContext, PipelineDeps } from '../types';
  *   - Otherwise: log the errors via `deps.logger?.error` and pass through.
  *
  * The `strictResponseValidation` flag is passed via `PipelineDeps` (captured from
- * `ApiController._config.strictResponseValidation` at schema-build time) rather
- * than accessed through `deps.controller` to avoid a circular-import footgun.
+ * `ApiController._config.strictResponseValidation` at schema-build time) as an
+ * explicit narrowly-typed field, avoiding any circular-import footgun.
  *
  * @param ctx  - Pipeline context carrying `result` from stage 8/9
  * @param deps - Pipeline dependencies (action, logger, strictResponseValidation)

@@ -3,12 +3,15 @@
  * ApiController.setStageOverride unit tests.
  *
  * Wave 27 PR-5 (PRD-065 FR-3 / RFC-027 §PR-5).
+ * Wave 32.E (EVID-083 HIGH-4 follow-up) — sensitive-stage warn-on-override.
  *
  * AC coverage:
  *   AC-SO-1: setStageOverride replaces a named stage for newly-built schemas
  *   AC-SO-2: Overrides are captured at schema-build time (snapshot isolation)
  *   AC-SO-3: Already-registered actions retain original pipeline (set-after-register has no effect)
  *   AC-SO-4: Multiple overrides on different stages compose correctly
+ *   AC-SO-5: console.warn fires when overriding a sensitive stage (Wave 32.E)
+ *   AC-SO-6: console.warn does NOT fire for non-sensitive stage override (Wave 32.E)
  */
 
 import { describe, it, expect, vi } from 'vitest';
@@ -180,5 +183,42 @@ describe('ApiController.setStageOverride', () => {
     expect(callLog).toContain('custom-inject');
     // Both should have been called (order: extract before inject per STAGE_NAMES order)
     expect(callLog.indexOf('custom-extract')).toBeLessThan(callLog.indexOf('custom-inject'));
+  });
+
+  // ---------------------------------------------------------------------------
+  // Wave 32.E follow-up to Phase D (EVID-083 HIGH-4) — sensitive-stage warn
+  // ---------------------------------------------------------------------------
+
+  // AC-SO-5 — Wave 32.E follow-up to Phase D (EVID-083 HIGH-4):
+  // setStageOverride must emit a console.warn (broker fallback when broker is
+  // not yet started at call time) when overriding a sensitive stage such as
+  // 'establishAuthSession'. Verifies HIGH-4 implementation is observable.
+  it("logs console.warn when overriding a sensitive stage 'establishAuthSession' (Wave 32.E / EVID-083 HIGH-4)", () => {
+    const controller = freshController();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const customAuth: Stage = async (ctx) => ctx;
+    controller.setStageOverride('establishAuthSession', customAuth);
+
+    expect(warnSpy).toHaveBeenCalledOnce();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/SENSITIVE stage 'establishAuthSession' overridden/),
+    );
+
+    warnSpy.mockRestore();
+  });
+
+  // AC-SO-6 — Wave 32.E: overriding a non-sensitive stage must NOT emit a warning.
+  // Ensures the warn is scoped only to the SENSITIVE_STAGES set.
+  it('does NOT log console.warn when overriding a non-sensitive stage (Wave 32.E)', () => {
+    const controller = freshController();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const customExtract: Stage = async (ctx) => ctx;
+    controller.setStageOverride('extractParams', customExtract);
+
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    warnSpy.mockRestore();
   });
 });

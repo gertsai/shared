@@ -284,6 +284,40 @@ NOTE: Call `setStageOverride` **before** `register()` for actions you want
 the override to apply to. Actions registered before `setStageOverride` retain
 the default stage.
 
+### Security boundary — sensitive stages
+
+Four stages are load-bearing security boundaries:
+
+- `establishAuthSession` — authentication enforcement
+- `validateRequest`      — input validation
+- `validateResponse`     — output validation
+- `injectTenantId`       — tenant-scoping invariant
+
+Overriding any of these via `setStageOverride` silently removes the corresponding
+check unless your override preserves the security semantics. Each call to
+`setStageOverride` for a sensitive stage emits `logger.warn` at startup so the
+override is visible in logs.
+
+If you need custom behaviour BEFORE or AFTER the default check, the cleanest
+pattern is to import the default stage and compose:
+
+```ts
+import { ApiController } from '@gertsai/api-core';
+import { establishAuthSession, type Stage } from '@gertsai/api-core/pipeline';
+
+const myAuthStage: Stage = async (ctx, deps) => {
+  // ... pre-auth logic (e.g., extract custom auth header)
+  const result = await establishAuthSession(ctx, deps);  // default check
+  // ... post-auth logic (e.g., custom telemetry)
+  return result;
+};
+
+controller.setStageOverride('establishAuthSession', myAuthStage);
+```
+
+For more invasive patterns (e.g., `addStageBefore`, `wrapStage('around')`), file
+a Forgeplan RFC — the current API intentionally limits to single-stage replace.
+
 ### Building custom runners
 
 Compose your own pipeline from the exported stages:

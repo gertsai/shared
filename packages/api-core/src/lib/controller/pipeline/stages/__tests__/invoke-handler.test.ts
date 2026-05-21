@@ -52,7 +52,6 @@ function makeDeps(handlerFn: (handlerDeps: any) => any): PipelineDeps {
         handler: handlerFn,
       },
     } as unknown as PipelineDeps['action'],
-    controller: {},
     service: service as unknown as PipelineDeps['service'],
     logger: service.logger,
     sessionFactory: () => makeSession(),

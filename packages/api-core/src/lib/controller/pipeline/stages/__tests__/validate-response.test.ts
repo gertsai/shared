@@ -57,7 +57,6 @@ function makeDeps(
         response: makeResponseValidator(validatorResult.success, validatorResult.errors),
       },
     } as unknown as PipelineDeps['action'],
-    controller: {},
     service: {} as PipelineDeps['service'],
     logger: {
       info: vi.fn(),

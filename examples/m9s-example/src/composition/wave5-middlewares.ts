@@ -118,6 +118,51 @@ export function buildWave5Middlewares(): readonly unknown[] {
 // Action-handler helpers — Sprint 3.10 Addendum 2 wiring
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Wave 32.A — testSession seam fail-closed gating (EVID-083 CRIT-1, CWE-287/602).
+//
+// The `meta.testSession` seam is a TEST-ONLY affordance for e2e/integration
+// tests that need a pre-built session without minting a real JWT. Without this
+// gate, any Moleculer peer (NATS/Redis/TCP transit forwards meta verbatim)
+// could inject a forged session and bypass establishAuthSession + session-guard.
+//
+// Fail-closed: BOTH `NODE_ENV !== 'production'` AND explicit opt-in env must
+// be set. Production sanity check: throws at module-load time if both gates
+// would admit a testSession in production — better dead than insecure.
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether the test-session seam is permitted in this process.
+ *
+ * Evaluated ONCE at module-load time. Both conditions must hold:
+ *   1. `NODE_ENV` is not `'production'`
+ *   2. `GERTSAI_TEST_SESSION_ALLOW` is explicitly set to `'1'`
+ *
+ * Production mis-configuration (GERTSAI_TEST_SESSION_ALLOW=1 in production)
+ * is caught by the module-load-time sanity check below, which throws
+ * immediately so the service dies on startup before accepting any traffic.
+ */
+const TEST_SESSION_ALLOWED = (() => {
+  const isNonProd = process.env['NODE_ENV'] !== 'production';
+  const explicitOptIn = process.env['GERTSAI_TEST_SESSION_ALLOW'] === '1';
+  return isNonProd && explicitOptIn;
+})();
+
+// Module-load-time sanity: if GERTSAI_TEST_SESSION_ALLOW=1 was set in a
+// production process, fail loudly on startup so it's visible in crash logs
+// before the service accepts a single request. Intentional hard crash —
+// better dead than insecure (CWE-287/602 defence-in-depth).
+if (
+  process.env['GERTSAI_TEST_SESSION_ALLOW'] === '1' &&
+  process.env['NODE_ENV'] === 'production'
+) {
+  throw new Error(
+    'wave5-middlewares: GERTSAI_TEST_SESSION_ALLOW=1 is FORBIDDEN in production. ' +
+      'This flag enables the meta.testSession auth-bypass seam used by tests only. ' +
+      'Unset it from the production environment.',
+  );
+}
+
 /**
  * Snapshot of the per-request Wave 5 context as seen by an action handler.
  * Both fields are optional so that pre-Wave-5 callers (no sessionMiddleware
@@ -162,6 +207,11 @@ export function tryGetRequestContextFromCtx(
   // Production code path (Wave 5 sessionMiddleware composed at HTTP entry)
   // never sets `meta.testSession`, so this branch is a no-op in real
   // deployments. Documented as test-only in the meta shape.
+  //
+  // Wave 32.A — CRIT-1 gate: only admit testSession when TEST_SESSION_ALLOWED
+  // is true (non-production + explicit opt-in env var). Production-reachable
+  // transit (NATS/Redis/TCP forwards meta verbatim) cannot inject a forged
+  // session through this path. See module-level comment above (CWE-287/602).
   const meta = ctx.meta as
     | {
         testSession?: unknown;
@@ -169,16 +219,47 @@ export function tryGetRequestContextFromCtx(
       }
     | undefined;
   if (
+    TEST_SESSION_ALLOWED &&
     meta !== undefined &&
     meta.testSession !== null &&
     typeof meta.testSession === 'object' &&
     meta.testSession !== undefined
   ) {
+    // Wave 32.A — CRIT-3 fix: derive expectedTenantId from testSession.tenantId
+    // (single source of truth). Pre-fix, the header was used as the source,
+    // enabling tests to silently mix sources and bypass tenant scoping
+    // (CWE-345 mixed-source tenant assertion).
+    //
+    // Now: expectedTenantId comes from session. If the header is ALSO present
+    // and disagrees with the session, throw immediately — this is a test-
+    // fixture bug that would produce a silent Tenant scope violation with the
+    // old code and must be caught loudly at the seam.
+    const session = meta.testSession as Wave5ContextSnapshot['session'];
+    const sessionTenantId = (
+      session as { tenantId?: string } | undefined
+    )?.tenantId;
     const headerTenantId = meta.headers?.['x-tenant-id'];
+
+    if (
+      headerTenantId !== undefined &&
+      sessionTenantId !== undefined &&
+      headerTenantId !== sessionTenantId
+    ) {
+      // Fail-loud: mixed-source tenant assertion is a CWE-345 footgun.
+      // Include "Tenant scope violation" so existing tests that assert on
+      // cross-tenant rejection still match the expected error pattern.
+      throw new Error(
+        `wave5-middlewares: Tenant scope violation — meta.testSession.tenantId ` +
+          `('${sessionTenantId}') does not match meta.headers['x-tenant-id'] ` +
+          `('${headerTenantId}'). Mixed-source tenant assertion is a CWE-345 ` +
+          `footgun — fix the test fixture to use a single tenantId across the ` +
+          `session and the header.`,
+      );
+    }
+
     return {
-      session: meta.testSession as Wave5ContextSnapshot['session'],
-      expectedTenantId:
-        typeof headerTenantId === 'string' ? headerTenantId : undefined,
+      session,
+      expectedTenantId: sessionTenantId,
     };
   }
 

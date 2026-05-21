@@ -54,8 +54,11 @@ export async function establishAuthSession(
           'establishAuthSession: PipelineDeps.sessionFactory is required when action.options.auth is "required" or "optional"',
         );
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const session = sessionFactory(meta.user_uuid, meta.user_type as any);
+      // Wave 32.C (EVID-083 HIGH-8): after the `meta.user_uuid && meta.user_type`
+      // narrowing, `meta.user_type` is already `UserType` (see
+      // `packages/api-core/src/lib/common/types.ts:15`), so the `as any` cast
+      // and its eslint-disable are redundant — dropped for end-to-end type safety.
+      const session = sessionFactory(meta.user_uuid, meta.user_type);
       return { ...ctx, session };
     }
   }

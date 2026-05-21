@@ -35,7 +35,18 @@ export async function wrapResponse(
   ctx: PipelineContext,
   deps: PipelineDeps,
 ): Promise<PipelineContext> {
-  const r = ctx.result!;
+  // Wave 32.C (EVID-083 HIGH-9): `setStageOverride('invokeHandler', ...)` lets a
+  // consumer replace stage 8 with one that doesn't populate `ctx.result`. Without
+  // this guard, the `!` would degrade to a `TypeError` at runtime — convert to a
+  // clear diagnostic instead. TS narrows `ctx.result` to non-undefined below.
+  if (!ctx.result) {
+    throw new Error(
+      'wrapResponse: ctx.result was not populated. ' +
+        'A custom stage replaced `invokeHandler` (or another upstream stage) without setting ctx.result. ' +
+        'Custom invokeHandler overrides MUST return a context with `result: { code?, message?, data, raw? }`.',
+    );
+  }
+  const r = ctx.result;
   const finalCode = r.code ?? deps.action.options.responseCode ?? ResponseCode.SUCCESS;
 
   // Compute resolved message (verbatim fallback chain: result.message → action.responseMessage)

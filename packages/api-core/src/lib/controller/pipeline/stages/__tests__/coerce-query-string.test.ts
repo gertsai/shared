@@ -33,7 +33,6 @@ function makeDepsWithRest(
         params: actionParams,
       },
     } as unknown as PipelineDeps['action'],
-    controller: {},
     service: {} as PipelineDeps['service'],
     logger: undefined,
   };

@@ -10,6 +10,9 @@
  *   5. auth='none' (or absent) → session stays undefined regardless of meta
  *   6. SPEC-021 I-6: unauthorized request never reaches sessionFactory (fail-fast)
  *   7. auth='required' + user_uuid present but user_type absent → session NOT created
+ * Wave 32.E (EVID-083 HIGH-11):
+ *   8. auth='required' + credentials present + sessionFactory undefined → throws plain Error
+ *   9. auth='optional' + credentials present + sessionFactory undefined → throws plain Error
  */
 
 import { describe, it, expect, vi } from 'vitest';
@@ -39,7 +42,6 @@ function makeDeps(overrides?: Partial<PipelineDeps>): PipelineDeps {
         auth: 'required',
       },
     } as unknown as PipelineDeps['action'],
-    controller: {},
     service: {} as PipelineDeps['service'],
     logger: {
       info: vi.fn(),
@@ -199,5 +201,49 @@ describe('establishAuthSession (Stage 6)', () => {
 
     expect(result.session).toBeUndefined();
     expect(deps.sessionFactory).not.toHaveBeenCalled();
+  });
+
+  // Case 8 — Wave 32.E (EVID-083 HIGH-11)
+  // Phase C (Wave 32.C) made sessionFactory optional on PipelineDeps and added a
+  // runtime guard inside the stage. When auth='required' AND both user_uuid + user_type
+  // are present (i.e. the factory WOULD be called), a missing sessionFactory must
+  // throw a descriptive plain Error — not silently skip session creation, which
+  // would allow an authenticated request to proceed without a session.
+  it("auth='required' + credentials present + sessionFactory undefined → throws plain Error (Wave 32.E / EVID-083 HIGH-11)", async () => {
+    const deps = makeDeps({
+      action: {
+        name: 'secure.action',
+        rest: undefined,
+        path: 'secure.action',
+        options: { auth: 'required' },
+      } as unknown as PipelineDeps['action'],
+      sessionFactory: undefined,
+    });
+    const ctx = makeCtx({ user_uuid: 'u1', user_type: 'web' });
+
+    await expect(establishAuthSession(ctx, deps)).rejects.toThrow(
+      /sessionFactory is required/i,
+    );
+  });
+
+  // Case 9 — Wave 32.E (EVID-083 HIGH-11)
+  // Same guard applies for auth='optional' when credentials ARE present.
+  // The 'optional' flag controls whether ANONYMOUS requests are accepted,
+  // not whether sessionFactory is required when a user presents credentials.
+  it("auth='optional' + credentials present + sessionFactory undefined → throws plain Error (Wave 32.E / EVID-083 HIGH-11)", async () => {
+    const deps = makeDeps({
+      action: {
+        name: 'optional.action',
+        rest: undefined,
+        path: 'optional.action',
+        options: { auth: 'optional' },
+      } as unknown as PipelineDeps['action'],
+      sessionFactory: undefined,
+    });
+    const ctx = makeCtx({ user_uuid: 'u1', user_type: 'web' });
+
+    await expect(establishAuthSession(ctx, deps)).rejects.toThrow(
+      /sessionFactory is required/i,
+    );
   });
 });

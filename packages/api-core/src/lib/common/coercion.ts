@@ -9,6 +9,13 @@
  */
 
 /**
+ * Wave 32.B (EVID-083 CRIT-6 / CWE-1321) — keys that would mutate
+ * Object.prototype if assigned via dynamic key. Iterating user-supplied
+ * field arrays MUST skip these to prevent prototype pollution.
+ */
+const DANGEROUS_KEYS = new Set<string>(['__proto__', 'constructor', 'prototype']);
+
+/**
  * Coerce string values to numbers for specified fields.
  * Mutates the params object in-place.
  *
@@ -24,6 +31,7 @@
  */
 export function coerceNumericFields(params: Record<string, unknown>, fields: string[]): void {
   for (const field of fields) {
+    if (DANGEROUS_KEYS.has(field)) continue; // Wave 32.B prototype-pollution guard
     const value = params[field];
     if (typeof value === 'string') {
       const num = Number(value);
@@ -54,6 +62,7 @@ export function coerceBooleanFields(params: Record<string, unknown>, fields: str
   const falseValues = new Set(['false', '0', 'no']);
 
   for (const field of fields) {
+    if (DANGEROUS_KEYS.has(field)) continue; // Wave 32.B prototype-pollution guard
     const value = params[field];
     if (typeof value === 'string') {
       const lower = value.toLowerCase();
@@ -83,6 +92,7 @@ export function coerceBooleanFields(params: Record<string, unknown>, fields: str
  */
 export function coerceArrayFields(params: Record<string, unknown>, fields: string[]): void {
   for (const field of fields) {
+    if (DANGEROUS_KEYS.has(field)) continue; // Wave 32.B prototype-pollution guard
     const value = params[field];
     if (typeof value === 'string' && value.includes(',')) {
       params[field] = value
@@ -147,6 +157,8 @@ export function smartCoerce(params: Record<string, unknown>, schema: CoercionSch
  * @deprecated Use smartCoerce with schema instead
  */
 export function coerceQueryParams(params: Record<string, unknown>): void {
+  // Wave 32.B prototype-pollution guard — filter DANGEROUS_KEYS from both hard-coded
+  // lists before delegating, so the guard holds even if the lists ever drift.
   const numericParams = [
     // Pagination
     'limit',
@@ -209,6 +221,6 @@ export function coerceQueryParams(params: Record<string, unknown>): void {
     'useOntology',
   ];
 
-  coerceNumericFields(params, numericParams);
-  coerceBooleanFields(params, booleanParams);
+  coerceNumericFields(params, numericParams.filter((k) => !DANGEROUS_KEYS.has(k)));
+  coerceBooleanFields(params, booleanParams.filter((k) => !DANGEROUS_KEYS.has(k)));
 }

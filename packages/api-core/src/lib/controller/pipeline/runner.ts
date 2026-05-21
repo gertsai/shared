@@ -75,7 +75,19 @@ export class PipelineRunner {
       }
       throw translateError(err, ctx, deps);
     } finally {
-      await cleanup(ctx, deps);
+      // Wave 32.C (EVID-083 HIGH-2): cleanup must NEVER mask the original error.
+      // JS finally-vs-catch semantics: a throw in finally replaces the in-flight
+      // catch-rethrow, silently losing the diagnostic. Swallow cleanup errors here
+      // and log via the structured logger — the original error (or normal return)
+      // takes precedence.
+      try {
+        await cleanup(ctx, deps);
+      } catch (cleanupErr) {
+        deps.logger?.error(
+          'PipelineRunner: cleanup threw — original error preserved',
+          cleanupErr,
+        );
+      }
     }
   }
 }

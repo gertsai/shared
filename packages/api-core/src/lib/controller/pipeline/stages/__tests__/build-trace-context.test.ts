@@ -27,7 +27,6 @@ function makeDeps(): PipelineDeps {
       path: 'test.action',
       options: {},
     } as unknown as PipelineDeps['action'],
-    controller: {},
     service: {} as PipelineDeps['service'],
     logger: undefined,
     sessionFactory: () => ({ $destroy: () => {} } as any),
