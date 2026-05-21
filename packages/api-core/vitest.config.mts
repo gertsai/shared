@@ -28,11 +28,9 @@ export default defineConfig({
     globals: false,
     hookTimeout: 30000,
     testTimeout: 30000,
-    // Bench harness — Wave 27 PR-5 (PRD-065 NFR perf / RFC-027 §Bench plan).
-    // Run with: pnpm --filter @gertsai/api-core exec vitest bench --run
-    benchmark: {
-      include: ['src/**/*.bench.ts'],
-      reporters: ['default'],
-    },
+    // Note: vitest 3.x experimental `benchmark` config produced NaN samples for
+    // our use-case — replaced with `scripts/perf-check.mjs` (Wave 29.B). Run:
+    //   pnpm --filter @gertsai/api-core perf:check  # baseline
+    //   pnpm --filter @gertsai/api-core perf:gate   # CI regression gate
   },
 });
