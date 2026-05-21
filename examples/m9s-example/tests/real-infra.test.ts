@@ -63,6 +63,36 @@ const ollamaReady = FORCE || (await ollamaAlive());
 
 const maybe = ollamaReady ? describe : describe.skip;
 
+// ---------------------------------------------------------------------------
+// Wave 30 fix — testSession injection helper (mirrors e2e.test.ts pattern).
+//
+// Since Wave 12.E-fix-1 (CWE-862 / PRD-038 FR-002), v1.ingest.document and
+// v1.search.query require an authenticated session via session-guard. The
+// pre-Wave-12 anonymous-call shape used here originally is silently 401.
+// `meta.testSession` is the Wave 9.0.1 test seam consumed by wave5-middlewares
+// `tryGetRequestContextFromCtx` — injecting a real Session fixture bypasses
+// JWT minting while keeping the rest of the production middleware chain
+// intact (tenant resolver, session-guard assertions).
+// ---------------------------------------------------------------------------
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function makeAuthSession(opts: { tenantId: string; operatorUuid?: string }): any {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { Session } = requireFromHere('@gertsai/session');
+  return new Session({
+    operatorUuid: opts.operatorUuid ?? 'user-real-infra-default',
+    operatorType: 'web',
+    tokenGetter: async () => 'tok',
+    dialog: {
+      confirm: async () => true,
+      alert: () => {},
+      error: () => {},
+    },
+    clientPlatform: 'web',
+    clientVersion: '0.0.0-real-infra',
+    tenantId: opts.tenantId,
+  });
+}
+
 maybe(
   'm9s-example real-infra e2e (Ollama embedder + Wave 5 broker)',
   () => {
@@ -128,7 +158,10 @@ maybe(
       };
 
       const resp = await broker.call('v1.ingest.document', input, {
-        meta: { headers: { 'x-tenant-id': 'tenant-real' } },
+        meta: {
+          headers: { 'x-tenant-id': 'tenant-real' },
+          testSession: makeAuthSession({ tenantId: 'tenant-real' }),
+        },
       });
 
       expect(resp).toBeDefined();
@@ -155,7 +188,10 @@ maybe(
         userId: 'user-real-search',
       };
       const ingestResp = await broker.call('v1.ingest.document', ingestInput, {
-        meta: { headers: { 'x-tenant-id': 'tenant-real' } },
+        meta: {
+          headers: { 'x-tenant-id': 'tenant-real' },
+          testSession: makeAuthSession({ tenantId: 'tenant-real' }),
+        },
       });
       expect(ingestResp).toBeDefined();
 
@@ -166,7 +202,12 @@ maybe(
           query: 'canonical reference Wave 5 middleware composition',
           topK: 3,
         },
-        { meta: { headers: { 'x-tenant-id': 'tenant-real' } } },
+        {
+          meta: {
+            headers: { 'x-tenant-id': 'tenant-real' },
+            testSession: makeAuthSession({ tenantId: 'tenant-real' }),
+          },
+        },
       );
 
       expect(searchResp).toBeDefined();
@@ -198,7 +239,10 @@ maybe(
       // Should succeed even on minimal-but-non-empty text — real embedder
       // produces a single chunk vector.
       const resp = await broker.call('v1.ingest.document', input, {
-        meta: { headers: { 'x-tenant-id': 'tenant-real' } },
+        meta: {
+          headers: { 'x-tenant-id': 'tenant-real' },
+          testSession: makeAuthSession({ tenantId: 'tenant-real' }),
+        },
       });
       expect(resp).toBeDefined();
       const data = (resp as { data?: { chunkCount?: number } }).data;

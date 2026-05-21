@@ -83,6 +83,32 @@ const redisReady = FORCE || (await redisAlive());
 
 const maybe = redisReady ? describe : describe.skip;
 
+// ---------------------------------------------------------------------------
+// Wave 30 fix — testSession injection helper (mirrors e2e.test.ts +
+// real-infra.test.ts pattern). v1.ingest.document requires authenticated
+// session since Wave 12.E-fix-1 (CWE-862). The `meta.testSession` seam in
+// wave5-middlewares.tryGetRequestContextFromCtx bypasses JWT minting while
+// keeping production middleware chain intact (tenant resolver, session-guard).
+// ---------------------------------------------------------------------------
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function makeAuthSession(opts: { tenantId: string; operatorUuid?: string }): any {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { Session } = requireFromHere('@gertsai/session');
+  return new Session({
+    operatorUuid: opts.operatorUuid ?? 'user-bullmq-default',
+    operatorType: 'web',
+    tokenGetter: async () => 'tok',
+    dialog: {
+      confirm: async () => true,
+      alert: () => {},
+      error: () => {},
+    },
+    clientPlatform: 'web',
+    clientVersion: '0.0.0-bullmq',
+    tenantId: opts.tenantId,
+  });
+}
+
 maybe(
   'm9s-example real-infra e2e (BullMQ async + Redis activation — Track 3)',
   () => {
@@ -166,7 +192,10 @@ maybe(
 
       const t0 = Date.now();
       const resp = await broker.call('v1.ingest.document', input, {
-        meta: { headers: { 'x-tenant-id': 'tenant-bullmq' } },
+        meta: {
+          headers: { 'x-tenant-id': 'tenant-bullmq' },
+          testSession: makeAuthSession({ tenantId: 'tenant-bullmq' }),
+        },
       });
       const elapsed = Date.now() - t0;
 
@@ -209,7 +238,10 @@ maybe(
 
         // 1. Enqueue — must return mode='queued' immediately.
         const ingestResp = await broker.call('v1.ingest.document', ingestInput, {
-          meta: { headers: { 'x-tenant-id': 'tenant-bullmq' } },
+          meta: {
+          headers: { 'x-tenant-id': 'tenant-bullmq' },
+          testSession: makeAuthSession({ tenantId: 'tenant-bullmq' }),
+        },
         });
         const ingestData = (
           ingestResp as { data?: { mode?: string; jobId?: string } }
@@ -226,7 +258,12 @@ maybe(
           const searchResp = await broker.call(
             'v1.search.query',
             { query: token, topK: 5 },
-            { meta: { headers: { 'x-tenant-id': 'tenant-bullmq' } } },
+            {
+              meta: {
+                headers: { 'x-tenant-id': 'tenant-bullmq' },
+                testSession: makeAuthSession({ tenantId: 'tenant-bullmq' }),
+              },
+            },
           );
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           return ((searchResp as any).data?.results ?? []) as Array<{
@@ -291,7 +328,12 @@ maybe(
               text: `Batch payload for token=${tok}. ` + 'x'.repeat(120),
               userId: 'user-batch',
             },
-            { meta: { headers: { 'x-tenant-id': 'tenant-bullmq' } } },
+            {
+              meta: {
+                headers: { 'x-tenant-id': 'tenant-bullmq' },
+                testSession: makeAuthSession({ tenantId: 'tenant-bullmq' }),
+              },
+            },
           ),
         ),
       );
