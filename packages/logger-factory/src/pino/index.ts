@@ -21,9 +21,10 @@ interface PinoLogger {
   fatal(ctx: LogContext, msg?: string): void;
 }
 
-type PinoFactory = () => PinoLogger;
+type PinoOptions = Record<string, unknown>;
+type PinoFactory = (opts?: PinoOptions) => PinoLogger;
 
-export function createPinoBackend(pinoInstance?: PinoLogger): LoggerBackend {
+export function createPinoBackend(pinoInstance?: PinoLogger, pinoOptions?: PinoOptions): LoggerBackend {
   let logger: PinoLogger;
   if (pinoInstance) {
     logger = pinoInstance;
@@ -34,7 +35,7 @@ export function createPinoBackend(pinoInstance?: PinoLogger): LoggerBackend {
         typeof pinoModule === 'function'
           ? pinoModule
           : (pinoModule.default as PinoFactory);
-      logger = factory();
+      logger = factory(pinoOptions);
     } catch {
       throw new Error(
         '@gertsai/logger-factory/pino requires "pino" >=8.0.0 as a peer dependency. Install it with: pnpm add pino',

@@ -47,6 +47,31 @@ describe('vueReactiveAdapter', () => {
     expect(typeof vueReactiveAdapter.isReactive).toBe('function');
   });
 
+  it('rejects with descriptive error when a Vue export is non-function (FR-9)', async () => {
+    // Simulate a broken/stub @vue/runtime-core that exports non-function values.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const M = Module as any;
+    const originalLoad = M._load;
+    M._load = function patched(req: string, ...rest: unknown[]) {
+      if (req === '@vue/runtime-core') {
+        // Return an object where shallowReactive is not a function.
+        return { shallowReactive: null, markRaw: () => undefined, isReactive: () => false };
+      }
+      // eslint-disable-next-line prefer-rest-params
+      return originalLoad.apply(this, [req, ...rest]);
+    };
+
+    try {
+      vi.resetModules();
+      const { vueReactiveAdapter } = await import('./vue');
+      expect(() => vueReactiveAdapter.reactive({})).toThrow(
+        /@gertsai\/entity\/vue.*did not export expected functions/,
+      );
+    } finally {
+      M._load = originalLoad;
+    }
+  });
+
   it('delegates to @vue/runtime-core when installed (shallowReactive + markRaw + isReactive)', async () => {
     // Sanity: Vue is in devDependencies so import resolves.
     const req = createRequire(import.meta.url);

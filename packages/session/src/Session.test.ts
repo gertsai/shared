@@ -55,8 +55,21 @@ describe('Session — construction', () => {
 
     expect(session.operatorUuid).toBe('op-1');
     expect(session.dataAccessUuid).toBe('op-1'); // fallback
-    // Default errorHandler is a no-op function — must not throw.
+    // Default errorHandler logs to console.error — must not throw.
     expect(() => session.errorHandler(new Error('boom'))).not.toThrow();
+  });
+
+  it('default errorHandler invokes console.error (FR-2)', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const session = new Session(makeOpts());
+      const err = new Error('test-error');
+      session.errorHandler(err);
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy).toHaveBeenCalledWith('[gertsai/session] uncaught error:', err);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('exposes the dialog instance unchanged', () => {

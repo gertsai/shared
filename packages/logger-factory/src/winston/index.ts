@@ -25,6 +25,9 @@ interface WinstonModule {
   default?: WinstonModule;
 }
 
+// winston ships no `fatal` level by default; we map fatal→error and lose distinction.
+// To preserve, configure winston with a custom level set + provide explicit instance
+// via `winston-instance` option.
 const LEVEL_MAP: Record<LogLevel, string> = {
   trace: 'silly',
   debug: 'debug',

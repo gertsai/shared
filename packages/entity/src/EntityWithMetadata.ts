@@ -145,8 +145,9 @@ export abstract class EntityWithMetadata<
     return changed;
   }
 
-  /** Transition `isMockup: true → false` and emit `'saved'`. */
+  /** Transition `isMockup: true → false` and emit `'saved'`. Idempotent. */
   $markSaved(): void {
+    if (this._isMockup === false) return;
     this._isMockup = false;
     this.emit('saved');
   }

@@ -42,6 +42,10 @@ export function throttle<TArgs extends readonly unknown[]>(
     }, limitMs - elapsed);
   }) as ThrottledFn<TArgs>;
 
+  /**
+   * Resets internal lastInvoke=0; the next call after cancel() invokes
+   * immediately rather than waiting for the throttle window.
+   */
   throttled.cancel = (): void => {
     if (timeoutId !== undefined) {
       clearTimeout(timeoutId);

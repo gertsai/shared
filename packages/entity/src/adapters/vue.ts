@@ -36,7 +36,7 @@ function loadVue(): {
   markRaw: MarkRawFn;
   isReactive: IsReactiveFn;
 } {
-  if (_shallowReactive && _markRaw && _isReactive) {
+  if (typeof _shallowReactive === 'function' && typeof _markRaw === 'function' && typeof _isReactive === 'function') {
     return {
       shallowReactive: _shallowReactive,
       markRaw: _markRaw,
@@ -45,15 +45,34 @@ function loadVue(): {
   }
   try {
     const vue = require('@vue/runtime-core') as {
-      shallowReactive: ShallowReactiveFn;
-      markRaw: MarkRawFn;
-      isReactive: IsReactiveFn;
+      shallowReactive: unknown;
+      markRaw: unknown;
+      isReactive: unknown;
     };
-    _shallowReactive = vue.shallowReactive;
-    _markRaw = vue.markRaw;
-    _isReactive = vue.isReactive;
-    return vue;
-  } catch {
+    if (
+      typeof vue.shallowReactive !== 'function' ||
+      typeof vue.markRaw !== 'function' ||
+      typeof vue.isReactive !== 'function'
+    ) {
+      throw new Error(
+        '@gertsai/entity/vue: "@vue/runtime-core" did not export expected functions (shallowReactive, markRaw, isReactive). Ensure @vue/runtime-core >=3.0.0 is installed.',
+      );
+    }
+    _shallowReactive = vue.shallowReactive as ShallowReactiveFn;
+    _markRaw = vue.markRaw as MarkRawFn;
+    _isReactive = vue.isReactive as IsReactiveFn;
+    return {
+      shallowReactive: _shallowReactive,
+      markRaw: _markRaw,
+      isReactive: _isReactive,
+    };
+  } catch (err) {
+    if (
+      err instanceof Error &&
+      err.message.includes('@gertsai/entity/vue')
+    ) {
+      throw err;
+    }
     throw new Error(
       '@gertsai/entity/vue requires "@vue/runtime-core" >=3.0.0 as a peer dependency. Install it with: pnpm add @vue/runtime-core',
     );
