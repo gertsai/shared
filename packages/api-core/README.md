@@ -233,6 +233,80 @@ broker.createService(createOpenApiService(openapi));
 await broker.start();
 ```
 
+## Action pipeline (Wave 27)
+
+The action-handling pipeline is composed of 11 named stages (plus `translateError` +
+`cleanup` hard-wired into the runner). Each stage is a typed `Stage<TIn, TOut>`
+function exported from `@gertsai/api-core/pipeline`.
+
+### Default stages (in order)
+
+1. `extractParams` — resolve params/file/fileMeta from `ctx.meta.$params` vs `ctx.params`
+2. `mergeMultipart` — merge `$multipart` into params
+3. `coerceQueryString` — typia smartCoerce or legacy coerceQueryParams for GET/DELETE endpoints
+4. `injectTenantId` — auto-pop `tenantId` from meta into params
+5. `validateRequest` — typia validator + throw `APIError(BAD_REQUEST__INVALID_PARAMS)` on failure
+6. `establishAuthSession` — auth-required check + `sessionFactory` call
+7. `buildTraceContext` — W3C traceparent for downstream job injection
+8. `invokeHandler` — central `action.options.handler.call(...)` invocation
+9. `rawResponseShortcut` — early-return for streaming/raw responses
+10. `validateResponse` — strict/loose response validation per `RESPONSE_VALIDATION` config
+11. `wrapResponse` — wrap result in `{success, code, message, data}` envelope
+
+`translateError` (catches all stage errors, maps to `APIError`) and `cleanup`
+(logs + `session.$destroy()`) are hard-wired into `PipelineRunner.run()` per
+SPEC-021 I-1/I-2.
+
+### Custom pipeline composition — `setStageOverride`
+
+Use `setStageOverride` to inject custom logic into a single named stage without
+forking the controller class. Overrides are per-controller-instance and are
+captured at action schema-build time (snapshot isolation: already-registered
+actions retain their original pipeline).
+
+```ts
+import { ApiController } from '@gertsai/api-core';
+import type { Stage } from '@gertsai/api-core/pipeline';
+
+const myAuthStage: Stage = async (ctx, deps) => {
+  // custom logic — call the next stage or return ctx directly
+  return ctx;
+};
+
+const controller = ApiController.resolveController('v1', 'graph');
+controller.setStageOverride('establishAuthSession', myAuthStage);
+
+// Actions registered AFTER this call use myAuthStage for stage 6:
+controller.register('query', { ... });
+```
+
+NOTE: Call `setStageOverride` **before** `register()` for actions you want
+the override to apply to. Actions registered before `setStageOverride` retain
+the default stage.
+
+### Building custom runners
+
+Compose your own pipeline from the exported stages:
+
+```ts
+import {
+  PipelineRunner,
+  extractParams,
+  validateRequest,
+  invokeHandler,
+} from '@gertsai/api-core/pipeline';
+
+const minimalRunner = new PipelineRunner([
+  extractParams,
+  validateRequest,
+  invokeHandler,
+]);
+```
+
+See `SPEC-021` for the frozen per-stage behaviour contract.
+
+---
+
 ## Status
 
 - **Tier 4** in the Gerts shared graph — depends on `@gertsai/core` and

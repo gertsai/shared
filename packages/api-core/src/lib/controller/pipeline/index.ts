@@ -12,7 +12,7 @@
 export type { PipelineContext, PipelineDeps, Stage, StageName } from './types';
 export { PipelineShortCircuit } from './types';
 export { PipelineRunner } from './runner';
-export { DEFAULT_STAGES } from './default-stages';
+export { DEFAULT_STAGES, STAGE_NAMES } from './default-stages';
 export { translateError } from './stages/translate-error';
 export { cleanup } from './stages/cleanup';
 // PR-2: stages 1-5

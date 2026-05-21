@@ -5,7 +5,6 @@ import untypia from '@ryoppippi/unplugin-typia';
 export default defineConfig({
   plugins: [
     // typia transform - must come first
-    // @ts-expect-error - vite version mismatch
     untypia.vite({
       tsconfig: './tsconfig.json',
     }),
@@ -29,5 +28,11 @@ export default defineConfig({
     globals: false,
     hookTimeout: 30000,
     testTimeout: 30000,
+    // Bench harness — Wave 27 PR-5 (PRD-065 NFR perf / RFC-027 §Bench plan).
+    // Run with: pnpm --filter @gertsai/api-core exec vitest bench --run
+    benchmark: {
+      include: ['src/**/*.bench.ts'],
+      reporters: ['default'],
+    },
   },
 });
