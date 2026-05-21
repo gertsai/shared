@@ -1,5 +1,18 @@
 # @gertsai-examples/m9s-example
 
+## 0.0.21
+
+### Patch Changes
+
+- Updated dependencies [1d1fd18]
+- Updated dependencies [964a57e]
+- Updated dependencies [6bdeaa2]
+- Updated dependencies [e27a5d2]
+- Updated dependencies [b7a1e2d]
+  - @gertsai/api-core@0.6.0
+  - @gertsai-examples/m9s-example-api-types@0.0.15
+  - @gertsai/api-rlr@0.3.9
+
 ## 0.0.20
 
 ### Patch Changes

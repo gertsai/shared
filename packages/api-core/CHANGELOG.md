@@ -1,5 +1,193 @@
 # @orchdev/api-core
 
+## 0.6.0
+
+### Minor Changes
+
+- e27a5d2: Wave 27 PR-4 — **integration milestone**: extract response-handling stages 9-11 + wire up full `PipelineRunner` orchestrator.
+
+  Stages 9-11 moved into standalone files (PRESERVED VERBATIM per SPEC-021 line-range contracts):
+
+  - **Stage 9 `rawResponseShortcut`** — throws `PipelineShortCircuit(data)` when handler returned `raw: true`. Runner catches outside the `translateError` path and returns data directly without wrapping.
+  - **Stage 10 `validateResponse`** — when `config.RESPONSE_VALIDATION === true`, validates handler result against `action.options.response`. Strict mode throws `APIError(BAD_REQUEST__INVALID_RESPONSE)`; loose mode logs error and passes through.
+  - **Stage 11 `wrapResponse`** — produces final `{code, message, data}` shape in `ctx.result` with fallback chain `result.code → action.responseCode → ResponseCode.SUCCESS`.
+
+  **`ApiController._createActionSchema`** now a **15-LOC orchestrator** (was 193 LOC in original closure). Full `new PipelineRunner(DEFAULT_STAGES).run(initialCtx, deps)` invocation. All 13 stages now extracted (11 in `DEFAULT_STAGES`; stages 12+13 hard-wired into runner's `catch`/`finally`).
+
+  **`ApiController.class.ts` size**: 1178 LOC → 1005 LOC (-173 LOC, -14.7%). The `_createActionSchema` method itself shrunk from 193 → 25 LOC including method scaffolding (the handler body is just 15 LOC).
+
+  **`PipelineDeps.strictResponseValidation`** added as **optional** field — captured at schema-build time from `ApiController._config.strictResponseValidation`. Chosen over runtime cast `(deps.controller as ...)._config` for type safety and to avoid silent `undefined` if controller shape ever changes.
+
+  **`PipelineRunner.run`** return-value semantics finalised: when `ctx.result.code !== undefined` (always after stage 11), returns `{ success: true, code, message, data }`; otherwise returns `ctx.result?.data` (partial-pipeline edge for tests with empty stages list).
+
+  **`runStagesSerially` retired** — was a temporary bridge during PR-2/3. Removed from `runner.ts`, `index.ts`, and its 2 tests dropped from `__tests__/runner.test.ts`.
+
+  **Minor bump rationale**: this PR makes `@gertsai/api-core/pipeline` subpath reachable as a documented public composition surface (additive). Consumer code can now `import { PipelineRunner, DEFAULT_STAGES, extractParams, ... } from '@gertsai/api-core/pipeline'`. PR-1..PR-3 were `patch` because the pipeline was dormant; PR-4 promotes it to a feature.
+
+  **Tests**: +19 new (6 raw-response-shortcut + 6 validate-response + 7 wrap-response). PipelineRunner tests updated to verify new envelope-return semantics. Total api-core: **376/376 passing**.
+
+  **Verification**:
+
+  - `pnpm --filter @gertsai/api-core build` — dual ESM+CJS green
+  - `pnpm --filter @gertsai/api-core typecheck` — 0 errors
+  - `pnpm --filter @gertsai/api-core test` — 376 passed (27 test files)
+  - `pnpm typecheck` workspace-wide — 0 errors
+
+  **Behaviour preservation**: zero changes to externally-observable behaviour. Same `APIError` codes, same `{success, code, message, data}` envelope, same `raw: true` short-circuit semantics, same response validation strict/loose paths.
+
+  **Deferred to PR-5**:
+
+  - Bench harness `__bench__/pipeline-runner.bench.ts` per RFC-027 §Bench plan (vitest bench config not yet wired)
+  - `setStageOverride` public API per RFC-027 §PR-5
+
+  Refs: PRD-065, SPEC-021 §Stages 9-11, RFC-027 §PR-4, ADR-015
+
+### Patch Changes
+
+- 1d1fd18: Wave 27 PR-1 — dormant pipeline scaffolding for action-pipeline extraction.
+
+  **No behaviour change.** `_createActionSchema` untouched. PR-1 adds dormant infrastructure that PR-2 onwards will activate per RFC-027 5-PR phased landing plan.
+
+  **New `./pipeline` subpath export** (additive, patch-bump-compatible):
+
+  - `PipelineContext` — typed per-request state threaded through stages
+  - `Stage<TIn, TOut>` — `(ctx, deps) => Promise<TOut>` signature
+  - `PipelineRunner` — sequential stage executor with `translateError` (catch) + `cleanup` (finally) + `PipelineShortCircuit` handling
+  - `PipelineDeps` — `{ action, controller, service, logger }`
+  - `PipelineShortCircuit` — sentinel error for raw-response short-circuit
+  - `StageName` — literal-union of 13 default stage names
+  - `DEFAULT_STAGES` — empty array placeholder (PR-2/3/4 will fill)
+  - `translateError` — stage 12 per SPEC-021, PRESERVED VERBATIM from `ApiController.class.ts:892-908`
+  - `cleanup` — stage 13 per SPEC-021, PRESERVED VERBATIM from `ApiController.class.ts:909-913`
+
+  **Tests**: +18 new (9 runner + 5 translate-error + 4 cleanup). All 304 api-core tests green.
+
+  **Verification**:
+
+  - `pnpm --filter @gertsai/api-core build` — dual ESM+CJS + DTS green for all 5 entrypoints including new `lib/controller/pipeline/index`
+  - `pnpm --filter @gertsai/api-core typecheck` — 0 errors
+  - `pnpm --filter @gertsai/api-core test` — 304/304 passed
+  - `pnpm typecheck` workspace-wide — 0 errors
+
+  **Rollback**: pure code refactor, no schema, no migration. Delete `pipeline/` directory + revert `package.json`/`tsup.config.ts` to revert.
+
+  Subsequent PRs land stages 1-11 (PR-2/3/4) and `setStageOverride` public API (PR-5) per RFC-027.
+
+  Refs: PRD-065, SPEC-021, RFC-027, ADR-015
+
+- 964a57e: Wave 27 PR-2 — extract pre-handler stages 1-5 into `@gertsai/api-core/pipeline`.
+
+  Stages 1-5 of the 13-stage `_createActionSchema` closure (per SPEC-021) are now standalone exported functions:
+
+  - **Stage 1 `extractParams`** — PRESERVED VERBATIM from `ApiController.class.ts:730-746`. Resolves `params`/`file`/`fileMeta` from `ctx.meta.$params` vs `ctx.params`.
+  - **Stage 2 `mergeMultipart`** — PRESERVED VERBATIM from `ApiController.class.ts:748-750`. `Object.assign(params, ctx.meta.$multipart)` when present.
+  - **Stage 3 `coerceQueryString`** — PRESERVED VERBATIM from `ApiController.class.ts:753-774`. Legacy `coerceQueryParams` vs typia `smartCoerce` per REST method.
+  - **Stage 4 `injectTenantId`** — PRESERVED VERBATIM from `ApiController.class.ts:779-782`. Auto-pop `tenantId` from `ctx.meta` into params.
+  - **Stage 5 `validateRequest`** — PRESERVED VERBATIM from `ApiController.class.ts:785-790`. Typia validator + `APIError(BAD_REQUEST__INVALID_PARAMS)` throw.
+
+  **`_createActionSchema` change**: 62 LOC of inline stages 1-5 replaced with 16-LOC `runStagesSerially([stage1..stage5], ctx, deps)` bridge call. Stages 6-13 stay inline (PR-3/4 will extract). No behaviour change.
+
+  **New helper**: `runStagesSerially(stages, initial, deps)` — temporary bridge between the still-monolithic closure (stages 6-13) and extracted stages 1-5. Will be retired in PR-4 when the full `PipelineRunner` orchestrates everything.
+
+  **Tests**: +33 new (5×stage averaging 6.2 tests/stage + 2 for `runStagesSerially`). Total api-core test count: 337/337 passing.
+
+  **Verification**:
+
+  - `pnpm --filter @gertsai/api-core build` — dual ESM+CJS green
+  - `pnpm --filter @gertsai/api-core typecheck` — 0 errors
+  - `pnpm --filter @gertsai/api-core test` — 337 passed
+  - `pnpm typecheck` workspace-wide — 0 errors
+
+  **Behaviour preservation**: zero changes to externally-observable behaviour. Same `APIError(BAD_REQUEST__INVALID_PARAMS)` codes, same `params`/`file`/`fileMeta` shape, same coercion semantics. Verified by 18 pre-existing api-core integration tests still passing post-extraction.
+
+  Refs: PRD-065, SPEC-021 §Stages 1-5, RFC-027 §PR-2
+
+- 6bdeaa2: Wave 27 PR-3 — extract handler-invocation stages 6-8 into `@gertsai/api-core/pipeline`.
+
+  Stages 6-8 moved into standalone files (PRESERVED VERBATIM per SPEC-021 line-range contracts):
+
+  - **Stage 6 `establishAuthSession`** — auth check + session creation. Throws `APIError(NOT_AUTHORIZED)` when `auth: 'required'` without `user_uuid`; calls `sessionFactory` when credentials present.
+  - **Stage 7 `buildTraceContext`** — W3C traceparent build via `@gertsai/otel/moleculer.buildTraceparent`. Spreads optional `ctx.requestID`, `ctx.id`, `ctx.parentID`, `ctx.tracing` per PRD-052 FR-004.
+  - **Stage 8 `invokeHandler`** — central `action.options.handler.call(deps.service, deps)` invocation. Assembles deps: `session`, `ctx`, `service`, `params`, `addJob` (wrapped with trace injection), `getQueue`, `files`, `call` (unwraps `.data`), `logger`, `respond`. Stores `{ code, message, data, raw }` in `ctx.result`.
+
+  `ApiController._createActionSchema` change: closure shrunk by net 41 LOC. `runStagesSerially` call extended from `[stage1..stage5]` to `[stage1..stage8]`. Stages 9-13 stay inline (PR-4 finishes the rest).
+
+  **`PipelineDeps.sessionFactory`** added as **optional** field. Stage 6 throws a clear runtime error if missing when `auth: 'required' | 'optional'`. Optional shape keeps PR-1/PR-2 mock test deps backward-compatible (no required-property breakage).
+
+  **`respond` helper** relocated to `pipeline/helpers.ts` (moved out of `ApiController.class.ts` where it was only used by the action handler). Avoids stage → ApiController circular import.
+
+  **Tests**: +20 new (7×establishAuthSession + 6×buildTraceContext + 7×invokeHandler). Total api-core test count: **357/357 passing**.
+
+  **Verification**:
+
+  - `pnpm --filter @gertsai/api-core build` — dual ESM+CJS green
+  - `pnpm --filter @gertsai/api-core typecheck` — 0 errors
+  - `pnpm --filter @gertsai/api-core test` — 357 passed
+  - `pnpm typecheck` workspace-wide — 0 errors
+
+  **Behaviour preservation**: zero changes to externally-observable behaviour. Same `APIError(NOT_AUTHORIZED)` codes, same W3C traceparent format, same handler invocation shape with `this` bound to Moleculer service, same job-trace injection semantics.
+
+  Refs: PRD-065, SPEC-021 §Stages 6-8, RFC-027 §PR-3
+
+- b7a1e2d: Wave 27 PR-5 — **final PR**: `setStageOverride` public API + bench harness + README docs. Closes Wave 15.D extraction project.
+
+  **`ApiController.setStageOverride(name, stage)`** — public method to override a single named stage in the action pipeline. Override is captured at schema-build time (snapshot isolation); already-registered actions retain their original pipeline.
+
+  ```ts
+  import { ApiController } from "@gertsai/api-core";
+  import type { Stage } from "@gertsai/api-core/pipeline";
+
+  const myAuthStage: Stage = async (ctx, deps) => {
+    // custom auth logic, fall back to default behaviour
+    return ctx;
+  };
+
+  const controller = ApiController.resolveController("v1", "graph");
+  controller.setStageOverride("establishAuthSession", myAuthStage);
+  ```
+
+  **`STAGE_NAMES`** constant — extracted to `pipeline/default-stages.ts` (11 entries aligned by index with `DEFAULT_STAGES`). Re-exported from `@gertsai/api-core/pipeline`.
+
+  **Bench harness** — `packages/api-core/src/lib/controller/pipeline/__bench__/pipeline-runner.bench.ts`. Runs via `pnpm --filter @gertsai/api-core exec vitest bench --run`. Two benches: full 11-stage zero-work pipeline + isolated `wrapResponse` stage. **No perf gate** in this PR — establishes harness only (RFC-027 §Bench plan baseline never captured pre-extraction). Future PRs may add p95 ≤+2% gate when baseline is recorded.
+
+  **README** — new `## Action pipeline (Wave 27)` section documenting:
+
+  - Default 11-stage order + role of each
+  - `setStageOverride` usage example with snapshot-isolation note
+  - Custom-runner composition example
+
+  **`@ts-ignore` cleanup**: 0 removals. All 5 remaining instances in `ApiController.class.ts` target code NOT extracted to typed stages (resolve-controller generic widening, subscribe-on-topic options spread, Orchestra duck-type checks in queue/subscriber schemas, Moleculer lifecycle `this.Promise`). Preserved verbatim.
+
+  **Tests**: +5 new (in `src/__test__/apiController-stage-override.test.ts`):
+
+  - AC-SO-1: override replaces named stage in new schemas
+  - AC-SO-1 variant: override on one stage does not affect other stages
+  - AC-SO-2: snapshot isolation — override after schema-build does not mutate closed handler
+  - AC-SO-3: already-registered actions retain original pipeline
+  - AC-SO-4: multiple overrides on different stages compose in `STAGE_NAMES` order
+
+  Total api-core: **381/381 passing**.
+
+  **Verification**:
+
+  - `pnpm --filter @gertsai/api-core build` — dual ESM+CJS green
+  - `pnpm --filter @gertsai/api-core typecheck` — 0 errors
+  - `pnpm --filter @gertsai/api-core test` — 381 passed (28 test files)
+  - `pnpm --filter @gertsai/api-core exec vitest bench --run` — functional (no perf gate)
+  - `pnpm typecheck` workspace-wide — 0 errors
+
+  **Wave 27 summary** (after all 5 PRs):
+
+  | Before                                 | After                                                     |
+  | -------------------------------------- | --------------------------------------------------------- |
+  | `ApiController.class.ts`: 1178 LOC     | 1005 LOC (-14.7%)                                         |
+  | `_createActionSchema`: 193-LOC closure | 25-LOC `PipelineRunner` orchestrator                      |
+  | Stages: 0 (monolith)                   | 13 typed `Stage<TIn, TOut>` functions                     |
+  | Stage tests: 0 (only e2e)              | 75+ unit tests across 13 stages                           |
+  | Public composition surface: none       | `@gertsai/api-core/pipeline` subpath + `setStageOverride` |
+
+  Refs: PRD-065, SPEC-021, RFC-027 §PR-5, ADR-015
+
 ## 0.5.2
 
 ### Patch Changes
