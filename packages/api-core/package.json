@@ -95,7 +95,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint . --max-warnings 0"
+    "lint": "eslint . --max-warnings 0",
+    "perf:check": "node scripts/perf-check.mjs",
+    "perf:update": "node scripts/perf-check.mjs --update",
+    "perf:gate": "node scripts/perf-check.mjs --gate"
   },
   "dependencies": {
     "@gertsai/api-envelope": "workspace:*",

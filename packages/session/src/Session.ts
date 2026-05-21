@@ -245,10 +245,10 @@ export class Session extends EventEmitter {
       });
     }
     const prev: OperatorRef = {
-      _uid: this._operatorUuid,
+      uuid: this._operatorUuid,
       type: this._operatorType,
     };
-    this._operatorUuid = operator._uid;
+    this._operatorUuid = operator.uuid;
     this._operatorType = operator.type;
     this.emit(SESSION_EVENTS.OPERATOR_SWITCHED, { prev, current: operator });
   }

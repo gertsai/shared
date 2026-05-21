@@ -171,7 +171,7 @@ describe('Session — $switchOperator', () => {
     const session = new Session(
       makeOpts({ operatorUuid: 'old', operatorType: 'web' }),
     );
-    const next: OperatorRef = { _uid: 'new', type: 'ai' };
+    const next: OperatorRef = { uuid: 'new', type: 'ai' };
 
     const listener = vi.fn();
     session.on(SESSION_EVENTS.OPERATOR_SWITCHED, listener);
@@ -182,7 +182,7 @@ describe('Session — $switchOperator', () => {
     expect(session.operatorType).toBe('ai');
     expect(listener).toHaveBeenCalledTimes(1);
     expect(listener).toHaveBeenCalledWith({
-      prev: { _uid: 'old', type: 'web' },
+      prev: { uuid: 'old', type: 'web' },
       current: next,
     });
   });
@@ -192,7 +192,7 @@ describe('Session — $switchOperator', () => {
     session.$destroy();
     let caught: unknown;
     try {
-      session.$switchOperator({ _uid: 'x', type: 'web' });
+      session.$switchOperator({ uuid: 'x', type: 'web' });
     } catch (e) {
       caught = e;
     }
@@ -226,7 +226,7 @@ describe('Session — $destroy', () => {
     const session = new Session(makeOpts());
     session.$destroy();
     expect(() =>
-      session.$switchOperator({ _uid: 'x', type: 'web' }),
+      session.$switchOperator({ uuid: 'x', type: 'web' }),
     ).toThrow(SessionDestroyedError);
     expect(() => session.$setDataAccessUuid('x')).toThrow(
       SessionDestroyedError,

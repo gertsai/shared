@@ -115,11 +115,15 @@ export interface SessionOpts {
 
 /**
  * Lightweight reference to an operator entity passed to
- * {@link Session.$switchOperator}. Matches the `{ _uid, type }` shape used
- * by Orchestra so existing call-sites can be migrated 1:1.
+ * {@link Session.$switchOperator}.
+ *
+ * Wave 29 (EVID-080 M4): field renamed `_uid` → `uuid` for parity with
+ * the rest of `@gertsai/*` ecosystem. The pre-1.0 minor bump
+ * accepts the surface-breaking change. Consumers migrating from <2.0.x
+ * should replace `{ _uid, type }` with `{ uuid, type }`.
  */
 export interface OperatorRef {
-  readonly _uid: string;
+  readonly uuid: string;
   readonly type: OperatorType;
 }
 
