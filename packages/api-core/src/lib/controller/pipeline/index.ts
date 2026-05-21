@@ -9,7 +9,13 @@
 
 export type { PipelineContext, PipelineDeps, Stage, StageName } from './types';
 export { PipelineShortCircuit } from './types';
-export { PipelineRunner } from './runner';
+export { PipelineRunner, runStagesSerially } from './runner';
 export { DEFAULT_STAGES } from './default-stages';
 export { translateError } from './stages/translate-error';
 export { cleanup } from './stages/cleanup';
+// PR-2: stages 1-5
+export { extractParams } from './stages/extract-params';
+export { mergeMultipart } from './stages/merge-multipart';
+export { coerceQueryString } from './stages/coerce-query-string';
+export { injectTenantId } from './stages/inject-tenant-id';
+export { validateRequest } from './stages/validate-request';

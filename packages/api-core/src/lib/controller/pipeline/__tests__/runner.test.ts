@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PipelineRunner } from '../runner';
+import { PipelineRunner, runStagesSerially } from '../runner';
 import { PipelineShortCircuit } from '../types';
 import type { PipelineContext, PipelineDeps, Stage } from '../types';
 import { APIError } from '../../../error';
@@ -192,5 +192,48 @@ describe('PipelineRunner', () => {
 
     expect(result).toBe('early-result');
     expect(destroySpy).toHaveBeenCalledOnce();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runStagesSerially (PR-2 bridge helper)
+// ---------------------------------------------------------------------------
+
+describe('runStagesSerially', () => {
+  // Bridge-1: empty stages list — returns initial context unchanged
+  it('returns the initial context unchanged when stages list is empty', async () => {
+    const deps = makeDeps();
+    const ctx = makeCtx({ params: { id: '1' } });
+
+    const result = await runStagesSerially([], ctx, deps);
+
+    expect(result).toBe(ctx);
+  });
+
+  // Bridge-2: sequential stages thread context through in order
+  it('threads PipelineContext sequentially through all stages and returns final context', async () => {
+    const deps = makeDeps();
+    const initial = makeCtx();
+    const order: number[] = [];
+
+    const stage1: Stage = async (c) => {
+      order.push(1);
+      return { ...c, params: { step: 1 } };
+    };
+    const stage2: Stage = async (c) => {
+      order.push(2);
+      expect((c.params as { step: number }).step).toBe(1);
+      return { ...c, params: { step: 2 } };
+    };
+    const stage3: Stage = async (c) => {
+      order.push(3);
+      expect((c.params as { step: number }).step).toBe(2);
+      return { ...c, params: { step: 3 } };
+    };
+
+    const result = await runStagesSerially([stage1, stage2, stage3], initial, deps);
+
+    expect(order).toEqual([1, 2, 3]);
+    expect((result.params as { step: number }).step).toBe(3);
   });
 });
