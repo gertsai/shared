@@ -375,7 +375,10 @@ export interface IDestroyable {
  */
 export interface UsersMetaType {
   data: {
-    _uid: string;
+    // Wave 34 PR-2 (EVID-083 W2): renamed `_uid` → `uuid` for ecosystem
+    // parity (matches `OperatorRef.uuid` in `@gertsai/session` Wave 29.A
+    // rename and `EntityJSON.uuid` in `@gertsai/entity` Wave 34 PR-2).
+    uuid: string;
     email?: string;
     displayName?: string;
     photoURL?: string;

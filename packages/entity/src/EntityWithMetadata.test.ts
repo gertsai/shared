@@ -178,7 +178,8 @@ describe('EntityWithMetadata', () => {
       metadata: { source: 'web', version: 3 },
     });
     expect(o.toJSONObject()).toEqual({
-      _uid: 'order-1',
+      // Wave 34 PR-2 (EVID-083 W2): renamed `_uid` → `uuid`.
+      uuid: 'order-1',
       data: { total: 100, currency: 'EUR' },
       metadata: { source: 'web', version: 3 },
       __typename: 'Order',
@@ -188,12 +189,13 @@ describe('EntityWithMetadata', () => {
   it('toJSON round-trips and preserves __typename', () => {
     const o = new Order({ uid: 'o-2', data: { total: 7, currency: 'USD' } });
     const restored = JSON.parse(o.toJSON()) as {
-      _uid: string;
+      // Wave 34 PR-2 (EVID-083 W2): renamed `_uid` → `uuid`.
+      uuid: string;
       data: OrderData;
       metadata: OrderMeta;
       __typename: string;
     };
-    expect(restored._uid).toBe('o-2');
+    expect(restored.uuid).toBe('o-2');
     expect(restored.__typename).toBe('Order');
     expect(restored.data).toEqual({ total: 7, currency: 'USD' });
     expect(restored.metadata).toEqual({ source: 'unknown', version: 1 });
