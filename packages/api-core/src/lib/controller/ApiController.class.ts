@@ -32,8 +32,8 @@ import type { ContextMeta, TypiaValidator } from '../common';
 import type { ActionParams, TypiaParamsWithSchema } from '../common';
 import { APIError } from '../error';
 import { PipelineRunner } from './pipeline/runner';
-import { DEFAULT_STAGES } from './pipeline/default-stages';
-import type { PipelineContext, PipelineDeps } from './pipeline/types';
+import { DEFAULT_STAGES, STAGE_NAMES } from './pipeline/default-stages';
+import type { PipelineContext, PipelineDeps, StageName, Stage } from './pipeline/types';
 
 import type {
   ActionAuthType,
@@ -405,6 +405,14 @@ export class ApiController<
   private _stoppedHandlers: Array<LifecycleHandler<ServiceVersion, ServiceName, ServiceContext>> =
     [];
 
+  /**
+   * Pipeline stage override map — populated via `setStageOverride`.
+   * Per-controller-instance overrides applied at schema-build time.
+   *
+   * Wave 27 PR-5 (PRD-065 FR-3 / RFC-027 §PR-5).
+   */
+  private _stageOverrides: Partial<Record<StageName, Stage>> = {};
+
   constructor(options: ApiControllerOptions<ServiceVersion, ServiceName>) {
     // Duplicate options to prevent ability of modifying passed object
     this._options = { ...options };
@@ -480,6 +488,40 @@ export class ApiController<
    */
   setChannels(channels: Record<string, unknown>): void {
     this._channels = { ...this._channels, ...channels };
+  }
+
+  /**
+   * Override a single named stage in the action pipeline.
+   *
+   * The override replaces the default stage at schema-build time, applied
+   * per ApiController instance (not globally). Use this to inject custom
+   * cross-cutting concerns (e.g., custom auth check, custom request-id
+   * propagation, custom telemetry) without forking the controller class.
+   *
+   * @param name  - Canonical stage name from DEFAULT_STAGES (see `STAGE_NAMES`)
+   * @param stage - Replacement Stage function
+   *
+   * @example
+   * ```ts
+   * import { ApiController } from '@gertsai/api-core';
+   * import type { Stage } from '@gertsai/api-core/pipeline';
+   *
+   * const myAuthStage: Stage = async (ctx, _deps) => {
+   *   // custom auth — fall back to default if not handled
+   *   return ctx;
+   * };
+   *
+   * const controller = ApiController.resolveController('v1', 'graph');
+   * controller.setStageOverride('establishAuthSession', myAuthStage);
+   * ```
+   *
+   * NOTE: Overrides apply to NEW action schemas generated AFTER this call.
+   * Already-registered actions retain their original pipeline.
+   *
+   * Wave 27 PR-5 (PRD-065 FR-3 / RFC-027 §PR-5).
+   */
+  public setStageOverride(name: StageName, stage: Stage): void {
+    this._stageOverrides[name] = stage;
   }
 
   /**
@@ -707,10 +749,22 @@ export class ApiController<
    * All 11 stages (1-11) delegated to DEFAULT_STAGES via PipelineRunner.
    * Stages 12 (translateError) and 13 (cleanup) are hard-wired into the runner.
    *
+   * PR-5: Resolves effective stage list at schema-build time by applying any
+   * per-instance overrides registered via `setStageOverride`. The snapshot is
+   * captured once per action schema — overrides set after `_createActionSchema`
+   * returns do NOT affect the already-built handler closure.
+   *
    * @param action - registered action
    */
   private _createActionSchema(action: ApiControllerRegisteredAction<any, any, any, any, any, any>) {
     const controller = this;
+
+    // Resolve effective stages: DEFAULT_STAGES with this controller's overrides applied.
+    // Snapshot taken at schema-build time so subsequent setStageOverride calls do not
+    // mutate already-registered action pipelines (SPEC-021 §override isolation).
+    const effectiveStages = DEFAULT_STAGES.map(
+      (defaultStage, i) => controller._stageOverrides[STAGE_NAMES[i]!] ?? defaultStage,
+    );
 
     return {
       rest: action.options.rest,
@@ -729,7 +783,7 @@ export class ApiController<
             strictResponseValidation: ApiController._config.strictResponseValidation,
           }),
         };
-        const runner = new PipelineRunner(DEFAULT_STAGES);
+        const runner = new PipelineRunner(effectiveStages);
         return await runner.run(initialPipelineCtx, deps);
       },
     };
