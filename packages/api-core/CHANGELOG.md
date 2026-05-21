@@ -1,5 +1,12 @@
 # @orchdev/api-core
 
+## 0.5.2
+
+### Patch Changes
+
+- Updated dependencies [30d3b10]
+  - @gertsai/logger-factory@2.0.1
+
 ## 0.5.1
 
 ### Patch Changes
