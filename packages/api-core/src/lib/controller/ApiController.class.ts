@@ -434,6 +434,34 @@ export class ApiController<
    */
   private _stageOverrides: Partial<Record<StageName, Stage>> = {};
 
+  /**
+   * Wave 34.A (EVID-083 W3) — per-stage insertion/wrapper slots for the
+   * additive `addStageBefore` / `addStageAfter` / `wrapStage` extension API.
+   *
+   * Each slot accumulates:
+   *  - `before[]`  — stages run BEFORE the (possibly-overridden) anchor stage
+   *                  in INSERTION ORDER (first `addStageBefore` runs first).
+   *  - `after[]`   — stages run AFTER the anchor stage in INSERTION ORDER.
+   *  - `wrappers[]` — around-advice wrappers that compose ONION-STYLE: the
+   *                   FIRST-pushed wrapper becomes the INNERMOST wrap (closest
+   *                   to the default stage), the LAST-pushed wrapper becomes
+   *                   the OUTERMOST wrap (runs first / last around the chain).
+   *                   See `addStageBefore` / `wrapStage` JSDoc + SPEC-021.
+   *
+   * Captured at schema-build time alongside `_stageOverrides` for snapshot
+   * isolation — already-registered actions retain their original pipeline.
+   */
+  private _stageInserts: Partial<
+    Record<
+      StageName,
+      {
+        before: Stage[];
+        after: Stage[];
+        wrappers: ((next: Stage) => Stage)[];
+      }
+    >
+  > = {};
+
   constructor(options: ApiControllerOptions<ServiceVersion, ServiceName>) {
     // Duplicate options to prevent ability of modifying passed object
     this._options = { ...options };
@@ -580,6 +608,165 @@ export class ApiController<
       );
     }
     this._stageOverrides[name] = stage;
+  }
+
+  /**
+   * Wave 34.A (EVID-083 W3) — Insert a custom stage BEFORE the named default
+   * (or overridden) anchor stage in the action pipeline.
+   *
+   * Inserted stages run in INSERTION ORDER:
+   * ```ts
+   * controller.addStageBefore('validateRequest', A);
+   * controller.addStageBefore('validateRequest', B);
+   * // pipeline order around anchor: ... → A → B → validateRequest → ...
+   * ```
+   *
+   * Insertions are captured at schema-build time (snapshot isolation matches
+   * {@link setStageOverride} semantics). Actions registered & schema-built
+   * BEFORE this call retain their original pipeline.
+   *
+   * ## SECURITY WARNING
+   * Inserting stages around a sensitive anchor (`establishAuthSession`,
+   * `validateRequest`, `validateResponse`, `injectTenantId`) emits a
+   * `logger.warn` — see {@link setStageOverride} for the threat model. A
+   * `before` stage that throws or short-circuits with `PipelineShortCircuit`
+   * can bypass the anchor's security check; ensure inserts compose, not
+   * pre-empt.
+   *
+   * @param anchor - Canonical stage name to insert BEFORE
+   * @param stage  - New `Stage` to run first
+   *
+   * @example
+   * ```ts
+   * const requestId: Stage = async (ctx, _deps) => {
+   *   const id = ctx.ctx.meta.requestId ?? crypto.randomUUID();
+   *   return { ...ctx, ctx: { ...ctx.ctx, meta: { ...ctx.ctx.meta, requestId: id } } };
+   * };
+   * controller.addStageBefore('validateRequest', requestId);
+   * ```
+   */
+  public addStageBefore(anchor: StageName, stage: Stage): void {
+    // Wave 34.A (EVID-083 W3)
+    const slot = this._getOrInitInsertSlot(anchor);
+    slot.before.push(stage);
+    this._warnIfSensitive(anchor, 'addStageBefore');
+  }
+
+  /**
+   * Wave 34.A (EVID-083 W3) — Insert a custom stage AFTER the named default
+   * (or overridden) anchor stage in the action pipeline.
+   *
+   * Multiple `addStageAfter` calls compose in INSERTION ORDER (first inserted
+   * runs first after the anchor):
+   * ```ts
+   * controller.addStageAfter('invokeHandler', A);
+   * controller.addStageAfter('invokeHandler', B);
+   * // pipeline order around anchor: ... → invokeHandler → A → B → ...
+   * ```
+   *
+   * Snapshot isolation matches {@link setStageOverride}: already-built schemas
+   * retain their original pipeline. See `addStageBefore` for security notes.
+   *
+   * @param anchor - Canonical stage name to insert AFTER
+   * @param stage  - New `Stage` to run after the anchor
+   *
+   * @example
+   * ```ts
+   * const auditLog: Stage = async (ctx, deps) => {
+   *   deps.logger?.info('action invoked', { action: deps.action.path });
+   *   return ctx;
+   * };
+   * controller.addStageAfter('invokeHandler', auditLog);
+   * ```
+   */
+  public addStageAfter(anchor: StageName, stage: Stage): void {
+    // Wave 34.A (EVID-083 W3)
+    const slot = this._getOrInitInsertSlot(anchor);
+    slot.after.push(stage);
+    this._warnIfSensitive(anchor, 'addStageAfter');
+  }
+
+  /**
+   * Wave 34.A (EVID-083 W3) — Wrap the named default (or overridden) anchor
+   * stage with around-advice.
+   *
+   * The wrapper receives the `next`-stage function and returns a new stage
+   * that can run code before and after `next(ctx, deps)`. Multiple wrappers
+   * compose ONION-STYLE:
+   *
+   *   - The FIRST-pushed wrapper becomes the INNERMOST wrap (closest to the
+   *     default/overridden stage).
+   *   - The LAST-pushed wrapper becomes the OUTERMOST wrap and therefore
+   *     runs FIRST around the chain.
+   *
+   * For two wrappers pushed in order `[A, B]` around default `D`, the
+   * effective stage is `B(A(D))` — when invoked: B's pre-code runs → A's
+   * pre-code runs → D runs → A's post-code runs → B's post-code runs.
+   *
+   * Snapshot isolation matches {@link setStageOverride}: already-built schemas
+   * retain their original pipeline. See `setStageOverride` for the sensitive-
+   * stage threat model — wrappers MUST always call `next` (or knowingly
+   * short-circuit) to preserve security semantics on sensitive anchors.
+   *
+   * @param anchor  - Canonical stage name to wrap
+   * @param wrapper - Function `(next: Stage) => Stage` producing the wrapped stage
+   *
+   * @example
+   * ```ts
+   * const tracingWrap = (next: Stage): Stage => async (ctx, deps) => {
+   *   const start = performance.now();
+   *   try {
+   *     return await next(ctx, deps);
+   *   } finally {
+   *     deps.logger?.info('stage timing', { elapsedMs: performance.now() - start });
+   *   }
+   * };
+   * controller.wrapStage('invokeHandler', tracingWrap);
+   * ```
+   */
+  public wrapStage(anchor: StageName, wrapper: (next: Stage) => Stage): void {
+    // Wave 34.A (EVID-083 W3)
+    const slot = this._getOrInitInsertSlot(anchor);
+    slot.wrappers.push(wrapper);
+    this._warnIfSensitive(anchor, 'wrapStage');
+  }
+
+  /**
+   * Wave 34.A (EVID-083 W3) — Resolve (or lazily initialise) the insert slot
+   * for an anchor stage. Slot accumulates before/after/wrappers consumed at
+   * schema-build time by `_createActionSchema`.
+   * @private
+   */
+  private _getOrInitInsertSlot(anchor: StageName): {
+    before: Stage[];
+    after: Stage[];
+    wrappers: ((next: Stage) => Stage)[];
+  } {
+    let slot = this._stageInserts[anchor];
+    if (!slot) {
+      slot = { before: [], after: [], wrappers: [] };
+      this._stageInserts[anchor] = slot;
+    }
+    return slot;
+  }
+
+  /**
+   * Wave 34.A (EVID-083 W3) — Emit a structured warn when a sensitive anchor
+   * is mutated via `addStageBefore` / `addStageAfter` / `wrapStage`. Reuses
+   * the same `SENSITIVE_STAGES` module-private set + broker/console fallback
+   * pattern as `setStageOverride` for consistent observability.
+   * @private
+   */
+  private _warnIfSensitive(anchor: StageName, methodName: string): void {
+    if (SENSITIVE_STAGES.has(anchor)) {
+      const logger = ApiController._broker?.logger ?? console;
+      logger.warn(
+        `ApiController.${methodName}: SENSITIVE stage '${anchor}' modified. ` +
+          `Custom inserts/wrappers MUST preserve security semantics ` +
+          `(see JSDoc + SPEC-021 §Stage for the contract). ` +
+          `This warning is logged once per call.`,
+      );
+    }
   }
 
   /**
@@ -817,12 +1004,45 @@ export class ApiController<
   private _createActionSchema(action: ApiControllerRegisteredAction<any, any, any, any, any, any>) {
     const controller = this;
 
-    // Resolve effective stages: DEFAULT_STAGES with this controller's overrides applied.
-    // Snapshot taken at schema-build time so subsequent setStageOverride calls do not
-    // mutate already-registered action pipelines (SPEC-021 §override isolation).
-    const effectiveStages = DEFAULT_STAGES.map(
-      (defaultStage, i) => controller._stageOverrides[STAGE_NAMES[i]!] ?? defaultStage,
-    );
+    // Resolve effective stages: DEFAULT_STAGES with this controller's overrides
+    // and inserts (before/after/wrappers) applied.
+    //
+    // Snapshot taken at schema-build time so subsequent setStageOverride /
+    // addStageBefore / addStageAfter / wrapStage calls do not mutate
+    // already-registered action pipelines (SPEC-021 §override isolation).
+    //
+    // Wave 34.A (EVID-083 W3): extended to consume `_stageInserts` slots.
+    // For each anchor i in STAGE_NAMES:
+    //   1. Push slot.before[] in insertion order (first-pushed runs first).
+    //   2. Compose the anchor: start from `_stageOverrides[name] ?? defaultStage`,
+    //      then apply wrappers in insertion order — first-pushed wraps first
+    //      (innermost), last-pushed wraps last (outermost / runs first around).
+    //   3. Push slot.after[] in insertion order.
+    const effectiveStages: Stage[] = [];
+    DEFAULT_STAGES.forEach((defaultStage, i) => {
+      const name = STAGE_NAMES[i]!;
+      const slot = controller._stageInserts[name];
+
+      if (slot) {
+        effectiveStages.push(...slot.before);
+      }
+
+      let stage: Stage = controller._stageOverrides[name] ?? defaultStage;
+
+      if (slot && slot.wrappers.length > 0) {
+        // Onion compose: iterating in push order produces
+        // wrapN(...wrap1(default)) where wrapN was last-pushed → outermost.
+        for (const wrap of slot.wrappers) {
+          stage = wrap(stage);
+        }
+      }
+
+      effectiveStages.push(stage);
+
+      if (slot) {
+        effectiveStages.push(...slot.after);
+      }
+    });
 
     return {
       rest: action.options.rest,

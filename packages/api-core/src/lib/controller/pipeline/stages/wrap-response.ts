@@ -5,6 +5,27 @@
  * Wave 27 (PRD-065 / RFC-027 / SPEC-021 §Stage 11).
  *
  * PRESERVED VERBATIM from ApiController.class.ts:801-808 (post-PR-3 actual location).
+ *
+ * ---
+ *
+ * ## Security note — `responseMessage` is server-controlled (Wave 34.B / EVID-083 W9)
+ *
+ * `ctx.result.message` and `deps.action.options.responseMessage` MUST be
+ * server-controlled strings (literal constants OR computed from server-side
+ * state). The pipeline does **NOT** sanitize this field for HTML/JS injection.
+ * If any caller flows untrusted user input through `responseMessage`, the
+ * resulting envelope can deliver an XSS payload to a downstream UI consumer
+ * that renders `message` as HTML.
+ *
+ * **Why no runtime sanitization:** server-controlled string sanitization would
+ * hide misuse (silent corruption) and impose ambiguous encoding rules across
+ * HTML / JSON / CLI consumers. The contract is fail-loud at design time, not
+ * silent at runtime.
+ *
+ * **If you need user-controlled text** surfaced to clients, put it inside
+ * `data` (which downstream consumers MUST treat as untrusted), not `message`.
+ *
+ * @see packages/api-core/src/lib/controller/types.ts — ActionOptions.responseMessage
  */
 
 import { ResponseCode } from '../../../apiResponse';

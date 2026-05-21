@@ -315,8 +315,60 @@ const myAuthStage: Stage = async (ctx, deps) => {
 controller.setStageOverride('establishAuthSession', myAuthStage);
 ```
 
-For more invasive patterns (e.g., `addStageBefore`, `wrapStage('around')`), file
-a Forgeplan RFC — the current API intentionally limits to single-stage replace.
+For more invasive patterns, use the additive Wave 34.A extension API below.
+
+### Extension API — `addStageBefore` / `addStageAfter` / `wrapStage` (Wave 34.A / EVID-083 W3)
+
+When `setStageOverride` is too coarse — e.g. you want to **add** behaviour
+around a default stage rather than replace it — use the three additive
+extension methods. All three share `setStageOverride`'s snapshot-isolation
+semantics (effective stages frozen at schema-build time) and emit the same
+sensitive-stage `logger.warn`.
+
+```ts
+import { ApiController } from '@gertsai/api-core';
+import type { Stage } from '@gertsai/api-core/pipeline';
+
+const controller = ApiController.resolveController('v1', 'graph');
+
+// 1. Insert BEFORE the anchor — multiple calls compose in INSERTION ORDER:
+//    addStageBefore('validateRequest', A) then ('validateRequest', B)
+//    → effective order: A → B → validateRequest
+const requestIdStage: Stage = async (ctx, _deps) => {
+  const id = ctx.ctx.meta.requestId ?? crypto.randomUUID();
+  return { ...ctx, ctx: { ...ctx.ctx, meta: { ...ctx.ctx.meta, requestId: id } } };
+};
+controller.addStageBefore('validateRequest', requestIdStage);
+
+// 2. Insert AFTER the anchor — multiple calls also compose in insertion order:
+const auditLogStage: Stage = async (ctx, deps) => {
+  deps.logger?.info('action invoked', { action: deps.action.path });
+  return ctx;
+};
+controller.addStageAfter('invokeHandler', auditLogStage);
+
+// 3. Wrap with around-advice — multiple wrappers compose ONION-STYLE:
+//    first-pushed = innermost, last-pushed = outermost (runs first / last around).
+const tracingWrap = (next: Stage): Stage => async (ctx, deps) => {
+  const start = performance.now();
+  try {
+    return await next(ctx, deps);
+  } finally {
+    deps.logger?.info('stage timing', { elapsedMs: performance.now() - start });
+  }
+};
+controller.wrapStage('invokeHandler', tracingWrap);
+```
+
+The three methods are **additive** — they coexist with `setStageOverride`:
+the anchor used for inserts/wrappers is the **already-overridden stage** when
+`setStageOverride` is also set on the same name.
+
+For sensitive anchors (`establishAuthSession`, `validateRequest`,
+`validateResponse`, `injectTenantId`), every `addStageBefore` /
+`addStageAfter` / `wrapStage` call emits a `logger.warn`. A `before` stage
+that throws or short-circuits with `PipelineShortCircuit` can bypass the
+anchor's security check — design inserts to **compose**, not pre-empt.
 
 ### Building custom runners
 

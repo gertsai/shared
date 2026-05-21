@@ -575,6 +575,27 @@ export type ActionOptions<
   response: ResponseValidator;
   responseCode?: ResponseCode;
   strictResponseValidation?: boolean;
+  /**
+   * Optional default response `message` field returned in the success envelope
+   * when the handler does not set `result.message` directly.
+   *
+   * ## SECURITY — Wave 34.B (EVID-083 W9)
+   *
+   * `responseMessage` MUST be a **server-controlled** string — either a literal
+   * constant or computed exclusively from server-side state. Flowing user input
+   * through this field can deliver an XSS payload to UI consumers that render
+   * `message` as HTML.
+   *
+   * The `wrapResponse` pipeline stage does **NOT** sanitize this field by
+   * design: server-controlled string sanitization would hide misuse (silent
+   * corruption) and impose ambiguous encoding rules across HTML / JSON / CLI
+   * consumers. The contract is fail-loud at design time, not silent at runtime.
+   *
+   * If you need to surface user-controlled text to clients, put it inside
+   * `data` (which downstream consumers MUST treat as untrusted), not `message`.
+   *
+   * @see packages/api-core/src/lib/controller/pipeline/stages/wrap-response.ts
+   */
   responseMessage?: string;
   handler: Handler;
 };
