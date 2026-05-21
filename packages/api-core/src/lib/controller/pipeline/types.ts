@@ -8,7 +8,7 @@
 
 import type Moleculer from 'moleculer';
 import type { LoggerInstance } from 'moleculer';
-import type { OrchestraSession } from '@gertsai/core';
+import type { OrchestraSession, UserType } from '@gertsai/core';
 
 import type { ContextMeta } from '../../common';
 import type { ResponseCode } from '../../apiResponse';
@@ -35,6 +35,19 @@ export interface PipelineDeps {
   readonly controller: AnyApiController;
   readonly service: Moleculer.Service;
   readonly logger: LoggerInstance | undefined;
+  /**
+   * Session factory captured from ApiController._config at schema-build time.
+   * Passed here to avoid a circular import from stage files back into ApiController.
+   *
+   * Added in PR-3 for Stage 6 (establishAuthSession). Optional so PR-1/PR-2
+   * tests and stages that don't need session creation (extractParams,
+   * mergeMultipart, coerceQueryString, injectTenantId, validateRequest,
+   * buildTraceContext, translateError, cleanup) can omit it without TS error.
+   *
+   * Stage 6 (establishAuthSession) throws a runtime error if the factory
+   * is missing AND `action.options.auth` is `'required' | 'optional'`.
+   */
+  readonly sessionFactory?: (user_uuid: string, user_type: UserType) => OrchestraSession;
 }
 
 // =============================================================================
