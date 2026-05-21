@@ -1,5 +1,12 @@
 # @gertsai/entity-audit
 
+## 0.2.4
+
+### Patch Changes
+
+- Updated dependencies [33eacbc]
+  - @gertsai/session@2.1.1
+
 ## 0.2.3
 
 ### Patch Changes

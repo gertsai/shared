@@ -1,5 +1,12 @@
 # @gertsai/entity
 
+## 1.1.6
+
+### Patch Changes
+
+- Updated dependencies [33eacbc]
+  - @gertsai/session@2.1.1
+
 ## 1.1.5
 
 ### Patch Changes
