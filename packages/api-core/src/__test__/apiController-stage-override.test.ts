@@ -221,4 +221,199 @@ describe('ApiController.setStageOverride', () => {
 
     warnSpy.mockRestore();
   });
+
+  // ---------------------------------------------------------------------------
+  // Wave 34.A (EVID-083 W3) — addStageBefore / addStageAfter / wrapStage
+  //
+  // AC-A1: addStageBefore injects a stage that runs BEFORE the anchor.
+  // AC-A2: multiple addStageBefore calls compose in INSERTION ORDER.
+  // AC-A3: addStageAfter injects a stage that runs AFTER the anchor.
+  // AC-A4: wrapStage produces around-advice (pre + post hook).
+  // AC-A5: multiple wrapStage calls compose ONION-STYLE — LAST-pushed wrapper
+  //        is OUTERMOST (runs first/last around the chain).
+  // AC-A6: addStageBefore on a SENSITIVE anchor emits console.warn.
+  // ---------------------------------------------------------------------------
+
+  // AC-A1: addStageBefore injects a stage that runs BEFORE the anchor.
+  it('addStageBefore injects a stage that runs before the anchor (Wave 34.A / EVID-083 W3)', async () => {
+    const controller = freshController();
+    const callLog: string[] = [];
+
+    const beforeExtract: Stage = async (ctx, _deps) => {
+      callLog.push('before-extract');
+      return ctx;
+    };
+
+    // Override extractParams so we can observe relative ordering deterministically.
+    const recordExtract: Stage = async (ctx, _deps) => {
+      callLog.push('anchor-extract');
+      return { ...ctx, params: ctx.ctx.params ?? {} };
+    };
+
+    controller.setStageOverride('extractParams', recordExtract);
+    controller.addStageBefore('extractParams', beforeExtract);
+
+    const action = makeRegisteredAction(controller);
+    const schema = controller['_createActionSchema'](action);
+
+    await schema.handler.call(moleculerServiceMock, validParamsContextMock);
+
+    expect(callLog).toContain('before-extract');
+    expect(callLog).toContain('anchor-extract');
+    expect(callLog.indexOf('before-extract')).toBeLessThan(callLog.indexOf('anchor-extract'));
+  });
+
+  // AC-A2: multiple addStageBefore calls compose in INSERTION ORDER.
+  // First-pushed runs first → effective order: A → B → anchor.
+  it('addStageBefore multiple calls compose in insertion order (Wave 34.A)', async () => {
+    const controller = freshController();
+    const callLog: string[] = [];
+
+    const beforeA: Stage = async (ctx, _deps) => {
+      callLog.push('A');
+      return ctx;
+    };
+    const beforeB: Stage = async (ctx, _deps) => {
+      callLog.push('B');
+      return ctx;
+    };
+    const anchor: Stage = async (ctx, _deps) => {
+      callLog.push('anchor');
+      return { ...ctx, params: ctx.ctx.params ?? {} };
+    };
+
+    controller.setStageOverride('extractParams', anchor);
+    controller.addStageBefore('extractParams', beforeA);
+    controller.addStageBefore('extractParams', beforeB);
+
+    const action = makeRegisteredAction(controller);
+    const schema = controller['_createActionSchema'](action);
+
+    await schema.handler.call(moleculerServiceMock, validParamsContextMock);
+
+    // First-pushed (A) runs first, then B, then anchor.
+    expect(callLog.indexOf('A')).toBeLessThan(callLog.indexOf('B'));
+    expect(callLog.indexOf('B')).toBeLessThan(callLog.indexOf('anchor'));
+  });
+
+  // AC-A3: addStageAfter injects a stage that runs AFTER the anchor.
+  it('addStageAfter injects a stage that runs after the anchor (Wave 34.A)', async () => {
+    const controller = freshController();
+    const callLog: string[] = [];
+
+    const recordExtract: Stage = async (ctx, _deps) => {
+      callLog.push('anchor-extract');
+      return { ...ctx, params: ctx.ctx.params ?? {} };
+    };
+    const afterExtract: Stage = async (ctx, _deps) => {
+      callLog.push('after-extract');
+      return ctx;
+    };
+
+    controller.setStageOverride('extractParams', recordExtract);
+    controller.addStageAfter('extractParams', afterExtract);
+
+    const action = makeRegisteredAction(controller);
+    const schema = controller['_createActionSchema'](action);
+
+    await schema.handler.call(moleculerServiceMock, validParamsContextMock);
+
+    expect(callLog).toContain('anchor-extract');
+    expect(callLog).toContain('after-extract');
+    expect(callLog.indexOf('anchor-extract')).toBeLessThan(callLog.indexOf('after-extract'));
+  });
+
+  // AC-A4: wrapStage produces around-advice (pre + post hook around the anchor).
+  it('wrapStage runs wrapper around the anchor (pre + post) (Wave 34.A)', async () => {
+    const controller = freshController();
+    const callLog: string[] = [];
+
+    const anchor: Stage = async (ctx, _deps) => {
+      callLog.push('anchor');
+      return { ...ctx, params: ctx.ctx.params ?? {} };
+    };
+
+    const aroundWrap = (next: Stage): Stage => async (ctx, deps) => {
+      callLog.push('pre');
+      const result = await next(ctx, deps);
+      callLog.push('post');
+      return result;
+    };
+
+    controller.setStageOverride('extractParams', anchor);
+    controller.wrapStage('extractParams', aroundWrap);
+
+    const action = makeRegisteredAction(controller);
+    const schema = controller['_createActionSchema'](action);
+
+    await schema.handler.call(moleculerServiceMock, validParamsContextMock);
+
+    expect(callLog).toEqual(expect.arrayContaining(['pre', 'anchor', 'post']));
+    expect(callLog.indexOf('pre')).toBeLessThan(callLog.indexOf('anchor'));
+    expect(callLog.indexOf('anchor')).toBeLessThan(callLog.indexOf('post'));
+  });
+
+  // AC-A5: multiple wrapStage calls compose ONION-STYLE.
+  // First-pushed = INNERMOST (closest to anchor), last-pushed = OUTERMOST.
+  // Effective stage = wrapLast(...wrapFirst(default)) → wrapLast pre runs FIRST,
+  // wrapLast post runs LAST. Order around anchor:
+  //   outerPre → innerPre → anchor → innerPost → outerPost
+  it('wrapStage multiple wrappers compose onion-style — last-pushed is outermost (Wave 34.A)', async () => {
+    const controller = freshController();
+    const callLog: string[] = [];
+
+    const anchor: Stage = async (ctx, _deps) => {
+      callLog.push('anchor');
+      return { ...ctx, params: ctx.ctx.params ?? {} };
+    };
+
+    // Inner wrapper — pushed FIRST → becomes innermost.
+    const innerWrap = (next: Stage): Stage => async (ctx, deps) => {
+      callLog.push('inner-pre');
+      const result = await next(ctx, deps);
+      callLog.push('inner-post');
+      return result;
+    };
+
+    // Outer wrapper — pushed LAST → becomes outermost (runs first/last).
+    const outerWrap = (next: Stage): Stage => async (ctx, deps) => {
+      callLog.push('outer-pre');
+      const result = await next(ctx, deps);
+      callLog.push('outer-post');
+      return result;
+    };
+
+    controller.setStageOverride('extractParams', anchor);
+    controller.wrapStage('extractParams', innerWrap); // pushed first
+    controller.wrapStage('extractParams', outerWrap); // pushed last
+
+    const action = makeRegisteredAction(controller);
+    const schema = controller['_createActionSchema'](action);
+
+    await schema.handler.call(moleculerServiceMock, validParamsContextMock);
+
+    // outer-pre runs BEFORE inner-pre; inner-post runs BEFORE outer-post.
+    expect(callLog.indexOf('outer-pre')).toBeLessThan(callLog.indexOf('inner-pre'));
+    expect(callLog.indexOf('inner-pre')).toBeLessThan(callLog.indexOf('anchor'));
+    expect(callLog.indexOf('anchor')).toBeLessThan(callLog.indexOf('inner-post'));
+    expect(callLog.indexOf('inner-post')).toBeLessThan(callLog.indexOf('outer-post'));
+  });
+
+  // AC-A6: addStageBefore on a SENSITIVE anchor emits console.warn.
+  // Reuses SENSITIVE_STAGES set (Wave 32.D) — observable proof that W3
+  // extension API plumbs the same security warning channel.
+  it('addStageBefore on a sensitive anchor emits console.warn (Wave 34.A / EVID-083 W3)', () => {
+    const controller = freshController();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const noop: Stage = async (ctx) => ctx;
+    controller.addStageBefore('establishAuthSession', noop);
+
+    expect(warnSpy).toHaveBeenCalledOnce();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/SENSITIVE stage 'establishAuthSession' modified/),
+    );
+
+    warnSpy.mockRestore();
+  });
 });
