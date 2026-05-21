@@ -48,6 +48,16 @@
         "default": "./dist/runtime/node/index.cjs"
       }
     },
+    "./pipeline": {
+      "import": {
+        "types": "./dist/lib/controller/pipeline/index.d.ts",
+        "default": "./dist/lib/controller/pipeline/index.js"
+      },
+      "require": {
+        "types": "./dist/lib/controller/pipeline/index.d.cts",
+        "default": "./dist/lib/controller/pipeline/index.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "typesVersions": {
@@ -60,6 +70,9 @@
       ],
       "runtime/node": [
         "./dist/runtime/node/index.d.ts"
+      ],
+      "pipeline": [
+        "./dist/lib/controller/pipeline/index.d.ts"
       ]
     }
   },

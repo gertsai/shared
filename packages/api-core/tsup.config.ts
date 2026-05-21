@@ -10,6 +10,7 @@ export default defineConfig({
     'contracts/index': 'src/contracts/index.ts',
     'moleculer/index': 'src/moleculer/index.ts',
     'runtime/node/index': 'src/runtime/node/index.ts',
+    'lib/controller/pipeline/index': 'src/lib/controller/pipeline/index.ts',
   },
   esbuildPlugins: [UnpluginTypia({ cache: false })],
 });
