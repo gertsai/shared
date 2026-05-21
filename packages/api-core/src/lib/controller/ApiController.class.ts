@@ -31,15 +31,15 @@ import {
 } from '../../moleculer/workflow/setWorkflows';
 import { ResponseCode } from '../apiResponse';
 import type { ContextMeta, TypiaValidator } from '../common';
-import {
-  coerceQueryParams,
-  smartCoerce,
-  isTypiaParamsWithSchema,
-  getValidator,
-  type ActionParams,
-  type TypiaParamsWithSchema,
-} from '../common';
+import type { ActionParams, TypiaParamsWithSchema } from '../common';
 import { APIError } from '../error';
+import { runStagesSerially } from './pipeline/runner';
+import { extractParams } from './pipeline/stages/extract-params';
+import { mergeMultipart } from './pipeline/stages/merge-multipart';
+import { coerceQueryString } from './pipeline/stages/coerce-query-string';
+import { injectTenantId } from './pipeline/stages/inject-tenant-id';
+import { validateRequest } from './pipeline/stages/validate-request';
+import type { PipelineContext, PipelineDeps } from './pipeline/types';
 
 import type {
   ActionAuthType,
@@ -720,6 +720,10 @@ export class ApiController<
    * @param action - registered action
    */
   private _createActionSchema(action: ApiControllerRegisteredAction<any, any, any, any, any, any>) {
+    // Capture `this` (the ApiController instance) at method-invocation time, before
+    // the inner `handler` function rebinds `this` to the Moleculer service.
+    const controller = this;
+
     return {
       rest: action.options.rest,
       // Pass auth and scopes for auth-moleculer middleware
@@ -729,65 +733,26 @@ export class ApiController<
         let session: OrchestraSession | undefined;
 
         try {
-          const params = ctx.meta.$params ? ctx.meta.$params : ctx.params;
-
-          const file = ctx.meta.$params ? ctx.params : null;
-          const fileMeta = ctx.meta.$params
-            ? {
-                // @ts-ignore
-                fieldname: ctx.meta.fieldname,
-                // @ts-ignore
-                filename: ctx.meta.filename,
-                // @ts-ignore
-                mimetype: ctx.meta.mimetype,
-                // @ts-ignore
-                encoding: ctx.meta.encoding,
-              }
-            : {};
-
-          if (ctx.meta.$multipart) {
-            Object.assign(params, ctx.meta.$multipart);
-          }
-
-          // Coerce query params for endpoints that receive params via URL query string
-          // (GET and DELETE — both use query strings, not request body)
-          const restConfig = action.options.rest;
-          const isQueryStringEndpoint =
-            typeof restConfig === 'string'
-              ? restConfig.startsWith('GET ') || restConfig.startsWith('DELETE ')
-              : restConfig?.method === 'GET' || restConfig?.method === 'DELETE';
-
-          if (isQueryStringEndpoint) {
-            const actionParams = action.options.params;
-
-            if (isTypiaParamsWithSchema(actionParams)) {
-              // New format: use schema-based smart coercion
-              smartCoerce(params as Record<string, unknown>, {
-                numericFields: actionParams.numericFields,
-                booleanFields: actionParams.booleanFields,
-                arrayFields: actionParams.arrayFields,
-              });
-            } else {
-              // Legacy format: use hard-coded list for backward compatibility
-              coerceQueryParams(params as Record<string, unknown>);
-            }
-          }
-
-          // Auto-inject tenantId from meta into params for REST calls.
-          // OpenAPI generator omits tenantId from the public spec (clients never send it),
-          // but Typia validators require it. Inject from meta so validation passes.
-          const meta = ctx.meta as Record<string, unknown>;
-          if (meta?.tenantId && !(params as Record<string, unknown>).tenantId) {
-            (params as Record<string, unknown>).tenantId = meta.tenantId;
-          }
-
-          // Get validator (supports both legacy and new format)
-          const validator = getValidator(action.options.params);
-          const requestIsValid = validator(params);
-
-          if (!requestIsValid.success) {
-            throw new APIError(ResponseCode.BAD_REQUEST__INVALID_PARAMS, requestIsValid.errors);
-          }
+          // ----------------------------------------------------------------
+          // Stages 1-5 (PR-2): delegated to extracted stage functions via
+          // runStagesSerially bridge helper. Stages 6-13 stay inline until
+          // PR-3/4 extract them.
+          // ----------------------------------------------------------------
+          const initialPipelineCtx: PipelineContext = { ctx };
+          const stageDeps: PipelineDeps = {
+            action,
+            controller,
+            service: this,
+            logger: this.logger,
+          };
+          const afterValidate = await runStagesSerially(
+            [extractParams, mergeMultipart, coerceQueryString, injectTenantId, validateRequest],
+            initialPipelineCtx,
+            stageDeps,
+          );
+          const params = afterValidate.params;
+          const file = afterValidate.file;
+          const fileMeta = afterValidate.fileMeta;
 
           if (action.options.auth === 'required' || action.options.auth === 'optional') {
             if (action.options.auth === 'required' && !ctx.meta.user_uuid) {
