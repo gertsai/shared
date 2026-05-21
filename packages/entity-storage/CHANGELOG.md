@@ -1,5 +1,14 @@
 # @gertsai/entity-storage
 
+## 5.0.0
+
+### Patch Changes
+
+- Updated dependencies [98f41f1]
+  - @gertsai/session@2.1.0
+  - @gertsai/entity-audit@0.2.3
+  - @gertsai/entity@1.1.5
+
 ## 4.0.0
 
 ### Minor Changes
