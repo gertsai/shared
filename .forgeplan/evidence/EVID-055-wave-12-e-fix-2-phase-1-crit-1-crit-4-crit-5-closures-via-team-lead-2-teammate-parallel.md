@@ -7,6 +7,8 @@ last_modified_by: claude-code/2.1.142
 links:
 - target: PRD-039
   relation: informs
+- target: RFC-026
+  relation: informs
 status: active
 title: Wave 12.E-fix-2 Phase 1 — CRIT-1 + CRIT-4 + CRIT-5 closures via team-lead + 2-teammate parallel
 ---
@@ -82,6 +84,7 @@ Teammate B surfaced an additional H-class finding during the api-types work: `ex
 - EVID-053 (audit source)
 - PRD-038 + EVID-054 (Wave 12.E-fix-1 precedent — CRIT-2/3 + H-7/17)
 - RFC-026 (this fix strategy)
+
 
 
 

@@ -7,6 +7,8 @@ last_modified_by: claude-code/2.1.142
 links:
 - target: PRD-028
   relation: informs
+- target: RFC-019
+  relation: informs
 status: active
 title: Wave 12.B aggregated audit — 15 Tier-1 foundation packages × 4 domain reviewers
 ---
@@ -261,6 +263,7 @@ Per RFC-019:
 - **ADR-004** — Foundation libs naming
 - **ADR-005** — storage-core / pg-client architecture
 - **ADR-006** — `@gertsai/errors` Shared Kernel + R_eff math
+
 
 
 

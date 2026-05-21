@@ -7,6 +7,8 @@ last_modified_by: claude-code/2.1.142
 links:
 - target: PRD-037
   relation: informs
+- target: RFC-025
+  relation: informs
 status: active
 title: Wave 12.E aggregated audit — 3 example apps × 4 domain reviewers
 ---
@@ -184,6 +186,7 @@ Per RFC-025:
 - **PRDs 028/032/035/037 + RFCs 019/023/024/025** — Wave 12 PRD/RFC series
 - **CLAUDE.md** — Wave 10-11 status + KNOWN-ISSUES.md residual
 - **ADR-006** — `@gertsai/errors` Shared Kernel + RFC 9457 ProblemDetails buckets (Three-envelope drift root cause)
+
 
 
 

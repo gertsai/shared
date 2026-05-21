@@ -7,6 +7,8 @@ last_modified_by: claude-code/2.1.139
 links:
 - target: PRD-023
   relation: informs
+- target: RFC-016
+  relation: informs
 status: active
 title: Wave 11.A ship evidence — real auth + Redis rotation store + SSE caps + CORS + Button migration — tsc 0 / web 1087-0-0 / lint clean / 86 passed
 ---
@@ -113,6 +115,7 @@ Wave 11.C / backlog:
 - [[RFC-016]] — 3-teammate strategy.
 - [[EVID-038]] / [[EVID-039]] — Wave 10.E predecessors.
 - [[ADR-002]] — Hex layer (respected via rotation-store.ts re-inlining).
+
 
 
 

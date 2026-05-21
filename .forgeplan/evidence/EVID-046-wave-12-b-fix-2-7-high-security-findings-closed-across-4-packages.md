@@ -7,6 +7,8 @@ last_modified_by: claude-code/2.1.142
 links:
 - target: PRD-030
   relation: informs
+- target: RFC-021
+  relation: informs
 status: active
 title: Wave 12.B-fix-2 — 7 HIGH security findings closed across 4 packages
 ---
@@ -98,6 +100,7 @@ Per EVID-044 §"Suggested follow-up wave structure":
 - RFC-021 — execution strategy
 - EVID-044 — sources of the 7 HIGH findings
 - PRD-029 + RFC-020 + EVID-045 — Wave 12.B-fix-1 (precedent)
+
 
 
 

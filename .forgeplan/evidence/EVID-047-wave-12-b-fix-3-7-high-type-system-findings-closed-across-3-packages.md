@@ -7,6 +7,8 @@ last_modified_by: claude-code/2.1.142
 links:
 - target: PRD-031
   relation: informs
+- target: RFC-022
+  relation: informs
 status: active
 title: Wave 12.B-fix-3 — 7 HIGH type-system findings closed across 3 packages
 ---
@@ -104,6 +106,7 @@ This evidence closes the last actionable HIGH-tier wave from Wave 12.B audit. Re
 - EVID-044 — sources of the 7 HIGH type-system findings
 - PRD-029 + EVID-045 — Wave 12.B-fix-1 precedent
 - PRD-030 + EVID-046 — Wave 12.B-fix-2 precedent
+
 
 
 

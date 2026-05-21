@@ -7,6 +7,8 @@ last_modified_by: claude-code/2.1.142
 links:
 - target: PRD-032
   relation: informs
+- target: RFC-023
+  relation: informs
 status: active
 title: Wave 12.C aggregated audit — 12 Tier-2 packages × 4 domain reviewers
 ---
@@ -279,6 +281,7 @@ Per RFC-023:
 - **RFC-018** — Wave 12 super-strategy
 - **ADR-008** — entity reactive adapter ISP split + I-11 module-private symbols
 - **CLAUDE.md** — 12 Tier-2 packages + tier table (reconciliation needed per Obs #6)
+
 
 
 

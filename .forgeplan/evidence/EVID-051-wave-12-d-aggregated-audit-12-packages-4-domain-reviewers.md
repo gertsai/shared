@@ -7,6 +7,8 @@ last_modified_by: claude-code/2.1.142
 links:
 - target: PRD-035
   relation: informs
+- target: RFC-024
+  relation: informs
 status: active
 title: Wave 12.D aggregated audit — 12 packages × 4 domain reviewers
 ---
@@ -218,6 +220,7 @@ Per RFC-024:
 - **ADR-010** — TypedToken<T> per Amendment 1
 - **ADR-012** — auth-openfga multi-instance scoping (precedent for api-rlr globalThis fix)
 - **CLAUDE.md** — tier-table (needs runtime-context session-guard peer + storage-core capabilities shape updates)
+
 
 
 

@@ -385,3 +385,4 @@ Rejected: internal paths are not public API.
 - ADR-004 (foundation libs naming — subpath patterns)
 
 
+

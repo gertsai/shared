@@ -217,6 +217,41 @@ describe('PipelineRunner', () => {
     expect(deps.logger?.info).toHaveBeenCalledWith('Action finished', 'test.action');
   });
 
+  // Wave 33.C (EVID-083 W5): per-stage timeout via deps.stageTimeoutMs.
+  it('stageTimeoutMs: stage that exceeds the timeout rejects with APIError(REQUEST_TIMEOUT)', async () => {
+    const slowStage: Stage = (ctx) =>
+      new Promise((resolve) => setTimeout(() => resolve(ctx), 100));
+
+    const runner = new PipelineRunner([slowStage]);
+    const depsWithTimeout = makeDeps({ stageTimeoutMs: 25 });
+
+    let caught: unknown;
+    try {
+      await runner.run(initialCtx, depsWithTimeout);
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(APIError);
+    expect((caught as APIError).code).toBe(ResponseCode.REQUEST_TIMEOUT);
+  });
+
+  // Wave 33.C (EVID-083 W5): omitting stageTimeoutMs preserves the
+  // pre-W5 contract — no timeout, slow stages still complete.
+  it('stageTimeoutMs undefined → no timeout, slow stage completes', async () => {
+    const slowStage: Stage = (ctx) =>
+      new Promise((resolve) => setTimeout(() => resolve({ ...ctx, params: 'slow-done' }), 60));
+
+    const runner = new PipelineRunner([slowStage]);
+    // makeDeps() returns a PipelineDeps WITHOUT stageTimeoutMs → preserves
+    // current default (no timeout). The slow stage must still complete.
+    const result = await runner.run(initialCtx, deps);
+
+    // No result.code was set → returns ctx.result.data (which is undefined here
+    // because slowStage did not set result). The important assertion is that
+    // the run resolved without throwing.
+    expect(result).toBeUndefined();
+  });
+
   // AC-5 variant: cleanup runs after PipelineShortCircuit
   it('cleanup runs after PipelineShortCircuit', async () => {
     const destroySpy = vi.fn();

@@ -93,6 +93,33 @@ describe('cleanup (Stage 13)', () => {
     await expect(cleanup(ctx, deps)).resolves.toBeUndefined();
   });
 
+  // Wave 33.C (EVID-083 W4) — cleanup awaits an async session.$destroy() result.
+  // Before W4 the call was `ctx.session?.$destroy()` (no await), which would
+  // silently lose rejections from a future async $destroy implementation.
+  // Verify the await contract by passing a Promise-returning $destroy and
+  // observing that cleanup waits for it.
+  it('awaits async session.$destroy() (Wave 33.C / EVID-083 W4)', async () => {
+    let destroyResolved = false;
+    const destroySpy = vi.fn().mockImplementation(
+      () =>
+        new Promise<void>((resolve) =>
+          setTimeout(() => {
+            destroyResolved = true;
+            resolve();
+          }, 5),
+        ),
+    );
+    const ctx = makeCtx({
+      session: { $destroy: destroySpy } as unknown as PipelineContext['session'],
+    });
+    const deps = makeDeps();
+
+    await cleanup(ctx, deps);
+
+    expect(destroySpy).toHaveBeenCalledOnce();
+    expect(destroyResolved).toBe(true);
+  });
+
   // Case 5 — Wave 32.E (EVID-083 HIGH-10)
   // cleanup.ts has NO internal try/catch around $destroy() (verified: line 25
   // is a bare `ctx.session?.$destroy()` with no surrounding try/catch).

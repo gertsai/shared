@@ -47,8 +47,13 @@ export async function validateResponse(
   const { action, logger, strictResponseValidation } = deps;
   const data = ctx.result?.data;
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-  const responseIsValid = action.options.response(data) as { success: boolean; errors?: unknown };
+  // Wave 33.C (EVID-083 W6): drop redundant `as { success; errors? }` cast —
+  // `action.options.response` is `TypiaValidator<ResponseType>` which is
+  // `ReturnType<typeof typia.createValidate<T>>` and that already returns
+  // `IValidation` (`{ success: boolean; errors: IValidation.IError[] }`).
+  // The cast was a leftover from an earlier untyped intermediate; structural
+  // inference already gives us the same shape with full type-safety.
+  const responseIsValid = action.options.response(data);
 
   if (!responseIsValid.success) {
     if (
@@ -57,11 +62,17 @@ export async function validateResponse(
     ) {
       throw new APIError(ResponseCode.BAD_REQUEST__INVALID_RESPONSE, responseIsValid.errors);
     } else {
-      logger?.error(
-        action.name,
-        'Response validation failed',
-        responseIsValid.errors,
-      );
+      // Wave 33.C (EVID-083 W8): strip `value` field from logged errors —
+      // typia's `IValidation.IError` includes the offending input value which
+      // may contain PII / secrets (passwords, tokens, PHI). In loose-mode
+      // (non-strict) we still want diagnostic visibility, but only the
+      // structural metadata (`path` + `expected`), never the raw value.
+      const safeErrors = responseIsValid.errors.map((e) => ({
+        path: e.path,
+        expected: e.expected,
+        // intentionally omit `value` — see Wave 33.C (EVID-083 W8) above.
+      }));
+      logger?.error(action.name, 'Response validation failed', safeErrors);
     }
   }
 
