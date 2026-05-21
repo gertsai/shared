@@ -8,10 +8,13 @@
  *   - Stage throwing routes to translateError (mock)
  *   - PipelineShortCircuit thrown by a stage is caught and returns data
  *   - cleanup always runs in finally (even on throw)
+ *
+ * PR-4: runStagesSerially removed; runner now returns full {success, code, message, data}
+ * envelope when ctx.result.code is set (wrapResponse guarantees this in the full pipeline).
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PipelineRunner, runStagesSerially } from '../runner';
+import { PipelineRunner } from '../runner';
 import { PipelineShortCircuit } from '../types';
 import type { PipelineContext, PipelineDeps, Stage } from '../types';
 import { APIError } from '../../../error';
@@ -70,12 +73,27 @@ describe('PipelineRunner', () => {
     expect(result).toBeUndefined();
   });
 
-  // AC-1 variant: Empty stages with result pre-set in initial ctx
-  it('empty stages list returns ctx.result.data when initial context has a result', async () => {
+  // AC-1 variant: Empty stages with result pre-set but no code → returns ctx.result.data
+  it('empty stages list returns ctx.result.data when initial context has result without code', async () => {
     const ctx = makeCtx({ result: { data: { id: '42' } } });
     const runner = new PipelineRunner([]);
     const result = await runner.run(ctx, deps);
     expect(result).toEqual({ id: '42' });
+  });
+
+  // AC-1 PR-4 variant: result with code set → returns full success envelope
+  it('empty stages list returns {success, code, message, data} envelope when result.code is set', async () => {
+    const ctx = makeCtx({
+      result: { code: ResponseCode.SUCCESS_CREATED, message: 'Created', data: { id: '99' } },
+    });
+    const runner = new PipelineRunner([]);
+    const result = await runner.run(ctx, deps);
+    expect(result).toEqual({
+      success: true,
+      code: ResponseCode.SUCCESS_CREATED,
+      message: 'Created',
+      data: { id: '99' },
+    });
   });
 
   // AC-2: Sequential stages — each stage receives the previous stage's output
@@ -102,7 +120,31 @@ describe('PipelineRunner', () => {
     const result = await runner.run(initialCtx, deps);
 
     expect(log).toEqual(['A', 'B', 'C']);
+    // result.code not set → returns raw data
     expect(result).toBe('final');
+  });
+
+  // AC-2 PR-4 variant: full pipeline with wrapResponse-equivalent stage
+  it('stage that sets result.code triggers full success envelope return', async () => {
+    const wrapStage: Stage = async (ctx) => ({
+      ...ctx,
+      result: {
+        ...ctx.result,
+        code: ResponseCode.SUCCESS,
+        message: undefined,
+        data: { wrapped: true },
+      },
+    });
+
+    const runner = new PipelineRunner([wrapStage]);
+    const result = await runner.run(initialCtx, deps);
+
+    expect(result).toEqual({
+      success: true,
+      code: ResponseCode.SUCCESS,
+      message: undefined,
+      data: { wrapped: true },
+    });
   });
 
   // AC-3: Stage throws generic Error — translateError wraps it as APIError
@@ -192,48 +234,5 @@ describe('PipelineRunner', () => {
 
     expect(result).toBe('early-result');
     expect(destroySpy).toHaveBeenCalledOnce();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// runStagesSerially (PR-2 bridge helper)
-// ---------------------------------------------------------------------------
-
-describe('runStagesSerially', () => {
-  // Bridge-1: empty stages list — returns initial context unchanged
-  it('returns the initial context unchanged when stages list is empty', async () => {
-    const deps = makeDeps();
-    const ctx = makeCtx({ params: { id: '1' } });
-
-    const result = await runStagesSerially([], ctx, deps);
-
-    expect(result).toBe(ctx);
-  });
-
-  // Bridge-2: sequential stages thread context through in order
-  it('threads PipelineContext sequentially through all stages and returns final context', async () => {
-    const deps = makeDeps();
-    const initial = makeCtx();
-    const order: number[] = [];
-
-    const stage1: Stage = async (c) => {
-      order.push(1);
-      return { ...c, params: { step: 1 } };
-    };
-    const stage2: Stage = async (c) => {
-      order.push(2);
-      expect((c.params as { step: number }).step).toBe(1);
-      return { ...c, params: { step: 2 } };
-    };
-    const stage3: Stage = async (c) => {
-      order.push(3);
-      expect((c.params as { step: number }).step).toBe(2);
-      return { ...c, params: { step: 3 } };
-    };
-
-    const result = await runStagesSerially([stage1, stage2, stage3], initial, deps);
-
-    expect(order).toEqual([1, 2, 3]);
-    expect((result.params as { step: number }).step).toBe(3);
   });
 });

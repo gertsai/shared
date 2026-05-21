@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 import type { SubscriptionOptions } from '@google-cloud/pubsub';
-import type { OrchestraSession } from '@gertsai/core';
 import { UserType, defaultSession } from '@gertsai/core';
 import {
   bootPubsubSubscriptions,
@@ -23,7 +22,6 @@ import type Moleculer from 'moleculer';
 import type { BrokerOptions, LoggerInstance, ServiceSchema } from 'moleculer';
 import { ServiceBroker } from 'moleculer';
 
-import config from '../../config';
 import type { MoleculerWorkflowSchema } from '../../moleculer/workflow/adapter';
 import {
   REGISTER_WORKFLOW,
@@ -33,15 +31,8 @@ import { ResponseCode } from '../apiResponse';
 import type { ContextMeta, TypiaValidator } from '../common';
 import type { ActionParams, TypiaParamsWithSchema } from '../common';
 import { APIError } from '../error';
-import { runStagesSerially } from './pipeline/runner';
-import { extractParams } from './pipeline/stages/extract-params';
-import { mergeMultipart } from './pipeline/stages/merge-multipart';
-import { coerceQueryString } from './pipeline/stages/coerce-query-string';
-import { injectTenantId } from './pipeline/stages/inject-tenant-id';
-import { validateRequest } from './pipeline/stages/validate-request';
-import { establishAuthSession } from './pipeline/stages/establish-auth-session';
-import { buildTraceContext } from './pipeline/stages/build-trace-context';
-import { invokeHandler } from './pipeline/stages/invoke-handler';
+import { PipelineRunner } from './pipeline/runner';
+import { DEFAULT_STAGES } from './pipeline/default-stages';
 import type { PipelineContext, PipelineDeps } from './pipeline/types';
 
 import type {
@@ -710,124 +701,36 @@ export class ApiController<
 
   /**
    * Create MoleculerJS service action schema
-   * based on provided actionOptions
+   * based on provided actionOptions.
+   *
+   * PR-4: Full PipelineRunner orchestrator (≤20 LOC handler).
+   * All 11 stages (1-11) delegated to DEFAULT_STAGES via PipelineRunner.
+   * Stages 12 (translateError) and 13 (cleanup) are hard-wired into the runner.
+   *
    * @param action - registered action
    */
   private _createActionSchema(action: ApiControllerRegisteredAction<any, any, any, any, any, any>) {
-    // Capture `this` (the ApiController instance) at method-invocation time, before
-    // the inner `handler` function rebinds `this` to the Moleculer service.
     const controller = this;
 
     return {
       rest: action.options.rest,
-      // Pass auth and scopes for auth-moleculer middleware
       auth: action.options.auth,
       scopes: action.options.scopes,
       handler: async function (this: Moleculer.Service, ctx: Moleculer.Context<any, ContextMeta>) {
-        let session: OrchestraSession | undefined;
-
-        try {
-          // ----------------------------------------------------------------
-          // Stages 1-5 (PR-2): delegated to extracted stage functions via
-          // runStagesSerially bridge helper. Stages 6-13 stay inline until
-          // PR-3/4 extract them.
-          // ----------------------------------------------------------------
-          const initialPipelineCtx: PipelineContext = { ctx };
-          const stageDeps: PipelineDeps = {
-            action,
-            controller,
-            service: this,
-            logger: this.logger,
-            // Capture sessionFactory at schema-build time to avoid circular imports
-            // in stage files. Stage 6 (establishAuthSession) reads this.
-            sessionFactory: ApiController._config.sessionFactory,
-          };
-          // ----------------------------------------------------------------
-          // Stages 6-8 (PR-3): delegated to extracted stage functions via
-          // runStagesSerially. Stages 9-13 stay inline until PR-4.
-          // ----------------------------------------------------------------
-          const afterInvoke = await runStagesSerially(
-            [
-              extractParams,
-              mergeMultipart,
-              coerceQueryString,
-              injectTenantId,
-              validateRequest,
-              establishAuthSession,
-              buildTraceContext,
-              invokeHandler,
-            ],
-            initialPipelineCtx,
-            stageDeps,
-          );
-          session = afterInvoke.session;
-          const { code, message, data, raw } = (afterInvoke.result as {
-            code?: ResponseCode;
-            message?: string;
-            data: unknown;
-            raw?: boolean;
-          });
-
-          // Raw response mode: return data directly without Orchestra wrapping
-          // Used for streaming responses (SSE, WebSockets) where data is a Readable stream
-          if (raw === true) {
-            this.logger?.info('Action returning raw response', action.name);
-            return data;
-          }
-
-          if (config.RESPONSE_VALIDATION === true) {
-            const responseIsValid = action.options.response(data);
-
-            if (!responseIsValid.success) {
-              if (
-                action.options.strictResponseValidation === true ||
-                ApiController._config.strictResponseValidation === true
-              ) {
-                throw new APIError(
-                  ResponseCode.BAD_REQUEST__INVALID_RESPONSE,
-                  responseIsValid.errors,
-                );
-              } else {
-                this.logger?.error(
-                  action.name,
-                  // Log action metadata
-                  'Response validation failed',
-                  responseIsValid.errors,
-                );
-              }
-            }
-          }
-
-          const finalCode = code ?? action.options.responseCode ?? ResponseCode.SUCCESS;
-
-          return {
-            success: true,
-            code: finalCode,
-            message: message ?? action.options.responseMessage,
-            data,
-          };
-        } catch (err: unknown) {
-          if (err instanceof APIError) {
-            throw err;
-          }
-
-          // @ts-ignore
-          if (err.__ORCHESTRA_ERROR__ === true) {
-            // @ts-ignore
-            throw APIError.fromJSON(err);
-          }
-
-          if (err instanceof Error) {
-            throw APIError.fromError(err);
-          }
-
-          this.logger?.error('Unknown error occurred', err);
-
-          throw new APIError(ResponseCode.INTERNAL_ERROR);
-        } finally {
-          this.logger?.info('Action finished', action.name);
-          session?.$destroy();
-        }
+        const initialPipelineCtx: PipelineContext = { ctx };
+        const deps: PipelineDeps = {
+          action,
+          controller,
+          service: this,
+          logger: this.logger,
+          sessionFactory: ApiController._config.sessionFactory,
+          // exactOptionalPropertyTypes: omit key entirely when undefined
+          ...(ApiController._config.strictResponseValidation !== undefined && {
+            strictResponseValidation: ApiController._config.strictResponseValidation,
+          }),
+        };
+        const runner = new PipelineRunner(DEFAULT_STAGES);
+        return await runner.run(initialPipelineCtx, deps);
       },
     };
   }

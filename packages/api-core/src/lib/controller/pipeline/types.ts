@@ -48,6 +48,18 @@ export interface PipelineDeps {
    * is missing AND `action.options.auth` is `'required' | 'optional'`.
    */
   readonly sessionFactory?: (user_uuid: string, user_type: UserType) => OrchestraSession;
+  /**
+   * Controller-level strict response validation flag, captured from
+   * `ApiController._config.strictResponseValidation` at schema-build time.
+   *
+   * Added in PR-4 for Stage 10 (validateResponse). Avoids a circular import
+   * from the stage file back into ApiController. Optional — when absent,
+   * stage 10 falls back to `action.options.strictResponseValidation` only.
+   *
+   * SPEC-021 §Stage 10: when either this flag OR `action.options.strictResponseValidation`
+   * is `true`, an invalid response throws `APIError(BAD_REQUEST__INVALID_RESPONSE)`.
+   */
+  readonly strictResponseValidation?: boolean;
 }
 
 // =============================================================================
