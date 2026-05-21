@@ -1,5 +1,12 @@
 # @gertsai/rpc-proxy-builder
 
+## 7.0.0
+
+### Patch Changes
+
+- Updated dependencies [f7549b8]
+  - @gertsai/api-core@0.8.0
+
 ## 6.0.0
 
 ### Patch Changes

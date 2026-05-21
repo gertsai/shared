@@ -1,5 +1,12 @@
 # @gerts/api-rlr
 
+## 0.3.13
+
+### Patch Changes
+
+- Updated dependencies [f7549b8]
+  - @gertsai/api-core@0.8.0
+
 ## 0.3.12
 
 ### Patch Changes
