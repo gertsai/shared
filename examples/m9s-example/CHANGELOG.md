@@ -1,5 +1,19 @@
 # @gertsai-examples/m9s-example
 
+## 0.0.24
+
+### Patch Changes
+
+- Updated dependencies [33eacbc]
+  - @gertsai/api-core@0.7.0
+  - @gertsai/session@2.1.1
+  - @gertsai-examples/m9s-example-api-types@0.0.18
+  - @gertsai/api-rlr@0.3.12
+  - @gertsai/entity-audit@0.2.4
+  - @gertsai/entity-storage@5.0.0
+  - @gertsai/runtime-context@5.0.0
+  - @gertsai/pg-client@3.0.0
+
 ## 0.0.23
 
 ### Patch Changes
