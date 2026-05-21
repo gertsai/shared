@@ -17,7 +17,7 @@ import {
   stopQueues,
 } from '@gertsai/api-queue';
 import { createLogger, type Logger as GertsLogger } from '@gertsai/logger-factory';
-import { buildTraceparent } from '@gertsai/otel/moleculer';
+// buildTraceparent moved to pipeline/stages/build-trace-context.ts (PR-3)
 import color from 'colorts';
 import type Moleculer from 'moleculer';
 import type { BrokerOptions, LoggerInstance, ServiceSchema } from 'moleculer';
@@ -39,6 +39,9 @@ import { mergeMultipart } from './pipeline/stages/merge-multipart';
 import { coerceQueryString } from './pipeline/stages/coerce-query-string';
 import { injectTenantId } from './pipeline/stages/inject-tenant-id';
 import { validateRequest } from './pipeline/stages/validate-request';
+import { establishAuthSession } from './pipeline/stages/establish-auth-session';
+import { buildTraceContext } from './pipeline/stages/build-trace-context';
+import { invokeHandler } from './pipeline/stages/invoke-handler';
 import type { PipelineContext, PipelineDeps } from './pipeline/types';
 
 import type {
@@ -59,7 +62,7 @@ import type {
   QueueHandler,
   QueueOptions,
   QueueProcessingStatus,
-  QueueTraceContext,
+  // QueueTraceContext moved to pipeline/stages/build-trace-context.ts (PR-3)
   RestConfig,
   ServiceContextBase,
   ServiceNameToPath,
@@ -67,17 +70,8 @@ import type {
   SubscribeOptions,
 } from './types';
 
-/**
- * Helper function for better types check
- * @param data
- * @param code
- * @param message
- */
-const respond = <C>(data: C, message?: string, code?: ResponseCode) => ({
-  data,
-  code,
-  message,
-});
+// `respond` helper moved to pipeline/helpers.ts (PR-3) — consumed by
+// Stage 8 (invokeHandler) via the pipeline helpers module.
 
 /**
  * Simple fallback logger for use before MoleculerJS Broker is available.
@@ -744,69 +738,34 @@ export class ApiController<
             controller,
             service: this,
             logger: this.logger,
+            // Capture sessionFactory at schema-build time to avoid circular imports
+            // in stage files. Stage 6 (establishAuthSession) reads this.
+            sessionFactory: ApiController._config.sessionFactory,
           };
-          const afterValidate = await runStagesSerially(
-            [extractParams, mergeMultipart, coerceQueryString, injectTenantId, validateRequest],
+          // ----------------------------------------------------------------
+          // Stages 6-8 (PR-3): delegated to extracted stage functions via
+          // runStagesSerially. Stages 9-13 stay inline until PR-4.
+          // ----------------------------------------------------------------
+          const afterInvoke = await runStagesSerially(
+            [
+              extractParams,
+              mergeMultipart,
+              coerceQueryString,
+              injectTenantId,
+              validateRequest,
+              establishAuthSession,
+              buildTraceContext,
+              invokeHandler,
+            ],
             initialPipelineCtx,
             stageDeps,
           );
-          const params = afterValidate.params;
-          const file = afterValidate.file;
-          const fileMeta = afterValidate.fileMeta;
-
-          if (action.options.auth === 'required' || action.options.auth === 'optional') {
-            if (action.options.auth === 'required' && !ctx.meta.user_uuid) {
-              this.logger?.error(
-                'Cannot call an action with required authorization. No user found in meta',
-                action,
-              );
-
-              throw new APIError(ResponseCode.NOT_AUTHORIZED);
-            }
-
-            if (ctx.meta.user_uuid && ctx.meta.user_type) {
-              session = ApiController._config.sessionFactory(
-                ctx.meta.user_uuid,
-                ctx.meta.user_type,
-              );
-            }
-          }
-
-          // Extract trace context for auto-injection into jobs.
-          // Wave 15.C (PRD-052 FR-004): delegated to
-          // `@gertsai/otel/moleculer.buildTraceparent` — identical W3C
-          // semantics (00-traceId-spanId-01 with non-zero enforcement),
-          // now centrally maintained alongside `withMoleculerTracing`.
-          const traceContext: QueueTraceContext | undefined = buildTraceparent({
-            ...(ctx.requestID !== undefined && { requestID: ctx.requestID }),
-            ...(ctx.id !== undefined && { id: ctx.id }),
-            ...(ctx.parentID !== undefined && { parentID: ctx.parentID }),
-            ...(ctx.tracing !== undefined && { tracing: ctx.tracing }),
-          });
-
-          const { code, message, data, raw } = await action.options.handler.call(this, {
-            session,
-            // Raw Moleculer context (for broker.call, meta, etc.)
-            ctx,
-            // Typed service with custom context
-            service: this,
-            params,
-            // Wrap addJob to auto-inject trace context (user can override)
-            addJob: (name: string, jobName: string, payload: any, opts: any) =>
-              this.addJob(name, jobName, { _traceContext: traceContext, ...payload }, opts),
-            getQueue: this.getQueue,
-            files: file
-              ? [
-                  {
-                    stream: file,
-                    meta: fileMeta,
-                  },
-                ]
-              : [],
-            call: (...args: [string, Record<string, any>]) =>
-              ctx.call(...args).then((res: any) => res.data),
-            logger: this.logger,
-            respond,
+          session = afterInvoke.session;
+          const { code, message, data, raw } = (afterInvoke.result as {
+            code?: ResponseCode;
+            message?: string;
+            data: unknown;
+            raw?: boolean;
           });
 
           // Raw response mode: return data directly without Orchestra wrapping

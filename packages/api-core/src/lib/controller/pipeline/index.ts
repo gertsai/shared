@@ -19,3 +19,7 @@ export { mergeMultipart } from './stages/merge-multipart';
 export { coerceQueryString } from './stages/coerce-query-string';
 export { injectTenantId } from './stages/inject-tenant-id';
 export { validateRequest } from './stages/validate-request';
+// PR-3: stages 6-8
+export { establishAuthSession } from './stages/establish-auth-session';
+export { buildTraceContext } from './stages/build-trace-context';
+export { invokeHandler } from './stages/invoke-handler';
