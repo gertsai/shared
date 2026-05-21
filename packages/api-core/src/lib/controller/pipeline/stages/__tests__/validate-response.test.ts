@@ -150,21 +150,29 @@ describe('validateResponse (Stage 10)', () => {
   });
 
   // Case 5: RESPONSE_VALIDATION=true + invalid + neither strict → logs error, passes through
+  // Wave 33.C (EVID-083 W8): validator errors are stripped to `{ path, expected }`
+  // before logging — the `value` field is intentionally dropped to avoid PII leaks.
   it('RESPONSE_VALIDATION=true + invalid + no strict flag → logs error via logger.error, returns ctx', async () => {
     mockConfig.RESPONSE_VALIDATION = true;
 
-    const errors = ['something off'];
+    const errors = [
+      { path: '$input.id', expected: 'string', value: 'secret-PII-do-not-log' },
+    ];
     const deps = makeDeps({ success: false, errors });
     const ctx = makeCtx({ partial: true });
 
     const result = await validateResponse(ctx, deps);
 
     expect(result).toBe(ctx);
+    // Wave 33.C (EVID-083 W8): expect stripped shape — `value` MUST NOT appear.
     expect(deps.logger?.error).toHaveBeenCalledWith(
       'test.action',
       'Response validation failed',
-      errors,
+      [{ path: '$input.id', expected: 'string' }],
     );
+    // Defensive: ensure the raw `value` never reaches the logger call.
+    const calls = (deps.logger!.error as ReturnType<typeof vi.fn>).mock.calls;
+    expect(JSON.stringify(calls)).not.toContain('secret-PII-do-not-log');
   });
 
   // Case 6: result.data undefined → validator called with undefined, strict mode throws

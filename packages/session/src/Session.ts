@@ -235,13 +235,41 @@ export class Session extends EventEmitter {
    * Switch the active operator identity. Emits
    * {@link SESSION_EVENTS.OPERATOR_SWITCHED} with `{ prev, current }`.
    *
-   * @throws if called on a destroyed session.
+   * Wave 33.C (EVID-083 W10) — runtime input validation: TypeScript's
+   * structural typing alone does not protect against callers passing an
+   * empty `uuid` (silent identity loss) or a non-string `type` (downstream
+   * consumers like the audit pipeline expect the `OperatorType` union).
+   * Validate before mutation so the session never enters a half-rotated
+   * state where `_operatorUuid` was updated but `_operatorType` was not.
+   *
+   * @throws {SessionDestroyedError} when the session has already been destroyed.
+   * @throws {ValidationError} when `operator.uuid` is not a non-empty string
+   *   or `operator.type` is not a non-empty string.
    */
   $switchOperator(operator: OperatorRef): void {
     if (this._destroyed) {
       throw new SessionDestroyedError({
         message: 'Cannot $switchOperator on destroyed session',
         details: { contextField: 'session' },
+      });
+    }
+    // Wave 33.C (EVID-083 W10): validate inputs BEFORE mutating instance state
+    // to prevent half-rotated identity on rejection.
+    if (typeof operator.uuid !== 'string' || operator.uuid.length === 0) {
+      throw new ValidationError({
+        message: 'Session.$switchOperator: operator.uuid must be a non-empty string',
+        details: { field: 'operator.uuid', constraint: 'non-empty-string' },
+      });
+    }
+    // OperatorType is a closed string-literal union of 24 values. A full Set
+    // lookup would require shipping a runtime list that duplicates the type
+    // (and drift if someone adds a new member). Minimal guard: require a
+    // non-empty string. Downstream consumers narrow further via the union
+    // type — anything not in the union is caught at the next assertion.
+    if (typeof operator.type !== 'string' || operator.type.length === 0) {
+      throw new ValidationError({
+        message: 'Session.$switchOperator: operator.type must be a non-empty string',
+        details: { field: 'operator.type', constraint: 'non-empty-string' },
       });
     }
     const prev: OperatorRef = {

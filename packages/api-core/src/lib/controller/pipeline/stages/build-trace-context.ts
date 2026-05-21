@@ -8,7 +8,6 @@
  */
 
 import { buildTraceparent } from '@gertsai/otel/moleculer';
-import type { QueueTraceContext } from '../../types';
 import type { PipelineContext, PipelineDeps } from '../types';
 
 /**
@@ -36,16 +35,20 @@ export async function buildTraceContext(
 ): Promise<PipelineContext> {
   const molCtx = ctx.ctx;
 
-  // Cast to QueueTraceContext: BuiltTraceparent is structurally compatible —
-  // both carry traceId/parentId/sampled/traceparent. `traceparent` is required on
-  // BuiltTraceparent (string) vs optional on QueueTraceContext (string|undefined);
-  // the cast is safe since a defined BuiltTraceparent always has `traceparent`.
+  // Wave 33.C (EVID-083 W7): dropped `as QueueTraceContext | undefined` cast.
+  // `BuiltTraceparent` is structurally assignable to `QueueTraceContext`:
+  // both carry the same field names with compatible variance — every property
+  // on `BuiltTraceparent` is at-most-as-restrictive as its `QueueTraceContext`
+  // counterpart (`traceparent` is required-string in the former, optional
+  // string in the latter). TS narrows the assignment in
+  // `PipelineContext.traceContext` (which is `QueueTraceContext | undefined`)
+  // via structural subtyping — no cast needed.
   const traceContext = buildTraceparent({
     ...(molCtx.requestID !== undefined && { requestID: molCtx.requestID }),
     ...(molCtx.id !== undefined && { id: molCtx.id }),
     ...(molCtx.parentID !== undefined && { parentID: molCtx.parentID }),
     ...(molCtx.tracing !== undefined && { tracing: molCtx.tracing }),
-  }) as QueueTraceContext | undefined;
+  });
 
   // exactOptionalPropertyTypes: only include traceContext key when defined.
   if (traceContext !== undefined) {

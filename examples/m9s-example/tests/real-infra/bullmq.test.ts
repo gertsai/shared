@@ -124,6 +124,13 @@ maybe(
       process.env['REDIS_URL'] = REDIS_URL;
       // Mock embedder keeps the suite focused on async wiring, not vectors.
       process.env['EMBEDDER_PROVIDER'] = 'mock';
+      // Wave 33.D (EVID-083 m9s test debt) — force in-memory storage so
+      // MockEmbedder (384-dim) does not hit PgVectorStore (expects 768-dim).
+      // The .env file sets STORAGE_PROVIDER=postgres for docker-compose dev
+      // runs; dotenv does NOT overwrite an already-set var, so this explicit
+      // assignment before requireFromHere wins. The async queue wiring is
+      // independent of storage backend — BullMQ+Redis works with memory store.
+      process.env['STORAGE_PROVIDER'] = 'memory';
 
       // Side-effect: register controllers. Triggers BullMQ `queueConfig`
       // construction in `services/index.ts` (covers W-3-11-18 verify path).

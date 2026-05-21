@@ -28,6 +28,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createRequire } from 'node:module';
+import { randomUUID } from 'node:crypto';
 import type { Middleware } from 'moleculer';
 
 const requireFromHere = createRequire(import.meta.url);
@@ -60,6 +61,13 @@ async function ollamaAlive(): Promise<boolean> {
 }
 
 const ollamaReady = FORCE || (await ollamaAlive());
+
+// Wave 33.D (EVID-083 m9s test debt) — PgDocumentRepository.coerceUuid
+// rejects non-canonical ids. Pre-generate UUIDs so the test works with both
+// memory (default) and postgres STORAGE_PROVIDER.
+const DOC_INGEST_UUID = randomUUID();
+const DOC_SEARCH_UUID = randomUUID();
+const DOC_SHORT_UUID = randomUUID();
 
 const maybe = ollamaReady ? describe : describe.skip;
 
@@ -108,6 +116,19 @@ maybe(
       process.env['EMBEDDER_PROVIDER'] = 'ollama';
       process.env['EMBEDDER_URL'] = OLLAMA_URL;
       process.env['EMBEDDER_MODEL'] = 'nomic-embed-text';
+      // Wave 33.D (EVID-083 m9s test debt) — explicitly empty REDIS_URL so
+      // services/index.ts sees QUEUE_ENABLED=false and ingest action returns
+      // mode='inline' (synchronous path). The .env file sets REDIS_URL for
+      // docker-compose dev runs; dotenv does NOT overwrite an already-set var,
+      // so setting '' here before requireFromHere takes precedence. The async
+      // BullMQ path is covered separately in tests/real-infra/bullmq.test.ts.
+      process.env['REDIS_URL'] = '';
+      // Wave 33.D (EVID-083 m9s test debt) — force memory storage so the
+      // in-process DocumentRepository (no UUID coercion constraint) and
+      // MemoryVectorStore (no dimension constraint) are used. The .env file
+      // sets STORAGE_PROVIDER=postgres for dev-compose runs; same dotenv
+      // precedence rule applies — explicit set before requireFromHere wins.
+      process.env['STORAGE_PROVIDER'] = 'memory';
 
       // Side-effect: register controllers (typia validators inlined in dist).
       requireFromHere('../dist/src/services/index.js');
@@ -149,7 +170,7 @@ maybe(
 
     it('ingests a document with real Ollama nomic-embed-text vectors', async () => {
       const input = {
-        docId: 'real-doc-1',
+        docId: DOC_INGEST_UUID, // Wave 33.D (EVID-083 m9s test debt) — was 'real-doc-1'
         text:
           'Wave 5 stack composes RequestContext per request. ' +
           'Hexagonal architecture isolates the core from infrastructure. ' +
@@ -170,7 +191,7 @@ maybe(
           data?: { docId?: string; chunkCount?: number; mode?: string };
         }
       ).data;
-      expect(data?.docId).toBe('real-doc-1');
+      expect(data?.docId).toBe(DOC_INGEST_UUID);
       expect(data?.mode).toBe('inline');
       // Real embedder produced ≥1 chunk (text > minimum chunk size).
       expect(typeof data?.chunkCount).toBe('number');
@@ -180,7 +201,7 @@ maybe(
     it('searches the corpus and returns the ingested document via real cosine sim', async () => {
       // Step 1: ingest a document with distinctive text.
       const ingestInput = {
-        docId: 'real-doc-search-target',
+        docId: DOC_SEARCH_UUID, // Wave 33.D (EVID-083 m9s test debt) — was 'real-doc-search-target'
         text:
           'A canonical reference application demonstrating Wave 5 ' +
           'middleware composition: tenant resolver, session middleware, ' +
@@ -220,7 +241,7 @@ maybe(
       // Top hit should be the ingested doc (high cosine similarity for the
       // semantically-overlapping query).
       const topDocIds = results.map((r) => r.docId);
-      expect(topDocIds).toContain('real-doc-search-target');
+      expect(topDocIds).toContain(DOC_SEARCH_UUID);
       // Sanity: scores are real numbers in [-1, 1] cosine range.
       for (const r of results) {
         expect(typeof r.score).toBe('number');
@@ -231,7 +252,7 @@ maybe(
 
     it('handles short text via real embedder (boundary case)', async () => {
       const input = {
-        docId: 'real-doc-short',
+        docId: DOC_SHORT_UUID, // Wave 33.D (EVID-083 m9s test debt) — was 'real-doc-short'
         text: 'Brief.',
         userId: 'user-real-short',
       };

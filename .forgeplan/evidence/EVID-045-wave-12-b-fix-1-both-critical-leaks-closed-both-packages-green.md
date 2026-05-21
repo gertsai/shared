@@ -7,6 +7,8 @@ last_modified_by: claude-code/2.1.142
 links:
 - target: PRD-029
   relation: informs
+- target: RFC-020
+  relation: informs
 status: active
 title: Wave 12.B-fix-1 — both CRITICAL leaks closed, both packages green
 ---
@@ -92,6 +94,7 @@ These are tracked in EVID-044 but NOT consumed by this PRD-029. New PRDs will cl
 - EVID-044 — sources of the 2 CRITICAL items
 - PRD-027 + EVID-043 — Wave 13 precedent (same-pattern surgical fix)
 - Sprint 3.0.1 F-4 — typesVersions pattern (mirrored)
+
 
 
 

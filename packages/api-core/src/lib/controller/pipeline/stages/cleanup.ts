@@ -22,5 +22,9 @@ import type { PipelineContext, PipelineDeps } from '../types';
  */
 export async function cleanup(ctx: PipelineContext, deps: PipelineDeps): Promise<void> {
   deps.logger?.info('Action finished', deps.action.name);
-  ctx.session?.$destroy();
+  // Wave 33.C (EVID-083 W4): `await` `$destroy()` so a future async
+  // OrchestraSession implementation (e.g. flushing audit events / closing
+  // sockets) is honoured. Current implementations return `void` synchronously,
+  // so `await` is a no-op today — but TypeScript-allowable + forward-compatible.
+  await ctx.session?.$destroy();
 }

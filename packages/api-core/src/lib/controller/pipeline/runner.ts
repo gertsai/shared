@@ -13,6 +13,8 @@ import { PipelineShortCircuit } from './types';
 import type { PipelineContext, PipelineDeps, Stage } from './types';
 import { translateError } from './stages/translate-error';
 import { cleanup } from './stages/cleanup';
+import { APIError } from '../../error';
+import { ResponseCode } from '../../apiResponse';
 
 /**
  * Executes a sequence of pipeline stages, threading `PipelineContext` through each.
@@ -51,7 +53,36 @@ export class PipelineRunner {
 
     try {
       for (const stage of this.stages) {
-        ctx = await stage(ctx, deps);
+        // Wave 33.C (EVID-083 W5): opt-in per-stage timeout. When
+        // `deps.stageTimeoutMs` is set, race the stage promise against a
+        // setTimeout that throws `APIError(REQUEST_TIMEOUT)`. The timer
+        // handle is always cleared (success OR reject path) via the
+        // `finally` block to prevent CWE-770 unreleased-resource leaks under
+        // load. When the field is undefined, fall back to the original
+        // un-raced call so existing consumers see zero behaviour change.
+        if (deps.stageTimeoutMs !== undefined) {
+          const timeoutMs = deps.stageTimeoutMs;
+          let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+          try {
+            ctx = await Promise.race<PipelineContext>([
+              stage(ctx, deps),
+              new Promise<never>((_, reject) => {
+                timeoutHandle = setTimeout(() => {
+                  reject(
+                    new APIError(
+                      ResponseCode.REQUEST_TIMEOUT,
+                      `pipeline stage exceeded ${timeoutMs}ms timeout`,
+                    ),
+                  );
+                }, timeoutMs);
+              }),
+            ]);
+          } finally {
+            if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
+          }
+        } else {
+          ctx = await stage(ctx, deps);
+        }
       }
 
       // After stage 11 (wrapResponse), ctx.result contains { code, message, data }.

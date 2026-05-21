@@ -45,8 +45,14 @@ export interface PipelineDeps {
    *
    * Stage 6 (establishAuthSession) throws a runtime error if the factory
    * is missing AND `action.options.auth` is `'required' | 'optional'`.
+   *
+   * Wave 33.C (EVID-083 W1): parameter names renamed `user_uuid`/`user_type`
+   * → `operatorUuid`/`operatorType` for camelCase parity with the rest of
+   * `@gertsai/*` (Session.operatorUuid, Wave 29.A OperatorRef.uuid). Pure
+   * type-name change — TS function-type parameter names are documentation,
+   * not part of the runtime contract, so no call-site updates required.
    */
-  readonly sessionFactory?: (user_uuid: string, user_type: UserType) => OrchestraSession;
+  readonly sessionFactory?: (operatorUuid: string, operatorType: UserType) => OrchestraSession;
   /**
    * Controller-level strict response validation flag, captured from
    * `ApiController._config.strictResponseValidation` at schema-build time.
@@ -59,6 +65,23 @@ export interface PipelineDeps {
    * is `true`, an invalid response throws `APIError(BAD_REQUEST__INVALID_RESPONSE)`.
    */
   readonly strictResponseValidation?: boolean;
+  /**
+   * Wave 33.C (EVID-083 W5) — optional per-stage timeout in milliseconds.
+   *
+   * When defined, `PipelineRunner` wraps each stage call in a `Promise.race`
+   * against a setTimeout that rejects with `APIError(REQUEST_TIMEOUT, ...)`.
+   * The pending timer is cleared on stage settle (success OR throw) via a
+   * `finally` block — no timer leaks even when the stage rejects.
+   *
+   * `undefined` (default) preserves pre-Wave-33 behaviour: no timeout, stages
+   * run to natural completion. Callers opt in per-controller by passing a
+   * positive integer (ms).
+   *
+   * Note: this is a stage-level timeout, NOT a total-pipeline budget. With
+   * 13 stages, total runtime is bounded by `13 × stageTimeoutMs` in the
+   * worst case.
+   */
+  readonly stageTimeoutMs?: number;
 }
 
 // =============================================================================

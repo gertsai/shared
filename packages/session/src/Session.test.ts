@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { SessionDestroyedError } from '@gertsai/errors';
+import { SessionDestroyedError, ValidationError } from '@gertsai/errors';
 import { describe, expect, it, vi } from 'vitest';
 
 import { Session } from './Session';
@@ -201,6 +201,47 @@ describe('Session — $switchOperator', () => {
     const err = caught as SessionDestroyedError;
     expect(err.message).toBe('Cannot $switchOperator on destroyed session');
     expect(err.details).toEqual({ contextField: 'session' });
+  });
+
+  // Wave 33.C (EVID-083 W10): input validation prevents silent identity loss.
+  it('throws ValidationError when operator.uuid is empty (Wave 33.C / EVID-083 W10)', () => {
+    const session = new Session(makeOpts({ operatorUuid: 'before' }));
+    let caught: unknown;
+    try {
+      session.$switchOperator({ uuid: '', type: 'web' });
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(ValidationError);
+    const err = caught as ValidationError;
+    expect(err.message).toContain('operator.uuid must be a non-empty string');
+    // Defensive: rejection MUST be pre-mutation — the operator state is unchanged.
+    expect(session.operatorUuid).toBe('before');
+  });
+
+  // Wave 33.C (EVID-083 W10): non-empty-string check on operator.type
+  // protects downstream OperatorType consumers (audit/telemetry pipelines).
+  it('throws ValidationError when operator.type is an empty string (Wave 33.C / EVID-083 W10)', () => {
+    const session = new Session(
+      makeOpts({ operatorUuid: 'before', operatorType: 'web' }),
+    );
+    let caught: unknown;
+    try {
+      session.$switchOperator({
+        uuid: 'valid-uuid',
+        // Force the runtime check; ts-expect-error narrows the union violation.
+        // @ts-expect-error — '' is not a valid OperatorType union member.
+        type: '',
+      });
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(ValidationError);
+    const err = caught as ValidationError;
+    expect(err.message).toContain('operator.type must be a non-empty string');
+    // State unchanged after rejection.
+    expect(session.operatorUuid).toBe('before');
+    expect(session.operatorType).toBe('web');
   });
 });
 

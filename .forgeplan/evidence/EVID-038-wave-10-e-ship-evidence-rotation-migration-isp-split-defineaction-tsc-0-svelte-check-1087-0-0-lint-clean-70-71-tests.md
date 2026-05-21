@@ -7,6 +7,8 @@ last_modified_by: claude-code/2.1.139
 links:
 - target: PRD-022
   relation: informs
+- target: PRD-016
+  relation: informs
 status: active
 title: Wave 10.E ship evidence — rotation + migration + ISP split + defineAction — tsc 0 / svelte-check 1087-0-0 / lint clean / 70-71 tests
 ---
@@ -151,6 +153,7 @@ Weakest live link = 1.0. Wave 10 closure is now **functionally + security + arch
 - [[PRD-018]] / [[PRD-019]] / [[PRD-020]] / [[PRD-021]] — Wave 10 chain.
 - [[ADR-002]] — Hex layer (preserved in soft-delete error placement).
 - [[ADR-006]] — `@gertsai/errors` Shared Kernel.
+
 
 
 
