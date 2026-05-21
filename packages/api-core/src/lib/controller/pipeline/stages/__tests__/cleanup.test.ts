@@ -6,6 +6,8 @@
  *   1. Logs 'Action finished'
  *   2. Calls session.$destroy() if session is present
  *   3. No-op if session is undefined
+ * Wave 32.E (EVID-083 HIGH-10):
+ *   5. session.$destroy() throw propagates (no internal try/catch in cleanup.ts)
  */
 
 import { describe, it, expect, vi } from 'vitest';
@@ -31,7 +33,6 @@ function makeDeps(overrides?: Partial<PipelineDeps>): PipelineDeps {
       path: 'test.cleanup-action',
       options: {} as PipelineDeps['action']['options'],
     } as PipelineDeps['action'],
-    controller: {},
     service: {} as PipelineDeps['service'],
     logger: {
       info: vi.fn(),
@@ -90,5 +91,26 @@ describe('cleanup (Stage 13)', () => {
     const deps = makeDeps({ logger: undefined });
 
     await expect(cleanup(ctx, deps)).resolves.toBeUndefined();
+  });
+
+  // Case 5 — Wave 32.E (EVID-083 HIGH-10)
+  // cleanup.ts has NO internal try/catch around $destroy() (verified: line 25
+  // is a bare `ctx.session?.$destroy()` with no surrounding try/catch).
+  // PipelineRunner wraps cleanup in its own finally/catch, but at the unit level
+  // cleanup itself propagates. This test confirms that invariant so any future
+  // internal-try/catch addition must be an intentional, reviewed change.
+  it('propagates when session.$destroy() throws (Wave 32.E / EVID-083 HIGH-10)', async () => {
+    const destroyError = new Error('destroy boom');
+    const ctx = makeCtx({
+      session: {
+        $destroy: vi.fn().mockImplementation(() => {
+          throw destroyError;
+        }),
+      } as unknown as PipelineContext['session'],
+    });
+    const deps = makeDeps();
+
+    await expect(cleanup(ctx, deps)).rejects.toThrow('destroy boom');
+    expect(ctx.session!.$destroy).toHaveBeenCalledOnce();
   });
 });

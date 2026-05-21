@@ -34,7 +34,6 @@ function makeDeps(overrides?: {
         responseMessage: overrides?.responseMessage,
       },
     } as unknown as PipelineDeps['action'],
-    controller: {},
     service: {} as PipelineDeps['service'],
     logger: undefined,
   };

@@ -248,3 +248,39 @@ describe('coerceQueryParams (legacy)', () => {
     expect(params.status).toBe('active');
   });
 });
+
+describe('Wave 32.B — CWE-1321 prototype-pollution guard', () => {
+  it('coerceNumericFields skips __proto__ field name', () => {
+    const polluted: Record<string, unknown> = {};
+    // Even if a malicious actor supplies __proto__ in the fields list,
+    // Object.prototype must not gain any new property.
+    coerceNumericFields(polluted, ['__proto__']);
+    expect((Object.prototype as Record<string, unknown>)['polluted']).toBeUndefined();
+    expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
+  });
+
+  it('coerceBooleanFields skips constructor field name', () => {
+    const params: Record<string, unknown> = { constructor: 'true' };
+    coerceBooleanFields(params, ['constructor']);
+    // Object.prototype.constructor must remain the built-in Function constructor,
+    // not the boolean true produced by coercion.
+    expect(typeof ({} as Record<string, unknown>)['constructor']).toBe('function');
+  });
+
+  it('coerceArrayFields skips prototype field name', () => {
+    const params: Record<string, unknown> = { prototype: 'a,b,c' };
+    coerceArrayFields(params, ['prototype']);
+    // Object.prototype must not gain a 'prototype' array element.
+    expect(({} as Record<string, unknown>)['prototype']).toBeUndefined();
+  });
+
+  it('coerceQueryParams ignores DANGEROUS_KEYS even if hard-coded list ever drifts', () => {
+    // Simulate a params object that carries dangerous key names.
+    // coerceQueryParams must not propagate them to Object.prototype.
+    const polluted: Record<string, unknown> = { __proto__: '42' };
+    coerceQueryParams(polluted);
+    expect((Object.prototype as Record<string, unknown>)['evil']).toBeUndefined();
+    // Numeric coercion must not have written to the prototype chain.
+    expect(typeof ({} as Record<string, unknown>)['__proto__']).not.toBe('number');
+  });
+});

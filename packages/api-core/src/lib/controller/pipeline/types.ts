@@ -15,12 +15,6 @@ import type { ResponseCode } from '../../apiResponse';
 import type { QueueTraceContext } from '../types';
 import type { ApiControllerRegisteredAction } from '../types';
 
-// ApiController is referenced by type only — avoid circular dependency by
-// importing the class type lazily. We narrow to `object` in PipelineDeps and
-// let consumers cast. PR-5 wiring will tighten this.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyApiController = object;
-
 // =============================================================================
 // PipelineDeps — external services injected into every stage
 // =============================================================================
@@ -28,11 +22,16 @@ type AnyApiController = object;
 /**
  * External dependencies injected into every stage call.
  * Stages MUST NOT hold mutable state — all state lives in PipelineContext.
+ *
+ * Wave 32.C (EVID-083 HIGH-5): the previously-exposed `controller: AnyApiController`
+ * field was dropped — no stage referenced it, and keeping a `{} | object`-typed
+ * back-reference invited future implicit-any drift and circular-dep footguns.
+ * Controller-scoped state (e.g. `strictResponseValidation`) is now passed
+ * through explicit, narrowly-typed fields below.
  */
 export interface PipelineDeps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   readonly action: ApiControllerRegisteredAction<any, any, any, any, any, any>;
-  readonly controller: AnyApiController;
   readonly service: Moleculer.Service;
   readonly logger: LoggerInstance | undefined;
   /**

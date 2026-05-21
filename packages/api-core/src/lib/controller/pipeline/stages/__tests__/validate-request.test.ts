@@ -33,7 +33,6 @@ function makeDepsWithValidator(
         params: validatorFn,
       },
     } as unknown as PipelineDeps['action'],
-    controller: {},
     service: {} as PipelineDeps['service'],
     logger: undefined,
   };
@@ -124,7 +123,6 @@ describe('validateRequest (Stage 5)', () => {
           params: typiaParamsWithSchema,
         },
       } as unknown as PipelineDeps['action'],
-      controller: {},
       service: {} as PipelineDeps['service'],
       logger: undefined,
     };

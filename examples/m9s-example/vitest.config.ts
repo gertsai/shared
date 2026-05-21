@@ -27,6 +27,14 @@ const isRealInfra = process.env['VITEST_REAL_INFRA'] === '1';
 
 export default defineConfig({
   test: {
+    // Wave 32.A — GERTSAI_TEST_SESSION_ALLOW=1 enables the meta.testSession
+    // seam (wave5-middlewares.ts) for e2e/integration tests. The seam is
+    // gated on both NODE_ENV !== 'production' (true in vitest; it does not
+    // set NODE_ENV=production) AND this explicit opt-in, so it is inert in
+    // production deployments even if this config file is somehow loaded.
+    env: {
+      GERTSAI_TEST_SESSION_ALLOW: '1',
+    },
     include: isRealInfra ? REAL_INFRA_INCLUDES : ['tests/**/*.test.ts'],
     exclude: isRealInfra ? [] : [...REAL_INFRA_EXCLUDES, 'node_modules/**', 'dist/**'],
     // Wave 5 broker startup (tenant + session middleware + ApiController

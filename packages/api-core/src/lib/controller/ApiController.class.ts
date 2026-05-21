@@ -112,6 +112,27 @@ const createSimpleFallbackLogger = (
 };
 
 /**
+ * Wave 32.D (EVID-083 HIGH-4) — load-bearing security-boundary stages.
+ *
+ * Module-private frozen `ReadonlySet<StageName>` consulted by
+ * {@link ApiController.setStageOverride} to emit a `logger.warn` whenever one
+ * of the four sensitive stages is replaced. Overriding any of these stages
+ * silently removes the corresponding security check unless the replacement
+ * preserves the default's semantics (see SPEC-021 §Stage contract).
+ *
+ * - `establishAuthSession` — authentication enforcement (CWE-862 if bypassed)
+ * - `validateRequest`     — input validation (CWE-20 if bypassed)
+ * - `validateResponse`    — output validation (CWE-209/CWE-840 if bypassed)
+ * - `injectTenantId`      — tenant-scoping invariant (CWE-639 if bypassed)
+ */
+const SENSITIVE_STAGES: ReadonlySet<StageName> = new Set<StageName>([
+  'establishAuthSession',
+  'validateRequest',
+  'validateResponse',
+  'injectTenantId',
+]);
+
+/**
  * ApiController - Main class for registering actions, queues, and subscriptions.
  *
  * @template ServiceVersion - Service version (e.g., 'v1')
@@ -498,29 +519,66 @@ export class ApiController<
    * cross-cutting concerns (e.g., custom auth check, custom request-id
    * propagation, custom telemetry) without forking the controller class.
    *
-   * @param name  - Canonical stage name from DEFAULT_STAGES (see `STAGE_NAMES`)
-   * @param stage - Replacement Stage function
+   * ## SECURITY WARNING (Wave 32.D / EVID-083 HIGH-4)
+   *
+   * The following stages are LOAD-BEARING SECURITY BOUNDARIES. Overriding them
+   * with a no-op or buggy implementation silently removes the corresponding
+   * security check from every action registered AFTER the override call:
+   *
+   * - `establishAuthSession` — authentication enforcement (CWE-862 if bypassed)
+   * - `validateRequest`     — input validation (CWE-20 if bypassed)
+   * - `validateResponse`    — output validation (CWE-209/CWE-840 if bypassed)
+   * - `injectTenantId`      — tenant-scoping invariant (CWE-639 if bypassed)
+   *
+   * When overriding these stages, the override MUST preserve the security
+   * semantics of the default stage (see SPEC-021 §Stage contract for the full
+   * per-stage contract). If you need custom behaviour BEFORE/AFTER the default
+   * check, consider:
+   *   - Wrapping the default stage (re-import + call it from your override),
+   *   - Filing a Forgeplan RFC to add `addStageBefore` / `addStageAfter` /
+   *     `wrapStage('around')` APIs (currently this method only replaces).
+   *
+   * This method emits a `logger.warn` whenever a sensitive stage is overridden
+   * so the override is visible in startup logs.
+   *
+   * @param name  - Canonical stage name from DEFAULT_STAGES (typed via `StageName`)
+   * @param stage - Replacement `Stage` function
    *
    * @example
    * ```ts
-   * import { ApiController } from '@gertsai/api-core';
-   * import type { Stage } from '@gertsai/api-core/pipeline';
+   * import { ApiController, type Stage } from '@gertsai/api-core';
+   * import type { PipelineContext, PipelineDeps } from '@gertsai/api-core/pipeline';
    *
-   * const myAuthStage: Stage = async (ctx, _deps) => {
-   *   // custom auth — fall back to default if not handled
+   * const myAuthStage: Stage = async (ctx, deps) => {
+   *   // custom auth — MUST still throw on unauthenticated when required
    *   return ctx;
    * };
    *
    * const controller = ApiController.resolveController('v1', 'graph');
    * controller.setStageOverride('establishAuthSession', myAuthStage);
+   * // Startup log: "ApiController.setStageOverride: SENSITIVE stage 'establishAuthSession' overridden..."
    * ```
    *
-   * NOTE: Overrides apply to NEW action schemas generated AFTER this call.
-   * Already-registered actions retain their original pipeline.
+   * NOTE: Overrides are applied to NEW action schemas generated AFTER the call.
+   * Already-registered actions retain their original pipeline (snapshot isolation).
    *
    * Wave 27 PR-5 (PRD-065 FR-3 / RFC-027 §PR-5).
+   * Wave 32.D (EVID-083 HIGH-4) — sensitive-stage warn-on-override.
    */
   public setStageOverride(name: StageName, stage: Stage): void {
+    // Wave 32.D (EVID-083 HIGH-4) — emit warn-level log on sensitive-stage
+    // overrides so security-boundary mutations are visible in startup logs /
+    // log search. `setStageOverride` may be called before the broker starts,
+    // so we fall back to `console` if the static broker logger is not yet
+    // wired (matches the broker-fallback pattern used elsewhere in this file).
+    if (SENSITIVE_STAGES.has(name)) {
+      const logger = ApiController._broker?.logger ?? console;
+      logger.warn(
+        `ApiController.setStageOverride: SENSITIVE stage '${name}' overridden. ` +
+          `Custom override MUST preserve security semantics (see JSDoc + SPEC-021 §Stage ` +
+          `for the contract). This warning is logged once per override call.`,
+      );
+    }
     this._stageOverrides[name] = stage;
   }
 
@@ -772,9 +830,11 @@ export class ApiController<
       scopes: action.options.scopes,
       handler: async function (this: Moleculer.Service, ctx: Moleculer.Context<any, ContextMeta>) {
         const initialPipelineCtx: PipelineContext = { ctx };
+        // Wave 32.C (EVID-083 HIGH-5): `controller` removed from PipelineDeps — no
+        // stage consumed it. The outer `const controller = this` capture above is
+        // still used to resolve `controller._stageOverrides[...]` for `effectiveStages`.
         const deps: PipelineDeps = {
           action,
-          controller,
           service: this,
           logger: this.logger,
           sessionFactory: ApiController._config.sessionFactory,

@@ -32,7 +32,6 @@ function makeDeps(overrides?: Partial<PipelineDeps>): PipelineDeps {
       path: 'test.action',
       options: {} as PipelineDeps['action']['options'],
     } as PipelineDeps['action'],
-    controller: {},
     service: {} as PipelineDeps['service'],
     logger: {
       info: vi.fn(),
