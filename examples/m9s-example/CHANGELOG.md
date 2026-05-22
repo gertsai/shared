@@ -1,5 +1,18 @@
 # @gertsai-examples/m9s-example
 
+## 0.0.26
+
+### Patch Changes
+
+- Updated dependencies [9de7cf7]
+  - @gertsai/core@0.6.0
+  - @gertsai/entity-storage@6.0.0
+  - @gertsai/api-core@0.8.1
+  - @gertsai/auth-openfga@0.4.1
+  - @gertsai/pg-client@3.0.0
+  - @gertsai-examples/m9s-example-api-types@0.0.20
+  - @gertsai/api-rlr@0.3.14
+
 ## 0.0.25
 
 ### Patch Changes
