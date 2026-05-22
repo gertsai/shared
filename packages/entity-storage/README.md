@@ -163,6 +163,18 @@ implicit commit, `runTransaction` throws.
 | `EventEmitter` declared but never emits | Real `STORAGE_EVENTS` emit on every CRUD | Five domain events plus the lifecycle `destroyed` event. |
 | `destroy(uid)` hard-deleted by default | Soft-delete is the default via `delete()`; `destroy(uid)` is the explicit hard-delete | Audit semantics differ — see "Soft-delete vs. hard-delete". |
 
+## Naming: `_uid` (storage row-id) vs `uuid` (entity JSON shape) (Wave 35.D / EVID-087)
+
+`@gertsai/entity-storage` operates at the **storage layer** — its Meta types
+may carry `_uid` as a row-id (parallel to `@gertsai/storage-core` convention).
+This is **distinct** from `@gertsai/entity.EntityJSON.uuid` (the entity's
+public JSON-serialization shape, renamed in Wave 34 PR-2 for ecosystem
+parity).
+
+If a storage Meta declares `_uid`, it's the storage row-id — DO NOT rename
+to `uuid` to align with EntityJSON. See `@gertsai/storage-core` README
+"Naming boundary" section for the full rationale.
+
 ## Troubleshooting / FAQ
 
 - **"`update(uid, ...)` throws `Cannot update an already-deleted row`."**

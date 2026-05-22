@@ -416,4 +416,39 @@ describe('ApiController.setStageOverride', () => {
 
     warnSpy.mockRestore();
   });
+
+  // ---------------------------------------------------------------------------
+  // Wave 35.C (EVID-087 security-W2) — addStageAfter + wrapStage emit
+  // console.warn on sensitive stages (mirrors AC-A6 for completeness).
+  // ---------------------------------------------------------------------------
+
+  // AC-A7: addStageAfter on sensitive stage emits logger.warn (Wave 35.C / EVID-087 security-W2)
+  it('AC-A7: addStageAfter on sensitive stage emits logger.warn (Wave 35.C / EVID-087 security-W2)', () => {
+    const controller = freshController();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const customStage: Stage = async (ctx) => ctx;
+    controller.addStageAfter('validateRequest', customStage);
+
+    expect(warnSpy).toHaveBeenCalledOnce();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/SENSITIVE stage 'validateRequest' modified/),
+    );
+    warnSpy.mockRestore();
+  });
+
+  // AC-A8: wrapStage on sensitive stage emits logger.warn (Wave 35.C / EVID-087 security-W2)
+  it('AC-A8: wrapStage on sensitive stage emits logger.warn (Wave 35.C / EVID-087 security-W2)', () => {
+    const controller = freshController();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const wrapper = (next: Stage): Stage => async (ctx, deps) => next(ctx, deps);
+    controller.wrapStage('validateResponse', wrapper);
+
+    expect(warnSpy).toHaveBeenCalledOnce();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/SENSITIVE stage 'validateResponse' modified/),
+    );
+    warnSpy.mockRestore();
+  });
 });

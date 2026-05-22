@@ -238,6 +238,23 @@ adapters (e.g., a future Firestore Web SDK adapter).
 | `IStorageDocumentSnapshot { _uid, path, data, metadata }` | `Meta['read']` directly | Caller already knows path / id; the surrogate `_uid` lives inside `data` if needed. |
 | `IStorageCollectionSnapshot { added, modified, removed }` | `Meta['read'][]` flat | Documented limitation; downstream diffing belongs to the consumer. |
 
+## Naming boundary: storage `_uid` vs entity `uuid` (Wave 35.D / EVID-087 arch-W3)
+
+This package uses `_uid` as a Firestore-surrogate row-id (legacy
+`IStorageDocumentSnapshot._uid`). This is **intentionally distinct** from
+`@gertsai/entity.EntityJSON.uuid` (renamed in Wave 34 PR-2 for ecosystem
+parity).
+
+The boundary:
+- **Storage layer** (`_uid`) — row-id assigned by the storage backend, used
+  for deduplication, MVCC, and Firestore-style document references. Lives
+  inside `data` if the consumer wants it preserved across serialization.
+- **Entity layer** (`uuid`) — UUID emitted in `Entity.toJSONObject()` for
+  ecosystem-wide parity with `OperatorRef.uuid` and other `@gertsai/*` types.
+
+If you see `_uid` in a `@gertsai/*` storage Meta type, it's the legacy
+storage concept and SHOULD NOT be renamed to align with `uuid`.
+
 ## Troubleshooting / FAQ
 
 - **"`onDocumentSnapshot` throws `ListenersNotSupportedError`."** The
