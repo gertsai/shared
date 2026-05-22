@@ -133,7 +133,12 @@ export interface EntityWithMetadataOpts<
  * event. If you need to mutate, take a clone first.
  */
 export interface EntityJSON<Data extends object> {
-  readonly _uid: string;
+  // Wave 34 PR-2 (EVID-083 W2): renamed `_uid` → `uuid` for parity with the
+  // rest of `@gertsai/*` ecosystem (matches Wave 29.A `OperatorRef.uuid`
+  // rename in `@gertsai/session`). Pre-1.0 minor bump accepts the
+  // surface-breaking change; consumers must replace `{ _uid, data }`
+  // destructures with `{ uuid, data }`.
+  readonly uuid: string;
   readonly data: Readonly<Data>;
 }
 

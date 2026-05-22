@@ -144,7 +144,9 @@ export abstract class Entity<Data extends object> extends Model {
    * Firelord `updated_at` fallback removed (see `EntityJSON` doc).
    */
   toJSONObject(): EntityJSON<Data> {
-    return { _uid: this._uuid, data: this._data };
+    // Wave 34 PR-2 (EVID-083 W2): emit `uuid` key (was `_uid`) for ecosystem
+    // parity — see `EntityJSON` JSDoc.
+    return { uuid: this._uuid, data: this._data };
   }
 
   /** `JSON.stringify` of `toJSONObject()`. */

@@ -140,11 +140,12 @@ describe('Entity', () => {
 
   // ---------------- F-4: toJSONObject + toJSON ----------------
 
-  it('toJSONObject returns { _uid, data } in the expected shape', () => {
+  // Wave 34 PR-2 (EVID-083 W2): JSON shape renamed `_uid` → `uuid`.
+  it('toJSONObject returns { uuid, data } in the expected shape', () => {
     const e = new TestEntity({ uid: 'u-42', data: { name: 'Alice', age: 7 } });
     const obj = e.toJSONObject();
     expect(obj).toEqual({
-      _uid: 'u-42',
+      uuid: 'u-42',
       data: { name: 'Alice', age: 7, active: true },
     });
   });
@@ -152,10 +153,11 @@ describe('Entity', () => {
   it('toJSON round-trips via JSON.parse', () => {
     const e = new TestEntity({ uid: 'u-7', data: { name: 'Bob' } });
     const restored = JSON.parse(e.toJSON()) as {
-      _uid: string;
+      // Wave 34 PR-2 (EVID-083 W2): renamed `_uid` → `uuid`.
+      uuid: string;
       data: UserData;
     };
-    expect(restored._uid).toBe('u-7');
+    expect(restored.uuid).toBe('u-7');
     expect(restored.data).toEqual({ name: 'Bob', age: 0, active: true });
   });
 

@@ -3,6 +3,29 @@
 Backend-agnostic entity base classes for `@gertsai/*`. Provides `Model`,
 `Entity`, and `EntityWithMetadata` with a pluggable reactivity layer.
 
+## Wave 34 breaking — `EntityJSON._uid` → `EntityJSON.uuid`
+
+`Entity.toJSONObject()` and `EntityWithMetadata.toJSONObject()` now return
+`{ uuid, data, ... }` instead of `{ _uid, data, ... }`. This aligns with
+`OperatorRef.uuid` (renamed in Wave 29.A) and the rest of the `@gertsai/*`
+ecosystem (`UsersMetaType.data.uuid` in `@gertsai/core`).
+
+Migration:
+
+```ts
+// Before (≤ Wave 33):
+const { _uid, data } = entity.toJSONObject();
+
+// After (Wave 34+):
+const { uuid, data } = entity.toJSONObject();
+```
+
+There is **no runtime fallback** — the rename is structural. Update all
+consumers in one PR for a clean type-check pass. Wave 34 ships this as a
+pre-1.0 minor bump per `@gertsai/*` versioning policy (breaking changes
+allowed in minor bumps until 1.0).
+
+
 Mirrors Orchestra's `orchlab/core` entity patterns, with these dependencies
 stripped per ADR-005 Decision B:
 
@@ -57,7 +80,7 @@ or test level if you rebuild against `@gertsai/entity`.
 | `$markStaled(true \| false)` (single setter) | `$markStaled()` + `$markFresh()` | Two no-arg methods. Idempotent: each emits its event only on transition. |
 | `static $generateUid()` | `EntityOpts.uuidProvider` | Defaults to `crypto.randomUUID()`. Pass `() => new Xid().toString()` if you still want xid-ts ids. |
 | `OrchestraModel.globalSession` singleton | dropped | Pass `session` explicitly (`new MyEntity({ session })`) or work session-less. |
-| `toJSONObject()` returned `EntityJSON` with `updated_at: this._data.updated_at?.toDate?.() ?? new Date()` | `toJSONObject(): EntityJSON<Data>` returns `{ _uid, data }` (and on `EntityWithMetadata`: `{ _uid, data, metadata, __typename }`) | No Firelord `Timestamp.toDate` fallback. If you need a timestamp, put it in `data` yourself. |
+| `toJSONObject()` returned `EntityJSON` with `updated_at: this._data.updated_at?.toDate?.() ?? new Date()` | `toJSONObject(): EntityJSON<Data>` returns `{ uuid, data }` (and on `EntityWithMetadata`: `{ uuid, data, metadata, __typename }`) — Wave 34 PR-2 (EVID-083 W2) renamed the legacy `_uid` key to `uuid` for ecosystem parity. | No Firelord `Timestamp.toDate` fallback. If you need a timestamp, put it in `data` yourself. |
 | `markRaw(this)` was called automatically in the Entity constructor | preserved | Still called — via the configured `ReactiveAdapter.markRaw(this)`. The Vue adapter routes to `@vue/runtime-core`'s `markRaw`; the default plain adapter sets a Symbol marker. |
 | `_uid` could be `string \| (() => string)` | preserved on `EntityOpts.uid` | Function form is re-evaluated on every `_uuid` access. |
 | `EntityOptions._uid_path?: string[]` | `EntityOpts.uidPath?: readonly string[]` | Renamed. Read via `entity.$uidPath`. Universal (no Firestore tie). |

@@ -171,8 +171,10 @@ export abstract class EntityWithMetadata<
    * with the `metadata` payload and the `__typename` discriminator.
    */
   override toJSONObject(): EntityWithMetadataJSON<Data, Metadata, Typename> {
+    // Wave 34 PR-2 (EVID-083 W2): emit `uuid` key (was `_uid`) for ecosystem
+    // parity — see `EntityJSON` JSDoc.
     return {
-      _uid: this._uuid,
+      uuid: this._uuid,
       data: this._data,
       metadata: this._metadata,
       __typename: this.__typename,
