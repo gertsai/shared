@@ -1,5 +1,12 @@
 # @gertsai/auth-openfga
 
+## 0.4.1
+
+### Patch Changes
+
+- Updated dependencies [9de7cf7]
+  - @gertsai/core@0.6.0
+
 ## 0.4.0
 
 ### Minor Changes

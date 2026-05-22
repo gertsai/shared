@@ -1,5 +1,12 @@
 # @gertsai/entity-storage
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [9de7cf7]
+  - @gertsai/entity@1.2.0
+
 ## 5.0.0
 
 ### Patch Changes

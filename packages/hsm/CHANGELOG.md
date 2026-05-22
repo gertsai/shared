@@ -1,5 +1,12 @@
 # @gertsai/hsm
 
+## 5.0.0
+
+### Patch Changes
+
+- Updated dependencies [9de7cf7]
+  - @gertsai/core@0.6.0
+
 ## 4.1.0
 
 ### Minor Changes
