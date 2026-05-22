@@ -32,8 +32,14 @@ import type { ContextMeta, TypiaValidator } from '../common';
 import type { ActionParams, TypiaParamsWithSchema } from '../common';
 import { APIError } from '../error';
 import { PipelineRunner } from './pipeline/runner';
-import { DEFAULT_STAGES, STAGE_NAMES } from './pipeline/default-stages';
-import type { PipelineContext, PipelineDeps, StageName, Stage } from './pipeline/types';
+import { STAGE_REGISTRY } from './pipeline/default-stages';
+import type {
+  ComposableStageName,
+  PipelineContext,
+  PipelineDeps,
+  Stage,
+  StageName,
+} from './pipeline/types';
 
 import type {
   ActionAuthType,
@@ -569,7 +575,7 @@ export class ApiController<
    * This method emits a `logger.warn` whenever a sensitive stage is overridden
    * so the override is visible in startup logs.
    *
-   * @param name  - Canonical stage name from DEFAULT_STAGES (typed via `StageName`)
+   * @param name  - Canonical stage name from DEFAULT_STAGES (typed via `ComposableStageName`)
    * @param stage - Replacement `Stage` function
    *
    * @example
@@ -592,8 +598,11 @@ export class ApiController<
    *
    * Wave 27 PR-5 (PRD-065 FR-3 / RFC-027 §PR-5).
    * Wave 32.D (EVID-083 HIGH-4) — sensitive-stage warn-on-override.
+   * Wave 35.A (EVID-087 type-W2) — narrowed `name` param to
+   * `ComposableStageName` so `'translateError'` / `'cleanup'` (hard-wired in
+   * the runner) are rejected at the type-level rather than silently no-op'ed.
    */
-  public setStageOverride(name: StageName, stage: Stage): void {
+  public setStageOverride(name: ComposableStageName, stage: Stage): void {
     // Wave 32.D (EVID-083 HIGH-4) — emit warn-level log on sensitive-stage
     // overrides so security-boundary mutations are visible in startup logs /
     // log search. `setStageOverride` may be called before the broker starts,
@@ -644,8 +653,12 @@ export class ApiController<
    * };
    * controller.addStageBefore('validateRequest', requestId);
    * ```
+   *
+   * Wave 35.A (EVID-087 type-W2) — narrowed `anchor` param to
+   * `ComposableStageName` so `'translateError'` / `'cleanup'` (hard-wired in
+   * the runner) are rejected at the type-level rather than silently no-op'ed.
    */
-  public addStageBefore(anchor: StageName, stage: Stage): void {
+  public addStageBefore(anchor: ComposableStageName, stage: Stage): void {
     // Wave 34.A (EVID-083 W3)
     const slot = this._getOrInitInsertSlot(anchor);
     slot.before.push(stage);
@@ -678,8 +691,12 @@ export class ApiController<
    * };
    * controller.addStageAfter('invokeHandler', auditLog);
    * ```
+   *
+   * Wave 35.A (EVID-087 type-W2) — narrowed `anchor` param to
+   * `ComposableStageName` so `'translateError'` / `'cleanup'` (hard-wired in
+   * the runner) are rejected at the type-level rather than silently no-op'ed.
    */
-  public addStageAfter(anchor: StageName, stage: Stage): void {
+  public addStageAfter(anchor: ComposableStageName, stage: Stage): void {
     // Wave 34.A (EVID-083 W3)
     const slot = this._getOrInitInsertSlot(anchor);
     slot.after.push(stage);
@@ -723,8 +740,12 @@ export class ApiController<
    * };
    * controller.wrapStage('invokeHandler', tracingWrap);
    * ```
+   *
+   * Wave 35.A (EVID-087 type-W2) — narrowed `anchor` param to
+   * `ComposableStageName` so `'translateError'` / `'cleanup'` (hard-wired in
+   * the runner) are rejected at the type-level rather than silently no-op'ed.
    */
-  public wrapStage(anchor: StageName, wrapper: (next: Stage) => Stage): void {
+  public wrapStage(anchor: ComposableStageName, wrapper: (next: Stage) => Stage): void {
     // Wave 34.A (EVID-083 W3)
     const slot = this._getOrInitInsertSlot(anchor);
     slot.wrappers.push(wrapper);
@@ -737,7 +758,7 @@ export class ApiController<
    * schema-build time by `_createActionSchema`.
    * @private
    */
-  private _getOrInitInsertSlot(anchor: StageName): {
+  private _getOrInitInsertSlot(anchor: ComposableStageName): {
     before: Stage[];
     after: Stage[];
     wrappers: ((next: Stage) => Stage)[];
@@ -757,7 +778,7 @@ export class ApiController<
    * pattern as `setStageOverride` for consistent observability.
    * @private
    */
-  private _warnIfSensitive(anchor: StageName, methodName: string): void {
+  private _warnIfSensitive(anchor: ComposableStageName, methodName: string): void {
     if (SENSITIVE_STAGES.has(anchor)) {
       const logger = ApiController._broker?.logger ?? console;
       logger.warn(
@@ -1004,7 +1025,7 @@ export class ApiController<
   private _createActionSchema(action: ApiControllerRegisteredAction<any, any, any, any, any, any>) {
     const controller = this;
 
-    // Resolve effective stages: DEFAULT_STAGES with this controller's overrides
+    // Resolve effective stages: STAGE_REGISTRY with this controller's overrides
     // and inserts (before/after/wrappers) applied.
     //
     // Snapshot taken at schema-build time so subsequent setStageOverride /
@@ -1012,15 +1033,20 @@ export class ApiController<
     // already-registered action pipelines (SPEC-021 §override isolation).
     //
     // Wave 34.A (EVID-083 W3): extended to consume `_stageInserts` slots.
-    // For each anchor i in STAGE_NAMES:
+    // For each anchor in STAGE_REGISTRY:
     //   1. Push slot.before[] in insertion order (first-pushed runs first).
     //   2. Compose the anchor: start from `_stageOverrides[name] ?? defaultStage`,
     //      then apply wrappers in insertion order — first-pushed wraps first
     //      (innermost), last-pushed wraps last (outermost / runs first around).
     //   3. Push slot.after[] in insertion order.
+    //
+    // Wave 35.A (EVID-087 arch-W1 + type-W1): iterate `STAGE_REGISTRY`
+    // directly (tuple-array of `{ name, stage }`) instead of zipping
+    // `STAGE_NAMES` + `DEFAULT_STAGES` by index. Destructuring guarantees
+    // `name` and `defaultStage` are non-undefined → no `!` non-null
+    // assertion needed.
     const effectiveStages: Stage[] = [];
-    DEFAULT_STAGES.forEach((defaultStage, i) => {
-      const name = STAGE_NAMES[i]!;
+    for (const { name, stage: defaultStage } of STAGE_REGISTRY) {
       const slot = controller._stageInserts[name];
 
       if (slot) {
@@ -1042,7 +1068,7 @@ export class ApiController<
       if (slot) {
         effectiveStages.push(...slot.after);
       }
-    });
+    }
 
     return {
       rest: action.options.rest,

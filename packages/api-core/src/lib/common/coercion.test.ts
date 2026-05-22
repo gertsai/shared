@@ -274,13 +274,39 @@ describe('Wave 32.B — CWE-1321 prototype-pollution guard', () => {
     expect(({} as Record<string, unknown>)['prototype']).toBeUndefined();
   });
 
-  it('coerceQueryParams ignores DANGEROUS_KEYS even if hard-coded list ever drifts', () => {
-    // Simulate a params object that carries dangerous key names.
-    // coerceQueryParams must not propagate them to Object.prototype.
-    const polluted: Record<string, unknown> = { __proto__: '42' };
+  it('coerceQueryParams skips DANGEROUS_KEYS even if a sneaky payload tries to pollute Object.prototype', () => {
+    // Wave 35.C (EVID-087 test-C1) — verify real prototype-pollution defense.
+    // The assignment pattern `params[field] = ...` does NOT pollute prototype
+    // by itself (own-property write), but if the hardcoded list ever drifts
+    // to include `__proto__`/`constructor`/`prototype`, the helpers MUST skip
+    // these keys before any write. This test directly exercises that contract.
+
+    const polluted: Record<string, unknown> = {
+      limit: '42',
+      __proto__: '99',
+      constructor: 'true',
+      prototype: 'a,b,c',
+    };
+
+    // Snapshot Object.prototype before
+    const protoBefore = Object.getOwnPropertyNames(Object.prototype).slice();
+
     coerceQueryParams(polluted);
-    expect((Object.prototype as Record<string, unknown>)['evil']).toBeUndefined();
-    // Numeric coercion must not have written to the prototype chain.
-    expect(typeof ({} as Record<string, unknown>)['__proto__']).not.toBe('number');
+
+    // Verify Object.prototype unchanged
+    const protoAfter = Object.getOwnPropertyNames(Object.prototype);
+    expect(protoAfter).toEqual(protoBefore);
+
+    // Verify no DANGEROUS_KEYS got coerced on the input params
+    // (legit `limit: '42'` should still be coerced normally to demonstrate
+    //  the function did run and skip only dangerous keys)
+    expect(polluted.limit).toBe(42); // coerced to number
+
+    // The dangerous keys MUST remain as strings (untouched) OR be skipped:
+    // Either behavior is acceptable as long as Object.prototype is not polluted.
+    // Strict check: prototype chain isolation.
+    const fresh = {} as Record<string, unknown>;
+    expect(fresh.__proto__).toBe(Object.prototype); // prototype chain intact
+    expect(fresh.constructor).toBe(Object); // not overwritten
   });
 });

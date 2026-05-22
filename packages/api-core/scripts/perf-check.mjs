@@ -160,9 +160,10 @@ const noopLogger = {
   trace: () => undefined,
 };
 
+// Wave 35.D (EVID-087 arch-W4) — `controller: {}` removed; Wave 32.C HIGH-5
+// dropped the `controller` field from PipelineDeps. Dead key deleted here.
 const deps = {
   action,
-  controller: {},
   service: { logger: noopLogger },
   logger: noopLogger,
   sessionFactory,
@@ -293,8 +294,10 @@ if (GATE) {
   }
 
   const gatePct = parseFiniteNumberEnv('PERF_GATE_PCT', file.gate_pct ?? REGRESSION_GATE_PCT);
-  if (!Number.isFinite(gatePct) || gatePct < 0 || gatePct > 10_000) {
-    console.error(`[perf-check] GATE SCHEMA: gate_pct must be in [0, 10000] (got: ${gatePct})`);
+  // Wave 35.D (EVID-087 logic-W3) — gate_pct === 0 makes any drift a regression
+  // (DoS-via-bad-baseline). Reject zero with a separate diagnostic exit code.
+  if (!Number.isFinite(gatePct) || gatePct <= 0 || gatePct > 10_000) {
+    console.error(`[perf-check] GATE SCHEMA: gate_pct must be in (0, 10000] (got: ${gatePct})`);
     process.exit(7);
   }
 

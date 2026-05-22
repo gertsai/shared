@@ -212,10 +212,16 @@ export function tryGetRequestContextFromCtx(
   // is true (non-production + explicit opt-in env var). Production-reachable
   // transit (NATS/Redis/TCP forwards meta verbatim) cannot inject a forged
   // session through this path. See module-level comment above (CWE-287/602).
+  // Wave 35.B (EVID-087 logic-W1) — widen the `headers` value type to
+  // `string | string[] | undefined`. Moleculer transit can forward
+  // multi-value HTTP headers (e.g. proxies that set X-Tenant-ID twice) as
+  // string arrays; narrowing them away at the type level hides a real
+  // runtime shape. The Array.isArray() guard below catches the multi-value
+  // case with a clear error before any string comparison.
   const meta = ctx.meta as
     | {
         testSession?: unknown;
-        headers?: Record<string, string | undefined>;
+        headers?: Record<string, string | string[] | undefined>;
       }
     | undefined;
   if (
@@ -238,19 +244,42 @@ export function tryGetRequestContextFromCtx(
     const sessionTenantId = (
       session as { tenantId?: string } | undefined
     )?.tenantId;
-    const headerTenantId = meta.headers?.['x-tenant-id'];
+    // Wave 35.B (EVID-087 logic-W2) — treat empty-string tenantId as unset.
+    // session-guard's isInTenant('') has ambiguous semantics; safer to
+    // return expectedTenantId: undefined and let the strict-mode guard
+    // fail-closed than to propagate an empty string as a "set" tenant.
+    const normalizedSessionTenantId =
+      sessionTenantId !== undefined && sessionTenantId.length > 0
+        ? sessionTenantId
+        : undefined;
+    // Wave 35.B (EVID-087 logic-W1) — defensive guard against multi-value
+    // HTTP headers. Moleculer's transit can forward `x-tenant-id: ['A','B']`
+    // from a proxy that sets multiple values. Without this guard, the
+    // array-vs-string inequality check throws a misleading "Tenant scope
+    // violation". Treat multi-value as an explicit error with a clearer
+    // message so the upstream proxy mis-configuration is obvious.
+    const headerTenantIdRaw = meta.headers?.['x-tenant-id'];
+    if (Array.isArray(headerTenantIdRaw)) {
+      throw new Error(
+        `wave5-middlewares: x-tenant-id header received multiple values ` +
+          `(${JSON.stringify(headerTenantIdRaw)}). Multi-value tenant headers are ` +
+          `ambiguous — fix the upstream proxy / load balancer to forward a single value, ` +
+          `or use meta.testSession.tenantId as the single source of truth.`,
+      );
+    }
+    const headerTenantId = headerTenantIdRaw; // narrowed to string | undefined
 
     if (
       headerTenantId !== undefined &&
-      sessionTenantId !== undefined &&
-      headerTenantId !== sessionTenantId
+      normalizedSessionTenantId !== undefined &&
+      headerTenantId !== normalizedSessionTenantId
     ) {
       // Fail-loud: mixed-source tenant assertion is a CWE-345 footgun.
       // Include "Tenant scope violation" so existing tests that assert on
       // cross-tenant rejection still match the expected error pattern.
       throw new Error(
         `wave5-middlewares: Tenant scope violation — meta.testSession.tenantId ` +
-          `('${sessionTenantId}') does not match meta.headers['x-tenant-id'] ` +
+          `('${normalizedSessionTenantId}') does not match meta.headers['x-tenant-id'] ` +
           `('${headerTenantId}'). Mixed-source tenant assertion is a CWE-345 ` +
           `footgun — fix the test fixture to use a single tenantId across the ` +
           `session and the header.`,
@@ -259,7 +288,7 @@ export function tryGetRequestContextFromCtx(
 
     return {
       session,
-      expectedTenantId: sessionTenantId,
+      expectedTenantId: normalizedSessionTenantId,
     };
   }
 

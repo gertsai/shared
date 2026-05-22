@@ -51,8 +51,15 @@ export interface PipelineDeps {
    * `@gertsai/*` (Session.operatorUuid, Wave 29.A OperatorRef.uuid). Pure
    * type-name change — TS function-type parameter names are documentation,
    * not part of the runtime contract, so no call-site updates required.
+   *
+   * Wave 35.A (EVID-087 arch-W2 reversal): parameter names match the
+   * wire-level Moleculer convention `user_uuid` + `user_type` (from
+   * `ContextMeta`). The Wave 33.C W1 cosmetic rename was reverted to keep
+   * one coherent naming narrative across the pipeline + middleware
+   * boundary. JSDoc-only change — TS function-type parameter names are
+   * documentation, not load-bearing.
    */
-  readonly sessionFactory?: (operatorUuid: string, operatorType: UserType) => OrchestraSession;
+  readonly sessionFactory?: (user_uuid: string, user_type: UserType) => OrchestraSession;
   /**
    * Controller-level strict response validation flag, captured from
    * `ApiController._config.strictResponseValidation` at schema-build time.
@@ -170,3 +177,12 @@ export type StageName =
   | 'wrapResponse'
   | 'translateError'
   | 'cleanup';
+
+/**
+ * Wave 35.A (EVID-087 type-W2) — Stages composable via setStageOverride /
+ * addStageBefore / addStageAfter / wrapStage. Excludes 'translateError' and
+ * 'cleanup' which are HARD-WIRED into PipelineRunner's catch/finally and
+ * cannot be overridden or wrapped via the public extension API (calls would
+ * silently no-op).
+ */
+export type ComposableStageName = Exclude<StageName, 'translateError' | 'cleanup'>;

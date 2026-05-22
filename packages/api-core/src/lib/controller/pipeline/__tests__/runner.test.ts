@@ -218,12 +218,17 @@ describe('PipelineRunner', () => {
   });
 
   // Wave 33.C (EVID-083 W5): per-stage timeout via deps.stageTimeoutMs.
+  // Wave 35.C (EVID-087 test-W1) — widen ratio from 4x to 10x (20ms timeout
+  // vs 200ms stage delay) to reduce flake risk on slow CI runners. Vitest
+  // testTimeout is 30000ms so absolute values are not the constraint;
+  // scheduler jitter on cold cloud runners is ~5-15ms, so 20ms timeout +
+  // 200ms stage gives a stable 10x safety margin.
   it('stageTimeoutMs: stage that exceeds the timeout rejects with APIError(REQUEST_TIMEOUT)', async () => {
     const slowStage: Stage = (ctx) =>
-      new Promise((resolve) => setTimeout(() => resolve(ctx), 100));
+      new Promise((resolve) => setTimeout(() => resolve(ctx), 200));
 
     const runner = new PipelineRunner([slowStage]);
-    const depsWithTimeout = makeDeps({ stageTimeoutMs: 25 });
+    const depsWithTimeout = makeDeps({ stageTimeoutMs: 20 });
 
     let caught: unknown;
     try {
