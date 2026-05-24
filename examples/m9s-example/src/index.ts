@@ -39,6 +39,13 @@
  *        -d '{"query":"hexagonal"}'
  */
 
+// Wave 36.A (Wave 31 EVID-087 follow-up — production-realistic m9s coverage):
+// initialize OTel SDK BEFORE any other module-load so spans created during
+// service registration / broker boot are captured. `initObservability()` is
+// a no-op when `OTEL_EXPORTER_OTLP_ENDPOINT` is unset (local dev default).
+import { initObservability, shutdownObservability } from './observability';
+initObservability();
+
 // 1. Side-effect: register all domain controllers + lifecycle handlers.
 import './services';
 
@@ -165,9 +172,33 @@ async function main(): Promise<void> {
   });
 }
 
+// Wave 36.A (Wave 31 EVID-087 follow-up — production-realistic m9s coverage):
+// Graceful shutdown — flush OTel span exporter BEFORE process exits so
+// in-flight spans reach the collector. No-op when observability was not
+// initialized (OTEL_EXPORTER_OTLP_ENDPOINT unset).
+//
+// Handlers are wired only when this module is the process entry point so
+// importing `./index` from tests does not install signal traps.
+function installShutdownHandlers(): void {
+  const handler = (signal: NodeJS.Signals): void => {
+    log.info('shutdown signal received', { signal });
+    void shutdownObservability().finally(() => {
+      // Re-raise the signal with default disposition so the broker (and
+      // any other listeners) observe normal termination semantics.
+      process.kill(process.pid, signal);
+    });
+    // Prevent the immediate default action from killing the process
+    // before the async flush completes.
+    process.removeAllListeners(signal);
+  };
+  process.once('SIGTERM', handler);
+  process.once('SIGINT', handler);
+}
+
 // Only run when executed directly. Allows tests to import this file
 // without triggering broker startup as a side effect.
 if (require.main === module) {
+  installShutdownHandlers();
   main().catch((err: unknown) => {
     log.error('startup failed', { err });
     process.exit(1);

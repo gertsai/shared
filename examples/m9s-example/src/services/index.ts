@@ -33,6 +33,17 @@ const log = createAppLogger('m9s-services');
 // 1. Optional BullMQ connection (only when REDIS_URL is configured).
 // =============================================================================
 
+// Wave 36.B (EVID-087 follow-up — m9s queue coverage):
+// m9s-example's queue lifecycle is owned by api-core's ApiController.Start({ queueConfig }),
+// which consumes raw BullMQConnectionOptions. The @gertsai/queue wrapper provides
+// createQueue/createWorker primitives for standalone use, but they are NOT a drop-in
+// replacement for api-core's broker-integrated queue path. To migrate, api-core itself
+// would need to accept @gertsai/queue.QueueConnection in its public API (out of m9s scope).
+//
+// Standalone workers (if added in the future) MUST use @gertsai/queue.createWorker
+// to participate in the ecosystem's queue contract. m9s does not currently have such
+// workers (queue handlers are registered via ApiController.registerQueue, processed
+// inside Moleculer service runtime).
 const queueConfig: BullMQConnectionOptions | undefined = config.REDIS_URL
   ? {
       connection: new IORedis(config.REDIS_URL, {
