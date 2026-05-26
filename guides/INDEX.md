@@ -8,3 +8,4 @@
 
 - [CLAUDE-MD-GUIDE.ru.md](CLAUDE-MD-GUIDE.ru.md) — как писать `CLAUDE.md` с учётом слабостей LLM (U-кривая attention, cry-wolf, dilution, redundancy cost).
 - [GIT-FLOW-GUIDE.ru.md](GIT-FLOW-GUIDE.ru.md) — Git Flow + Conventional Commits + PR-процесс + SemVer + safety-правила против AI-деструкции.
+- [CONSUMING-PACKAGES.ru.md](CONSUMING-PACKAGES.ru.md) — как использовать `@gertsai/*` пакеты в другом проекте (GitHub Packages registry, PAT setup, version pinning pre-v1.0, workspace link, troubleshooting).
