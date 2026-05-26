@@ -44,6 +44,10 @@
 import pLimit from 'p-limit';
 import { RestRequestManager } from '@gertsai/rest-request-manager';
 import type { RestResponse } from '@gertsai/rest-request-manager';
+// Wave 37.C (PRD-071 — llm-costs, C-δ) — branded TenantId for embedder
+// concrete-impl options (port IEmbedder unchanged). Matches the brand the
+// Postgres repos already require after Phase B (FR-B2/B3).
+import type { TenantId } from '@gertsai/tenant';
 
 import { createAppLogger } from '../shared/logger';
 import { UpstreamFailureError, isAppError } from '@gertsai/errors';
@@ -76,6 +80,16 @@ export interface OllamaEmbedderOptions {
    * not yet migrated to constructor-injection.
    */
   readonly manager?: RestRequestManager;
+  /**
+   * Wave 37.C (PRD-071 — llm-costs, C-δ) — branded tenant id stamped onto
+   * every emitted symbolic cost event. Required at the concrete-impl
+   * boundary so the type system catches plain-string regressions at
+   * compile time; matches the brand already enforced by
+   * `PgDocumentRepository` + `PgVectorStore` constructors after Phase B
+   * (FR-B2/B3). m9s is single-tenant-per-process by design — the
+   * composition root supplies the process-level brand once at startup.
+   */
+  readonly tenantId: TenantId;
 }
 
 interface OllamaEmbeddingsResponse {
@@ -196,6 +210,12 @@ export class OllamaEmbedder implements IEmbedder {
     if (!opts.model || opts.model.trim().length === 0) {
       throw new Error('OllamaEmbedder: model is required');
     }
+    // Wave 37.C (PRD-071 — llm-costs, C-δ) — TenantId brand provides
+    // compile-time safety; runtime non-empty check guards against
+    // accidental cast-then-empty at composition boundaries.
+    if (typeof opts.tenantId !== 'string' || opts.tenantId.length === 0) {
+      throw new Error('OllamaEmbedder: tenantId is required (branded TenantId)');
+    }
     // Validate URL early — reject bad protocol / unparseable input rather
     // than letting it surface as a runtime SSRF reject deep in @gertsai/fetch.
     let parsed: URL;
@@ -230,9 +250,50 @@ export class OllamaEmbedder implements IEmbedder {
     // the embedding of `texts[i]`, so order is preserved without an
     // explicit `index` field round-trip.
     const limit = pLimit(parseConcurrency());
-    return Promise.all(
+    const vectors = await Promise.all(
       texts.map((text) => limit(() => this.embedOne(text))),
     );
+
+    // Wave 37.C (PRD-071 — llm-costs) — symbolic cost event (Ollama local,
+    // USD=0; tokens estimated via length/4). Ollama's `/api/embeddings`
+    // returns no `usage` field — we approximate the input token count with
+    // a length/4 heuristic (~4 chars/token, the canonical
+    // English-text-on-BPE estimate). Same event shape as OpenAIEmbedder
+    // so a single downstream consumer can ingest both providers.
+    this.emitCostEvent(texts);
+
+    return vectors;
+  }
+
+  /**
+   * Wave 37.C (PRD-071 — llm-costs) — manual cost emission shim.
+   *
+   * Best-effort: any error in token estimation or logging is swallowed.
+   * `usdCost: 0` because Ollama runs locally — no billable upstream call.
+   * The event still emits so dashboards can graph token throughput per
+   * tenant even for the zero-cost local provider.
+   */
+  private emitCostEvent(texts: ReadonlyArray<string>): void {
+    try {
+      const tokens = texts.reduce(
+        (sum, text) => sum + Math.ceil(text.length / 4),
+        0,
+      );
+      log.info('llm.cost', {
+        event: 'llm.cost',
+        tenantId: this.opts.tenantId,
+        model: this.opts.model,
+        tokens,
+        usdCost: 0,
+        timestamp: new Date().toISOString(),
+        estimated: true,
+      });
+    } catch (err) {
+      log.warn('llm.cost emission failed', {
+        model: this.opts.model,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   private async embedOne(prompt: string): Promise<number[]> {

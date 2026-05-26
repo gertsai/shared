@@ -83,6 +83,9 @@ importers:
       '@gertsai/fetch':
         specifier: workspace:*
         version: link:../../packages/fetch
+      '@gertsai/llm-costs':
+        specifier: workspace:*
+        version: link:../../packages/llm-costs
       '@gertsai/logger-factory':
         specifier: workspace:*
         version: link:../../packages/logger-factory
@@ -95,6 +98,9 @@ importers:
       '@gertsai/pg-client':
         specifier: workspace:*
         version: link:../../packages/pg-client
+      '@gertsai/query-dsl':
+        specifier: workspace:*
+        version: link:../../packages/query-dsl
       '@gertsai/rest-request-manager':
         specifier: workspace:*
         version: link:../../packages/rest-request-manager
@@ -110,6 +116,9 @@ importers:
       '@gertsai/storage-core':
         specifier: workspace:*
         version: link:../../packages/storage-core
+      '@gertsai/tenant':
+        specifier: workspace:*
+        version: link:../../packages/tenant
       '@gertsai/tenant-resolver':
         specifier: workspace:*
         version: link:../../packages/tenant-resolver

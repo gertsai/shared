@@ -40,6 +40,11 @@ import {
   OpenAIEmbedder,
   __resetOpenAIManagerForTests,
 } from '../src/infrastructure/openai-embedder.js';
+// Wave 37.C (PRD-071 — llm-costs, C-δ) — branded TenantId now required by
+// both embedder concrete-impl options. Tests use a fixed brand value.
+import { asTenantId } from '@gertsai/tenant';
+
+const TEST_TENANT_ID = asTenantId('test-tenant');
 
 type RequestMock = Mock<
   (req: { url: string; method: string }) => Promise<RestResponse<unknown>>
@@ -82,6 +87,7 @@ describe('Wave 8.1 — Ollama embedder hardening', () => {
     const embedder = new OllamaEmbedder({
       url: 'http://localhost:11434',
       model: 'nomic-embed-text',
+      tenantId: TEST_TENANT_ID,
     });
 
     const result = await embedder.embed(['hello']);
@@ -101,6 +107,7 @@ describe('Wave 8.1 — Ollama embedder hardening', () => {
       url: 'http://localhost:11434',
       model: 'nomic-embed-text',
       timeoutMs: 100,
+      tenantId: TEST_TENANT_ID,
     });
 
     let caught: unknown;
@@ -142,6 +149,7 @@ describe('Wave 8.1 — Ollama embedder hardening', () => {
       url: 'http://localhost:11434',
       model: 'nomic-embed-text',
       manager: mockManager as RestRequestManager,
+      tenantId: TEST_TENANT_ID,
     });
 
     const result = await embedder.embed(['x']);
@@ -171,6 +179,7 @@ describe('Wave 8.1 — Ollama embedder hardening', () => {
     const embedder = new OllamaEmbedder({
       url: 'http://localhost:11434',
       model: 'nomic-embed-text',
+      tenantId: TEST_TENANT_ID,
     });
 
     await embedder.embed(['first']);
@@ -214,6 +223,7 @@ describe('Wave 8.1 — OpenAI embedder hardening', () => {
     const embedder = new OpenAIEmbedder({
       apiKey: 'sk-test-bad',
       model: 'text-embedding-3-small',
+      tenantId: TEST_TENANT_ID,
     });
 
     let caught: unknown;
@@ -242,6 +252,7 @@ describe('Wave 8.1 — OpenAI embedder hardening', () => {
     const embedder = new OpenAIEmbedder({
       apiKey: 'sk-test',
       model: 'text-embedding-3-small',
+      tenantId: TEST_TENANT_ID,
     });
 
     let caught: unknown;
@@ -273,6 +284,7 @@ describe('Wave 8.1 — OpenAI embedder hardening', () => {
     const embedder = new OpenAIEmbedder({
       apiKey: 'sk-test',
       model: 'text-embedding-3-small',
+      tenantId: TEST_TENANT_ID,
     });
 
     const vectors = await embedder.embed(['a', 'b']);

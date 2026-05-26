@@ -8,13 +8,21 @@
  *      Resolves a tenant from the inbound HTTP request via a chain of
  *      strategies and writes the resolution onto `ctx.meta.tenantId` /
  *      `ctx.meta.tenantResolution` so downstream middlewares + handlers
- *      see the same value.
+ *      see the same value. Wave 37.B (PRD-071 — tenant brand) — the
+ *      resolved value is projected to the branded `TenantId` type at the
+ *      `tryGetRequestContextFromCtx` boundary so action handlers receive
+ *      a compile-time-checked identifier, and downstream infrastructure
+ *      (PgDocumentRepository, PgVectorStore) requires the brand on its
+ *      constructors.
  *
  *   2. `sessionMiddleware` (`@gertsai/runtime-context/moleculer`)
  *      Reads `ctx.meta.tenantId` (set by step 1), composes a
  *      `RequestContext`, attaches it to `ctx.locals.requestContext`, and
  *      auto-`$freeze()`s before invoking the downstream action handler
- *      (per ADR-007 I-16, TOCTOU protection).
+ *      (per ADR-007 I-16, TOCTOU protection). The runtime-context layer
+ *      remains string-typed at its API surface; Wave 37.B applies
+ *      `asTenantId` at the snapshot projection so action handlers see a
+ *      `TenantId | undefined`, not a plain `string | undefined`.
  *
  * Composition order (canonical per ADR-010 §B): tenantMiddleware MUST
  * precede sessionMiddleware so that tenantId is resolved BEFORE the
@@ -37,6 +45,8 @@ import {
 } from '@gertsai/runtime-context/moleculer';
 import type { RequestContext } from '@gertsai/runtime-context';
 import type { Session } from '@gertsai/session';
+// Wave 37.B (PRD-071 — tenant brand) — TenantId enforces tenant resolution at compile time
+import { asTenantId, type TenantId } from '@gertsai/tenant';
 
 /**
  * Build the tenant-resolution chain for the example.
@@ -170,9 +180,10 @@ if (
  * undefined fields skip the corresponding session-guard branch in the use
  * case (per ADR-010 I-2 / I-3 additive-optional regression invariant).
  */
+// Wave 37.B (PRD-071 — tenant brand) — TenantId enforces tenant resolution at compile time
 export interface Wave5ContextSnapshot {
   readonly session: Session | undefined;
-  readonly expectedTenantId: string | undefined;
+  readonly expectedTenantId: TenantId | undefined;
 }
 
 /**
@@ -248,9 +259,10 @@ export function tryGetRequestContextFromCtx(
     // session-guard's isInTenant('') has ambiguous semantics; safer to
     // return expectedTenantId: undefined and let the strict-mode guard
     // fail-closed than to propagate an empty string as a "set" tenant.
-    const normalizedSessionTenantId =
+    // Wave 37.B (PRD-071 — tenant brand) — TenantId enforces tenant resolution at compile time
+    const normalizedSessionTenantId: TenantId | undefined =
       sessionTenantId !== undefined && sessionTenantId.length > 0
-        ? sessionTenantId
+        ? asTenantId(sessionTenantId)
         : undefined;
     // Wave 35.B (EVID-087 logic-W1) — defensive guard against multi-value
     // HTTP headers. Moleculer's transit can forward `x-tenant-id: ['A','B']`
@@ -318,8 +330,18 @@ export function tryGetRequestContextFromCtx(
     return { session: undefined, expectedTenantId: undefined };
   }
   const rc = value as RequestContext;
+  // Wave 37.B (PRD-071 — tenant brand) — TenantId enforces tenant resolution at compile time.
+  // RequestContext.tenantIdOptional returns plain `string | undefined`; project
+  // through `asTenantId` so the snapshot field is the branded type. Empty string
+  // collapses to undefined here so the strict-mode guard fails closed downstream
+  // (mirrors Wave 35.B EVID-087 logic-W2 in the testSession branch).
+  const rcTenantIdRaw = rc.tenantIdOptional;
+  const expectedTenantId: TenantId | undefined =
+    rcTenantIdRaw !== undefined && rcTenantIdRaw.length > 0
+      ? asTenantId(rcTenantIdRaw)
+      : undefined;
   return {
     session: rc.sessionOptional,
-    expectedTenantId: rc.tenantIdOptional,
+    expectedTenantId,
   };
 }

@@ -35,6 +35,11 @@ import {
   OllamaEmbedder,
   __resetOllamaManagerForTests,
 } from '../src/infrastructure/ollama-embedder.js';
+// Wave 37.C (PRD-071 — llm-costs, C-δ) — branded TenantId now required by
+// OllamaEmbedderOptions. Tests use a fixed brand value.
+import { asTenantId } from '@gertsai/tenant';
+
+const TEST_TENANT_ID = asTenantId('test-tenant');
 
 interface MockResponseInit {
   readonly status?: number;
@@ -86,6 +91,7 @@ describe('Wave 8.2 — OllamaEmbedder retry semantics (audit Tests#2)', () => {
       url: 'http://localhost:11434',
       model: 'nomic-embed-text',
       timeoutMs: 1_000,
+      tenantId: TEST_TENANT_ID,
     });
 
     const [vector] = await embedder.embed(['hello']);
@@ -109,6 +115,7 @@ describe('Wave 8.2 — OllamaEmbedder retry semantics (audit Tests#2)', () => {
       url: 'http://localhost:11434',
       model: 'nomic-embed-text',
       timeoutMs: 1_000,
+      tenantId: TEST_TENANT_ID,
     });
     await expect(embedder.embed(['x'])).rejects.toThrow(/failed.*UPSTREAM_FAILURE/);
     expect(httpCallerMock).toHaveBeenCalledTimes(1);
@@ -121,6 +128,7 @@ describe('Wave 8.2 — OllamaEmbedder retry semantics (audit Tests#2)', () => {
       url: 'http://10.20.30.40:11434',
       model: 'nomic-embed-text',
       timeoutMs: 1_000,
+      tenantId: TEST_TENANT_ID,
     });
     await embedder.embed(['x']);
 
@@ -141,6 +149,7 @@ describe('Wave 8.2 — OllamaEmbedder retry semantics (audit Tests#2)', () => {
         new OllamaEmbedder({
           url: 'not-a-url',
           model: 'nomic-embed-text',
+          tenantId: TEST_TENANT_ID,
         }),
     ).toThrow(/invalid url/i);
     expect(httpCallerMock).not.toHaveBeenCalled();
@@ -152,6 +161,7 @@ describe('Wave 8.2 — OllamaEmbedder retry semantics (audit Tests#2)', () => {
         new OllamaEmbedder({
           url: 'file:///etc/passwd',
           model: 'nomic-embed-text',
+          tenantId: TEST_TENANT_ID,
         }),
     ).toThrow(/unsupported protocol/i);
   });
@@ -160,6 +170,7 @@ describe('Wave 8.2 — OllamaEmbedder retry semantics (audit Tests#2)', () => {
     const embedder = new OllamaEmbedder({
       url: 'http://localhost:11434',
       model: 'nomic-embed-text',
+      tenantId: TEST_TENANT_ID,
     });
     const out = await embedder.embed([]);
     expect(out).toEqual([]);

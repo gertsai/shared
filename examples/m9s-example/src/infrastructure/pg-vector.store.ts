@@ -20,6 +20,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { PgClient } from '@gertsai/pg-client';
+import type { TenantId } from '@gertsai/tenant';
 
 import type { Chunk, ChunkSearchHit } from '../domain/chunk';
 import type { IChunkStore } from '../domain/ports/IChunkStore';
@@ -31,8 +32,12 @@ export interface PgVectorStoreOptions {
    * Tenant id whose chunks this store reads + writes. Mandatory: every
    * SQL is filtered by this value (I-13). m9s-example runs one tenant
    * per process.
+   *
+   * Wave 37.B (PRD-071 — tenant brand) — TenantId enforces tenant resolution
+   * at compile time; plain `string` is rejected so callers must route
+   * through `asTenantId` / `getTenantIdStrict` at the composition boundary.
    */
-  readonly tenantId: string;
+  readonly tenantId: TenantId;
   /**
    * Embedding dimensionality. pgvector type is fixed at column-creation
    * time (`vector(768)` in the migration); this option lets tests swap
@@ -54,7 +59,7 @@ interface ChunkRow {
 
 export class PgVectorStore implements IChunkStore {
   private readonly client: PgClient;
-  private readonly tenantId: string;
+  private readonly tenantId: TenantId;
   private readonly dimensions: number;
 
   constructor(opts: PgVectorStoreOptions) {
@@ -70,6 +75,10 @@ export class PgVectorStore implements IChunkStore {
       const id = randomUUID();
       const vectorLiteral = toPgVectorLiteral(chunk.vector);
 
+      // Wave 37.A (PRD-071 — query-dsl) — INSERT not supported by compileToSql
+      // v0.1 (emits only `SELECT * FROM <t>`); kept as raw SQL per FR-A3 escape
+      // hatch. tenant_id column written explicitly (security invariant FR-A4 /
+      // I-13: every SQL on `chunks` carries the tenant scope).
       await this.client.$executeRaw`
         INSERT INTO chunks (id, document_id, ordinal, text, vector, tenant_id)
         VALUES (
@@ -96,6 +105,12 @@ export class PgVectorStore implements IChunkStore {
     // Cosine distance: 1 - (vector <=> query). pgvector's <=> operator
     // returns cosine DISTANCE in [0, 2]; we invert for similarity in
     // [-1, 1] to match the in-memory store's contract.
+    //
+    // Wave 37.A (PRD-071 — query-dsl) — pgvector `<=>` operator + aliased
+    // SELECT-list (`1 - (vector <=> $) AS score`) + ORDER BY expression
+    // are not supported by compileToSql v0.1 (emits only `SELECT * FROM <t>`);
+    // kept as raw SQL per FR-A3 escape hatch. tenant_id WHERE filter
+    // preserved (security invariant FR-A4 / I-13).
     const rows = await this.client.$queryRaw<ChunkRow>`
       SELECT
         id,
@@ -122,6 +137,10 @@ export class PgVectorStore implements IChunkStore {
 
   /** Test/diag helper. Always tenant-scoped per I-13. */
   async size(): Promise<number> {
+    // Wave 37.A (PRD-071 — query-dsl) — COUNT aggregate not supported by
+    // compileToSql v0.1 (emits only `SELECT * FROM <t>`); kept as raw SQL
+    // per FR-A3 escape hatch. tenant_id WHERE filter preserved (security
+    // invariant FR-A4 / I-13).
     const rows = await this.client.$queryRaw<{ count: string }>`
       SELECT COUNT(*)::text AS count FROM chunks WHERE tenant_id = ${this.tenantId}
     `;

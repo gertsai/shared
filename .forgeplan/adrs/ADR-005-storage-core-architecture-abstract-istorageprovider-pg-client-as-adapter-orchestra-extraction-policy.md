@@ -11,6 +11,8 @@ links:
   relation: refines
 - target: ADR-003
   relation: refines
+- target: PRD-071
+  relation: informs
 status: active
 title: Storage-core architecture — abstract IStorageProvider, pg-client as adapter, Orchestra extraction policy
 ---
@@ -240,6 +242,7 @@ NOT admissible под этим ADR:
 | EVID-007 (Sprint 3.2 complete) | Evidence | informs |
 
 > **Next step**: Activate PRD-002 → Activate ADR-005 → SPEC-007 → Build → SPEC-008 → Build.
+
 
 
 
