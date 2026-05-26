@@ -28,6 +28,13 @@
  */
 import { RestRequestManager } from '@gertsai/rest-request-manager';
 import type { RestResponse } from '@gertsai/rest-request-manager';
+// Wave 37.C (PRD-071 — llm-costs) — rate-table lookup + manual emission
+// (registry/calculator package, no built-in emission API per PRD-071 Risks).
+import { calculateCost } from '@gertsai/llm-costs';
+// Wave 37.C (PRD-071 — llm-costs) — branded TenantId (C-δ): embedder
+// concrete-impl options consume the same brand the repos already require
+// post-Phase B (PRD-071 FR-B2/B3). Port (IEmbedder) is unchanged.
+import type { TenantId } from '@gertsai/tenant';
 
 import { createAppLogger } from '../shared/logger';
 import {
@@ -61,6 +68,18 @@ export interface OpenAIEmbedderOptions {
    * backwards-compat with legacy callers.
    */
   readonly manager?: RestRequestManager;
+  /**
+   * Wave 37.C (PRD-071 — llm-costs, C-δ) — branded tenant id stamped onto
+   * every emitted cost event. Required at the concrete-impl boundary so
+   * the type system catches any plain-string regression at compile time;
+   * matches the brand already enforced by `PgDocumentRepository` +
+   * `PgVectorStore` constructors after Phase B (FR-B2/B3). m9s is
+   * single-tenant-per-process by design (`pg-document.repository.ts:48`),
+   * so the composition root supplies the process-level brand once at
+   * startup; a future per-request composition would route a
+   * context-derived `TenantId` through this same opt.
+   */
+  readonly tenantId: TenantId;
 }
 
 interface OpenAIEmbeddingsResponse {
@@ -132,6 +151,12 @@ export class OpenAIEmbedder implements IEmbedder {
     }
     if (!opts.model || opts.model.trim().length === 0) {
       throw new Error('OpenAIEmbedder: model is required');
+    }
+    // Wave 37.C (PRD-071 — llm-costs, C-δ) — TenantId brand provides
+    // compile-time safety but a runtime non-empty check guards against
+    // accidental cast-then-empty patterns at composition boundaries.
+    if (typeof opts.tenantId !== 'string' || opts.tenantId.length === 0) {
+      throw new Error('OpenAIEmbedder: tenantId is required (branded TenantId)');
     }
   }
 
@@ -234,6 +259,47 @@ export class OpenAIEmbedder implements IEmbedder {
       this._dimensions = first.length;
       this.dimensionsLatched = true;
     }
+
+    // Wave 37.C (PRD-071 — llm-costs) — USD cost event from
+    // usage.prompt_tokens × per-model rate. `@gertsai/llm-costs` exposes a
+    // registry + calculator only (no emission API), so we look up the rate
+    // here and emit a structured event via the existing logger. Failure to
+    // find the model in the catalogue is logged but never throws — cost
+    // telemetry must not break the embed call path.
+    this.emitCostEvent(json.usage?.prompt_tokens ?? 0);
+
     return vectors;
+  }
+
+  /**
+   * Wave 37.C (PRD-071 — llm-costs) — manual cost emission shim.
+   *
+   * Best-effort: any error in cost calculation or logging is swallowed so
+   * cost telemetry never breaks the embed call path. Event shape matches
+   * the Ollama embedder's emission so a single downstream consumer can
+   * ingest both providers uniformly.
+   */
+  private emitCostEvent(promptTokens: number): void {
+    try {
+      const result = calculateCost(this.opts.model, {
+        inputTokens: promptTokens,
+        outputTokens: 0,
+      });
+      const usdCost = result?.totalCost ?? 0;
+      log.info('llm.cost', {
+        event: 'llm.cost',
+        tenantId: this.opts.tenantId,
+        model: this.opts.model,
+        tokens: promptTokens,
+        usdCost,
+        timestamp: new Date().toISOString(),
+        ...(result === undefined && { catalogueMiss: true }),
+      });
+    } catch (err) {
+      log.warn('llm.cost emission failed', {
+        model: this.opts.model,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 }

@@ -37,6 +37,12 @@ import IORedis from 'ioredis';
 import { InMemoryStorageProvider } from '@gertsai/entity-storage';
 import { RestRequestManager } from '@gertsai/rest-request-manager';
 import { Session } from '@gertsai/session';
+// Wave 37.B (PRD-071 — tenant brand) — TenantId enforces tenant resolution at compile time.
+// `asTenantId` validates non-empty at this composition boundary, after which
+// the branded value flows into PgDocumentRepository + PgVectorStore (Phase B
+// brand surfaces) and is also passed through to the OpenAI + Ollama
+// embedders for Wave 37.C (PRD-071 — llm-costs) cost-event correlation.
+import { asTenantId } from '@gertsai/tenant';
 
 import { createAppLogger } from '../shared/logger';
 import { DocumentRepository } from '../infrastructure/document.repository';
@@ -193,9 +199,13 @@ function pickStores(): {
         );
       }
       const pgClient = new PgClientAdapter({ connectionString: config.POSTGRES_URL });
+      // Wave 37.B (PRD-071 — tenant brand) — TenantId enforces tenant resolution at compile time.
+      // `asTenantId` throws TypeError on empty/non-string at this boundary; both
+      // repo constructors below require the brand and reject plain strings.
+      const tenantId = asTenantId(config.TENANT_ID);
       const docStore = new PgDocumentRepository({
         client: pgClient,
-        tenantId: config.TENANT_ID,
+        tenantId,
         ownerUuid: config.DEFAULT_OWNER_UUID,
         // OpenFGA tuple writes require a configured FGA store; default-on in
         // production but tests can flip via composition seam (see m9s
@@ -205,7 +215,7 @@ function pickStores(): {
       });
       const chunkStore = new PgVectorStore({
         client: pgClient,
-        tenantId: config.TENANT_ID,
+        tenantId,
       });
       return { docStore, chunkStore };
     }
@@ -235,6 +245,11 @@ function pickStores(): {
  * deployments (e.g. dual-provider failover) don't share state.
  */
 function pickEmbedder(): IEmbedder {
+  // Wave 37.C (PRD-071 — llm-costs, C-δ) — brand the process-level tenant
+  // id once and pass it to every concrete embedder impl. Mirrors the
+  // pattern Phase B applies to PgDocumentRepository + PgVectorStore.
+  const tenantId = asTenantId(config.TENANT_ID);
+
   switch (config.EMBEDDER_PROVIDER) {
     case 'ollama': {
       // Parse the URL once here so the SSRF allowlist can be tightened to
@@ -265,6 +280,9 @@ function pickEmbedder(): IEmbedder {
         url: config.EMBEDDER_URL,
         model: config.EMBEDDER_MODEL,
         manager: ollamaManager,
+        // Wave 37.C (PRD-071 — llm-costs, C-δ) — branded tenant id for
+        // emitted cost events.
+        tenantId,
       });
     }
 
@@ -293,6 +311,9 @@ function pickEmbedder(): IEmbedder {
         // OpenAI's smallest current generation. Override via EMBEDDER_MODEL.
         model: config.EMBEDDER_MODEL || 'text-embedding-3-small',
         manager: openaiManager,
+        // Wave 37.C (PRD-071 — llm-costs, C-δ) — branded tenant id for
+        // emitted cost events.
+        tenantId,
       });
     }
 

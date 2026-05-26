@@ -7,6 +7,8 @@ last_modified_by: claude-code/2.1.145
 links:
 - target: PRD-070
   relation: informs
+- target: PRD-071
+  relation: informs
 status: active
 title: Wave 36 — m9s otel wired + live re-verify (15 passed Docker)
 ---
@@ -94,6 +96,7 @@ CL3 same-context: tests run on actual codebase against live Docker. Phase 0 + Ph
 | PRD-070 | informs (parent) |
 | EVID-087 | informs (audit context driving Wave 36) |
 | PRD-001 FR-018 | informs (@gertsai/otel package origin) |
+
 
 
 

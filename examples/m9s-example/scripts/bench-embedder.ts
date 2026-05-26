@@ -21,6 +21,10 @@ import { performance } from 'node:perf_hooks';
 
 import type { RestRequestManager } from '@gertsai/rest-request-manager';
 import { OllamaEmbedder } from '../src/infrastructure/ollama-embedder';
+// Wave 37.C (PRD-071 — llm-costs, C-δ) — branded TenantId now required.
+import { asTenantId } from '@gertsai/tenant';
+
+const BENCH_TENANT_ID = asTenantId('bench-tenant');
 
 const BATCH_SIZE = 100;
 const SIMULATED_LATENCY_MS = 50;
@@ -61,6 +65,7 @@ async function runBatch(
     url: 'http://localhost:11434',
     model: 'bench-stub',
     manager: makeFakeManager(),
+    tenantId: BENCH_TENANT_ID,
   });
   const texts = new Array(BATCH_SIZE).fill('benchmark prompt');
   const t0 = performance.now();

@@ -23,6 +23,14 @@
 import { randomUUID } from 'node:crypto';
 
 import type { PgClient } from '@gertsai/pg-client';
+// Wave 37.A (PRD-071 — query-dsl) — typed builders for SELECT-by-id paths;
+// see compileToSql call sites below. UPDATE/INSERT/aggregate/projection
+// queries remain raw SQL per FR-A3 escape hatch (compileToSql v0.1 emits
+// only `SELECT * FROM <t>`).
+import { defineQueryConstraints } from '@gertsai/query-dsl';
+import { compileToSql } from '@gertsai/query-dsl/sql';
+import type { StorageMetadata } from '@gertsai/storage-core';
+import type { TenantId } from '@gertsai/tenant';
 
 import type { Document } from '../domain/document';
 import type {
@@ -37,6 +45,17 @@ import { PgSoftDeleteNotSupportedError } from '../shared/errors';
 
 import type { DocumentRow } from './document.meta';
 
+// Wave 37.A (PRD-071 — query-dsl) — minimal `StorageMetadata` shape used by
+// the typed builders below. `indexed` enumerates the columns the SELECT-by-id
+// paths filter on. `read`/`write` are `unknown` because the type system only
+// validates the indexed-field literal at the constraint call site (per
+// query-dsl design note "value is `unknown` to avoid PathValue blowup").
+type DocumentQueryMeta = StorageMetadata<
+  unknown,
+  unknown,
+  'id' | 'tenant_id' | 'deleted_at'
+>;
+
 export interface PgDocumentRepositoryOptions {
   /** PgClient instance — typically `PgClientAdapter` in production. */
   readonly client: PgClient;
@@ -44,8 +63,12 @@ export interface PgDocumentRepositoryOptions {
    * Tenant id used when persisting documents. m9s-example demos a single
    * tenant per process; a production deployment would scope this per
    * request via `@gertsai/runtime-context` (see TODO at composition root).
+   *
+   * Wave 37.B (PRD-071 — tenant brand) — TenantId enforces tenant resolution
+   * at compile time; plain `string` is rejected so callers must route through
+   * `asTenantId` / `getTenantIdStrict` at the composition boundary.
    */
-  readonly tenantId: string;
+  readonly tenantId: TenantId;
   /**
    * Owner uuid used when persisting documents. Same per-process caveat as
    * `tenantId` applies.
@@ -63,7 +86,7 @@ export interface PgDocumentRepositoryOptions {
 
 export class PgDocumentRepository implements IDocumentStore, IDocumentQuery, ISoftDeletableDocumentStore {
   private readonly client: PgClient;
-  private readonly tenantId: string;
+  private readonly tenantId: TenantId;
   private readonly ownerUuid: string;
   private readonly writeFgaTuples: boolean;
   private readonly logger: NonNullable<PgDocumentRepositoryOptions['logger']>;
@@ -81,11 +104,25 @@ export class PgDocumentRepository implements IDocumentStore, IDocumentQuery, ISo
     const metadata = (doc.metadata ?? {}) as Record<string, unknown>;
     const metadataJson = JSON.stringify(metadata);
 
-    const existing = await this.client.$queryRaw<{ id: string }>`
-      SELECT id FROM documents WHERE id = ${id} AND tenant_id = ${this.tenantId}
-    `;
+    // Wave 37.A (PRD-071 — query-dsl) — migrated from raw SQL line 84-86.
+    // Pure SELECT-by-id with tenant filter — fits compileToSql's `SELECT * FROM <t>`
+    // emission perfectly. tenant_id WHERE filter preserved (security invariant FR-A4).
+    const existingQuery = [
+      q.where('id', '==', id),
+      q.where('tenant_id', '==', this.tenantId),
+      q.limit(1),
+    ] as const;
+    const existingCompiled = compileToSql(existingQuery, 'documents');
+    const existing = await rawQuery<{ id: string }>(
+      this.client,
+      existingCompiled.sql,
+      existingCompiled.params,
+    );
 
     if (existing.length > 0) {
+      // Wave 37.A (PRD-071 — query-dsl) — UPDATE not supported by compileToSql v0.1
+      // (emits only `SELECT * FROM <t>`); kept as raw SQL per FR-A3 escape hatch.
+      // tenant_id WHERE filter preserved (security invariant FR-A4).
       await this.client.$executeRaw`
         UPDATE documents
            SET text = ${doc.text},
@@ -96,6 +133,9 @@ export class PgDocumentRepository implements IDocumentStore, IDocumentQuery, ISo
       return;
     }
 
+    // Wave 37.A (PRD-071 — query-dsl) — INSERT not supported by compileToSql v0.1
+    // (emits only `SELECT * FROM <t>`); kept as raw SQL per FR-A3 escape hatch.
+    // tenant_id column written explicitly (security invariant FR-A4).
     await this.client.$executeRaw`
       INSERT INTO documents (id, tenant_id, owner_uuid, text, metadata)
       VALUES (${id}, ${this.tenantId}, ${this.ownerUuid}, ${doc.text}, ${metadataJson}::jsonb)
@@ -110,14 +150,44 @@ export class PgDocumentRepository implements IDocumentStore, IDocumentQuery, ISo
     // Wave 10.E (PRD-022): exclude soft-deleted rows so callers honor the
     // soft-delete contract — a tombstoned doc is invisible to read paths
     // (matching the in-memory adapter's `status === 'deleted'` filter).
-    const rows = await this.client.$queryRaw<DocumentRow>`
-      SELECT id, tenant_id, owner_uuid, text, metadata, created_at, updated_at
-        FROM documents
-       WHERE id = ${coerceUuid(id)}
-         AND tenant_id = ${this.tenantId}
-         AND deleted_at IS NULL
-       LIMIT 1
-    `;
+    //
+    // Wave 37.A (PRD-071 — query-dsl) — migrated from raw SQL line 113-120.
+    // Equality + LIMIT compose cleanly; the `deleted_at IS NULL` predicate
+    // is the only piece the DSL cannot model (no IS-NULL operator), so we
+    // splice the fragment after compileToSql via safe SQL string `.replace()`
+    // — compileToSql guarantees `$N`-only placeholders and the fragment
+    // carries no user input. tenant_id WHERE filter preserved (security
+    // invariant FR-A4).
+    const findQuery = [
+      q.where('id', '==', coerceUuid(id)),
+      q.where('tenant_id', '==', this.tenantId),
+      q.limit(1),
+    ] as const;
+    const findCompiled = compileToSql(findQuery, 'documents');
+    // Wave 37.A (PRD-071 — query-dsl FR-A3 follow-up, code-reviewer T4-A1 #1) —
+    // fail-loud guard: the `.replace()` below is a no-op if compileToSql emits
+    // no `LIMIT` clause, which would silently bypass the soft-delete tombstone
+    // filter and return deleted rows. Future maintenance that drops
+    // `q.limit(1)` from `findQuery` must restore it before this splice can
+    // run; the assertion catches that regression at runtime instead of
+    // shipping a soft-delete bypass.
+    if (!findCompiled.sql.includes(' LIMIT ')) {
+      throw new Error(
+        'pg-document.repository.ts:findById: compileToSql output missing LIMIT clause; ' +
+          'tombstone splice would silently no-op. Restore q.limit(1) in findQuery.',
+      );
+    }
+    const findSqlWithTombstone = findCompiled.sql.replace(
+      ' LIMIT ',
+      ' AND deleted_at IS NULL LIMIT ',
+    );
+    // SELECT * returns all DocumentRow columns; cast is documented at the
+    // query-dsl boundary (`SELECT *` semantics — see README §SQL compiler).
+    const rows = await rawQuery<DocumentRow>(
+      this.client,
+      findSqlWithTombstone,
+      findCompiled.params,
+    );
     if (rows.length === 0) return null;
     const row = rows[0]!;
     const rowMetadata = row.metadata as Document['metadata'];
@@ -141,6 +211,11 @@ export class PgDocumentRepository implements IDocumentStore, IDocumentQuery, ISo
 
     // Wave 10.E (PRD-022): filter tombstones; uses the partial index
     // `idx_documents_active` added in migration 002.
+    //
+    // Wave 37.A (PRD-071 — query-dsl) — expression-list (LEFT/octet_length)
+    // + aliases not supported by compileToSql v0.1 (always emits `SELECT *`);
+    // kept as raw SQL per FR-A3 escape hatch. tenant_id WHERE filter
+    // preserved (security invariant FR-A4).
     const rows = await this.client.$queryRaw<{
       id: string;
       preview: string;
@@ -172,6 +247,10 @@ export class PgDocumentRepository implements IDocumentStore, IDocumentQuery, ISo
    */
   async count(): Promise<number> {
     // Wave 10.E (PRD-022): tombstones excluded so list + count stay in sync.
+    //
+    // Wave 37.A (PRD-071 — query-dsl) — COUNT aggregate not supported by
+    // compileToSql v0.1 (always emits `SELECT *`); kept as raw SQL per FR-A3
+    // escape hatch. tenant_id WHERE filter preserved (security invariant FR-A4).
     const rows = await this.client.$queryRaw<{ count: string }>`
       SELECT COUNT(*)::text AS count
         FROM documents
@@ -198,6 +277,9 @@ export class PgDocumentRepository implements IDocumentStore, IDocumentQuery, ISo
    */
   async softDelete(id: string): Promise<void> {
     try {
+      // Wave 37.A (PRD-071 — query-dsl) — UPDATE not supported by compileToSql
+      // v0.1 (emits only `SELECT * FROM <t>`); kept as raw SQL per FR-A3 escape
+      // hatch. tenant_id WHERE filter preserved (security invariant FR-A4).
       await this.client.$executeRaw`
         UPDATE documents
            SET deleted_at = now()
@@ -269,3 +351,26 @@ const UUID_RE =
  * repository would otherwise require callers to bring themselves.
  */
 export const newDocumentId = (): string => randomUUID();
+
+// Wave 37.A (PRD-071 — query-dsl) — bound constraint factory captured at
+// module-load time so the SELECT-by-id call sites stay terse and type-safe
+// (TypeScript validates each `field` against DocumentQueryMeta['indexed']).
+const q = defineQueryConstraints<DocumentQueryMeta>();
+
+/**
+ * Wave 37.A (PRD-071 — query-dsl): bridge from compileToSql's positional
+ * `(sql, params)` shape to PgClient's `(strings, ...values)` tagged-template
+ * shape. Mirrors the helper inside `@gertsai/pg-client/src/storage-provider.ts`
+ * (lines 93-105) — the same approach that backs `PgStorageProvider` since
+ * Sprint 3.5 W-4B-4. The fragment carries no user input; compileToSql
+ * guarantees `$N`-only placeholders.
+ */
+function rawQuery<T = unknown>(
+  client: PgClient,
+  sql: string,
+  params: ReadonlyArray<unknown>,
+): Promise<T[]> {
+  const parts = sql.split(/\$\d+/g);
+  const template = Object.assign(parts, { raw: parts }) as unknown as TemplateStringsArray;
+  return client.$queryRaw<T>(template, ...params);
+}
