@@ -219,6 +219,59 @@ export class APIError<CODE extends ResponseCode = ResponseCode> extends GertsErr
   }
 
   /**
+   * Structural type guard — is `err` an `APIError`, or an object that lost its
+   * prototype identity but is structurally one?
+   *
+   * An `APIError` loses `instanceof` identity when it (a) crosses the Moleculer
+   * transport boundary (serialised, then reconstructed as a plain object / generic
+   * MoleculerError) or (b) is thrown from code that imported `APIError` from a
+   * different installed copy of `@gertsai/api-core` (dual-package hazard). In both
+   * cases the surviving signals are `name === 'APIError'` (or the `__API_ERROR__`
+   * brand emitted by {@link toJSON}) plus a `code` that is a known
+   * {@link ResponseCode}. Recognising these lets the gateway honour the carried
+   * HTTP status instead of collapsing every such error to 500. See issue #115.
+   */
+  public static isAPIErrorLike(
+    err: unknown,
+  ): err is { code: ResponseCode; data?: unknown; message: string; stack?: string } {
+    if (err instanceof APIError) return true;
+    if (err === null || typeof err !== 'object') return false;
+    const e = err as Record<string, unknown>;
+    if (typeof e.message !== 'string') return false;
+    const branded = e.__API_ERROR__ === true || e.name === 'APIError';
+    return (
+      branded &&
+      typeof e.code === 'string' &&
+      Object.prototype.hasOwnProperty.call(responseMetadata, e.code)
+    );
+  }
+
+  /**
+   * Reconstruct an `APIError` from a structurally-equivalent object (see
+   * {@link isAPIErrorLike}), preserving the carried `code` (and therefore the HTTP
+   * status) and the already-formatted `message` verbatim.
+   *
+   * Unlike {@link fromJSON}, this does NOT re-apply the metadata prefix, so a
+   * transported message such as `"Conflict: X already exists"` is kept as-is rather
+   * than double-prefixed to `"Conflict: Conflict: X already exists"`. See issue #115.
+   */
+  public static fromSerialized(e: {
+    code: ResponseCode;
+    data?: unknown;
+    message?: string;
+    stack?: string;
+  }): APIError {
+    const error = new APIError(e.code, e.data as unknown);
+    if (typeof e.message === 'string' && e.message.length > 0) {
+      error.message = e.message;
+    }
+    if (typeof e.stack === 'string') {
+      error.stack = e.stack;
+    }
+    return error;
+  }
+
+  /**
    * Convert error to client-safe JSON representation.
    * Respects the `expose` flag - hides details for 5xx errors.
    */

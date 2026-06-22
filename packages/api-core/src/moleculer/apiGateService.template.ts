@@ -267,7 +267,11 @@ export const createApiService = (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let response: OrchestraApiResponse<any>;
 
-    if (err instanceof APIError) {
+    // issue #115: recognise an APIError structurally, not only by `instanceof`.
+    // An APIError that crossed the Moleculer transport boundary (or was imported
+    // from a different package copy) is no longer `instanceof APIError`, but still
+    // carries its ResponseCode `code` — honour it instead of collapsing to 500.
+    if (APIError.isAPIErrorLike(err)) {
       response = new OrchestraApiResponse(err.code, err.data, {
         message: err.message,
       });
