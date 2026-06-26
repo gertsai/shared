@@ -41,6 +41,17 @@ export function translateError(err: unknown, _ctx: PipelineContext, deps: Pipeli
     return APIError.fromJSON(err as Record<string, unknown>);
   }
 
+  // Transport-serialised or dual-package APIError (issue #115): an APIError thrown
+  // from a handler loses its prototype identity crossing the Moleculer transport
+  // boundary (reconstructed as a plain object), or when imported from a different
+  // installed copy of `@gertsai/api-core`. It still carries `name === 'APIError'`
+  // (or the `__API_ERROR__` brand) plus a valid ResponseCode `code`. Rebuild it
+  // preserving the code so the original HTTP status survives, instead of falling
+  // through to `fromError` below and collapsing to INTERNAL_ERROR (500).
+  if (APIError.isAPIErrorLike(err)) {
+    return APIError.fromSerialized(err);
+  }
+
   if (err instanceof Error) {
     return APIError.fromError(err);
   }

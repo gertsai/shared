@@ -1112,6 +1112,10 @@ export class ApiController<
           // @ts-ignore
           return APIError.fromJSON(err);
         }
+        // issue #115: a transport-serialised / dual-package APIError lost its
+        // prototype identity but still carries a valid ResponseCode — recognise it
+        // structurally and rebuild preserving the code (else it collapses to 500).
+        if (APIError.isAPIErrorLike(err)) return APIError.fromSerialized(err);
         if (err instanceof Error) return APIError.fromError(err);
         return new APIError(ResponseCode.INTERNAL_ERROR);
       },
@@ -1136,6 +1140,10 @@ export class ApiController<
           // @ts-ignore
           return APIError.fromJSON(err);
         }
+        // issue #115: a transport-serialised / dual-package APIError lost its
+        // prototype identity but still carries a valid ResponseCode — recognise it
+        // structurally and rebuild preserving the code (else it collapses to 500).
+        if (APIError.isAPIErrorLike(err)) return APIError.fromSerialized(err);
         if (err instanceof Error) return APIError.fromError(err);
         return new APIError(ResponseCode.INTERNAL_ERROR);
       },

@@ -105,4 +105,52 @@ describe('translateError (Stage 12)', () => {
     expect(apiError.code).toBe(ResponseCode.INTERNAL_ERROR);
     expect(deps.logger?.error).toHaveBeenCalledWith('Unknown error occurred', null);
   });
+
+  // Case 5 (issue #115): a transport-serialised / dual-package APIError that lost
+  // its prototype identity is recognised structurally and rebuilt preserving its
+  // ResponseCode — NOT collapsed to INTERNAL_ERROR via the generic `fromError` path.
+  it('preserves the ResponseCode of a transport-serialised APIError (issue #115)', () => {
+    // Shape an APIError takes after crossing the Moleculer transport boundary:
+    // a plain object — not `instanceof APIError`, no `__ORCHESTRA_ERROR__` brand —
+    // that still carries `name: 'APIError'` and a valid ResponseCode `code`.
+    const serialised = {
+      name: 'APIError',
+      code: ResponseCode.CONFLICT,
+      message: 'Conflict: X already exists',
+      data: undefined,
+    };
+
+    const result = translateError(serialised, makeCtx(), makeDeps());
+
+    expect(result).toBeInstanceOf(APIError);
+    const apiError = result as APIError;
+    expect(apiError.code).toBe(ResponseCode.CONFLICT);
+    expect(apiError.httpCode).toBe(409);
+    // message preserved verbatim — not double-prefixed, not "Internal server error: …"
+    expect(apiError.message).toBe('Conflict: X already exists');
+  });
+
+  // Case 6 (issue #115): the `__API_ERROR__` brand (emitted by APIError.toJSON) is
+  // also accepted as a structural signal even when `name` is absent.
+  it('recognises a serialised APIError via the __API_ERROR__ brand (issue #115)', () => {
+    const serialised = {
+      __API_ERROR__: true,
+      code: ResponseCode.CONFLICT,
+      message: 'Conflict: duplicate',
+    };
+
+    const result = translateError(serialised, makeCtx(), makeDeps());
+
+    expect((result as APIError).code).toBe(ResponseCode.CONFLICT);
+  });
+
+  // Case 7 (issue #115 guard): an object that merely has `name: 'APIError'` but an
+  // unknown `code` must NOT hijack the path — it falls through to INTERNAL_ERROR.
+  it('does not misclassify an object with an invalid code as an APIError (issue #115)', () => {
+    const notReally = { name: 'APIError', code: 'not-a-real-code', message: 'x' };
+
+    const result = translateError(notReally, makeCtx(), makeDeps());
+
+    expect((result as APIError).code).toBe(ResponseCode.INTERNAL_ERROR);
+  });
 });
