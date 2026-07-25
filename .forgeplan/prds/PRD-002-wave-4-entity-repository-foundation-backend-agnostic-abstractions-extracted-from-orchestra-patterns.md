@@ -7,8 +7,6 @@ last_modified_by: claude-code/2.1.128
 links:
 - target: PRD-001
   relation: refines
-- target: ADR-005
-  relation: based_on
 status: active
 title: Wave 4 — Entity/Repository Foundation (backend-agnostic abstractions extracted from Orchestra patterns)
 ---
@@ -254,6 +252,7 @@ Phase C (team-lead): EVID-009 + activate SPEC-008.
 | Upstream extraction sources (orchlab/core, orchlab/storage, orchlab/di) | external | informs (extraction reference) |
 
 > **Next step**: Activate PRD-002 → Activate ADR-005 → SPEC-007 (Sprint 3.4 Wave 4A Shape) → Sprint 3.4 Build → SPEC-008 → Sprint 3.5 Build.
+
 
 
 
