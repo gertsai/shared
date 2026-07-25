@@ -597,6 +597,47 @@ export type ActionOptions<
    * @see packages/api-core/src/lib/controller/pipeline/stages/wrap-response.ts
    */
   responseMessage?: string;
+  /**
+   * Native Moleculer per-action schema options, passed through **verbatim** into
+   * the emitted action — the deliberate escape-hatch for the Moleculer surface
+   * api-core does not model as first-class fields: `cache`, `visibility`,
+   * `tracing`, `bulkhead`, `circuitBreaker`, `retryPolicy`, `fallback`, `hooks`
+   * (and any other native `ActionSchema` option, e.g. `timeout`, via Moleculer's
+   * index signature). Lets consumers reach the raw Moleculer surface without
+   * api-core mirroring every option on every release.
+   *
+   * **Controller-owned fields are forbidden** (`?: never`) so the hatch can never
+   * bypass the pipeline:
+   * - `handler` — the emitted handler IS the `PipelineRunner`;
+   * - `params` — validation is typia inside the pipeline; a native validator
+   *   would double-validate under the broker's `validator: true` and mutate
+   *   `ctx.params` before the pipeline sees it;
+   * - `rest` — owned by the `rest` field above;
+   * - `name` / `service` — owned by the controller / injected by Moleculer.
+   *
+   * The `?: never` gives a compile-time guarantee (it overrides `ActionSchema`'s
+   * `[key: string]: any` index signature, which a bare `Omit` cannot); the
+   * spread-first ordering in `_createActionSchema` enforces the same invariant at
+   * runtime, so even an `as any` cast cannot hijack the handler or validation.
+   *
+   * ⚠️ `hooks` here wrap the **entire** pipeline handler — a `before` hook runs
+   * before auth/validation stages, an `error` hook before api-core's error
+   * envelope. Use deliberately.
+   *
+   * @example
+   * // action-level read cache (ADR-046)
+   * moleculer: { cache: { keys: ['id'], ttl: 60 } }
+   * @example
+   * // cron-only action not callable over the broker (SPEC-015 §C.3)
+   * moleculer: { visibility: 'private' }
+   */
+  moleculer?: Partial<Moleculer.ActionSchema> & {
+    handler?: never;
+    params?: never;
+    rest?: never;
+    name?: never;
+    service?: never;
+  };
   handler: Handler;
 };
 
