@@ -441,6 +441,27 @@ Embedding-модель `bge-m3` (для `search`/`embed`) подгружаетс
 ADR/RFC/PRD — **задача ссылается на решение, а не переписывает его** (Forgeplan = single
 source of truth).
 
+### Соотношение с forgeplan
+
+`.forgeplan/` инициализирован (workspace + `forgeplan` MCP в `.mcp.json`). Разделение слоёв —
+каждый факт живёт ровно в одном месте:
+
+| Слой | Где | Что в нём |
+| --- | --- | --- |
+| Работа в полёте | task list (`TaskCreate` / `TaskUpdate` / `TaskList`) | что делается прямо сейчас, кем, в каком статусе |
+| Решения | `.forgeplan/{adrs,prds,rfcs,specs}/` — ADR/PRD/RFC/SPEC | почему так решили + альтернативы; в этом репо ADR **живут в `.forgeplan/adrs/`** (ID `ADR-005…ADR-012`), а не в `docs/`. Мутировать ТОЛЬКО через forgeplan MCP/CLI (см. Красные линии) |
+| Доказательства | `.forgeplan/evidence/` — EVID + `## Structured Fields` | вердикт прогона (`supports` / `weakens` / `refutes`), а не пересказ отчёта агента |
+| Дефекты / ограничения | `KNOWN-ISSUES.md` (+ EVID с failing-вердиктом) | известные лимиты v0.1.0 + находки, переживающие сессию (в репо нет `.forgeplan/problems/`) |
+| Дорожная карта | `ROADMAP.md` | долгосрочный бэклог / фазы |
+
+Задача ссылается на артефакт по ID (`ADR-005`, `EVID-090`), а не копирует его тело. Артефакт
+переживает сессию; задача — нет. Поэтому находка, которая должна дожить до следующей недели,
+обязана стать артефактом (EVID / ADR / PRD через forgeplan MCP), даже если задача по ней закрыта.
+
+`/smith` читает состояние через `forgeplan_health` / `forgeplan_claims` — пустой граф означает,
+что он маршрутизирует вслепую. Если работа велась, а артефактов не появилось, это дефект
+процесса, а не экономия.
+
 ## 38 packages — tier таблица + build (post-Sprint 3.0..3.11 + Wave 6/7 enhancements per ADR-004..ADR-012)
 
 **Wave 5 fully complete** — 13 packages total (2 Phase 1 + 3 Phase 2 + 4 Phase 3 + 4 Phase 4). Subsequent enhancement waves (no new packages, all E+/F+):
