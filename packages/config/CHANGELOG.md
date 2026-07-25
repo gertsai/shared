@@ -1,5 +1,12 @@
 # @gertsai/config
 
+## 0.1.18
+
+### Patch Changes
+
+- Updated dependencies [6aa9efa]
+  - @gertsai/api-core@0.8.3
+
 ## 0.1.17
 
 ### Patch Changes
