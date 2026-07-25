@@ -4,9 +4,6 @@ id: EVID-029
 kind: evidence
 last_modified_at: 2026-05-12T22:12:27.373982+00:00
 last_modified_by: claude-code/2.1.139
-links:
-- target: AUDIT-2026-05-12-215927
-  relation: informs
 status: active
 title: 'Code audit AUDIT-2026-05-12-215927: verdict=FAIL (1 CRIT + 12 HIGH), Wave 8.2 patch closes all CRIT/HIGH'
 ---
@@ -121,6 +118,7 @@ These were flagged HIGH or below but require architectural decisions:
 - EVID-029 informs AUDIT-2026-05-12-215927 (this evidence)
 
 R_eff impact: EVID-029 evidence on Wave 8.1 ship target (PRD-013). When linked back, PRD-013 R_eff remains 1.00 (the audit weakens by surfacing fixable issues but the underlying capability adoption was sound and the patch closed all CRIT/HIGH).
+
 
 
 
