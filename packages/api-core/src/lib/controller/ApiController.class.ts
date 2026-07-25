@@ -1070,7 +1070,22 @@ export class ApiController<
       }
     }
 
+    // ActionOptions.moleculer — native Moleculer per-action options (cache /
+    // visibility / retryPolicy / bulkhead / …) passed through verbatim. Filter the
+    // controller-owned keys OUT of the passthrough so they can NEVER leak: `?: never`
+    // forbids them at compile time, and this filter + the explicit fields below
+    // enforce the same invariant at runtime (defense-in-depth against an `as any`
+    // cast). `params` matters most — a native validator would double-validate under
+    // the broker's `validator: true` and mutate `ctx.params` before the pipeline.
+    const ownedActionKeys = ['handler', 'params', 'rest', 'name', 'service'];
+    const nativeActionOptions = Object.fromEntries(
+      Object.entries(action.options.moleculer ?? {}).filter(
+        ([key]) => !ownedActionKeys.includes(key),
+      ),
+    );
+
     return {
+      ...nativeActionOptions,
       rest: action.options.rest,
       auth: action.options.auth,
       scopes: action.options.scopes,

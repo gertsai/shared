@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { UserType } from '@gertsai/core';
 import typia from 'typia';
 
@@ -353,6 +353,88 @@ describe('ApiController', () => {
         { test: 'test' },
         { meta: { test: 'test' } },
       );
+    });
+  });
+
+  describe('ApiController/actions/native-options (moleculer escape-hatch)', () => {
+    test('native Moleculer options pass through to the emitted action schema', () => {
+      const controller = new ApiController({ version: 'v1', name: 'native_pass' });
+      const registered = controller.register('cached', {
+        auth: 'none',
+        rest: 'GET /:param1',
+        params: paramsValidate,
+        response: responseValidate,
+        moleculer: {
+          cache: { keys: ['param1'], ttl: 60 },
+          visibility: 'private',
+        },
+        handler(ctx: any) {
+          return ctx.respond({ var1: ctx.params.param1, var2: ctx.params.param2 });
+        },
+      });
+
+      expect(controller['_createActionSchema'](registered)).toMatchObject({
+        cache: { keys: ['param1'], ttl: 60 },
+        visibility: 'private',
+        rest: 'GET /:param1',
+        handler: expect.any(Function),
+      });
+    });
+
+    test('generateServiceSchema carries native options through', () => {
+      const controller = new ApiController({ version: 'v1', name: 'native_schema' });
+      controller.register('cached', {
+        auth: 'none',
+        rest: 'GET /:param1',
+        params: paramsValidate,
+        response: responseValidate,
+        moleculer: { cache: true, visibility: 'private' },
+        handler(ctx: any) {
+          return ctx.respond({ var1: ctx.params.param1, var2: ctx.params.param2 });
+        },
+      });
+
+      expect(controller.generateServiceSchema()).toMatchObject({
+        actions: {
+          cached: { cache: true, visibility: 'private', rest: 'GET /:param1' },
+        },
+      });
+    });
+
+    test('controller-owned fields win at runtime — moleculer cannot hijack handler/rest/params', async () => {
+      const controller = new ApiController({ version: 'v1', name: 'native_guard' });
+      const hijackHandler = vi.fn();
+      const registered = controller.register('guarded', {
+        auth: 'none',
+        rest: 'GET /:param1',
+        params: paramsValidate,
+        response: responseValidate,
+        // `as any` bypasses the compile-time `?: never` guard — the runtime filter
+        // must still keep the controller's own fields and drop native params/name.
+        moleculer: {
+          handler: hijackHandler,
+          rest: 'DELETE /hijacked',
+          params: { evil: 'string' },
+          name: 'hijacked',
+        } as any,
+        handler(ctx: any) {
+          return ctx.respond({ var1: ctx.params.param1, var2: ctx.params.param2 });
+        },
+      });
+
+      const schema = controller['_createActionSchema'](registered);
+
+      // controller owns rest + handler; native params/name never leak
+      expect(schema.rest).toBe('GET /:param1');
+      expect(schema.handler).not.toBe(hijackHandler);
+      expect(schema).not.toHaveProperty('params');
+      expect(schema).not.toHaveProperty('name');
+
+      // the real pipeline runs; the hijack handler never fires
+      await expect(
+        schema.handler.call(moleculerServiceMock, validParamsContextMock),
+      ).resolves.toMatchObject({ data: validResponseMock, code: ResponseCode.SUCCESS });
+      expect(hijackHandler).not.toHaveBeenCalled();
     });
   });
 });
