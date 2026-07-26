@@ -90,3 +90,11 @@ export type {
 export { LeakyBucketStrategy } from './strategies/LeakyBucketStrategy';
 export { GCRAStrategy } from './strategies/GCRAStrategy';
 export { SlidingWindowStrategy } from './strategies/SlidingWindowStrategy';
+// Shared strategy contract + arg/result types — so a consumer using a strategy
+// directly by key (execute({ key, limit, timeFrame, now })) can type against the
+// interface instead of a concrete class. No new capability, less coupling.
+export type {
+  RateLimitStrategy,
+  StrategyExecuteArgs,
+  StrategyResult,
+} from './strategies/RateLimitStrategy';
