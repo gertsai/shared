@@ -21,6 +21,16 @@ export interface SetupObservabilityOpts {
   readonly sampling?: number;
   /** Extra resource attributes merged on top of `service.name`. */
   readonly resource?: Readonly<Record<string, string>>;
+  /**
+   * OTLP/HTTP **metrics** endpoint (e.g. `http://collector:4318/v1/metrics`).
+   * Separate from {@link otlpEndpoint} on purpose: in real deployments the trace
+   * collector and the metric collector may be different addresses. Omitted ⇒
+   * metrics are not collected, {@link ObservabilityHandle.meter} is `undefined`,
+   * and traces behave byte-for-byte as before.
+   */
+  readonly metricsEndpoint?: string;
+  /** Metric export interval in ms. Defaults to `60_000`. Ignored without {@link metricsEndpoint}. */
+  readonly metricsIntervalMs?: number;
 }
 
 /**
@@ -30,8 +40,36 @@ export interface SetupObservabilityOpts {
 export interface ObservabilityHandle {
   /** Underlying NodeSDK instance — typed as `unknown` because it is lazy-loaded. */
   readonly sdk: unknown;
-  /** Flushes spans and shuts down all exporters. Should be awaited on SIGTERM. */
+  /** Flushes spans (and metrics, if enabled) and shuts down all exporters.
+   *  Idempotent — awaiting it more than once resolves the same flush. Await on SIGTERM. */
   readonly shutdown: () => Promise<void>;
+  /**
+   * Meter for creating counters / histograms. `undefined` when
+   * {@link SetupObservabilityOpts.metricsEndpoint} was not supplied — absence is
+   * honest: a no-op meter would look like it works while silently dropping every
+   * write, exactly the failure that makes SLOs poll series that never exist.
+   */
+  readonly meter?: MeterLike;
+}
+
+/**
+ * Minimal structural meter — shaped to be assignable from `@opentelemetry/api`'s
+ * `Meter` without making `@opentelemetry/api` a required dependency. A consumer
+ * that already has the API passes its own meter by structural compatibility, no cast.
+ */
+export interface MeterLike {
+  createCounter(name: string, opts?: { description?: string; unit?: string }): CounterLike;
+  createHistogram(name: string, opts?: { description?: string; unit?: string }): HistogramLike;
+}
+
+/** Monotonic counter — a value added over labelled dimensions. */
+export interface CounterLike {
+  add(value: number, attributes?: Readonly<Record<string, string | number | boolean>>): void;
+}
+
+/** Distribution of recorded values. */
+export interface HistogramLike {
+  record(value: number, attributes?: Readonly<Record<string, string | number | boolean>>): void;
 }
 
 /**
@@ -132,9 +170,48 @@ export function setupObservability(opts: SetupObservabilityOpts): ObservabilityH
 
   sdk.start();
 
+  // Metrics are opt-in: only a supplied metricsEndpoint resolves the metrics
+  // peer-deps and stands up a MeterProvider. A missing metrics peer-dep raises
+  // OtelPeerDepMissingError — the same contract as traces. We build a standalone
+  // MeterProvider and read the meter off it directly (`.getMeter`) so that
+  // `@opentelemetry/api` is never required.
+  let meter: MeterLike | undefined;
+  let meterProvider: MeterProviderInstance | undefined;
+  if (opts.metricsEndpoint !== undefined) {
+    const sdkMetricsMod = loadPeerDep<{
+      MeterProvider: new (o: Record<string, unknown>) => MeterProviderInstance;
+      PeriodicExportingMetricReader: new (o: Record<string, unknown>) => unknown;
+    }>('@opentelemetry/sdk-metrics');
+    const metricsExporterMod = loadPeerDep<{
+      OTLPMetricExporter: new (o: { url?: string }) => unknown;
+    }>('@opentelemetry/exporter-metrics-otlp-http');
+
+    const metricExporter = new metricsExporterMod.OTLPMetricExporter({ url: opts.metricsEndpoint });
+    const reader = new sdkMetricsMod.PeriodicExportingMetricReader({
+      exporter: metricExporter,
+      exportIntervalMillis: opts.metricsIntervalMs ?? 60_000,
+    });
+    meterProvider = new sdkMetricsMod.MeterProvider({ resource, readers: [reader] });
+    meter = meterProvider.getMeter(opts.serviceName);
+  }
+
+  // Idempotent shutdown flushing both pipelines; the memoized promise makes a
+  // second call a no-op that resolves with the first.
+  let shutdownPromise: Promise<void> | undefined;
+  const shutdown = (): Promise<void> => {
+    if (shutdownPromise === undefined) {
+      shutdownPromise = Promise.all([
+        sdk.shutdown(),
+        meterProvider !== undefined ? meterProvider.shutdown() : Promise.resolve(),
+      ]).then(() => undefined);
+    }
+    return shutdownPromise;
+  };
+
   return {
     sdk,
-    shutdown: () => sdk.shutdown(),
+    shutdown,
+    ...(meter !== undefined && { meter }),
   };
 }
 
@@ -145,6 +222,12 @@ export function setupObservability(opts: SetupObservabilityOpts): ObservabilityH
 
 interface SdkInstance {
   start(): void;
+  shutdown(): Promise<void>;
+}
+
+/** Loosely-typed shape of a `@opentelemetry/sdk-metrics` MeterProvider. */
+interface MeterProviderInstance {
+  getMeter(name: string): MeterLike;
   shutdown(): Promise<void>;
 }
 
