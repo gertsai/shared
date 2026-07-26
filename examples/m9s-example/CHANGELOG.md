@@ -1,5 +1,16 @@
 # @gertsai-examples/m9s-example
 
+## 0.0.31
+
+### Patch Changes
+
+- Updated dependencies [e4bfe1d]
+- Updated dependencies [962bed7]
+  - @gertsai/api-rlr@0.3.18
+  - @gertsai/otel@0.3.0
+  - @gertsai/api-core@0.9.1
+  - @gertsai-examples/m9s-example-api-types@0.0.24
+
 ## 0.0.30
 
 ### Patch Changes
