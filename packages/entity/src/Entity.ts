@@ -9,7 +9,6 @@
  *     `crypto.randomUUID()` — Node 22+ / browser >Q1 2024)
  *   - `lodash.isequal` → vendored `deepEqual` in `./internal/deep-equal`
  */
-import { randomUUID } from 'crypto';
 import { Model } from './Model';
 import { plainReactiveAdapter } from './adapters/plain';
 import { deepEqual } from './internal/deep-equal';
@@ -21,7 +20,11 @@ import type {
   UuidProvider,
 } from './types';
 
-const defaultUuidProvider: UuidProvider = () => randomUUID();
+// `globalThis.crypto.randomUUID` exists in Node ≥19 and every modern
+// browser; importing the `crypto` builtin instead would break bundler
+// (browser) builds — the package must stay platform-agnostic.
+const defaultUuidProvider: UuidProvider = () =>
+  globalThis.crypto.randomUUID();
 
 export abstract class Entity<Data extends object> extends Model {
   protected _data: Data;
