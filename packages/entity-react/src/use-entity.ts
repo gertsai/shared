@@ -4,8 +4,18 @@
  * `entity._data` (intercepted by `reactReactiveAdapter`) via
  * `React.useSyncExternalStore` with a version-snapshot wrapper per
  * ADR-008 Amendment 1.2.10.
+ *
+ * React loading strategy (no static imports — both would break a class
+ * of consumers):
+ *  - `import 'react'` would hard-require an OPTIONAL peer for everyone
+ *    importing the barrel, including adapter-only users;
+ *  - `import 'node:module'` breaks bundler/browser builds (the builtin
+ *    gets externalized and is absent at runtime).
+ *
+ * Order: injected fn ({@link setUseSyncExternalStore} — what bundler
+ * apps register once) → `process.getBuiltinModule('node:module')`
+ * createRequire (Node ≥22.3, import-free) → peer-dep error.
  */
-import { createRequire } from 'node:module';
 import type { Entity } from '@gertsai/entity';
 import { subscribe, getVersion } from './adapter.js';
 
@@ -17,35 +27,75 @@ type UseSyncExternalStoreFn = <T>(
 let _useSyncExternalStore: UseSyncExternalStoreFn | undefined;
 
 /**
- * Test seam: inject a `useSyncExternalStore` implementation (or `undefined`
- * to clear). Public for unit tests of `useEntity`; production code SHOULD
- * NOT call this — it is documented but unsupported.
+ * Register `React.useSyncExternalStore` for `useEntity`.
+ *
+ * Required in bundler/browser builds (no `createRequire` there) — call
+ * once near app bootstrap:
+ *
+ * ```ts
+ * import { useSyncExternalStore } from 'react';
+ * import { setUseSyncExternalStore } from '@gertsai/entity-react';
+ * setUseSyncExternalStore(useSyncExternalStore);
+ * ```
+ *
+ * In Node runtimes this is optional — the hook auto-resolves `react`
+ * through `process.getBuiltinModule('node:module')`.
+ */
+export function setUseSyncExternalStore(
+  fn: UseSyncExternalStoreFn | undefined,
+): void {
+  _useSyncExternalStore = fn;
+}
+
+/**
+ * Test seam kept for existing callers — now an alias of the public
+ * {@link setUseSyncExternalStore}.
  *
  * @internal
  */
 export function __setUseSyncExternalStoreForTests(
   fn: UseSyncExternalStoreFn | undefined,
 ): void {
-  _useSyncExternalStore = fn;
+  setUseSyncExternalStore(fn);
+}
+
+/** Minimal `node:module` surface needed to resolve the react peer. */
+interface NodeModuleBuiltin {
+  createRequire(url: string | URL): (id: string) => unknown;
+}
+
+function requireReact(): { useSyncExternalStore?: unknown } | undefined {
+  // Node ≥22.3 exposes builtins without an import; absent elsewhere.
+  if (typeof process === 'undefined') return undefined;
+  const getBuiltin = (process as { getBuiltinModule?: (id: string) => unknown })
+    .getBuiltinModule;
+  if (typeof getBuiltin !== 'function') return undefined;
+  const nodeModule = getBuiltin.call(process, 'node:module') as
+    | NodeModuleBuiltin
+    | undefined;
+  if (typeof nodeModule?.createRequire !== 'function') return undefined;
+  try {
+    return nodeModule.createRequire(import.meta.url)('react') as {
+      useSyncExternalStore?: unknown;
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 function loadReact(): UseSyncExternalStoreFn {
   if (_useSyncExternalStore) return _useSyncExternalStore;
-  try {
-    const requireFn = createRequire(import.meta.url);
-    const react = requireFn('react') as {
-      useSyncExternalStore: UseSyncExternalStoreFn;
-    };
-    if (typeof react.useSyncExternalStore !== 'function') {
-      throw new Error('useSyncExternalStore is not a function');
-    }
-    _useSyncExternalStore = react.useSyncExternalStore;
+  const react = requireReact();
+  if (typeof react?.useSyncExternalStore === 'function') {
+    _useSyncExternalStore =
+      react.useSyncExternalStore as UseSyncExternalStoreFn;
     return _useSyncExternalStore;
-  } catch {
-    throw new Error(
-      '@gertsai/entity-react requires "react" >=18.0.0 as a peer dependency. Install it with: pnpm add react',
-    );
   }
+  throw new Error(
+    '@gertsai/entity-react requires "react" >=18.0.0 as a peer dependency. ' +
+      'Install it with: pnpm add react — or, in bundler/browser builds, ' +
+      'register it via setUseSyncExternalStore(useSyncExternalStore).',
+  );
 }
 
 interface EntitySnapshot<Data extends object> {

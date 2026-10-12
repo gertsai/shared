@@ -5,4 +5,7 @@
  * Per ADR-008 Decision C + Amendment 1 invariants I-11..I-14.
  */
 export { reactReactiveAdapter, subscribe, getVersion } from './adapter.js';
-export { useEntity } from './use-entity.js';
+export {
+  useEntity,
+  setUseSyncExternalStore,
+} from './use-entity.js';

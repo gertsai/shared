@@ -5,11 +5,8 @@ describe('useEntity — peer-dep gate (no React installed)', () => {
   it('throws a clear error message when react cannot be resolved', async () => {
     vi.resetModules();
 
-    vi.doMock('node:module', () => ({
-      createRequire: () => () => {
-        throw new Error("Cannot find module 'react'");
-      },
-    }));
+    // Simulate a bundler/browser runtime: no node builtins reachable.
+    vi.stubGlobal('process', { getBuiltinModule: undefined });
 
     const mod = await import('../use-entity.js');
     mod.__setUseSyncExternalStoreForTests(undefined);
@@ -22,7 +19,7 @@ describe('useEntity — peer-dep gate (no React installed)', () => {
       /@gertsai\/entity-react requires "react" >=18\.0\.0 as a peer dependency/,
     );
 
-    vi.doUnmock('node:module');
+    vi.unstubAllGlobals();
     vi.resetModules();
   });
 });
