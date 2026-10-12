@@ -165,7 +165,10 @@ export async function resolveBody(
 
   // Handle undici's FormData — multipart size unknown at this layer, pass through
   if (body instanceof UndiciFormData) {
-    return body;
+    // undici's FormData and the global facade diverge across
+    // undici/@types-node majors (File[Symbol.toStringTag]); the instance
+    // IS what undici's request() consumes, so the cast is honest.
+    return body as unknown as FormData;
   }
 
   // Handle global FormData (browser or polyfill)
@@ -173,7 +176,7 @@ export async function resolveBody(
     typeof (globalThis as Record<string, unknown>).FormData !== 'undefined' &&
     body instanceof ((globalThis as Record<string, unknown>).FormData as typeof FormData)
   ) {
-    return globalToUndiciFormData(body as unknown);
+    return globalToUndiciFormData(body as unknown) as unknown as FormData;
   }
 
   // Handle sync iterables with size limit (FIX-006: prevent DoS)
