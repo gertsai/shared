@@ -136,13 +136,16 @@ describe("assertWriteAllowed — fail-closed semantics", () => {
     await expect(assertWriteAllowed(rules, createEval)).rejects.toThrow(
       /protected fields in diff: creator_uuid/,
     );
+    // `status` is deliberately NOT protected on update — Orchestra writes
+    // it through action types (archive/delete/restore); per-action
+    // allowlists regulate it. Audit fields stay protected.
     const updateEval = baseEval({
       action: { type: "card_updated", params: {} },
-      affectedKeys: ["status"],
-      patch: { status: "deleted" },
+      affectedKeys: ["update_version"],
+      patch: { update_version: 99 },
     });
     await expect(assertWriteAllowed(rules, updateEval)).rejects.toThrow(
-      /protected fields in diff: status/,
+      /protected fields in diff: update_version/,
     );
     expect(rules.create).not.toHaveBeenCalled();
   });

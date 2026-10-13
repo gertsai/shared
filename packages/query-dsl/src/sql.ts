@@ -33,8 +33,10 @@ import type { StorageMetadata } from '@gertsai/storage-core';
 import { validateQuery } from './validate';
 import type { Query, QueryConstraint, WhereOp } from './types';
 
-/** Quoted-string SQL identifier matcher — same charset Postgres allows for unquoted identifiers. */
-const IDENT_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+/** Quoted-string SQL identifier matcher — same charset Postgres allows
+ *  for unquoted identifiers, plus ONE dot for `schema.table` qualified
+ *  names (the orchestra schema is addressed that way). */
+const IDENT_RE = /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$/;
 
 /**
  * Output of {@link compileToSql}: a single parameterised SELECT plus the

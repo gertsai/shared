@@ -138,29 +138,38 @@ export function hasRole(
 export function hasRoleWithSource(
   doc: EntityDoc,
   uid: string,
-  role: string,
-  source: string,
+  roles: string | readonly string[],
+  sources: string | readonly string[],
 ): boolean {
+  const wantRoles = asStringArray(roles);
+  const wantSources = asStringArray(sources);
   const observers = doc["observers"];
   if (typeof observers !== "object" || observers === null) return false;
   const rec = (observers as Record<string, unknown>)[uid];
   if (typeof rec !== "object" || rec === null) return false;
   const rolesRaw = (rec as Record<string, unknown>)["roles"];
-  let sources: unknown;
-  if (typeof rolesRaw === "object" && rolesRaw !== null && !Array.isArray(rolesRaw)) {
-    const entry = (rolesRaw as Record<string, unknown>)[role];
-    if (entry === undefined) return false;
-    sources =
-      typeof entry === "object" && entry !== null
+  const hit = (role: string): unknown | undefined => {
+    if (typeof rolesRaw === "object" && rolesRaw !== null && !Array.isArray(rolesRaw)) {
+      const entry = (rolesRaw as Record<string, unknown>)[role];
+      if (entry === undefined) return undefined;
+      return typeof entry === "object" && entry !== null
         ? (entry as Record<string, unknown>)["sources"]
         : undefined;
-  } else {
-    if (!asStringArray(rolesRaw).includes(role)) return false;
-    sources = (rec as Record<string, unknown>)["sources"];
+    }
+    return asStringArray(rolesRaw).includes(role)
+      ? (rec as Record<string, unknown>)["sources"]
+      : undefined;
+  };
+  for (const role of wantRoles) {
+    const src = hit(role);
+    if (src === undefined) continue;
+    const has =
+      typeof src === "object" && src !== null && !Array.isArray(src)
+        ? wantSources.some((s) => s in (src as Record<string, unknown>))
+        : wantSources.some((s) => asStringArray(src).includes(s));
+    if (has) return true;
   }
-  return typeof sources === "object" && sources !== null && !Array.isArray(sources)
-    ? source in (sources as Record<string, unknown>)
-    : asStringArray(sources).includes(source);
+  return false;
 }
 
 /** `hasPrivilegedRole` — owner/member/editor on `doc`. */
