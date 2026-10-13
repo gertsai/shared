@@ -73,15 +73,16 @@ export interface WriteRuleEval {
   readonly patch: Readonly<Record<string, unknown>>;
   /**
    * The stored row before this write (`undefined` on create or missing
-   * doc). Sourced from the transaction snapshot when the write is
-   * tx-routed, else the provider.
+   * doc). Always the COMMITTED state — read via `provider.getDoc`, never
+   * a transaction's local view (own queued writes would leak post-write
+   * state into `resource`).
    */
   readonly resource?: Record<string, unknown>;
 }
 
 /** Rule predicate — `true` allows the write. May be async. */
 export type WriteRulePredicate = (
-  eval_: WriteRuleEval,
+  ctx: WriteRuleEval,
 ) => boolean | Promise<boolean>;
 
 /**
@@ -144,23 +145,21 @@ export class WriteRuleDenied extends Error {
   readonly reason: string;
 
   constructor(
-    eval_: Pick<WriteRuleEval, 'path' | 'id' | 'verb'> & {
+    ctx: Pick<WriteRuleEval, 'path' | 'id' | 'verb'> & {
       actionType?: string | undefined;
     },
     reason: string,
   ) {
     super(
-      `write denied: ${eval_.verb} ${eval_.path}/${eval_.id}` +
-        (eval_.actionType !== undefined
-          ? ` (action=${eval_.actionType})`
-          : '') +
+      `write denied: ${ctx.verb} ${ctx.path}/${ctx.id}` +
+        (ctx.actionType !== undefined ? ` (action=${ctx.actionType})` : '') +
         ` — ${reason}`,
     );
     this.name = 'WriteRuleDenied';
-    this.path = eval_.path;
-    this.id = eval_.id;
-    this.verb = eval_.verb;
-    this.actionType = eval_.actionType;
+    this.path = ctx.path;
+    this.id = ctx.id;
+    this.verb = ctx.verb;
+    this.actionType = ctx.actionType;
     this.reason = reason;
   }
 }
@@ -280,22 +279,22 @@ function resolvePredicate(
  */
 export async function assertWriteAllowed(
   rules: TableWriteRules | undefined,
-  eval_: WriteRuleEval,
+  ctx: WriteRuleEval,
 ): Promise<void> {
   if (rules === undefined) return;
 
   // Guard 1 — protected fields can never ride a caller's diff.
-  if (eval_.verb === 'update' || eval_.verb === 'create') {
+  if (ctx.verb === 'update' || ctx.verb === 'create') {
     const protectedSet =
-      eval_.verb === 'update'
+      ctx.verb === 'update'
         ? PROTECTED_UPDATE_FIELDS
         : PROTECTED_CREATE_FIELDS;
-    const illegal = Object.keys(eval_.patch).filter((k) =>
+    const illegal = Object.keys(ctx.patch).filter((k) =>
       (protectedSet as readonly string[]).includes(k),
     );
     if (illegal.length > 0) {
       throw new WriteRuleDenied(
-        { ...eval_, actionType: eval_.action?.type },
+        { ...ctx, actionType: ctx.action?.type },
         `protected fields in diff: ${illegal.join(', ')}`,
       );
     }
@@ -304,25 +303,25 @@ export async function assertWriteAllowed(
   // Guard 2 — update/delete on a mapped table require update_action
   // (Orchestra `NO_UPDATE_ACTION`). Restore/destroy stamp their own.
   const needsAction =
-    (eval_.verb === 'update' || eval_.verb === 'delete') &&
-    (rules[eval_.verb as 'update' | 'delete'] !== undefined);
-  if (needsAction && eval_.action === undefined) {
+    (ctx.verb === 'update' || ctx.verb === 'delete') &&
+    (rules[ctx.verb as 'update' | 'delete'] !== undefined);
+  if (needsAction && ctx.action === undefined) {
     throw new WriteRuleDenied(
-      { ...eval_, actionType: undefined },
+      { ...ctx, actionType: undefined },
       'update_action required (NO_UPDATE_ACTION)',
     );
   }
 
   let predicate: WriteRulePredicate | undefined;
-  switch (eval_.verb) {
+  switch (ctx.verb) {
     case 'create':
       predicate = rules.create;
       break;
     case 'update':
-      predicate = resolvePredicate(rules.update, eval_.action?.type);
+      predicate = resolvePredicate(rules.update, ctx.action?.type);
       break;
     case 'delete':
-      predicate = resolvePredicate(rules.delete, eval_.action?.type);
+      predicate = resolvePredicate(rules.delete, ctx.action?.type);
       break;
     case 'restore':
       predicate = rules.restore;
@@ -334,17 +333,131 @@ export async function assertWriteAllowed(
 
   if (predicate === undefined) {
     throw new WriteRuleDenied(
-      { ...eval_, actionType: eval_.action?.type },
-      `no rule for verb '${eval_.verb}'` +
-        (eval_.action !== undefined
-          ? ` / action '${eval_.action.type}'`
+      { ...ctx, actionType: ctx.action?.type },
+      `no rule for verb '${ctx.verb}'` +
+        (ctx.action !== undefined ? ` / action '${ctx.action.type}'` : ''),
+    );
+  }
+  if (!(await predicate(ctx))) {
+    throw new WriteRuleDenied(
+      { ...ctx, actionType: ctx.action?.type },
+      'rule predicate returned false' +
+        (ctx.affectedKeys.length > 0
+          ? ` (affected: ${ctx.affectedKeys.join(', ')})`
           : ''),
     );
   }
-  if (!(await predicate(eval_))) {
-    throw new WriteRuleDenied(
-      { ...eval_, actionType: eval_.action?.type },
-      'rule predicate returned false',
-    );
+}
+
+/**
+ * One write queued inside a batch/transaction, recorded for post-`fn`
+ * rule evaluation — the runner's `pending` buffer entry.
+ */
+export interface PendingWrite {
+  readonly verb: WriteVerb;
+  /** Collection path the write targets. */
+  readonly path: string;
+  readonly id: string;
+  /** The caller's pre-stamp field map (`set` body / `update` partial). */
+  readonly patch: Readonly<Record<string, unknown>>;
+  /**
+   * The caller-supplied `update_action`, when given. Lifecycle verbs
+   * omit it — the evaluator supplies the stamped type (`delete`,
+   * `restore`, `create`) so action-keyed rules resolve identically to
+   * the single-document path.
+   */
+  readonly action?: WriteRuleAction;
+}
+
+/** Knobs for {@link assertPendingWrites}. */
+export interface PendingWriteGate {
+  /** Operator session — forwarded to every eval. */
+  readonly session: Session;
+  /** Ruleset lookup by collection path. */
+  readonly rulesFor: (path: string) => TableWriteRules | undefined;
+  /**
+   * Committed-state row reader (`provider.getDoc`). Supplies `resource`
+   * for update/delete/restore evals and the create-existence check.
+   * Omit to evaluate without `resource` (weaker: `affectedKeys` falls
+   * back to full patch keys, params-vs-resource checks degrade).
+   */
+  readonly resource?: (
+    path: string,
+    id: string,
+  ) => Promise<Record<string, unknown> | undefined>;
+  /**
+   * What a write to a path with no registered ruleset does.
+   * `'skip'` (default) preserves the engine's opt-in semantics —
+   * ruleless tables pass. `'deny'` makes the buffer fail-closed —
+   * use for writers scoped to a fixed table set, where an unmapped
+   * path is a typo or an escape attempt.
+   */
+  readonly unmappedPath?: 'skip' | 'deny';
+}
+
+/**
+ * Replay a batch/transaction's queued writes through the write-rules
+ * gate — the deferred-eval counterpart of the per-call
+ * {@link assertWriteAllowed}. Run AFTER the runner's `fn` queues
+ * everything but BEFORE the buffered commit flushes: a denial thrown
+ * here aborts the whole batch atomically (providers apply nothing when
+ * the callback throws).
+ *
+ * Lifecycle defaults: an `update` without `action` hits
+ * `NO_UPDATE_ACTION`; a `delete`/`restore`/`create` without one
+ * evaluates under its stamped lifecycle type — same as the
+ * single-document path.
+ *
+ * Create-existence guard: when `resource` is readable and the target
+ * row already exists, `set` is denied outright — providers treat `set`
+ * as upsert (`INSERT … ON CONFLICT DO UPDATE`), and letting it stand
+ * would both smuggle an update past update-rules and stamp a false
+ * `create` journal entry.
+ */
+export async function assertPendingWrites(
+  pending: readonly PendingWrite[],
+  gate: PendingWriteGate,
+): Promise<void> {
+  for (const w of pending) {
+    const rules = gate.rulesFor(w.path);
+    if (rules === undefined) {
+      if (gate.unmappedPath === 'deny') {
+        throw new WriteRuleDenied(
+          { path: w.path, id: w.id, verb: w.verb },
+          `no ruleset registered for path '${w.path}'`,
+        );
+      }
+      continue;
+    }
+    const resource =
+      gate.resource !== undefined
+        ? ((await gate.resource(w.path, w.id)) ?? undefined)
+        : undefined;
+    if (w.verb === 'create' && resource !== undefined) {
+      throw new WriteRuleDenied(
+        { path: w.path, id: w.id, verb: w.verb },
+        'row already exists — set() is create-only on a governed table; use update()',
+      );
+    }
+    const action =
+      w.action ??
+      (w.verb === 'update'
+        ? undefined
+        : { type: w.verb === 'create' ? 'create' : w.verb, params: {} });
+    await assertWriteAllowed(rules, {
+      verb: w.verb,
+      path: w.path,
+      id: w.id,
+      session: gate.session,
+      ...(action !== undefined ? { action } : {}),
+      affectedKeys:
+        w.verb === 'create'
+          ? Object.keys(w.patch)
+          : w.verb === 'update'
+            ? computeAffectedKeys(w.patch, resource)
+            : [],
+      patch: w.verb === 'create' || w.verb === 'update' ? w.patch : {},
+      ...(resource !== undefined ? { resource } : {}),
+    });
   }
 }

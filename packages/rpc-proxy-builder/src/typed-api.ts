@@ -24,11 +24,26 @@
 
 import type { RpcCallOptions } from './proxy.js';
 
-/** Unwrap a params/response validator to its validated type. */
-type UnwrapValidator<V> = V extends (input: unknown) => infer T
+/**
+ * Unwrap one validator RESULT to the validated type. A typia
+ * `IValidation<T>` is a discriminated union — the `success: true`
+ * member carries `data: T`, the `success: false` member contributes
+ * `never`, so the union collapses to `T`. A plain `(input) => T`
+ * contract falls through unchanged. (A params type that literally IS
+ * `{ success: true; data: T }` would read as an envelope — none of the
+ * contracts here are; the shape is typia's discriminator by design.)
+ */
+type UnwrapResult<R> = R extends { success: true; data: infer T }
   ? T
-  : V extends { validate: (input: unknown) => infer T }
-    ? T
+  : R extends { success: false }
+    ? never
+    : R;
+
+/** Unwrap a params/response validator to its validated type. */
+type UnwrapValidator<V> = V extends (input: unknown) => infer R
+  ? UnwrapResult<R>
+  : V extends { validate: (input: unknown) => infer R }
+    ? UnwrapResult<R>
     : never;
 
 /** Structural action contract — literal path + option validators. */

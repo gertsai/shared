@@ -7,12 +7,6 @@
 // `@gertsai/entity-audit` rather than `@orchlab/core`.
 import { EventEmitter } from 'events';
 
-import {
-  buildDataForDelete,
-  buildDataForRestore,
-  buildDataForSet,
-  buildDataForUpdate,
-} from '@gertsai/entity-audit';
 import type { Session } from '@gertsai/session';
 import type { IDestroyable } from '@gertsai/di';
 
@@ -31,10 +25,20 @@ import type {
   AuditedTxRunner,
 } from './AuditedRunners';
 import {
+  assertPendingWrites,
   assertWriteAllowed,
   computeAffectedKeys,
+  WriteRuleDenied,
+  type PendingWrite,
   type TableWriteRules,
 } from './write-rules';
+import {
+  actionFromOpts,
+  stampCreate,
+  stampDelete,
+  stampRestore,
+  stampUpdate,
+} from './write-stamps';
 
 /**
  * Optional per-method routing knob accepted by `set` / `update` / `delete` /
@@ -251,7 +255,6 @@ export abstract class BaseEntityStorageService<
    */
   private async _readResource(
     uid: string,
-    _opts: MutationRoutingOpts<Meta, UpdateActionTypes>,
   ): Promise<Record<string, unknown> | undefined> {
     const doc = await this._provider.getDoc(this._path, uid);
     return (doc ?? undefined) as Record<string, unknown> | undefined;
@@ -288,6 +291,19 @@ export abstract class BaseEntityStorageService<
     >;
     const id = _uid ?? this._uuidProvider();
     if (this._rules !== undefined) {
+      // Providers treat `set` as upsert (`INSERT … ON CONFLICT DO
+      // UPDATE`) — an existing row here means a create-stamped write
+      // would overwrite a live document, falsify the journal, and
+      // skip every update rule. Governed tables are create-only on
+      // `set`: update goes through `update()` (with `update_action`),
+      // upsert semantics through `upsert()` (create-only as well).
+      const resource = await this._readResource(id);
+      if (resource !== undefined) {
+        throw new WriteRuleDenied(
+          { path: this._path, id, verb: 'create' },
+          'row already exists — set() is create-only on a governed table; use update()',
+        );
+      }
       await assertWriteAllowed(this._rules, {
         verb: 'create',
         path: this._path,
@@ -307,10 +323,7 @@ export abstract class BaseEntityStorageService<
       return opts.transaction.set(entity);
     }
     this._logger.debug('set', { path: this._path, id });
-    const stamped = buildDataForSet(rest as object, this._session, {
-      _uid: id,
-    });
-    const data = stamped as unknown as Meta['write'];
+    const data = stampCreate(rest, this._session, id) as Meta['write'];
     await this._provider.set(this._path, id, data);
     // Wave 12.D-fix FR-021 / EVID-051 L-5 — re-check after await: if
     // `$destroy` ran while the provider write was in-flight, suppress
@@ -345,7 +358,7 @@ export abstract class BaseEntityStorageService<
   ): Promise<void> {
     this._assertAlive();
     if (this._rules !== undefined) {
-      const resource = await this._readResource(uid, opts);
+      const resource = await this._readResource(uid);
       const patch = partial as Record<string, unknown>;
       await assertWriteAllowed(this._rules, {
         verb: 'update',
@@ -383,14 +396,11 @@ export abstract class BaseEntityStorageService<
       return;
     }
     this._logger.debug('update', { path: this._path, id: uid });
-    const stamped = buildDataForUpdate<object, UpdateActionTypes>(
-      partial as Partial<object>,
+    const data = stampUpdate(
+      partial as Record<string, unknown>,
       this._session,
-      opts.action !== undefined
-        ? { action: { type: opts.action, params: opts.params ?? {} } }
-        : {},
-    );
-    const data = stamped as unknown as Partial<Meta['write']>;
+      actionFromOpts(opts.action, opts.params),
+    ) as Partial<Meta['write']>;
     await this._provider.update(this._path, uid, data);
     // Wave 12.D-fix FR-021 — see note in `set()`.
     if (this._destroyed) return;
@@ -415,36 +425,52 @@ export abstract class BaseEntityStorageService<
    */
   async delete(
     uid: string,
-    opts: MutationRoutingOpts<Meta, UpdateActionTypes> = {},
+    opts: {
+      readonly action?: UpdateActionTypes;
+      readonly params?: Readonly<Record<string, unknown>>;
+    } & MutationRoutingOpts<Meta, UpdateActionTypes> = {},
   ): Promise<void> {
     this._assertAlive();
     if (this._rules !== undefined) {
-      const resource = await this._readResource(uid, opts);
+      const resource = await this._readResource(uid);
       await assertWriteAllowed(this._rules, {
         verb: 'delete',
         path: this._path,
         id: uid,
         session: this._session,
-        action: { type: 'delete', params: {} },
+        action: {
+          type: (opts.action ?? 'delete') as string,
+          params: opts.params ?? {},
+        },
         affectedKeys: [],
         patch: {},
         ...(resource !== undefined ? { resource } : {}),
       });
     }
+    const actionOpts =
+      opts.action !== undefined
+        ? {
+            action: opts.action,
+            ...(opts.params !== undefined && { params: opts.params }),
+          }
+        : undefined;
     if (opts.batch) {
       this._logger.debug('delete:batch', { path: this._path, id: uid });
-      opts.batch.delete(uid);
+      opts.batch.delete(uid, actionOpts);
       return;
     }
     if (opts.transaction) {
       this._logger.debug('delete:tx', { path: this._path, id: uid });
-      opts.transaction.delete(uid);
+      opts.transaction.delete(uid, actionOpts);
       return;
     }
     this._logger.debug('delete', { path: this._path, id: uid });
-    const data = buildDataForDelete(this._session) as unknown as Partial<
-      Meta['write']
-    >;
+    const data = stampDelete(
+      this._session,
+      opts.action !== undefined
+        ? { type: opts.action as string, params: opts.params ?? {} }
+        : undefined,
+    ) as Partial<Meta['write']>;
     await this._provider.update(this._path, uid, data);
     // Wave 12.D-fix FR-021 — see note in `set()`.
     if (this._destroyed) return;
@@ -478,7 +504,7 @@ export abstract class BaseEntityStorageService<
   ): Promise<void> {
     this._assertAlive();
     if (this._rules !== undefined) {
-      const resource = await this._readResource(uid, opts);
+      const resource = await this._readResource(uid);
       await assertWriteAllowed(this._rules, {
         verb: 'destroy',
         path: this._path,
@@ -519,7 +545,7 @@ export abstract class BaseEntityStorageService<
   ): Promise<void> {
     this._assertAlive();
     if (this._rules !== undefined) {
-      const resource = await this._readResource(uid, opts);
+      const resource = await this._readResource(uid);
       await assertWriteAllowed(this._rules, {
         verb: 'restore',
         path: this._path,
@@ -542,9 +568,7 @@ export abstract class BaseEntityStorageService<
       return;
     }
     this._logger.debug('restore', { path: this._path, id: uid });
-    const data = buildDataForRestore(this._session) as unknown as Partial<
-      Meta['write']
-    >;
+    const data = stampRestore(this._session) as Partial<Meta['write']>;
     await this._provider.update(this._path, uid, data);
     // Wave 12.D-fix FR-021 — see note in `set()`.
     if (this._destroyed) return;
@@ -630,26 +654,25 @@ export abstract class BaseEntityStorageService<
         )) as Record<string, unknown> | null;
         const existing = resource ?? undefined;
         if (existing !== undefined) {
-          await assertWriteAllowed(this._rules, {
-            verb: 'update',
-            path: this._path,
-            id: _uid,
-            session: this._session,
-            affectedKeys: computeAffectedKeys(rest, existing),
-            patch: rest,
-            resource: existing,
-          });
-        } else {
-          await assertWriteAllowed(this._rules, {
-            verb: 'create',
-            path: this._path,
-            id: _uid,
-            session: this._session,
-            action: { type: 'create', params: {} },
-            affectedKeys: Object.keys(rest),
-            patch: rest,
-          });
+          // The fast path stamps `buildDataForSet` — a `create` journal
+          // — so an honest upsert-update cannot exist here: allowed or
+          // not, the write would falsify the journal and skip
+          // update-rules. Create-only on governed tables; an update
+          // needs `update()` (which carries `update_action`).
+          throw new WriteRuleDenied(
+            { path: this._path, id: _uid, verb: 'update' },
+            'upsert cannot update a governed row — use update() with an update_action',
+          );
         }
+        await assertWriteAllowed(this._rules, {
+          verb: 'create',
+          path: this._path,
+          id: _uid,
+          session: this._session,
+          action: { type: 'create', params: {} },
+          affectedKeys: Object.keys(rest),
+          patch: rest,
+        });
       }
       // Same audit stamping as `set()` — `buildDataForSet` populates BOTH
       // create-time (`creator_uuid`, `created_*`) and modify-time
@@ -657,9 +680,7 @@ export abstract class BaseEntityStorageService<
       // `INSERT ... ON CONFLICT DO UPDATE`, the provider is responsible
       // for excluding `creator_uuid`/`created_*` from the UPDATE SET-list
       // so existing rows preserve their original creator audit.
-      const stamped = buildDataForSet(rest as object, this._session, {
-        _uid,
-      }) as unknown as Meta['write'];
+      const stamped = stampCreate(rest, this._session, _uid) as Meta['write'];
       // Wave 6.5: fast path does NOT emit ENTITY_CREATED / ENTITY_UPDATED
       // because we cannot tell insert from update without a pre-read
       // (which would defeat the 1-RTT optimization). Listeners that need
@@ -677,6 +698,14 @@ export abstract class BaseEntityStorageService<
     // Wave 12.D-fix FR-021 — re-check after await between the two RTTs.
     if (this._destroyed) return { id: entity._uid };
     if (existing) {
+      // Same contract as the 1-RTT path: upsert is create-only on a
+      // governed table — `update()` is the honest way to update.
+      if (this._rules !== undefined) {
+        throw new WriteRuleDenied(
+          { path: this._path, id: entity._uid, verb: 'update' },
+          'upsert cannot update a governed row — use update() with an update_action',
+        );
+      }
       const { _uid, ...rest } = entity as { _uid: string } & Record<
         string,
         unknown
@@ -777,8 +806,16 @@ export abstract class BaseEntityStorageService<
     this._logger.debug('runTransaction:enter', { path: this._path });
     try {
       const result = await this._provider.runTransaction(async (rawTx) => {
-        const audited = this._wrapTxRunner(rawTx);
-        return fn(audited);
+        const pending: PendingWrite[] = [];
+        const audited = this._wrapTxRunner(rawTx, pending);
+        const r = await fn(audited);
+        // Rules gate: every queued write is evaluated AFTER `fn` but
+        // BEFORE the provider commits — a denial aborts the transaction
+        // atomically. `resource` reads hit the committed state via the
+        // provider, never `rawTx.get` (the tx's local view already
+        // contains own queued writes — post-write, not `resource`).
+        await this._assertPending(pending);
+        return r;
       });
       this._logger.debug('runTransaction:exit', { path: this._path });
       return result;
@@ -806,8 +843,12 @@ export abstract class BaseEntityStorageService<
     this._logger.debug('runBatch:enter', { path: this._path });
     try {
       const result = await this._provider.runBatch(async (rawBatch) => {
-        const audited = this._wrapBatchRunner(rawBatch);
-        return fn(audited);
+        const pending: PendingWrite[] = [];
+        const audited = this._wrapBatchRunner(rawBatch, pending);
+        const r = await fn(audited);
+        // Same gate as runTransaction — denial aborts the whole batch.
+        await this._assertPending(pending);
+        return r;
       });
       this._logger.debug('runBatch:exit', { path: this._path });
       return result;
@@ -820,8 +861,35 @@ export abstract class BaseEntityStorageService<
     }
   }
 
+  /**
+   * Post-`fn` rules gate for the audited runners: replays every queued
+   * write through {@link assertPendingWrites} against this service's
+   * ruleset. No-op when the collection is ungoverned.
+   */
+  private async _assertPending(
+    pending: readonly PendingWrite[],
+  ): Promise<void> {
+    if (this._rules === undefined) return;
+    const rules = this._rules;
+    await assertPendingWrites(pending, {
+      session: this._session,
+      rulesFor: () => rules,
+      resource: async (_path, id) =>
+        ((await this._provider.getDoc(this._path, id)) ?? undefined) as
+          | Record<string, unknown>
+          | undefined,
+    });
+  }
+
+  /**
+   * Audit-stamped tx runner — every write stamps via `write-stamps`
+   * AND records a {@link PendingWrite} for the post-`fn` rules gate.
+   * `delete` is soft: it queues an audit-stamped `update`, never a raw
+   * row removal.
+   */
   private _wrapTxRunner(
     rawTx: ITransactionRunner<Meta>,
+    pending: PendingWrite[],
   ): AuditedTxRunner<Meta, UpdateActionTypes> {
     return {
       get: (uid): Promise<Meta['read'] | null> =>
@@ -832,65 +900,61 @@ export abstract class BaseEntityStorageService<
           unknown
         >;
         const id = _uid ?? this._uuidProvider();
-        const stamped = buildDataForSet(rest as object, this._session, {
-          _uid: id,
-        });
-        rawTx.set(this._path, id, stamped as unknown as Meta['write']);
+        pending.push({ verb: 'create', path: this._path, id, patch: rest });
+        rawTx.set(
+          this._path,
+          id,
+          stampCreate(rest, this._session, id) as Meta['write'],
+        );
         return { id };
       },
       update: (uid, partial, opts = {}): void => {
-        const stamped = buildDataForUpdate<object, UpdateActionTypes>(
-          partial as Partial<object>,
-          this._session,
-          opts.action !== undefined
-            ? { action: { type: opts.action, params: opts.params ?? {} } }
-            : {},
-        );
+        const action = actionFromOpts(opts.action, opts.params);
+        pending.push({
+          verb: 'update',
+          path: this._path,
+          id: uid,
+          patch: partial as Record<string, unknown>,
+          ...(action !== undefined ? { action } : {}),
+        });
         rawTx.update(
           this._path,
           uid,
-          stamped as unknown as Partial<Meta['write']>,
+          stampUpdate(partial as Record<string, unknown>, this._session, action) as Partial<
+            Meta['write']
+          >,
         );
       },
       delete: (uid, opts): void => {
-        const deleteMarks = buildDataForDelete(this._session);
-        // Soft-delete: queue `update`, NOT `delete`. When caller passes
-        // an `action`, append it to the canonical `delete` audit entry.
-        if (opts?.action !== undefined) {
-          const withAction = {
-            ...deleteMarks,
-            update_action: {
-              type: opts.action,
-              params: opts.params ?? {},
-              timestamp: deleteMarks.update_action.timestamp,
-            },
-          };
-          rawTx.update(
-            this._path,
-            uid,
-            withAction as unknown as Partial<Meta['write']>,
-          );
-          return;
-        }
+        const action = actionFromOpts(opts?.action, opts?.params);
+        pending.push({
+          verb: 'delete',
+          path: this._path,
+          id: uid,
+          patch: {},
+          ...(action !== undefined ? { action } : {}),
+        });
         rawTx.update(
           this._path,
           uid,
-          deleteMarks as unknown as Partial<Meta['write']>,
+          stampDelete(this._session, action) as Partial<Meta['write']>,
         );
       },
       restore: (uid): void => {
-        const stamped = buildDataForRestore(this._session);
+        pending.push({ verb: 'restore', path: this._path, id: uid, patch: {} });
         rawTx.update(
           this._path,
           uid,
-          stamped as unknown as Partial<Meta['write']>,
+          stampRestore(this._session) as Partial<Meta['write']>,
         );
       },
     };
   }
 
+  /** Batch counterpart of {@link _wrapTxRunner} — same stamping + gate. */
   private _wrapBatchRunner(
     rawBatch: IBatchRunner<Meta>,
+    pending: PendingWrite[],
   ): AuditedBatchRunner<Meta, UpdateActionTypes> {
     return {
       set: (input): { id: string } => {
@@ -899,56 +963,52 @@ export abstract class BaseEntityStorageService<
           unknown
         >;
         const id = _uid ?? this._uuidProvider();
-        const stamped = buildDataForSet(rest as object, this._session, {
-          _uid: id,
-        });
-        rawBatch.set(this._path, id, stamped as unknown as Meta['write']);
+        pending.push({ verb: 'create', path: this._path, id, patch: rest });
+        rawBatch.set(
+          this._path,
+          id,
+          stampCreate(rest, this._session, id) as Meta['write'],
+        );
         return { id };
       },
       update: (uid, partial, opts = {}): void => {
-        const stamped = buildDataForUpdate<object, UpdateActionTypes>(
-          partial as Partial<object>,
-          this._session,
-          opts.action !== undefined
-            ? { action: { type: opts.action, params: opts.params ?? {} } }
-            : {},
-        );
+        const action = actionFromOpts(opts.action, opts.params);
+        pending.push({
+          verb: 'update',
+          path: this._path,
+          id: uid,
+          patch: partial as Record<string, unknown>,
+          ...(action !== undefined ? { action } : {}),
+        });
         rawBatch.update(
           this._path,
           uid,
-          stamped as unknown as Partial<Meta['write']>,
+          stampUpdate(partial as Record<string, unknown>, this._session, action) as Partial<
+            Meta['write']
+          >,
         );
       },
       delete: (uid, opts): void => {
-        const deleteMarks = buildDataForDelete(this._session);
-        if (opts?.action !== undefined) {
-          const withAction = {
-            ...deleteMarks,
-            update_action: {
-              type: opts.action,
-              params: opts.params ?? {},
-              timestamp: deleteMarks.update_action.timestamp,
-            },
-          };
-          rawBatch.update(
-            this._path,
-            uid,
-            withAction as unknown as Partial<Meta['write']>,
-          );
-          return;
-        }
+        const action = actionFromOpts(opts?.action, opts?.params);
+        pending.push({
+          verb: 'delete',
+          path: this._path,
+          id: uid,
+          patch: {},
+          ...(action !== undefined ? { action } : {}),
+        });
         rawBatch.update(
           this._path,
           uid,
-          deleteMarks as unknown as Partial<Meta['write']>,
+          stampDelete(this._session, action) as Partial<Meta['write']>,
         );
       },
       restore: (uid): void => {
-        const stamped = buildDataForRestore(this._session);
+        pending.push({ verb: 'restore', path: this._path, id: uid, patch: {} });
         rawBatch.update(
           this._path,
           uid,
-          stamped as unknown as Partial<Meta['write']>,
+          stampRestore(this._session) as Partial<Meta['write']>,
         );
       },
     };
