@@ -30,6 +30,11 @@ import type {
   AuditedBatchRunner,
   AuditedTxRunner,
 } from './AuditedRunners';
+import {
+  assertWriteAllowed,
+  computeAffectedKeys,
+  type TableWriteRules,
+} from './write-rules';
 
 /**
  * Optional per-method routing knob accepted by `set` / `update` / `delete` /
@@ -91,6 +96,15 @@ export interface BaseEntityStorageServiceOpts<Meta extends StorageMetadata> {
    * emitted log entries.
    */
   readonly logger?: StorageLogger;
+  /**
+   * Orchestra `firestore.rules`-parity write rules for this collection
+   * (RFC-024 gap 5). When set, every `set`/`update`/`delete`/`restore`/
+   * `upsert`/`destroy` is evaluated by {@link assertWriteAllowed}
+   * BEFORE stamping/routing — a table with a ruleset fails closed on
+   * unlisted verbs, unknown `update_action` types, and protected-field
+   * diffs regardless of which use-case issued the write.
+   */
+  readonly rules?: TableWriteRules | undefined;
 }
 
 /**
@@ -200,6 +214,7 @@ export abstract class BaseEntityStorageService<
   protected readonly _path: string;
   protected readonly _uuidProvider: () => string;
   protected readonly _logger: StorageLogger;
+  protected readonly _rules: TableWriteRules | undefined;
   protected readonly _listenerDisposers = new Set<() => void>();
   protected _destroyed = false;
 
@@ -208,6 +223,7 @@ export abstract class BaseEntityStorageService<
     this._provider = opts.provider;
     this._session = opts.session;
     this._path = opts.path ?? '';
+    this._rules = opts.rules;
     this._logger = opts.logger ?? noopStorageLogger;
     this._uuidProvider =
       opts.uuidProvider ??
@@ -225,6 +241,20 @@ export abstract class BaseEntityStorageService<
   /** Provider capabilities (passthrough for consumer decision logic). */
   get capabilities(): IStorageProvider<Meta>['capabilities'] {
     return this._provider.capabilities;
+  }
+
+  /**
+   * Read the stored row for a rules evaluation — Orchestra's `resource`
+   * is the COMMITTED row, so this always goes to the provider even when
+   * the write is tx-routed (`tx.get` would return the tx's local view —
+   * own queued writes included — i.e. post-write state, not `resource`).
+   */
+  private async _readResource(
+    uid: string,
+    _opts: MutationRoutingOpts<Meta, UpdateActionTypes>,
+  ): Promise<Record<string, unknown> | undefined> {
+    const doc = await this._provider.getDoc(this._path, uid);
+    return (doc ?? undefined) as Record<string, unknown> | undefined;
   }
 
   /** Collection path bound at construction time. */
@@ -252,6 +282,22 @@ export abstract class BaseEntityStorageService<
     opts: MutationRoutingOpts<Meta, UpdateActionTypes> = {},
   ): Promise<{ id: string }> {
     this._assertAlive();
+    const { _uid, ...rest } = entity as { _uid?: string } & Record<
+      string,
+      unknown
+    >;
+    const id = _uid ?? this._uuidProvider();
+    if (this._rules !== undefined) {
+      await assertWriteAllowed(this._rules, {
+        verb: 'create',
+        path: this._path,
+        id,
+        session: this._session,
+        action: { type: 'create', params: {} },
+        affectedKeys: Object.keys(rest),
+        patch: rest,
+      });
+    }
     if (opts.batch) {
       this._logger.debug('set:batch', { path: this._path });
       return opts.batch.set(entity);
@@ -260,11 +306,6 @@ export abstract class BaseEntityStorageService<
       this._logger.debug('set:tx', { path: this._path });
       return opts.transaction.set(entity);
     }
-    const { _uid, ...rest } = entity as { _uid?: string } & Record<
-      string,
-      unknown
-    >;
-    const id = _uid ?? this._uuidProvider();
     this._logger.debug('set', { path: this._path, id });
     const stamped = buildDataForSet(rest as object, this._session, {
       _uid: id,
@@ -303,6 +344,27 @@ export abstract class BaseEntityStorageService<
     } & MutationRoutingOpts<Meta, UpdateActionTypes> = {},
   ): Promise<void> {
     this._assertAlive();
+    if (this._rules !== undefined) {
+      const resource = await this._readResource(uid, opts);
+      const patch = partial as Record<string, unknown>;
+      await assertWriteAllowed(this._rules, {
+        verb: 'update',
+        path: this._path,
+        id: uid,
+        session: this._session,
+        ...(opts.action !== undefined
+          ? {
+              action: {
+                type: opts.action as string,
+                params: opts.params ?? {},
+              },
+            }
+          : {}),
+        affectedKeys: computeAffectedKeys(patch, resource),
+        patch,
+        ...(resource !== undefined ? { resource } : {}),
+      });
+    }
     const actionOpts =
       opts.action !== undefined
         ? {
@@ -356,6 +418,19 @@ export abstract class BaseEntityStorageService<
     opts: MutationRoutingOpts<Meta, UpdateActionTypes> = {},
   ): Promise<void> {
     this._assertAlive();
+    if (this._rules !== undefined) {
+      const resource = await this._readResource(uid, opts);
+      await assertWriteAllowed(this._rules, {
+        verb: 'delete',
+        path: this._path,
+        id: uid,
+        session: this._session,
+        action: { type: 'delete', params: {} },
+        affectedKeys: [],
+        patch: {},
+        ...(resource !== undefined ? { resource } : {}),
+      });
+    }
     if (opts.batch) {
       this._logger.debug('delete:batch', { path: this._path, id: uid });
       opts.batch.delete(uid);
@@ -402,6 +477,18 @@ export abstract class BaseEntityStorageService<
     opts: MutationRoutingOpts<Meta, UpdateActionTypes> = {},
   ): Promise<void> {
     this._assertAlive();
+    if (this._rules !== undefined) {
+      const resource = await this._readResource(uid, opts);
+      await assertWriteAllowed(this._rules, {
+        verb: 'destroy',
+        path: this._path,
+        id: uid,
+        session: this._session,
+        affectedKeys: [],
+        patch: {},
+        ...(resource !== undefined ? { resource } : {}),
+      });
+    }
     if (opts.batch || opts.transaction) {
       throw new Error(
         'destroy via batch/transaction not supported — drop down to provider.runBatch / provider.runTransaction and call the raw runner.delete()',
@@ -431,6 +518,19 @@ export abstract class BaseEntityStorageService<
     opts: MutationRoutingOpts<Meta, UpdateActionTypes> = {},
   ): Promise<void> {
     this._assertAlive();
+    if (this._rules !== undefined) {
+      const resource = await this._readResource(uid, opts);
+      await assertWriteAllowed(this._rules, {
+        verb: 'restore',
+        path: this._path,
+        id: uid,
+        session: this._session,
+        action: { type: 'restore', params: {} },
+        affectedKeys: [],
+        patch: {},
+        ...(resource !== undefined ? { resource } : {}),
+      });
+    }
     if (opts.batch) {
       this._logger.debug('restore:batch', { path: this._path, id: uid });
       opts.batch.restore(uid);
@@ -519,6 +619,38 @@ export abstract class BaseEntityStorageService<
         string,
         unknown
       >;
+      // Write-rules on the 1-RTT path cost the read back — fail-closed
+      // trumps round-trips: a rules-governed table cannot let
+      // INSERT...ON CONFLICT smuggle a create-vs-update verdict the
+      // ruleset never saw.
+      if (this._rules !== undefined) {
+        const resource = (await this._provider.getDoc(
+          this._path,
+          _uid,
+        )) as Record<string, unknown> | null;
+        const existing = resource ?? undefined;
+        if (existing !== undefined) {
+          await assertWriteAllowed(this._rules, {
+            verb: 'update',
+            path: this._path,
+            id: _uid,
+            session: this._session,
+            affectedKeys: computeAffectedKeys(rest, existing),
+            patch: rest,
+            resource: existing,
+          });
+        } else {
+          await assertWriteAllowed(this._rules, {
+            verb: 'create',
+            path: this._path,
+            id: _uid,
+            session: this._session,
+            action: { type: 'create', params: {} },
+            affectedKeys: Object.keys(rest),
+            patch: rest,
+          });
+        }
+      }
       // Same audit stamping as `set()` — `buildDataForSet` populates BOTH
       // create-time (`creator_uuid`, `created_*`) and modify-time
       // (`last_modified_*`) fields. For SQL providers using

@@ -1,0 +1,61 @@
+{
+  "name": "@gertsai/entity-queries",
+  "version": "0.1.0",
+  "description": "Validated entity read-path — loadOne/loadPage/loadUids with guard hook, safe-query policy (op/field whitelist, pinned scope, limit cap), soft-delete lifecycle predicate and server-field stripping. Backend-agnostic over IStorageProvider. Per RFC-024 (Fluxis merge).",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://npm.pkg.github.com"
+  },
+  "scripts": {
+    "build": "tsup",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo *.tsbuildinfo",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0"
+  },
+  "peerDependencies": {
+    "@gertsai/query-dsl": "workspace:^",
+    "@gertsai/storage-core": "workspace:^"
+  },
+  "devDependencies": {
+    "@gertsai/query-dsl": "workspace:*",
+    "@gertsai/storage-core": "workspace:*",
+    "vitest": "^3.0.0"
+  },
+  "keywords": [
+    "entity",
+    "queries",
+    "storage",
+    "authorization",
+    "projection",
+    "soft-delete",
+    "gerts",
+    "gertsai"
+  ],
+  "author": "gerts.ai"
+}

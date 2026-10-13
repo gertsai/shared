@@ -27,6 +27,29 @@ export type {
 
 export { InMemoryStorageProvider } from './InMemoryStorageProvider';
 
+export {
+  allowFields,
+  allowWrite,
+  assertWriteAllowed,
+  collectTableRules,
+  computeAffectedKeys,
+  defineTableRules,
+  denyWrite,
+  PROTECTED_AUDIT_FIELDS,
+  PROTECTED_CREATE_FIELDS,
+  PROTECTED_UPDATE_FIELDS,
+  WriteRuleDenied,
+} from './write-rules';
+export type {
+  ActionRules,
+  TableWriteRules,
+  WriteRuleAction,
+  WriteRuleEval,
+  WriteRulePredicate,
+  WriteRules,
+  WriteVerb,
+} from './write-rules';
+
 export { STORAGE_EVENTS } from './STORAGE_EVENTS';
 export type { StorageEventName } from './STORAGE_EVENTS';
 
