@@ -45,6 +45,23 @@ export interface WriteRuleAction {
   readonly params: Readonly<Record<string, unknown>>;
 }
 
+/**
+ * Committed-state document reader — the port of Firestore rules `get(path)`.
+ * The `path` argument is opaque to this package: hierarchical collection
+ * paths (`Workspaces/{s}/Space_Members`) and flattened table names both
+ * work — the gate's `resource` callback owns resolution.
+ *
+ * Semantics follow the Firestore contract exactly: the reader observes
+ * COMMITTED state only — writes queued in the same batch/transaction are
+ * invisible (use {@link WriteRuleEval.getAfter} for post-transaction
+ * state). A `get` result never changes between two calls inside one
+ * evaluation, so readers are memoized per gate invocation.
+ */
+export type RuleDocReader = (
+  path: string,
+  id: string,
+) => Promise<Record<string, unknown> | undefined>;
+
 /** Everything a predicate may inspect for one write. */
 export interface WriteRuleEval {
   /** Storage verb — `create` covers `set`; `destroy` is hard-delete. */
@@ -87,6 +104,37 @@ export interface WriteRuleEval {
    * re-enforces the same condition atomically at write time.
    */
   readonly expectedVersion?: number;
+  /**
+   * `request.time` port — the server-side stamp for this evaluation.
+   * One value per gate invocation (`assertPendingWrites` stamps it once
+   * for the whole batch, matching Firestore's per-request semantics).
+   * Predicates use it for expiry checks (`invites.expire_at > now`) and
+   * `update_action.timestamp` equality. Defaults to the wall clock when
+   * the caller didn't supply one.
+   */
+  readonly now?: Date;
+  /**
+   * `request.auth.token` port — decoded JWT claims attached to the
+   * operator session (`admin`, tenant flags, ...). Empty object when the
+   * caller carried none; predicates must treat absence as "no claims"
+   * (fail-closed).
+   */
+  readonly claims?: Readonly<Record<string, unknown>>;
+  /**
+   * `get(path)` port — committed read of an arbitrary document (the
+   * `getChat(space_uid)`/`getMember(space)` pattern Orchestra rules use
+   * for cross-document authorization). Undefined when the gate was built
+   * without a resource reader; predicates needing it deny.
+   */
+  readonly get?: RuleDocReader;
+  /**
+   * `getAfter(path)` port — the document as it will exist after every
+   * pending write in this batch applies (committed state folded with
+   * queued creates/updates/deletes, in order). Used by rules that assert
+   * post-transaction invariants on sibling documents. Undefined when no
+   * batch reader is wired; predicates needing it deny.
+   */
+  readonly getAfter?: RuleDocReader;
 }
 
 /** Rule predicate — `true` allows the write. May be async. */
@@ -326,6 +374,11 @@ export async function assertWriteAllowed(
   onDenied?: WriteDenialObserver,
 ): Promise<void> {
   if (rules === undefined) return;
+  // `request.time` parity — the stamp defaults to the wall clock so a
+  // standalone caller never hands predicates an undefined `now`.
+  if (ctx.now === undefined) {
+    ctx = { ...ctx, now: new Date() };
+  }
 
   // Guard 1 — protected fields can never ride a caller's diff.
   if (ctx.verb === "update" || ctx.verb === "create") {
@@ -454,14 +507,26 @@ export interface PendingWriteGate {
   readonly rulesFor: (path: string) => TableWriteRules | undefined;
   /**
    * Committed-state row reader (`provider.getDoc`). Supplies `resource`
-   * for update/delete/restore evals and the create-existence check.
+   * for update/delete/restore evals and the create-existence check —
+   * and backs `ctx.get`/`ctx.getAfter` for cross-document rules.
    * Omit to evaluate without `resource` (weaker: `affectedKeys` falls
-   * back to full patch keys, params-vs-resource checks degrade).
+   * back to full patch keys, params-vs-resource checks degrade, and
+   * rules needing `get`/`getAfter` deny).
    */
   readonly resource?: (
     path: string,
     id: string,
   ) => Promise<Record<string, unknown> | undefined>;
+  /**
+   * `request.auth.token` claims forwarded to every eval (`admin`, ...).
+   * One gate invocation = one caller = one claims set.
+   */
+  readonly claims?: Readonly<Record<string, unknown>>;
+  /**
+   * `request.time` — stamped once and shared across every eval in this
+   * batch. Defaults to `new Date()` at gate entry.
+   */
+  readonly now?: Date;
   /**
    * What a write to a path with no registered ruleset does.
    * `'skip'` (default) preserves the engine's opt-in semantics —
@@ -525,6 +590,73 @@ export async function assertPendingWrites(
       }),
     );
   }
+
+  // `get(path)` — committed reads, memoized into the prefetch map so
+  // repeated lookups and the write-target prefetch share one cache. A
+  // doc queued in this batch but never prefetched (ungoverned path)
+  // still resolves through the live reader.
+  const batchNow = gate.now ?? new Date();
+  const get: RuleDocReader | undefined =
+    gate.resource === undefined
+      ? undefined
+      : async (path, id) => {
+          const key = resKey(path, id);
+          if (!resources.has(key)) {
+            resources.set(key, (await gate.resource!(path, id)) ?? undefined);
+          }
+          return resources.get(key);
+        };
+
+  // `getAfter(path)` — post-transaction view. Computed lazily per key:
+  // start from committed state, then fold that key's pending writes in
+  // order (create replaces, update merges, delete/destroy removes,
+  // restore clears the deleted_* markers). Docs the batch doesn't touch
+  // resolve to committed state through `get`.
+  let getAfter: RuleDocReader | undefined;
+  if (get !== undefined) {
+    const committedGet = get;
+    const pendingByKey = new Map<string, PendingWrite[]>();
+    for (const w of pending) {
+      const key = resKey(w.path, w.id);
+      const list = pendingByKey.get(key);
+      if (list === undefined) pendingByKey.set(key, [w]);
+      else list.push(w);
+    }
+    const postCache = new Map<string, Record<string, unknown> | undefined>();
+    getAfter = async (path, id) => {
+      const key = resKey(path, id);
+      if (postCache.has(key)) return postCache.get(key);
+      let cur = await committedGet(path, id);
+      for (const w of pendingByKey.get(key) ?? []) {
+        switch (w.verb) {
+          case "create":
+            cur = { ...w.patch };
+            break;
+          case "update":
+            cur = cur === undefined ? undefined : { ...cur, ...w.patch };
+            break;
+          case "delete":
+          case "destroy":
+            cur = undefined;
+            break;
+          case "restore":
+            cur =
+              cur === undefined
+                ? undefined
+                : {
+                    ...cur,
+                    deleted_at: undefined,
+                    deleted_by_uuid: undefined,
+                    deleted_by_platform: undefined,
+                  };
+            break;
+        }
+      }
+      postCache.set(key, cur);
+      return cur;
+    };
+  }
+
   for (const w of pending) {
     const rules = gate.rulesFor(w.path);
     if (rules === undefined) {
@@ -559,6 +691,10 @@ export async function assertPendingWrites(
         path: w.path,
         id: w.id,
         session: gate.session,
+        now: batchNow,
+        claims: gate.claims ?? {},
+        ...(get !== undefined ? { get } : {}),
+        ...(getAfter !== undefined ? { getAfter } : {}),
         ...(action !== undefined ? { action } : {}),
         affectedKeys:
           w.verb === "create"

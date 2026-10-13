@@ -45,6 +45,7 @@ export type {
   ActionRules,
   PendingWrite,
   PendingWriteGate,
+  RuleDocReader,
   TableWriteRules,
   WriteDenialObserver,
   WriteRuleAction,
@@ -53,6 +54,26 @@ export type {
   WriteRules,
   WriteVerb,
 } from './write-rules';
+
+export {
+  callerHasRole,
+  callerHasRoleAfter,
+  callerHasRoleIn,
+  callerIsObserver,
+  GUEST_ROLES,
+  hasGuestRole,
+  hasPrivilegedRole,
+  hasRole,
+  hasRoleWithSource,
+  isAdmin,
+  isObserver,
+  isSignedIn,
+  notExpired,
+  PRIVILEGED_ROLES,
+  rolesOf,
+  sourcesOf,
+} from './rules-helpers';
+export type { EntityDoc } from './rules-helpers';
 
 export {
   actionFromOpts,
