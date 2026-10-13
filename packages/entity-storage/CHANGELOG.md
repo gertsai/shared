@@ -1,5 +1,43 @@
 # @gertsai/entity-storage
 
+## 7.0.0
+
+### Minor Changes
+
+- c8a19b9: Optimistic concurrency (`update_version`/ETag) + gate-denial observability:
+
+  - `storage-core`: `VersionConflictError` — the caller-visible 409-class error carrying `{path, id, expected, actual}`; distinct from `TransactionConflictError` (engine-level serialization) and `WriteRuleDenied` (authorization).
+  - `storage-core`: `WriteConcurrencyOpts` — `update()` on `IStorageProvider`, `IBatchRunner`, and `ITransactionRunner` accept an optional `expectedVersion` precondition.
+  - `entity-storage`: create stamping seeds `update_version: 1`; every stamped update/delete carries the version bump and the CAS precondition through to the provider, which owns the atomic increment.
+  - `entity-storage`: `assertWriteAllowed`/`assertPendingWrites` evaluate `expectedVersion` against committed state — a stale ETag fails semantically at the gate AND atomically at the write (`WHERE update_version = $n`), closing the read→write race.
+  - `entity-storage`: `WriteDenialObserver` + `onDenied` gate option — every denial (`WriteRuleDenied` or `VersionConflictError`) is reported once with `{path, verb, actionType}` context for metrics; observer failures are swallowed (fire-and-forget, instrumentation can never break the gate).
+  - `entity-storage`: `update_version` joins the protected-field set — callers cannot stamp or smuggle it; the provider owns the counter.
+
+- f6fcc92: RFC-024 shared tier (Fluxis merge groundwork, Orchestra parity):
+
+  - `entity-queries` (new): validated read-path over `IStorageProvider` — guard → sanitizeConstraints (allowedOps/allowedFields/maxLimit) → pinnedFields → lifecycle filter → stripFields; `loadOne`/`loadPage`/`loadUids`/`loadCount` + `getLive`/`listLive`.
+  - `entity-storage`: write-rules engine — `TableWriteRules` (verb + `update_action.type` → predicate), fail-closed `assertWriteAllowed`, protected audit/lifecycle fields, `computeAffectedKeys`, `allowFields`; `BaseEntityStorageService.opts.rules` evaluates before stamping/routing, `resource` = committed row.
+  - `rpc-proxy-builder`: `createTypedApi` — structural `ActionContract` union → nested typed call surface via recursive Proxy; `invokeTransport`/`restTransport` adapters, `RestError`.
+  - `entity`: `node:crypto` → `globalThis.crypto.randomUUID()` (browser bundlers).
+  - `entity-react`: bundler-safe React resolution — public `setUseSyncExternalStore()` + `process.getBuiltinModule` Node path (was static `node:module` import breaking Vite).
+  - `fetch`: undici FormData facade casts — undici@7 `buffer.File` vs undici-types@6 `File[Symbol.toStringTag]` divergence unblocked repo typecheck.
+
+- dfefde7: Write-rules deferred gate + storage hardening (Fluxis RFC-024 follow-up):
+
+  - `entity-storage`: `assertPendingWrites` — deferred-eval gate that replays a runner's queued `PendingWrite[]` through the ruleset before the buffered commit flushes; `runBatch`/`runTransaction` now evaluate rules on every queued write (was: stamped but ungated).
+  - `entity-storage`: `set()`/`upsert()` are create-only on governed tables — writing over an existing row is denied instead of smuggling an update past update-rules with a false `create` journal.
+  - `entity-storage`: `delete()` accepts `{ action, params }` — action-keyed delete rules receive the journal just like updates.
+  - `entity-storage`: `write-stamps` helpers (`stampCreate`/`stampUpdate`/`stampDelete`/`stampRestore`/`actionFromOpts`) — single stamping point for service and runner paths.
+  - `entity-storage`: `InMemoryStorageProvider` returns cloned rows on reads/snapshots (mutating a returned doc no longer corrupts the store) and `update` on a missing row is a no-op, matching PostgreSQL `UPDATE ... WHERE` semantics.
+  - `rpc-proxy-builder`: `UnwrapValidator` unwraps typia `IValidation<T>` envelopes (`{ success: true, data: T }`) in addition to callable and `.validate()` shapes.
+
+### Patch Changes
+
+- Updated dependencies [c8a19b9]
+- Updated dependencies [f6fcc92]
+  - @gertsai/storage-core@2.1.0
+  - @gertsai/entity@1.2.1
+
 ## 6.0.0
 
 ### Patch Changes
