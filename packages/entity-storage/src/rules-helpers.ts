@@ -50,9 +50,13 @@ function asStringArray(v: unknown): readonly string[] {
 }
 
 /**
- * The `observers[uid]` record — `{roles, sources}` in the current model.
- * Legacy docs may carry a bare `true`/number; normalize to empty lists
- * (presence alone still proves observer-ship).
+ * The `observers[uid]` record. Two shapes exist in Orchestra data:
+ * current docs carry `roles` as a MAP — `{member: {sources: {...}},
+ * editor: {sources: {...}}}` — where each role's `sources` is itself a
+ * map (or array) of provenance ids; older/leaner docs carry
+ * `roles: string[]`. A bare `true`/number means "observer, no roles".
+ * Normalized to flat string lists; `sources` unions per-role sources
+ * with any top-level `sources` list.
  */
 function observerRecord(
   doc: EntityDoc,
@@ -64,10 +68,27 @@ function observerRecord(
   if (rec === undefined) return undefined;
   if (typeof rec !== "object" || rec === null) return { roles: [], sources: [] };
   const r = rec as Record<string, unknown>;
-  return {
-    roles: asStringArray(r["roles"]),
-    sources: asStringArray(r["sources"]),
-  };
+  const rolesRaw = r["roles"];
+  const roles: string[] = [];
+  const sources = [...asStringArray(r["sources"])];
+  if (Array.isArray(rolesRaw)) {
+    roles.push(...asStringArray(rolesRaw));
+  } else if (typeof rolesRaw === "object" && rolesRaw !== null) {
+    for (const [role, entry] of Object.entries(
+      rolesRaw as Record<string, unknown>,
+    )) {
+      roles.push(role);
+      if (typeof entry === "object" && entry !== null) {
+        const s = (entry as Record<string, unknown>)["sources"];
+        sources.push(
+          ...(typeof s === "object" && s !== null && !Array.isArray(s)
+            ? Object.keys(s as Record<string, unknown>)
+            : asStringArray(s)),
+        );
+      }
+    }
+  }
+  return { roles, sources: [...new Set(sources)] };
 }
 
 /** `roles` list for `uid` on `doc` — `observers[uid].roles`. */
@@ -110,21 +131,36 @@ export function hasRole(
 }
 
 /**
- * `hasRoleWithSource` — `uid` holds one of `roles` AND at least one of
- * `sources` on the same observer record.
+ * `hasRoleWithSource` — exact port of the rules helper: `uid` holds
+ * `role` AND `role`'s per-role `sources` contain `source`
+ * (`source_uid in docData.observers[uuid].roles[role].sources`).
  */
 export function hasRoleWithSource(
   doc: EntityDoc,
   uid: string,
-  roles: readonly string[],
-  sources: readonly string[],
+  role: string,
+  source: string,
 ): boolean {
-  const rec = observerRecord(doc, uid);
-  if (rec === undefined) return false;
-  return (
-    roles.some((r) => rec.roles.includes(r)) &&
-    sources.some((s) => rec.sources.includes(s))
-  );
+  const observers = doc["observers"];
+  if (typeof observers !== "object" || observers === null) return false;
+  const rec = (observers as Record<string, unknown>)[uid];
+  if (typeof rec !== "object" || rec === null) return false;
+  const rolesRaw = (rec as Record<string, unknown>)["roles"];
+  let sources: unknown;
+  if (typeof rolesRaw === "object" && rolesRaw !== null && !Array.isArray(rolesRaw)) {
+    const entry = (rolesRaw as Record<string, unknown>)[role];
+    if (entry === undefined) return false;
+    sources =
+      typeof entry === "object" && entry !== null
+        ? (entry as Record<string, unknown>)["sources"]
+        : undefined;
+  } else {
+    if (!asStringArray(rolesRaw).includes(role)) return false;
+    sources = (rec as Record<string, unknown>)["sources"];
+  }
+  return typeof sources === "object" && sources !== null && !Array.isArray(sources)
+    ? source in (sources as Record<string, unknown>)
+    : asStringArray(sources).includes(source);
 }
 
 /** `hasPrivilegedRole` — owner/member/editor on `doc`. */
@@ -236,4 +272,197 @@ function toMillis(v: unknown): number | undefined {
     if (typeof s === "number") return s * 1000;
   }
   return undefined;
+}
+
+// ─── Combinators + identity fragments ────────────────────────────────────────
+
+/** OR over predicates — the `||` chain in every Orchestra check body. */
+export function anyOf(...preds: readonly WriteRulePredicate[]): WriteRulePredicate {
+  return async (ctx) => {
+    for (const p of preds) if (await p(ctx)) return true;
+    return false;
+  };
+}
+
+/** AND over predicates. */
+export function allOf(...preds: readonly WriteRulePredicate[]): WriteRulePredicate {
+  return async (ctx) => {
+    for (const p of preds) if (!(await p(ctx))) return false;
+    return true;
+  };
+}
+
+/** Negation — `member_uuid != currUuid`-style clauses. */
+export function not(pred: WriteRulePredicate): WriteRulePredicate {
+  return async (ctx) => !(await pred(ctx));
+}
+
+/** Path-param self check — `user_uid == currUuid` (`Users/{user_uid}`). */
+export const isSelfDoc: WriteRulePredicate = (ctx) =>
+  ctx.id === ctx.session.operatorUuid;
+
+/** `resData.<field> == currUuid` — caller named on the STORED row. */
+export function resourceFieldIsCaller(field: string): WriteRulePredicate {
+  return (ctx) => ctx.resource?.[field] === ctx.session.operatorUuid;
+}
+
+/** `reqResData.<field> == currUuid` — caller named on the INCOMING doc. */
+export function patchFieldIsCaller(field: string): WriteRulePredicate {
+  return (ctx) =>
+    (ctx.verb === "create" ? ctx.patch[field] : ctx.patch[field]) ===
+    ctx.session.operatorUuid;
+}
+
+/** `params.<field> == currUuid` — the write targets the caller. */
+export function paramIsCaller(field: string): WriteRulePredicate {
+  return (ctx) => ctx.action?.params[field] === ctx.session.operatorUuid;
+}
+
+/** `resData.<field> == value` — e.g. `type == 'channel'`. */
+export function docFieldEq(field: string, value: unknown): WriteRulePredicate {
+  return (ctx) => docUnderEval(ctx)?.[field] === value;
+}
+
+/** `isNotDeleted(doc)` — the doc's status is not 'deleted'. Type-guard:
+ *  a live doc is a defined doc, so callers get narrowing for free. */
+export const docIsLive = (doc: EntityDoc | undefined): doc is EntityDoc =>
+  doc !== undefined && doc["status"] !== "deleted";
+
+/** `isObserver(chat, uid)` on a doc fetched through `ctx.get` — the
+ *  cross-doc observer probe (`isObserver(chat)` in message rules). */
+export function callerIsObserverIn(
+  path: string,
+  idOf: (ctx: WriteRuleEval) => string | undefined,
+): WriteRulePredicate {
+  return async (ctx) => {
+    if (ctx.get === undefined) return false;
+    const id = idOf(ctx);
+    if (id === undefined || id === "") return false;
+    const doc = await ctx.get(path, id);
+    return doc !== undefined && isObserver(doc, ctx.session.operatorUuid);
+  };
+}
+
+// ─── Cross-role traversal — isCrossOwner / isCrossEditor / hasPrivilegedRole ─
+//
+// Their helpers walk the ancestry chain: the doc's own `cross_*` roles,
+// then the space chat, then the project chat. The space id doubles as the
+// workspace chat id (the Workspaces/Chats twin), so every ancestor read is
+// `get('chats', uid)` regardless of which side named it.
+
+/** `getChat(x)` — an id read on the universal entity table. */
+async function getChat(
+  ctx: WriteRuleEval,
+  id: unknown,
+): Promise<EntityDoc | undefined> {
+  if (ctx.get === undefined || typeof id !== "string" || id === "")
+    return undefined;
+  return ctx.get("chats", id);
+}
+
+/** `isOwnerOrEditorOrCrossMemberSimplified(doc)` — owner_uuid match,
+ *  editors[] entry, or cross_owner/cross_editor in the observers map. */
+function isOwnerOrEditorOrCrossMember(doc: EntityDoc, uid: string): boolean {
+  return (
+    doc["owner_uuid"] === uid ||
+    asStringArray(doc["editors"]).includes(uid) ||
+    hasRole(doc, uid, ["cross_owner"]) ||
+    hasRole(doc, uid, ["cross_editor"])
+  );
+}
+
+/**
+ * `isCrossOwner(data, uuid)` — `cross_owner` role on the doc, `owner` on
+ * the space chat, or `owner`/`cross_owner` on the project chat.
+ */
+export const callerIsCrossOwner: WriteRulePredicate = async (ctx) => {
+  const doc = docUnderEval(ctx);
+  if (doc === undefined) return false;
+  const uid = ctx.session.operatorUuid;
+  if (hasRole(doc, uid, ["cross_owner"])) return true;
+  const space = await getChat(ctx, doc["space_uid"]);
+  if (space !== undefined && hasRole(space, uid, ["owner"])) return true;
+  const project = await getChat(ctx, doc["project_uid"]);
+  return (
+    project !== undefined && hasRole(project, uid, ["owner", "cross_owner"])
+  );
+};
+
+/**
+ * `isCrossEditor(data, uuid)` — `cross_editor` on the doc's observers,
+ * `editor` on the space's observers, `editor`/`cross_editor` on the
+ * project's observers.
+ */
+export const callerIsCrossEditor: WriteRulePredicate = async (ctx) => {
+  const doc = docUnderEval(ctx);
+  if (doc === undefined) return false;
+  const uid = ctx.session.operatorUuid;
+  if (hasRole(doc, uid, ["cross_editor"])) return true;
+  const space = await getChat(ctx, doc["space_uid"]);
+  if (space !== undefined && hasRole(space, uid, ["editor"])) return true;
+  const project = await getChat(ctx, doc["project_uid"]);
+  return (
+    project !== undefined && hasRole(project, uid, ["editor", "cross_editor"])
+  );
+};
+
+/**
+ * `hasPrivilegedRole(docData, uuid)` — owner/editors/cross-member on the
+ * doc, the project chat, or the space chat (in that order).
+ */
+export const callerIsPrivileged: WriteRulePredicate = async (ctx) => {
+  const doc = docUnderEval(ctx);
+  if (doc === undefined) return false;
+  const uid = ctx.session.operatorUuid;
+  if (isOwnerOrEditorOrCrossMember(doc, uid)) return true;
+  const project = await getChat(ctx, doc["project_uid"]);
+  if (project !== undefined && isOwnerOrEditorOrCrossMember(project, uid))
+    return true;
+  const space = await getChat(ctx, doc["space_uid"]);
+  return space !== undefined && isOwnerOrEditorOrCrossMember(space, uid);
+};
+
+/**
+ * `hasGuestRole(data, uuid)` — `visitor` on the SPACE chat: theirs reads
+ * `getChat(space_uid ?? _uid)` — the visitor role lives on the workspace,
+ * never on the entity itself.
+ */
+export const callerIsGuest: WriteRulePredicate = async (ctx) => {
+  const doc = docUnderEval(ctx);
+  if (doc === undefined) return false;
+  const spaceId =
+    typeof doc["space_uid"] === "string" && doc["space_uid"] !== ""
+      ? doc["space_uid"]
+      : doc["id"] ?? doc["_uid"];
+  const space = await getChat(ctx, spaceId);
+  return space !== undefined && hasRole(space, ctx.session.operatorUuid, ["visitor"]);
+};
+
+/**
+ * `ifChatMessagesAccessible(chat, uid)` — message-level read/write gate.
+ * `chatOf` fetches the parent chat (usually
+ * `ctx.get('chats', ctx.resource.chat_uid)`). Clauses ported:
+ * member || (observer && !visitor) || (non-group/personal && cross).
+ * The channel-public and shared-space branches of the original need
+ * workspace/shared_docs lookups — covered by callerHasRoleIn at the
+ * call site until the shared-spaces feature lands.
+ */
+export function chatMessagesAccessible(
+  chatOf: (ctx: WriteRuleEval) => Promise<EntityDoc | undefined>,
+): WriteRulePredicate {
+  return async (ctx) => {
+    const uid = ctx.session.operatorUuid;
+    const chat = await chatOf(ctx);
+    if (!docIsLive(chat)) return false;
+    if (hasRole(chat, uid, ["member"])) return true;
+    if (isObserver(chat, uid) && !hasRole(chat, uid, ["visitor"])) return true;
+    const t = chat["type"];
+    if (t !== "group" && t !== "personal") {
+      // cross roles evaluated against the CHAT doc as context.
+      const asDoc: WriteRuleEval = { ...ctx, resource: chat };
+      if (await callerIsCrossOwner(asDoc)) return true;
+      if (await callerIsCrossEditor(asDoc)) return true;
+    }
+    return false;
+  };
 }

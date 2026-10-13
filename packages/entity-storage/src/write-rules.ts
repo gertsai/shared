@@ -253,15 +253,17 @@ export const PROTECTED_AUDIT_FIELDS: readonly string[] = [
  * Fields additionally protected on **update**: identity and lifecycle
  * columns that callers may legitimately write on create (`id`,
  * `created_at`, `updated_at` sit inside `WriteShape`) but can never
- * patch later. `entity_status`/`status` are lifecycle-owned on every
- * verb (the delete/restore stamps own transitions).
+ * patch later. `entity_status` is stamp-owned on every verb (the
+ * delete/restore stamps own its transitions). `status` is deliberately
+ * NOT here: in the Orchestra model it is a domain field written through
+ * action-gated updates (`archive`/`delete`/`restore` actions), so each
+ * action's field allowlist decides whether status may move.
  */
 export const PROTECTED_UPDATE_FIELDS: readonly string[] = [
   ...PROTECTED_AUDIT_FIELDS,
   "_uid",
   "id",
   "entity_status",
-  "status",
   "created_at",
   "updated_at",
   "update_version",
