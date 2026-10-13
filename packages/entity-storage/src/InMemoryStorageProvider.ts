@@ -129,7 +129,11 @@ export class InMemoryStorageProvider<
     const set = byPath.get(id);
     if (!set || set.size === 0) return;
     const doc = this._coll(path).get(id);
-    const data = (doc?.data ?? null) as Meta['read'] | null;
+    // Clone per emit — a listener mutating the payload must not corrupt
+    // the store (same snapshot rule reads enforce).
+    const data = (
+      doc === undefined ? null : structuredClone(doc.data)
+    ) as Meta['read'] | null;
     for (const cb of set) {
       try {
         cb(data);
@@ -143,7 +147,7 @@ export class InMemoryStorageProvider<
     const set = this._collListeners.get(path);
     if (!set || set.size === 0) return;
     const allDocs = Array.from(this._coll(path).values()).map(
-      (d) => d.data,
+      (d) => structuredClone(d.data),
     ) as Meta['read'][];
     for (const { query, cb } of set) {
       const docs =
@@ -156,6 +160,11 @@ export class InMemoryStorageProvider<
     }
   }
 
+  /**
+   * Store a full doc, cloned at the boundary — the store never aliases
+   * a caller-owned object (a post-write mutation of the caller's doc
+   * would otherwise corrupt committed state).
+   */
   private _writeOnto(
     coll: Map<string, VersionedDoc>,
     id: string,
@@ -164,24 +173,30 @@ export class InMemoryStorageProvider<
     const prev = coll.get(id);
     const versioned: VersionedDoc = {
       version: (prev?.version ?? 0) + 1,
-      data,
+      data: structuredClone(data),
     };
     coll.set(id, versioned);
     return versioned;
   }
 
+  /**
+   * Merge a partial onto a stored doc. Returns `null` when the row is
+   * absent — pg parity (`UPDATE … WHERE id = $1` touches zero rows; a
+   * missing key must never materialize a ghost row from the partial).
+   */
   private _updateOnto(
     coll: Map<string, VersionedDoc>,
     id: string,
     partial: Record<string, unknown>,
-  ): VersionedDoc {
+  ): VersionedDoc | null {
     const prev = coll.get(id);
+    if (prev === undefined) return null;
     const merged = {
-      ...(prev?.data as Record<string, unknown> | undefined),
-      ...partial,
+      ...(prev.data as Record<string, unknown>),
+      ...structuredClone(partial),
     };
     const versioned: VersionedDoc = {
-      version: (prev?.version ?? 0) + 1,
+      version: prev.version + 1,
       data: merged,
     };
     coll.set(id, versioned);
@@ -244,11 +259,12 @@ export class InMemoryStorageProvider<
     id: string,
     partial: Partial<Meta['write']>,
   ): Promise<void> {
-    this._updateOnto(
+    const applied = this._updateOnto(
       this._coll(path),
       id,
       partial as Record<string, unknown>,
     );
+    if (applied === null) return;
     this._emitDoc(path, id);
     this._emitColl(path);
   }
@@ -263,7 +279,11 @@ export class InMemoryStorageProvider<
 
   async getDoc(path: string, id: string): Promise<Meta['read'] | null> {
     const doc = this._coll(path).get(id);
-    return (doc?.data ?? null) as Meta['read'] | null;
+    // Snapshot on the way out — the caller receives a copy, not the
+    // stored object; mutating a read result must not corrupt the store.
+    return (
+      doc === undefined ? null : structuredClone(doc.data)
+    ) as Meta['read'] | null;
   }
 
   async getDocs(
@@ -271,7 +291,7 @@ export class InMemoryStorageProvider<
     query?: Query<Meta>,
   ): Promise<Meta['read'][]> {
     const docs = Array.from(this._coll(path).values()).map(
-      (d) => d.data,
+      (d) => structuredClone(d.data),
     ) as Meta['read'][];
     return applyQueryFilter<Meta>(docs, query);
   }
@@ -306,7 +326,11 @@ export class InMemoryStorageProvider<
     set.add(cb);
     // Fire initial value synchronously, mirroring Firestore semantics.
     const initial = this._coll(path).get(id);
-    cb((initial?.data ?? null) as Meta['read'] | null);
+    cb(
+      (initial === undefined ? null : structuredClone(initial.data)) as
+        | Meta['read']
+        | null,
+    );
     return () => {
       const inner = this._docListeners.get(path)?.get(id);
       if (inner) {
@@ -331,7 +355,7 @@ export class InMemoryStorageProvider<
     const entry: CollectionListenerEntry<Meta> = { query, cb };
     set.add(entry);
     const allDocs = Array.from(this._coll(path).values()).map(
-      (d) => d.data,
+      (d) => structuredClone(d.data),
     ) as Meta['read'][];
     const docs =
       query.length === 0 ? allDocs : applyQueryFilter<Meta>(allDocs, query);
@@ -519,7 +543,9 @@ export class InMemoryStorageProvider<
     const runner: ITransactionRunner<Meta> = {
       get: async (path, id): Promise<Meta['read'] | null> => {
         const doc = snapRead(path, id);
-        return (doc?.data ?? null) as Meta['read'] | null;
+        return (
+          doc === null ? null : structuredClone(doc.data)
+        ) as Meta['read'] | null;
       },
       set: (path, id, data): void => {
         queue(path, id, { kind: 'set', data });

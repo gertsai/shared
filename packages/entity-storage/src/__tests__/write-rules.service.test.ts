@@ -278,6 +278,194 @@ describe('BaseEntityStorageService write-rules — delete/restore/destroy', () =
   });
 });
 
+describe('BaseEntityStorageService write-rules — create existence', () => {
+  it('set on an existing row is denied — create cannot overwrite', async () => {
+    const provider = new InMemoryStorageProvider<CardMeta>();
+    await seed(provider);
+    const setSpy = vi.spyOn(provider, 'set');
+    const svc = new CardsStorage(provider, makeSession());
+    await expect(
+      svc.set({
+        _uid: 'c-1',
+        title: 'overwrite',
+        list_id: 'l-9',
+        position: 1,
+      } as CardData & { _uid: string }),
+    ).rejects.toThrow(/create-only/);
+    expect(setSpy).not.toHaveBeenCalled();
+    // The stored row is untouched — the deny landed before the provider.
+    expect((await provider.getDoc('cards', 'c-1'))?.title).toBe('seed');
+  });
+});
+
+describe('BaseEntityStorageService write-rules — audited runners', () => {
+  it('runBatch: a denied write inside the runner rejects the whole commit', async () => {
+    const provider = new InMemoryStorageProvider<CardMeta>();
+    await seed(provider);
+    const svc = new CardsStorage(provider, makeSession());
+    await expect(
+      svc.runBatch(async (batch) => {
+        batch.set({
+          _uid: 'c-2',
+          title: 'new',
+          list_id: 'l-1',
+          position: 2,
+        } as CardData & { _uid: string });
+        batch.update('c-1', { title: 'x' }, { action: 'bogus' });
+      }),
+    ).rejects.toThrow(WriteRuleDenied);
+    // Atomic abort — the legal set() in the same batch never landed.
+    expect(await provider.getDoc('cards', 'c-2')).toBeNull();
+    expect((await provider.getDoc('cards', 'c-1'))?.title).toBe('seed');
+  });
+
+  it('runBatch: a legal batch lands with stamped audit fields', async () => {
+    const provider = new InMemoryStorageProvider<CardMeta>();
+    await seed(provider);
+    const svc = new CardsStorage(provider, makeSession());
+    await svc.runBatch(async (batch) => {
+      batch.set({
+        _uid: 'c-2',
+        title: 'new',
+        list_id: 'l-1',
+        position: 2,
+      } as CardData & { _uid: string });
+      batch.update(
+        'c-1',
+        { title: 'renamed' },
+        { action: 'card_updated' },
+      );
+    });
+    expect(await provider.getDoc('cards', 'c-2')).toMatchObject({
+      title: 'new',
+      creator_uuid: 'op-1',
+    });
+    expect((await provider.getDoc('cards', 'c-1'))?.title).toBe('renamed');
+  });
+
+  it('runBatch: set() on an existing row is denied at the pending gate', async () => {
+    const provider = new InMemoryStorageProvider<CardMeta>();
+    await seed(provider);
+    const svc = new CardsStorage(provider, makeSession());
+    await expect(
+      svc.runBatch(async (batch) => {
+        batch.set({
+          _uid: 'c-1',
+          title: 'overwrite',
+          list_id: 'l-1',
+          position: 1,
+        } as CardData & { _uid: string });
+      }),
+    ).rejects.toThrow(/create-only|already exists/);
+  });
+
+  it('runTransaction: a denied write inside the runner rejects the whole commit', async () => {
+    const provider = new InMemoryStorageProvider<CardMeta>();
+    await seed(provider);
+    const svc = new CardsStorage(provider, makeSession());
+    await expect(
+      svc.runTransaction(async (tx) => {
+        tx.update('c-1', { title: 'x' }, { action: 'bogus' });
+        tx.set({
+          _uid: 'c-2',
+          title: 'new',
+          list_id: 'l-1',
+          position: 2,
+        } as CardData & { _uid: string });
+      }),
+    ).rejects.toThrow(WriteRuleDenied);
+    expect(await provider.getDoc('cards', 'c-2')).toBeNull();
+    expect((await provider.getDoc('cards', 'c-1'))?.title).toBe('seed');
+  });
+
+  it('runTransaction: tx.get reads committed rows; a legal write lands', async () => {
+    const provider = new InMemoryStorageProvider<CardMeta>();
+    await seed(provider);
+    const svc = new CardsStorage(provider, makeSession());
+    await svc.runTransaction(async (tx) => {
+      const row = await tx.get('c-1');
+      expect(row?.title).toBe('seed');
+      tx.update('c-1', { title: 'renamed' }, { action: 'card_updated' });
+    });
+    expect((await provider.getDoc('cards', 'c-1'))?.title).toBe('renamed');
+  });
+});
+
+describe('BaseEntityStorageService write-rules — governed upsert', () => {
+  it('upsert of a NEW row is a clean create', async () => {
+    const provider = new InMemoryStorageProvider<CardMeta>();
+    const svc = new CardsStorage(provider, makeSession());
+    await svc.upsert({
+      _uid: 'c-9',
+      title: 'fresh',
+      list_id: 'l-1',
+      position: 9,
+    } as CardData & { _uid: string });
+    expect(await provider.getDoc('cards', 'c-9')).toMatchObject({
+      title: 'fresh',
+      creator_uuid: 'op-1',
+    });
+  });
+
+  it('upsert of an EXISTING row is denied — use update() with an action', async () => {
+    const provider = new InMemoryStorageProvider<CardMeta>();
+    await seed(provider);
+    const svc = new CardsStorage(provider, makeSession());
+    await expect(
+      svc.upsert({
+        _uid: 'c-1',
+        title: 'overwrite',
+        list_id: 'l-9',
+        position: 9,
+      } as CardData & { _uid: string }),
+    ).rejects.toThrow(/update/);
+    expect((await provider.getDoc('cards', 'c-1'))?.title).toBe('seed');
+  });
+});
+
+describe('BaseEntityStorageService write-rules — delete action channel', () => {
+  const DELETE_ACTION_RULES: TableWriteRules = {
+    create: allowWrite,
+    update: allowWrite,
+    delete: {
+      member_revoked: ({ action }) =>
+        action !== undefined && action.params['user_id'] === 'u-2',
+    },
+  };
+
+  it('delete forwards action+params into the rule eval', async () => {
+    const provider = new InMemoryStorageProvider<CardMeta>();
+    await seed(provider);
+    const svc = new (class extends BaseEntityStorageService<CardMeta> {
+      constructor(p: IStorageProvider<CardMeta>, s: Session) {
+        super({
+          provider: p,
+          session: s,
+          path: 'cards',
+          rules: DELETE_ACTION_RULES,
+        });
+      }
+    })(provider, makeSession());
+    // Wrong params → denied; no action → the write stamps the
+    // default 'delete' action, which the action-keyed ruleset does not
+    // list → fail-closed deny.
+    await expect(
+      svc.delete('c-1', {
+        action: 'member_revoked',
+        params: { user_id: 'u-3' },
+      }),
+    ).rejects.toThrow(WriteRuleDenied);
+    await expect(svc.delete('c-1')).rejects.toThrow(WriteRuleDenied);
+    await svc.delete('c-1', {
+      action: 'member_revoked',
+      params: { user_id: 'u-2' },
+    });
+    expect(await provider.getDoc('cards', 'c-1')).toMatchObject({
+      update_action: expect.objectContaining({ type: 'member_revoked' }),
+    });
+  });
+});
+
 describe('BaseEntityStorageService write-rules — batch/transaction routing', () => {
   it('a denied update routed via batch never lands in the queue', async () => {
     const provider = new InMemoryStorageProvider<CardMeta>();

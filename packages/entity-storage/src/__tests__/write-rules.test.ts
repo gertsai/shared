@@ -218,6 +218,8 @@ describe('WriteRuleDenied — diagnostics payload', () => {
     expect(denied.id).toBe('c-1');
     expect(denied.verb).toBe('update');
     expect(denied.actionType).toBe('card_updated');
-    expect(denied.reason).toBe('rule predicate returned false');
+    expect(denied.reason).toBe(
+      'rule predicate returned false (affected: title)',
+    );
   });
 });

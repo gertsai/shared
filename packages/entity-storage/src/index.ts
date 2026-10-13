@@ -30,6 +30,7 @@ export { InMemoryStorageProvider } from './InMemoryStorageProvider';
 export {
   allowFields,
   allowWrite,
+  assertPendingWrites,
   assertWriteAllowed,
   collectTableRules,
   computeAffectedKeys,
@@ -42,6 +43,8 @@ export {
 } from './write-rules';
 export type {
   ActionRules,
+  PendingWrite,
+  PendingWriteGate,
   TableWriteRules,
   WriteRuleAction,
   WriteRuleEval,
@@ -49,6 +52,15 @@ export type {
   WriteRules,
   WriteVerb,
 } from './write-rules';
+
+export {
+  actionFromOpts,
+  stampCreate,
+  stampDelete,
+  stampRestore,
+  stampUpdate,
+} from './write-stamps';
+export type { WriteAction } from './write-stamps';
 
 export { STORAGE_EVENTS } from './STORAGE_EVENTS';
 export type { StorageEventName } from './STORAGE_EVENTS';
