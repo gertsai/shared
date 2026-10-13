@@ -1,5 +1,13 @@
 # @gertsai/pg-client
 
+## 4.0.0
+
+### Patch Changes
+
+- Updated dependencies [c8a19b9]
+  - @gertsai/storage-core@2.1.0
+  - @gertsai/query-dsl@3.0.0
+
 ## 3.0.0
 
 ### Patch Changes
