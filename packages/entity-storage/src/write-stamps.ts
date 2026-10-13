@@ -33,16 +33,29 @@ export function actionFromOpts(
   return action !== undefined ? { type: action, params: params ?? {} } : undefined;
 }
 
-/** `set` stamp — create/update audit fields + `_uid` echo. */
+/**
+ * The optimistic-concurrency counter column. Stamped `1` on create;
+ * the PROVIDER owns every subsequent increment atomically at write
+ * time (`COALESCE(update_version,0)+1` on pg, store-compare on
+ * in-memory) — stamps never carry it on update/delete/restore, and
+ * `update_version` sits in the PROTECTED_* field lists so a caller
+ * patch can never smuggle one.
+ */
+export const UPDATE_VERSION_FIELD = 'update_version';
+
+/** `set` stamp — create/update audit fields + `_uid` echo + version seed. */
 export function stampCreate(
   patch: Readonly<Record<string, unknown>>,
   session: Session,
   _uid: string,
 ): Record<string, unknown> {
-  return buildDataForSet(patch as object, session, { _uid }) as Record<
-    string,
-    unknown
-  >;
+  return {
+    ...(buildDataForSet(patch as object, session, { _uid }) as Record<
+      string,
+      unknown
+    >),
+    [UPDATE_VERSION_FIELD]: 1,
+  };
 }
 
 /** `update` stamp — `updated_*` triplet + optional `update_action`. */

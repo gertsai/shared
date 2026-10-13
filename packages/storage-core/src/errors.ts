@@ -94,3 +94,67 @@ export class TransactionConflictError extends Error {
     Object.setPrototypeOf(this, new.target.prototype);
   }
 }
+
+/**
+ * Thrown when a caller-declared `expectedVersion` does not match the
+ * row's current `update_version` — the ETag-style optimistic
+ * concurrency contract across request boundaries.
+ *
+ * Distinct from {@link TransactionConflictError}: that one is the
+ * backend's intra-transaction write-write signal (retry whole
+ * transaction); this one is a *client-visible* precondition failure —
+ * the correct response is `409 Conflict`, and the caller should reload
+ * the row and retry with the fresh version (or surface a merge UI).
+ *
+ * Thrown at two layers for the same write:
+ *
+ * - the write-rules gate compares `ctx.expectedVersion` against the
+ *   committed `resource.update_version` (semantic failure, counted by
+ *   the denial observer); and
+ * - the provider enforces `WHERE update_version = $n` atomically at
+ *   flush (closes the read→write race the gate's read leaves open).
+ *
+ * Carries `{path, id, expected, actual}` so denial observers can
+ * aggregate without parsing the message.
+ *
+ * @public
+ */
+export class VersionConflictError extends Error {
+  /**
+   * Stable error name for cross-realm `name === 'VersionConflictError'`
+   * checks (see {@link ListenersNotSupportedError.name}).
+   */
+  override readonly name = 'VersionConflictError';
+  /** Collection path the conflicting write targeted, when known. */
+  readonly path: string | undefined;
+  /** Target document id, when known. */
+  readonly id: string | undefined;
+  /** The caller-declared version the write required. */
+  readonly expected: number | undefined;
+  /** The row's `update_version` at evaluation time (`undefined` = row absent). */
+  readonly actual: number | undefined;
+
+  constructor(
+    info: {
+      readonly path?: string;
+      readonly id?: string;
+      readonly expected?: number;
+      readonly actual?: number;
+    },
+    message?: string,
+    options?: ErrorOptions,
+  ) {
+    super(
+      message ??
+        `version conflict on ${info.path ?? '?'}/${info.id ?? '?'}` +
+          (info.expected !== undefined ? ` — expected update_version=${info.expected}` : '') +
+          `, found ${info.actual ?? 'absent'}`,
+      options,
+    );
+    this.path = info.path;
+    this.id = info.id;
+    this.expected = info.expected;
+    this.actual = info.actual;
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}
