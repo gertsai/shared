@@ -34,6 +34,7 @@
  */
 
 import type { Session } from '@gertsai/session';
+import { VersionConflictError } from '@gertsai/storage-core';
 
 /** Storage verb being evaluated. */
 export type WriteVerb = 'create' | 'update' | 'delete' | 'restore' | 'destroy';
@@ -78,12 +79,32 @@ export interface WriteRuleEval {
    * state into `resource`).
    */
   readonly resource?: Record<string, unknown>;
+  /**
+   * Optimistic-concurrency precondition the caller declared (ETag).
+   * When set, the gate compares it against `resource.update_version`
+   * and throws {@link VersionConflictError} on mismatch — a distinct
+   * signal from {@link WriteRuleDenied} (409 vs 403). The provider
+   * re-enforces the same condition atomically at write time.
+   */
+  readonly expectedVersion?: number;
 }
 
 /** Rule predicate — `true` allows the write. May be async. */
 export type WriteRulePredicate = (
   ctx: WriteRuleEval,
 ) => boolean | Promise<boolean>;
+
+/**
+ * Denial observer — called synchronously just before the gate throws.
+ * Receives the typed error ({@link WriteRuleDenied} for policy denials,
+ * {@link VersionConflictError} for optimistic-concurrency failures) so
+ * metrics can key on `err.name` / `verb` / `path` / `reason` without
+ * string-sniffing. Wire it to a counter; keep it cheap — it runs on
+ * every denied write.
+ */
+export type WriteDenialObserver = (
+  err: WriteRuleDenied | VersionConflictError,
+) => void;
 
 /**
  * Action-keyed rule map for `update`/`delete`: keys are
@@ -195,6 +216,7 @@ export const PROTECTED_UPDATE_FIELDS: readonly string[] = [
   'status',
   'created_at',
   'updated_at',
+  'update_version',
 ] as const;
 
 /** Fields protected on **create** — audit marks + lifecycle. `id`/`created_at`/`updated_at` stay writable (domain columns). */
@@ -203,6 +225,7 @@ export const PROTECTED_CREATE_FIELDS: readonly string[] = [
   '_uid',
   'entity_status',
   'status',
+  'update_version',
 ] as const;
 
 /** Value-equality for the affected-keys diff (deep-lite via JSON). */
@@ -266,6 +289,23 @@ function resolvePredicate(
 }
 
 /**
+ * Notify the denial observer — fire-and-forget. A metrics sink that
+ * throws must never turn a gate rejection into a different failure,
+ * and must never *cause* one on the allow path.
+ */
+function notifyDenied(
+  onDenied: WriteDenialObserver | undefined,
+  err: WriteRuleDenied | VersionConflictError,
+): void {
+  if (onDenied === undefined) return;
+  try {
+    onDenied(err);
+  } catch {
+    // Intentionally swallowed — instrumentation is not the authority.
+  }
+}
+
+/**
  * Evaluate one write against a table's ruleset — Orchestra
  * `basicUpdateCheck` + the matched `allow` body.
  *
@@ -276,10 +316,14 @@ function resolvePredicate(
  * that haven't declared rules yet).
  *
  * @throws {WriteRuleDenied} on any denied write.
+ * @throws {VersionConflictError} when `ctx.expectedVersion` is declared
+ *   and the committed row's `update_version` differs (or the row is
+ *   absent).
  */
 export async function assertWriteAllowed(
   rules: TableWriteRules | undefined,
   ctx: WriteRuleEval,
+  onDenied?: WriteDenialObserver,
 ): Promise<void> {
   if (rules === undefined) return;
 
@@ -293,10 +337,34 @@ export async function assertWriteAllowed(
       (protectedSet as readonly string[]).includes(k),
     );
     if (illegal.length > 0) {
-      throw new WriteRuleDenied(
+      const err = new WriteRuleDenied(
         { ...ctx, actionType: ctx.action?.type },
         `protected fields in diff: ${illegal.join(', ')}`,
       );
+      notifyDenied(onDenied, err);
+      throw err;
+    }
+  }
+
+  // Guard 1b — caller-declared ETag. Evaluated against committed state
+  // here (semantic check, observable); the provider re-checks the same
+  // condition atomically at write time to close the read→write race.
+  // A missing row IS a conflict when a version was declared — the
+  // caller asserted it existed at that version.
+  if (ctx.expectedVersion !== undefined) {
+    const actual =
+      ctx.resource !== undefined
+        ? (ctx.resource['update_version'] as number | undefined)
+        : undefined;
+    if (actual !== ctx.expectedVersion) {
+      const err = new VersionConflictError({
+        path: ctx.path,
+        id: ctx.id,
+        expected: ctx.expectedVersion,
+        ...(actual !== undefined ? { actual } : {}),
+      });
+      notifyDenied(onDenied, err);
+      throw err;
     }
   }
 
@@ -306,10 +374,12 @@ export async function assertWriteAllowed(
     (ctx.verb === 'update' || ctx.verb === 'delete') &&
     (rules[ctx.verb as 'update' | 'delete'] !== undefined);
   if (needsAction && ctx.action === undefined) {
-    throw new WriteRuleDenied(
+    const err = new WriteRuleDenied(
       { ...ctx, actionType: undefined },
       'update_action required (NO_UPDATE_ACTION)',
     );
+    notifyDenied(onDenied, err);
+    throw err;
   }
 
   let predicate: WriteRulePredicate | undefined;
@@ -332,20 +402,24 @@ export async function assertWriteAllowed(
   }
 
   if (predicate === undefined) {
-    throw new WriteRuleDenied(
+    const err = new WriteRuleDenied(
       { ...ctx, actionType: ctx.action?.type },
       `no rule for verb '${ctx.verb}'` +
         (ctx.action !== undefined ? ` / action '${ctx.action.type}'` : ''),
     );
+    notifyDenied(onDenied, err);
+    throw err;
   }
   if (!(await predicate(ctx))) {
-    throw new WriteRuleDenied(
+    const err = new WriteRuleDenied(
       { ...ctx, actionType: ctx.action?.type },
       'rule predicate returned false' +
         (ctx.affectedKeys.length > 0
           ? ` (affected: ${ctx.affectedKeys.join(', ')})`
           : ''),
     );
+    notifyDenied(onDenied, err);
+    throw err;
   }
 }
 
@@ -367,6 +441,11 @@ export interface PendingWrite {
    * the single-document path.
    */
   readonly action?: WriteRuleAction;
+  /**
+   * Caller-declared ETag — forwarded to the eval and to the raw
+   * runner's atomic `WHERE update_version = $n` at flush.
+   */
+  readonly expectedVersion?: number;
 }
 
 /** Knobs for {@link assertPendingWrites}. */
@@ -393,6 +472,12 @@ export interface PendingWriteGate {
    * path is a typo or an escape attempt.
    */
   readonly unmappedPath?: 'skip' | 'deny';
+  /**
+   * Called once per denied write just before the throw — the metrics
+   * hook ({@link WriteDenialObserver}). Fires for both policy denials
+   * and version conflicts surfaced inside the gate.
+   */
+  readonly onDenied?: WriteDenialObserver;
 }
 
 /**
@@ -422,10 +507,12 @@ export async function assertPendingWrites(
     const rules = gate.rulesFor(w.path);
     if (rules === undefined) {
       if (gate.unmappedPath === 'deny') {
-        throw new WriteRuleDenied(
+        const err = new WriteRuleDenied(
           { path: w.path, id: w.id, verb: w.verb },
           `no ruleset registered for path '${w.path}'`,
         );
+        notifyDenied(gate.onDenied, err);
+        throw err;
       }
       continue;
     }
@@ -434,30 +521,39 @@ export async function assertPendingWrites(
         ? ((await gate.resource(w.path, w.id)) ?? undefined)
         : undefined;
     if (w.verb === 'create' && resource !== undefined) {
-      throw new WriteRuleDenied(
+      const err = new WriteRuleDenied(
         { path: w.path, id: w.id, verb: w.verb },
         'row already exists — set() is create-only on a governed table; use update()',
       );
+      notifyDenied(gate.onDenied, err);
+      throw err;
     }
     const action =
       w.action ??
       (w.verb === 'update'
         ? undefined
         : { type: w.verb === 'create' ? 'create' : w.verb, params: {} });
-    await assertWriteAllowed(rules, {
-      verb: w.verb,
-      path: w.path,
-      id: w.id,
-      session: gate.session,
-      ...(action !== undefined ? { action } : {}),
-      affectedKeys:
-        w.verb === 'create'
-          ? Object.keys(w.patch)
-          : w.verb === 'update'
-            ? computeAffectedKeys(w.patch, resource)
-            : [],
-      patch: w.verb === 'create' || w.verb === 'update' ? w.patch : {},
-      ...(resource !== undefined ? { resource } : {}),
-    });
+    await assertWriteAllowed(
+      rules,
+      {
+        verb: w.verb,
+        path: w.path,
+        id: w.id,
+        session: gate.session,
+        ...(action !== undefined ? { action } : {}),
+        affectedKeys:
+          w.verb === 'create'
+            ? Object.keys(w.patch)
+            : w.verb === 'update'
+              ? computeAffectedKeys(w.patch, resource)
+              : [],
+        patch: w.verb === 'create' || w.verb === 'update' ? w.patch : {},
+        ...(resource !== undefined ? { resource } : {}),
+        ...(w.expectedVersion !== undefined
+          ? { expectedVersion: w.expectedVersion }
+          : {}),
+      },
+      gate.onDenied,
+    );
   }
 }

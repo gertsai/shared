@@ -46,6 +46,7 @@ export type {
   PendingWrite,
   PendingWriteGate,
   TableWriteRules,
+  WriteDenialObserver,
   WriteRuleAction,
   WriteRuleEval,
   WriteRulePredicate,
@@ -59,6 +60,7 @@ export {
   stampDelete,
   stampRestore,
   stampUpdate,
+  UPDATE_VERSION_FIELD,
 } from './write-stamps';
 export type { WriteAction } from './write-stamps';
 
@@ -76,9 +78,11 @@ export type {
   StorageCapabilities,
   StorageLogger,
   StorageMetadata,
+  WriteConcurrencyOpts,
 } from '@gertsai/storage-core';
 export {
   ListenersNotSupportedError,
   noopStorageLogger,
   TransactionConflictError,
+  VersionConflictError,
 } from '@gertsai/storage-core';

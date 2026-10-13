@@ -53,8 +53,12 @@ import type {
   Query,
   StorageCapabilities,
   StorageMetadata,
+  WriteConcurrencyOpts,
 } from '@gertsai/storage-core';
-import { TransactionConflictError } from '@gertsai/storage-core';
+import {
+  TransactionConflictError,
+  VersionConflictError,
+} from '@gertsai/storage-core';
 import { AUDIT_FIELDS } from '@gertsai/entity-audit';
 import { applyQueryFilter } from './applyQueryFilter';
 
@@ -171,9 +175,20 @@ export class InMemoryStorageProvider<
     data: unknown,
   ): VersionedDoc {
     const prev = coll.get(id);
+    const cloned = structuredClone(data) as Record<string, unknown>;
+    // The provider owns `update_version`: a full-write over an existing
+    // versioned row bumps the counter rather than trusting the incoming
+    // value (a create-stamped `1` on an overwrite path must not rewind
+    // the clock). Fresh rows keep whatever the stamp seeded.
+    const curVersion = (prev?.data as Record<string, unknown> | undefined)?.[
+      'update_version'
+    ];
+    if (curVersion !== undefined) {
+      cloned['update_version'] = (curVersion as number) + 1;
+    }
     const versioned: VersionedDoc = {
       version: (prev?.version ?? 0) + 1,
-      data: structuredClone(data),
+      data: cloned,
     };
     coll.set(id, versioned);
     return versioned;
@@ -188,13 +203,46 @@ export class InMemoryStorageProvider<
     coll: Map<string, VersionedDoc>,
     id: string,
     partial: Record<string, unknown>,
+    expectedVersion?: number,
+    path?: string,
   ): VersionedDoc | null {
     const prev = coll.get(id);
-    if (prev === undefined) return null;
+    if (prev === undefined) {
+      if (expectedVersion !== undefined) {
+        throw new VersionConflictError({
+          ...(path !== undefined ? { path } : {}),
+          id,
+          expected: expectedVersion,
+        });
+      }
+      return null;
+    }
+    const curUpdateVersion = (
+      prev.data as Record<string, unknown>
+    )['update_version'] as number | undefined;
+    if (
+      expectedVersion !== undefined &&
+      curUpdateVersion !== expectedVersion
+    ) {
+      throw new VersionConflictError({
+        ...(path !== undefined ? { path } : {}),
+        id,
+        expected: expectedVersion,
+        ...(curUpdateVersion !== undefined
+          ? { actual: curUpdateVersion }
+          : {}),
+      });
+    }
     const merged = {
       ...(prev.data as Record<string, unknown>),
       ...structuredClone(partial),
     };
+    // Provider-owned counter — every applied update bumps it; a caller
+    // patch can never rewind or skip it (governed tables also list it
+    // in PROTECTED_UPDATE_FIELDS).
+    if (curUpdateVersion !== undefined) {
+      merged['update_version'] = curUpdateVersion + 1;
+    }
     const versioned: VersionedDoc = {
       version: prev.version + 1,
       data: merged,
@@ -258,11 +306,14 @@ export class InMemoryStorageProvider<
     path: string,
     id: string,
     partial: Partial<Meta['write']>,
+    opts?: WriteConcurrencyOpts,
   ): Promise<void> {
     const applied = this._updateOnto(
       this._coll(path),
       id,
       partial as Record<string, unknown>,
+      opts?.expectedVersion,
+      path,
     );
     if (applied === null) return;
     this._emitDoc(path, id);
@@ -400,7 +451,7 @@ export class InMemoryStorageProvider<
         if (op.kind === 'set') {
           this._writeOnto(coll, id, op.data);
         } else if (op.kind === 'update') {
-          this._updateOnto(coll, id, op.partial);
+          this._updateOnto(coll, id, op.partial, op.expectedVersion, path);
         } else {
           coll.delete(id);
         }
@@ -443,10 +494,13 @@ export class InMemoryStorageProvider<
       set: (path, id, data): void => {
         queue(path, id, { kind: 'set', data });
       },
-      update: (path, id, partial): void => {
+      update: (path, id, partial, opts): void => {
         queue(path, id, {
           kind: 'update',
           partial: partial as Record<string, unknown>,
+          ...(opts?.expectedVersion !== undefined
+            ? { expectedVersion: opts.expectedVersion }
+            : {}),
         });
       },
       delete: (path, id): void => {
@@ -550,10 +604,13 @@ export class InMemoryStorageProvider<
       set: (path, id, data): void => {
         queue(path, id, { kind: 'set', data });
       },
-      update: (path, id, partial): void => {
+      update: (path, id, partial, opts): void => {
         queue(path, id, {
           kind: 'update',
           partial: partial as Record<string, unknown>,
+          ...(opts?.expectedVersion !== undefined
+            ? { expectedVersion: opts.expectedVersion }
+            : {}),
         });
       },
       delete: (path, id): void => {
@@ -629,5 +686,12 @@ type DeltaOp =
   | {
       readonly kind: 'update';
       readonly partial: Record<string, unknown>;
+      /**
+       * Caller-declared ETag — verified against the row's live
+       * `update_version` at apply time; a stale or absent row throws
+       * {@link VersionConflictError} (distinct from the write-set
+       * `TransactionConflictError` check, which detects inter-tx races).
+       */
+      readonly expectedVersion?: number;
     }
   | { readonly kind: 'delete' };

@@ -525,3 +525,135 @@ describe('BaseEntityStorageService write-rules — batch/transaction routing', (
     );
   });
 });
+
+describe('optimistic concurrency — update_version / expectedVersion', () => {
+  it('stamps update_version=1 on create and bumps it on each update', async () => {
+    const provider = new InMemoryStorageProvider<CardMeta>();
+    const svc = new CardsStorage(provider, makeSession());
+    await seed(provider);
+    expect(((await provider.getDoc('cards', 'c-1')) as unknown as Record<string, unknown>)?.['update_version']).toBe(1);
+    await svc.update('c-1', { title: 'b' }, { action: 'card_updated' });
+    const doc = await provider.getDoc('cards', 'c-1');
+    expect((doc as unknown as Record<string, unknown>)['update_version']).toBe(2);
+  });
+
+  it('applies an update when expectedVersion matches the committed row', async () => {
+    const provider = new InMemoryStorageProvider<CardMeta>();
+    const svc = new CardsStorage(provider, makeSession());
+    await seed(provider);
+    await svc.update(
+      'c-1',
+      { title: 'v2' },
+      { action: 'card_updated', expectedVersion: 1 },
+    );
+    const doc = await provider.getDoc('cards', 'c-1');
+    expect(doc).toMatchObject({ title: 'v2', update_version: 2 });
+  });
+
+  it('throws VersionConflictError (not WriteRuleDenied) on a stale expectedVersion', async () => {
+    const provider = new InMemoryStorageProvider<CardMeta>();
+    const svc = new CardsStorage(provider, makeSession());
+    await seed(provider);
+    const { VersionConflictError } = await import('@gertsai/storage-core');
+    const err = await svc
+      .update('c-1', { title: 'x' }, { action: 'card_updated', expectedVersion: 9 })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(VersionConflictError);
+    expect(err).not.toBeInstanceOf(WriteRuleDenied);
+    // Nothing applied.
+    expect((await provider.getDoc('cards', 'c-1'))?.['title']).toBe('seed');
+  });
+
+  it('treats a missing row as a conflict when expectedVersion is declared', async () => {
+    const provider = new InMemoryStorageProvider<CardMeta>();
+    const svc = new CardsStorage(provider, makeSession());
+    await seed(provider);
+    await expect(
+      svc.update('c-absent', { title: 'x' }, { action: 'card_updated', expectedVersion: 1 }),
+    ).rejects.toMatchObject({ name: 'VersionConflictError' });
+  });
+
+  it('enforces expectedVersion inside runBatch — conflict aborts the whole batch', async () => {
+    const provider = new InMemoryStorageProvider<CardMeta>();
+    const svc = new CardsStorage(provider, makeSession());
+    await seed(provider);
+    await svc.set({
+      _uid: 'c-2',
+      title: 'seed2',
+      list_id: 'l-1',
+      position: 2000,
+    } as CardData & { _uid: string });
+    const err = await svc
+      .runBatch(async (b) => {
+        b.update('c-1', { title: 'ok' }, { action: 'card_updated', expectedVersion: 1 });
+        b.update('c-2', { title: 'stale' }, { action: 'card_updated', expectedVersion: 99 });
+      })
+      .catch((e: unknown) => e);
+    expect(err).toMatchObject({ name: 'VersionConflictError' });
+    // Atomic: c-1 was NOT updated either.
+    expect((await provider.getDoc('cards', 'c-1'))?.['title']).toBe('seed');
+    expect((await provider.getDoc('cards', 'c-2'))?.['title']).toBe('seed2');
+  });
+
+  it('provider.update enforces expectedVersion atomically (ungoverned path)', async () => {
+    const provider = new InMemoryStorageProvider<CardMeta>();
+    const svc = new RulelessStorage(provider, makeSession());
+    await svc.set({
+      _uid: 'c-1',
+      title: 'seed',
+      list_id: 'l-1',
+      position: 1000,
+    } as CardData & { _uid: string });
+    await provider.update('cards', 'c-1', { title: 'x' }, { expectedVersion: 9 })
+      .then(() => {
+        throw new Error('must throw');
+      })
+      .catch((e: unknown) => {
+        expect(e).toMatchObject({ name: 'VersionConflictError', expected: 9, actual: 1 });
+      });
+    await provider.update('cards', 'c-1', { title: 'x' }, { expectedVersion: 1 });
+    expect(((await provider.getDoc('cards', 'c-1')) as unknown as Record<string, unknown>)?.['update_version']).toBe(2);
+  });
+
+  it('denies a caller patch carrying update_version (protected field)', async () => {
+    const provider = new InMemoryStorageProvider<CardMeta>();
+    const svc = new CardsStorage(provider, makeSession());
+    await seed(provider);
+    await expect(
+      svc.update(
+        'c-1',
+        { title: 'x', update_version: 42 } as Partial<CardData>,
+        { action: 'card_updated' },
+      ),
+    ).rejects.toThrow(WriteRuleDenied);
+  });
+
+  it('fires onDenied for policy denials and version conflicts alike', async () => {
+    const provider = new InMemoryStorageProvider<CardMeta>();
+    const onDenied = vi.fn();
+    class ObservedStorage extends BaseEntityStorageService<CardMeta> {
+      constructor(p: IStorageProvider<CardMeta>, s: Session) {
+        super({ provider: p, session: s, path: 'cards', rules: CARD_RULES, onDenied });
+      }
+    }
+    const svc = new ObservedStorage(provider, makeSession());
+    await svc.set({
+      _uid: 'c-1',
+      title: 'seed',
+      list_id: 'l-1',
+      position: 1000,
+    } as CardData & { _uid: string });
+    // Policy denial — no action on a mapped table.
+    await expect(svc.update('c-1', { title: 'x' })).rejects.toThrow(WriteRuleDenied);
+    // Version conflict.
+    await expect(
+      svc.update('c-1', { title: 'x' }, { action: 'card_updated', expectedVersion: 42 }),
+    ).rejects.toMatchObject({ name: 'VersionConflictError' });
+    expect(onDenied).toHaveBeenCalledTimes(2);
+    expect(onDenied).toHaveBeenNthCalledWith(1, expect.objectContaining({ name: 'WriteRuleDenied' }));
+    expect(onDenied).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ name: 'VersionConflictError', path: 'cards', id: 'c-1', expected: 42 }),
+    );
+  });
+});

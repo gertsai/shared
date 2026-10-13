@@ -18,6 +18,7 @@ import type {
   Query,
   StorageLogger,
   StorageMetadata,
+  WriteConcurrencyOpts,
 } from '@gertsai/storage-core';
 import { ListenersNotSupportedError, noopStorageLogger } from '@gertsai/storage-core';
 import type {
@@ -31,6 +32,7 @@ import {
   WriteRuleDenied,
   type PendingWrite,
   type TableWriteRules,
+  type WriteDenialObserver,
 } from './write-rules';
 import {
   actionFromOpts,
@@ -109,6 +111,14 @@ export interface BaseEntityStorageServiceOpts<Meta extends StorageMetadata> {
    * diffs regardless of which use-case issued the write.
    */
   readonly rules?: TableWriteRules | undefined;
+  /**
+   * Denial observer ({@link WriteDenialObserver}) — called once per
+   * write the rules gate rejects, on both the direct and the
+   * batch/transaction paths. Receives {@link WriteRuleDenied} for
+   * policy failures and `VersionConflictError` for optimistic-
+   * concurrency failures. Wire to a metrics counter.
+   */
+  readonly onDenied?: WriteDenialObserver;
 }
 
 /**
@@ -219,6 +229,7 @@ export abstract class BaseEntityStorageService<
   protected readonly _uuidProvider: () => string;
   protected readonly _logger: StorageLogger;
   protected readonly _rules: TableWriteRules | undefined;
+  protected readonly _onDenied: WriteDenialObserver | undefined;
   protected readonly _listenerDisposers = new Set<() => void>();
   protected _destroyed = false;
 
@@ -228,6 +239,7 @@ export abstract class BaseEntityStorageService<
     this._session = opts.session;
     this._path = opts.path ?? '';
     this._rules = opts.rules;
+    this._onDenied = opts.onDenied;
     this._logger = opts.logger ?? noopStorageLogger;
     this._uuidProvider =
       opts.uuidProvider ??
@@ -304,15 +316,19 @@ export abstract class BaseEntityStorageService<
           'row already exists — set() is create-only on a governed table; use update()',
         );
       }
-      await assertWriteAllowed(this._rules, {
-        verb: 'create',
-        path: this._path,
-        id,
-        session: this._session,
-        action: { type: 'create', params: {} },
-        affectedKeys: Object.keys(rest),
-        patch: rest,
-      });
+      await assertWriteAllowed(
+        this._rules,
+        {
+          verb: 'create',
+          path: this._path,
+          id,
+          session: this._session,
+          action: { type: 'create', params: {} },
+          affectedKeys: Object.keys(rest),
+          patch: rest,
+        },
+        this._onDenied,
+      );
     }
     if (opts.batch) {
       this._logger.debug('set:batch', { path: this._path });
@@ -354,37 +370,48 @@ export abstract class BaseEntityStorageService<
     opts: {
       readonly action?: UpdateActionTypes;
       readonly params?: Readonly<Record<string, unknown>>;
-    } & MutationRoutingOpts<Meta, UpdateActionTypes> = {},
+    } & WriteConcurrencyOpts &
+      MutationRoutingOpts<Meta, UpdateActionTypes> = {},
   ): Promise<void> {
     this._assertAlive();
     if (this._rules !== undefined) {
       const resource = await this._readResource(uid);
       const patch = partial as Record<string, unknown>;
-      await assertWriteAllowed(this._rules, {
-        verb: 'update',
-        path: this._path,
-        id: uid,
-        session: this._session,
-        ...(opts.action !== undefined
-          ? {
-              action: {
-                type: opts.action as string,
-                params: opts.params ?? {},
-              },
-            }
-          : {}),
-        affectedKeys: computeAffectedKeys(patch, resource),
-        patch,
-        ...(resource !== undefined ? { resource } : {}),
-      });
+      await assertWriteAllowed(
+        this._rules,
+        {
+          verb: 'update',
+          path: this._path,
+          id: uid,
+          session: this._session,
+          ...(opts.action !== undefined
+            ? {
+                action: {
+                  type: opts.action as string,
+                  params: opts.params ?? {},
+                },
+              }
+            : {}),
+          affectedKeys: computeAffectedKeys(patch, resource),
+          patch,
+          ...(resource !== undefined ? { resource } : {}),
+          ...(opts.expectedVersion !== undefined
+            ? { expectedVersion: opts.expectedVersion }
+            : {}),
+        },
+        this._onDenied,
+      );
     }
-    const actionOpts =
-      opts.action !== undefined
-        ? {
-            action: opts.action,
-            ...(opts.params !== undefined && { params: opts.params }),
-          }
-        : undefined;
+    const runnerOpts = {
+      ...(opts.action !== undefined && {
+        action: opts.action,
+        ...(opts.params !== undefined && { params: opts.params }),
+      }),
+      ...(opts.expectedVersion !== undefined && {
+        expectedVersion: opts.expectedVersion,
+      }),
+    };
+    const actionOpts = Object.keys(runnerOpts).length > 0 ? runnerOpts : undefined;
     if (opts.batch) {
       this._logger.debug('update:batch', { path: this._path, id: uid });
       opts.batch.update(uid, partial, actionOpts);
@@ -401,7 +428,11 @@ export abstract class BaseEntityStorageService<
       this._session,
       actionFromOpts(opts.action, opts.params),
     ) as Partial<Meta['write']>;
-    await this._provider.update(this._path, uid, data);
+    await this._provider.update(this._path, uid, data, {
+      ...(opts.expectedVersion !== undefined && {
+        expectedVersion: opts.expectedVersion,
+      }),
+    });
     // Wave 12.D-fix FR-021 — see note in `set()`.
     if (this._destroyed) return;
     const payload: StorageEventPayload<Meta> = {
@@ -428,32 +459,43 @@ export abstract class BaseEntityStorageService<
     opts: {
       readonly action?: UpdateActionTypes;
       readonly params?: Readonly<Record<string, unknown>>;
-    } & MutationRoutingOpts<Meta, UpdateActionTypes> = {},
+    } & WriteConcurrencyOpts &
+      MutationRoutingOpts<Meta, UpdateActionTypes> = {},
   ): Promise<void> {
     this._assertAlive();
     if (this._rules !== undefined) {
       const resource = await this._readResource(uid);
-      await assertWriteAllowed(this._rules, {
-        verb: 'delete',
-        path: this._path,
-        id: uid,
-        session: this._session,
-        action: {
-          type: (opts.action ?? 'delete') as string,
-          params: opts.params ?? {},
+      await assertWriteAllowed(
+        this._rules,
+        {
+          verb: 'delete',
+          path: this._path,
+          id: uid,
+          session: this._session,
+          action: {
+            type: (opts.action ?? 'delete') as string,
+            params: opts.params ?? {},
+          },
+          affectedKeys: [],
+          patch: {},
+          ...(resource !== undefined ? { resource } : {}),
+          ...(opts.expectedVersion !== undefined
+            ? { expectedVersion: opts.expectedVersion }
+            : {}),
         },
-        affectedKeys: [],
-        patch: {},
-        ...(resource !== undefined ? { resource } : {}),
-      });
+        this._onDenied,
+      );
     }
-    const actionOpts =
-      opts.action !== undefined
-        ? {
-            action: opts.action,
-            ...(opts.params !== undefined && { params: opts.params }),
-          }
-        : undefined;
+    const runnerOpts = {
+      ...(opts.action !== undefined && {
+        action: opts.action,
+        ...(opts.params !== undefined && { params: opts.params }),
+      }),
+      ...(opts.expectedVersion !== undefined && {
+        expectedVersion: opts.expectedVersion,
+      }),
+    };
+    const actionOpts = Object.keys(runnerOpts).length > 0 ? runnerOpts : undefined;
     if (opts.batch) {
       this._logger.debug('delete:batch', { path: this._path, id: uid });
       opts.batch.delete(uid, actionOpts);
@@ -471,7 +513,11 @@ export abstract class BaseEntityStorageService<
         ? { type: opts.action as string, params: opts.params ?? {} }
         : undefined,
     ) as Partial<Meta['write']>;
-    await this._provider.update(this._path, uid, data);
+    await this._provider.update(this._path, uid, data, {
+      ...(opts.expectedVersion !== undefined && {
+        expectedVersion: opts.expectedVersion,
+      }),
+    });
     // Wave 12.D-fix FR-021 — see note in `set()`.
     if (this._destroyed) return;
     const payload: StorageEventPayload<Meta> = {
@@ -505,15 +551,19 @@ export abstract class BaseEntityStorageService<
     this._assertAlive();
     if (this._rules !== undefined) {
       const resource = await this._readResource(uid);
-      await assertWriteAllowed(this._rules, {
-        verb: 'destroy',
-        path: this._path,
-        id: uid,
-        session: this._session,
-        affectedKeys: [],
-        patch: {},
-        ...(resource !== undefined ? { resource } : {}),
-      });
+      await assertWriteAllowed(
+        this._rules,
+        {
+          verb: 'destroy',
+          path: this._path,
+          id: uid,
+          session: this._session,
+          affectedKeys: [],
+          patch: {},
+          ...(resource !== undefined ? { resource } : {}),
+        },
+        this._onDenied,
+      );
     }
     if (opts.batch || opts.transaction) {
       throw new Error(
@@ -541,35 +591,51 @@ export abstract class BaseEntityStorageService<
    */
   async restore(
     uid: string,
-    opts: MutationRoutingOpts<Meta, UpdateActionTypes> = {},
+    opts: WriteConcurrencyOpts &
+      MutationRoutingOpts<Meta, UpdateActionTypes> = {},
   ): Promise<void> {
     this._assertAlive();
     if (this._rules !== undefined) {
       const resource = await this._readResource(uid);
-      await assertWriteAllowed(this._rules, {
-        verb: 'restore',
-        path: this._path,
-        id: uid,
-        session: this._session,
-        action: { type: 'restore', params: {} },
-        affectedKeys: [],
-        patch: {},
-        ...(resource !== undefined ? { resource } : {}),
-      });
+      await assertWriteAllowed(
+        this._rules,
+        {
+          verb: 'restore',
+          path: this._path,
+          id: uid,
+          session: this._session,
+          action: { type: 'restore', params: {} },
+          affectedKeys: [],
+          patch: {},
+          ...(resource !== undefined ? { resource } : {}),
+          ...(opts.expectedVersion !== undefined
+            ? { expectedVersion: opts.expectedVersion }
+            : {}),
+        },
+        this._onDenied,
+      );
     }
+    const restoreOpts =
+      opts.expectedVersion !== undefined
+        ? { expectedVersion: opts.expectedVersion }
+        : undefined;
     if (opts.batch) {
       this._logger.debug('restore:batch', { path: this._path, id: uid });
-      opts.batch.restore(uid);
+      opts.batch.restore(uid, restoreOpts);
       return;
     }
     if (opts.transaction) {
       this._logger.debug('restore:tx', { path: this._path, id: uid });
-      opts.transaction.restore(uid);
+      opts.transaction.restore(uid, restoreOpts);
       return;
     }
     this._logger.debug('restore', { path: this._path, id: uid });
     const data = stampRestore(this._session) as Partial<Meta['write']>;
-    await this._provider.update(this._path, uid, data);
+    await this._provider.update(this._path, uid, data, {
+      ...(opts.expectedVersion !== undefined && {
+        expectedVersion: opts.expectedVersion,
+      }),
+    });
     // Wave 12.D-fix FR-021 — see note in `set()`.
     if (this._destroyed) return;
     const payload: StorageEventPayload<Meta> = {
@@ -664,15 +730,19 @@ export abstract class BaseEntityStorageService<
             'upsert cannot update a governed row — use update() with an update_action',
           );
         }
-        await assertWriteAllowed(this._rules, {
-          verb: 'create',
-          path: this._path,
-          id: _uid,
-          session: this._session,
-          action: { type: 'create', params: {} },
-          affectedKeys: Object.keys(rest),
-          patch: rest,
-        });
+        await assertWriteAllowed(
+          this._rules,
+          {
+            verb: 'create',
+            path: this._path,
+            id: _uid,
+            session: this._session,
+            action: { type: 'create', params: {} },
+            affectedKeys: Object.keys(rest),
+            patch: rest,
+          },
+          this._onDenied,
+        );
       }
       // Same audit stamping as `set()` — `buildDataForSet` populates BOTH
       // create-time (`creator_uuid`, `created_*`) and modify-time
@@ -878,6 +948,7 @@ export abstract class BaseEntityStorageService<
         ((await this._provider.getDoc(this._path, id)) ?? undefined) as
           | Record<string, unknown>
           | undefined,
+      ...(this._onDenied !== undefined ? { onDenied: this._onDenied } : {}),
     });
   }
 
@@ -916,6 +987,9 @@ export abstract class BaseEntityStorageService<
           id: uid,
           patch: partial as Record<string, unknown>,
           ...(action !== undefined ? { action } : {}),
+          ...(opts.expectedVersion !== undefined
+            ? { expectedVersion: opts.expectedVersion }
+            : {}),
         });
         rawTx.update(
           this._path,
@@ -923,6 +997,9 @@ export abstract class BaseEntityStorageService<
           stampUpdate(partial as Record<string, unknown>, this._session, action) as Partial<
             Meta['write']
           >,
+          opts.expectedVersion !== undefined
+            ? { expectedVersion: opts.expectedVersion }
+            : undefined,
         );
       },
       delete: (uid, opts): void => {
@@ -933,19 +1010,36 @@ export abstract class BaseEntityStorageService<
           id: uid,
           patch: {},
           ...(action !== undefined ? { action } : {}),
+          ...(opts?.expectedVersion !== undefined
+            ? { expectedVersion: opts.expectedVersion }
+            : {}),
         });
         rawTx.update(
           this._path,
           uid,
           stampDelete(this._session, action) as Partial<Meta['write']>,
+          opts?.expectedVersion !== undefined
+            ? { expectedVersion: opts.expectedVersion }
+            : undefined,
         );
       },
-      restore: (uid): void => {
-        pending.push({ verb: 'restore', path: this._path, id: uid, patch: {} });
+      restore: (uid, opts): void => {
+        pending.push({
+          verb: 'restore',
+          path: this._path,
+          id: uid,
+          patch: {},
+          ...(opts?.expectedVersion !== undefined
+            ? { expectedVersion: opts.expectedVersion }
+            : {}),
+        });
         rawTx.update(
           this._path,
           uid,
           stampRestore(this._session) as Partial<Meta['write']>,
+          opts?.expectedVersion !== undefined
+            ? { expectedVersion: opts.expectedVersion }
+            : undefined,
         );
       },
     };
@@ -979,6 +1073,9 @@ export abstract class BaseEntityStorageService<
           id: uid,
           patch: partial as Record<string, unknown>,
           ...(action !== undefined ? { action } : {}),
+          ...(opts.expectedVersion !== undefined
+            ? { expectedVersion: opts.expectedVersion }
+            : {}),
         });
         rawBatch.update(
           this._path,
@@ -986,6 +1083,9 @@ export abstract class BaseEntityStorageService<
           stampUpdate(partial as Record<string, unknown>, this._session, action) as Partial<
             Meta['write']
           >,
+          opts.expectedVersion !== undefined
+            ? { expectedVersion: opts.expectedVersion }
+            : undefined,
         );
       },
       delete: (uid, opts): void => {
@@ -996,19 +1096,36 @@ export abstract class BaseEntityStorageService<
           id: uid,
           patch: {},
           ...(action !== undefined ? { action } : {}),
+          ...(opts?.expectedVersion !== undefined
+            ? { expectedVersion: opts.expectedVersion }
+            : {}),
         });
         rawBatch.update(
           this._path,
           uid,
           stampDelete(this._session, action) as Partial<Meta['write']>,
+          opts?.expectedVersion !== undefined
+            ? { expectedVersion: opts.expectedVersion }
+            : undefined,
         );
       },
-      restore: (uid): void => {
-        pending.push({ verb: 'restore', path: this._path, id: uid, patch: {} });
+      restore: (uid, opts): void => {
+        pending.push({
+          verb: 'restore',
+          path: this._path,
+          id: uid,
+          patch: {},
+          ...(opts?.expectedVersion !== undefined
+            ? { expectedVersion: opts.expectedVersion }
+            : {}),
+        });
         rawBatch.update(
           this._path,
           uid,
           stampRestore(this._session) as Partial<Meta['write']>,
+          opts?.expectedVersion !== undefined
+            ? { expectedVersion: opts.expectedVersion }
+            : undefined,
         );
       },
     };

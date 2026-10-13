@@ -62,6 +62,13 @@ export interface AuditedTxRunner<
     opts?: {
       readonly action?: UpdateActionTypes;
       readonly params?: Readonly<Record<string, unknown>>;
+      /**
+       * ETag precondition — the write applies only while the row's
+       * `update_version` still equals this. The gate compares it
+       * against committed state; the raw runner re-checks atomically
+       * at flush (`VersionConflictError` on mismatch).
+       */
+      readonly expectedVersion?: number;
     },
   ): void;
   /**
@@ -74,6 +81,7 @@ export interface AuditedTxRunner<
     opts?: {
       readonly action?: UpdateActionTypes;
       readonly params?: Readonly<Record<string, unknown>>;
+      readonly expectedVersion?: number;
     },
   ): void;
   /**
@@ -81,7 +89,10 @@ export interface AuditedTxRunner<
    * `deleted_*` triplet, bumps `updated_*`, flips `status` back to
    * `'created'` via `buildDataForRestore`.
    */
-  restore(uid: string): void;
+  restore(
+    uid: string,
+    opts?: { readonly expectedVersion?: number },
+  ): void;
 }
 
 /**
@@ -114,6 +125,7 @@ export interface AuditedBatchRunner<
     opts?: {
       readonly action?: UpdateActionTypes;
       readonly params?: Readonly<Record<string, unknown>>;
+      readonly expectedVersion?: number;
     },
   ): void;
   /**
@@ -125,10 +137,14 @@ export interface AuditedBatchRunner<
     opts?: {
       readonly action?: UpdateActionTypes;
       readonly params?: Readonly<Record<string, unknown>>;
+      readonly expectedVersion?: number;
     },
   ): void;
   /**
    * Queue a restore into the batch via `buildDataForRestore`.
    */
-  restore(uid: string): void;
+  restore(
+    uid: string,
+    opts?: { readonly expectedVersion?: number },
+  ): void;
 }

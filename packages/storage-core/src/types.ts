@@ -261,7 +261,12 @@ export interface IBatchRunner<Meta extends StorageMetadata> {
   /** Queue a `set` (full-document write) into the batch. */
   set(path: string, id: string, data: Meta['write']): void;
   /** Queue a partial-update into the batch. */
-  update(path: string, id: string, partial: Partial<Meta['write']>): void;
+  update(
+    path: string,
+    id: string,
+    partial: Partial<Meta['write']>,
+    opts?: WriteConcurrencyOpts,
+  ): void;
   /** Queue a delete into the batch. */
   delete(path: string, id: string): void;
 }
@@ -283,9 +288,39 @@ export interface ITransactionRunner<Meta extends StorageMetadata> {
   /** Queue a `set` to commit when the transaction resolves. */
   set(path: string, id: string, data: Meta['write']): void;
   /** Queue a partial-update to commit when the transaction resolves. */
-  update(path: string, id: string, partial: Partial<Meta['write']>): void;
+  update(
+    path: string,
+    id: string,
+    partial: Partial<Meta['write']>,
+    opts?: WriteConcurrencyOpts,
+  ): void;
   /** Queue a delete to commit when the transaction resolves. */
   delete(path: string, id: string): void;
+}
+
+/**
+ * Optimistic-concurrency knobs a mutating call may declare.
+ *
+ * `expectedVersion` is the ETag contract: the caller asserts it read the
+ * row at `update_version = N` and the write must apply only while that
+ * still holds. Providers enforce it atomically (`UPDATE … WHERE
+ * update_version = $n` / an in-store compare) and throw
+ * {@link VersionConflictError} when it does not — including the
+ * "row vanished" case, which is a conflict, not a silent no-op.
+ *
+ * The field is a convention owned by `@gertsai/entity-storage`
+ * (`update_version`, stamped `1` on create, incremented by the provider
+ * on every mutation). Adapters without the column simply never satisfy
+ * a caller that passes `expectedVersion`.
+ *
+ * @public
+ */
+export interface WriteConcurrencyOpts {
+  /**
+   * Commit only if the row's current `update_version` equals this value.
+   * Omit for last-write-wins (previous behaviour).
+   */
+  readonly expectedVersion?: number;
 }
 
 /**
@@ -398,8 +433,20 @@ export interface IStorageProvider<Meta extends StorageMetadata> {
   /**
    * Apply a partial write. Adapters merge with existing fields rather
    * than overwriting the whole document.
+   *
+   * When `opts.expectedVersion` is supplied the adapter MUST enforce it
+   * atomically (single compare-and-swap) and throw
+   * {@link VersionConflictError} on mismatch — a stale or absent row is
+   * a conflict, never a silent no-op. Adapters SHOULD also increment
+   * the row's `update_version` on every applied update so callers can
+   * obtain the next version from reads.
    */
-  update(path: string, id: string, partial: Partial<Meta['write']>): Promise<void>;
+  update(
+    path: string,
+    id: string,
+    partial: Partial<Meta['write']>,
+    opts?: WriteConcurrencyOpts,
+  ): Promise<void>;
 
   /**
    * Wave 6.5 / PRD-007: native upsert primitive.
