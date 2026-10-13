@@ -33,11 +33,11 @@
  *   opt-out a table may declare).
  */
 
-import type { Session } from '@gertsai/session';
-import { VersionConflictError } from '@gertsai/storage-core';
+import type { Session } from "@gertsai/session";
+import { VersionConflictError } from "@gertsai/storage-core";
 
 /** Storage verb being evaluated. */
-export type WriteVerb = 'create' | 'update' | 'delete' | 'restore' | 'destroy';
+export type WriteVerb = "create" | "update" | "delete" | "restore" | "destroy";
 
 /** The `update_action` journal stamped on the write. */
 export interface WriteRuleAction {
@@ -166,17 +166,17 @@ export class WriteRuleDenied extends Error {
   readonly reason: string;
 
   constructor(
-    ctx: Pick<WriteRuleEval, 'path' | 'id' | 'verb'> & {
+    ctx: Pick<WriteRuleEval, "path" | "id" | "verb"> & {
       actionType?: string | undefined;
     },
     reason: string,
   ) {
     super(
       `write denied: ${ctx.verb} ${ctx.path}/${ctx.id}` +
-        (ctx.actionType !== undefined ? ` (action=${ctx.actionType})` : '') +
+        (ctx.actionType !== undefined ? ` (action=${ctx.actionType})` : "") +
         ` — ${reason}`,
     );
-    this.name = 'WriteRuleDenied';
+    this.name = "WriteRuleDenied";
     this.path = ctx.path;
     this.id = ctx.id;
     this.verb = ctx.verb;
@@ -191,14 +191,14 @@ export class WriteRuleDenied extends Error {
  * `…Restore` own these; they are never legitimate caller input.
  */
 export const PROTECTED_AUDIT_FIELDS: readonly string[] = [
-  'creator_uuid',
-  'created_by_platform',
-  'updated_by_uuid',
-  'updated_by_platform',
-  'deleted_at',
-  'deleted_by_uuid',
-  'deleted_by_platform',
-  'update_action',
+  "creator_uuid",
+  "created_by_platform",
+  "updated_by_uuid",
+  "updated_by_platform",
+  "deleted_at",
+  "deleted_by_uuid",
+  "deleted_by_platform",
+  "update_action",
 ] as const;
 
 /**
@@ -210,22 +210,22 @@ export const PROTECTED_AUDIT_FIELDS: readonly string[] = [
  */
 export const PROTECTED_UPDATE_FIELDS: readonly string[] = [
   ...PROTECTED_AUDIT_FIELDS,
-  '_uid',
-  'id',
-  'entity_status',
-  'status',
-  'created_at',
-  'updated_at',
-  'update_version',
+  "_uid",
+  "id",
+  "entity_status",
+  "status",
+  "created_at",
+  "updated_at",
+  "update_version",
 ] as const;
 
 /** Fields protected on **create** — audit marks + lifecycle. `id`/`created_at`/`updated_at` stay writable (domain columns). */
 export const PROTECTED_CREATE_FIELDS: readonly string[] = [
   ...PROTECTED_AUDIT_FIELDS,
-  '_uid',
-  'entity_status',
-  'status',
-  'update_version',
+  "_uid",
+  "entity_status",
+  "status",
+  "update_version",
 ] as const;
 
 /** Value-equality for the affected-keys diff (deep-lite via JSON). */
@@ -233,7 +233,7 @@ function valuesDiffer(a: unknown, b: unknown): boolean {
   if (a === b) return false;
   if (a === null || b === null) return true;
   if (typeof a !== typeof b) return true;
-  if (typeof a !== 'object') return true;
+  if (typeof a !== "object") return true;
   try {
     return JSON.stringify(a) !== JSON.stringify(b);
   } catch {
@@ -283,9 +283,9 @@ function resolvePredicate(
   actionType: string | undefined,
 ): WriteRulePredicate | undefined {
   if (rules === undefined) return undefined;
-  if (typeof rules === 'function') return rules;
+  if (typeof rules === "function") return rules;
   if (actionType === undefined) return undefined;
-  return rules[actionType] ?? rules['*'];
+  return rules[actionType] ?? rules["*"];
 }
 
 /**
@@ -328,18 +328,16 @@ export async function assertWriteAllowed(
   if (rules === undefined) return;
 
   // Guard 1 — protected fields can never ride a caller's diff.
-  if (ctx.verb === 'update' || ctx.verb === 'create') {
+  if (ctx.verb === "update" || ctx.verb === "create") {
     const protectedSet =
-      ctx.verb === 'update'
-        ? PROTECTED_UPDATE_FIELDS
-        : PROTECTED_CREATE_FIELDS;
+      ctx.verb === "update" ? PROTECTED_UPDATE_FIELDS : PROTECTED_CREATE_FIELDS;
     const illegal = Object.keys(ctx.patch).filter((k) =>
       (protectedSet as readonly string[]).includes(k),
     );
     if (illegal.length > 0) {
       const err = new WriteRuleDenied(
         { ...ctx, actionType: ctx.action?.type },
-        `protected fields in diff: ${illegal.join(', ')}`,
+        `protected fields in diff: ${illegal.join(", ")}`,
       );
       notifyDenied(onDenied, err);
       throw err;
@@ -354,7 +352,7 @@ export async function assertWriteAllowed(
   if (ctx.expectedVersion !== undefined) {
     const actual =
       ctx.resource !== undefined
-        ? (ctx.resource['update_version'] as number | undefined)
+        ? (ctx.resource["update_version"] as number | undefined)
         : undefined;
     if (actual !== ctx.expectedVersion) {
       const err = new VersionConflictError({
@@ -371,12 +369,12 @@ export async function assertWriteAllowed(
   // Guard 2 — update/delete on a mapped table require update_action
   // (Orchestra `NO_UPDATE_ACTION`). Restore/destroy stamp their own.
   const needsAction =
-    (ctx.verb === 'update' || ctx.verb === 'delete') &&
-    (rules[ctx.verb as 'update' | 'delete'] !== undefined);
+    (ctx.verb === "update" || ctx.verb === "delete") &&
+    rules[ctx.verb as "update" | "delete"] !== undefined;
   if (needsAction && ctx.action === undefined) {
     const err = new WriteRuleDenied(
       { ...ctx, actionType: undefined },
-      'update_action required (NO_UPDATE_ACTION)',
+      "update_action required (NO_UPDATE_ACTION)",
     );
     notifyDenied(onDenied, err);
     throw err;
@@ -384,19 +382,19 @@ export async function assertWriteAllowed(
 
   let predicate: WriteRulePredicate | undefined;
   switch (ctx.verb) {
-    case 'create':
+    case "create":
       predicate = rules.create;
       break;
-    case 'update':
+    case "update":
       predicate = resolvePredicate(rules.update, ctx.action?.type);
       break;
-    case 'delete':
+    case "delete":
       predicate = resolvePredicate(rules.delete, ctx.action?.type);
       break;
-    case 'restore':
+    case "restore":
       predicate = rules.restore;
       break;
-    case 'destroy':
+    case "destroy":
       predicate = rules.destroy;
       break;
   }
@@ -405,7 +403,7 @@ export async function assertWriteAllowed(
     const err = new WriteRuleDenied(
       { ...ctx, actionType: ctx.action?.type },
       `no rule for verb '${ctx.verb}'` +
-        (ctx.action !== undefined ? ` / action '${ctx.action.type}'` : ''),
+        (ctx.action !== undefined ? ` / action '${ctx.action.type}'` : ""),
     );
     notifyDenied(onDenied, err);
     throw err;
@@ -413,10 +411,10 @@ export async function assertWriteAllowed(
   if (!(await predicate(ctx))) {
     const err = new WriteRuleDenied(
       { ...ctx, actionType: ctx.action?.type },
-      'rule predicate returned false' +
+      "rule predicate returned false" +
         (ctx.affectedKeys.length > 0
-          ? ` (affected: ${ctx.affectedKeys.join(', ')})`
-          : ''),
+          ? ` (affected: ${ctx.affectedKeys.join(", ")})`
+          : ""),
     );
     notifyDenied(onDenied, err);
     throw err;
@@ -471,7 +469,7 @@ export interface PendingWriteGate {
    * use for writers scoped to a fixed table set, where an unmapped
    * path is a typo or an escape attempt.
    */
-  readonly unmappedPath?: 'skip' | 'deny';
+  readonly unmappedPath?: "skip" | "deny";
   /**
    * Called once per denied write just before the throw — the metrics
    * hook ({@link WriteDenialObserver}). Fires for both policy denials
@@ -503,10 +501,34 @@ export async function assertPendingWrites(
   pending: readonly PendingWrite[],
   gate: PendingWriteGate,
 ): Promise<void> {
+  // Resource prefetch: every governed write's committed row is read in
+  // ONE parallel batch before the eval loop. The eval itself stays
+  // sequential and fail-fast — but the read-per-write round-trips were
+  // the measured cost (N pending writes serialized to ~N·RTT against a
+  // remote store). Deduped by (path,id) — repeated writes to one row
+  // share the read. Semantics unchanged: reads still observe committed
+  // pre-commit state; the provider's atomic guard owns the last word.
+  const resources = new Map<string, Record<string, unknown> | undefined>();
+  const resKey = (path: string, id: string) => `${path} ${id}`;
+  if (gate.resource !== undefined) {
+    const read = gate.resource;
+    const wanted = new Map<string, PendingWrite>();
+    for (const w of pending) {
+      if (gate.rulesFor(w.path) === undefined) continue;
+      const key = resKey(w.path, w.id);
+      if (!wanted.has(key)) wanted.set(key, w);
+    }
+    await Promise.all(
+      [...wanted.values()].map(async (w) => {
+        const row = (await read(w.path, w.id)) ?? undefined;
+        resources.set(resKey(w.path, w.id), row);
+      }),
+    );
+  }
   for (const w of pending) {
     const rules = gate.rulesFor(w.path);
     if (rules === undefined) {
-      if (gate.unmappedPath === 'deny') {
+      if (gate.unmappedPath === "deny") {
         const err = new WriteRuleDenied(
           { path: w.path, id: w.id, verb: w.verb },
           `no ruleset registered for path '${w.path}'`,
@@ -516,23 +538,20 @@ export async function assertPendingWrites(
       }
       continue;
     }
-    const resource =
-      gate.resource !== undefined
-        ? ((await gate.resource(w.path, w.id)) ?? undefined)
-        : undefined;
-    if (w.verb === 'create' && resource !== undefined) {
+    const resource = resources.get(resKey(w.path, w.id));
+    if (w.verb === "create" && resource !== undefined) {
       const err = new WriteRuleDenied(
         { path: w.path, id: w.id, verb: w.verb },
-        'row already exists — set() is create-only on a governed table; use update()',
+        "row already exists — set() is create-only on a governed table; use update()",
       );
       notifyDenied(gate.onDenied, err);
       throw err;
     }
     const action =
       w.action ??
-      (w.verb === 'update'
+      (w.verb === "update"
         ? undefined
-        : { type: w.verb === 'create' ? 'create' : w.verb, params: {} });
+        : { type: w.verb === "create" ? "create" : w.verb, params: {} });
     await assertWriteAllowed(
       rules,
       {
@@ -542,12 +561,12 @@ export async function assertPendingWrites(
         session: gate.session,
         ...(action !== undefined ? { action } : {}),
         affectedKeys:
-          w.verb === 'create'
+          w.verb === "create"
             ? Object.keys(w.patch)
-            : w.verb === 'update'
+            : w.verb === "update"
               ? computeAffectedKeys(w.patch, resource)
               : [],
-        patch: w.verb === 'create' || w.verb === 'update' ? w.patch : {},
+        patch: w.verb === "create" || w.verb === "update" ? w.patch : {},
         ...(resource !== undefined ? { resource } : {}),
         ...(w.expectedVersion !== undefined
           ? { expectedVersion: w.expectedVersion }
