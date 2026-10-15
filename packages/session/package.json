@@ -42,6 +42,7 @@
     "@gertsai/errors": "workspace:^"
   },
   "devDependencies": {
+    "@gertsai/errors": "workspace:*",
     "vitest": "^3.0.0"
   },
   "keywords": [
