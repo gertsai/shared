@@ -53,6 +53,7 @@
     "@gertsai/entity": "workspace:*",
     "@gertsai/entity-audit": "workspace:*",
     "@gertsai/session": "workspace:*",
+    "@gertsai/storage-core": "workspace:*",
     "vitest": "^3.0.0"
   },
   "keywords": [
