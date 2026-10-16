@@ -657,3 +657,142 @@ describe('optimistic concurrency — update_version / expectedVersion', () => {
     );
   });
 });
+
+describe('BaseEntityStorageService write-rules — single-doc cross-document readers', () => {
+  it('ctx.get reads a committed doc in another collection during update', async () => {
+    const provider = new InMemoryStorageProvider<CardMeta>();
+    // Rule: a card may move only while its parent list is not archived —
+    // the Orchestra getChat(space_uid) pattern.
+    const rules: TableWriteRules = {
+      ...CARD_RULES,
+      update: {
+        card_moved: async (ctx) => {
+          if (ctx.get === undefined) return false;
+          const list = await ctx.get('lists', String(ctx.patch['list_id'] ?? ''));
+          return list !== undefined && list['archived'] !== true;
+        },
+      },
+    };
+    class Svc extends BaseEntityStorageService<CardMeta> {
+      constructor(p: IStorageProvider<CardMeta>, s: Session) {
+        super({ provider: p, session: s, path: 'cards', rules });
+      }
+    }
+    const svc = new Svc(provider, makeSession());
+    await seed(provider);
+    // No list doc → deny.
+    await expect(
+      svc.update('c-1', { list_id: 'l-2', position: 5 }, { action: 'card_moved' }),
+    ).rejects.toThrow(WriteRuleDenied);
+    // Archived list → deny.
+    await provider.set('lists', 'l-2', { archived: true } as unknown as CardData, 'l-2');
+    await expect(
+      svc.update('c-1', { list_id: 'l-2', position: 5 }, { action: 'card_moved' }),
+    ).rejects.toThrow(WriteRuleDenied);
+    // Live list → allow.
+    await provider.set('lists', 'l-3', { archived: false } as unknown as CardData, 'l-3');
+    await svc.update('c-1', { list_id: 'l-3', position: 5 }, { action: 'card_moved' });
+    expect(((await provider.getDoc('cards', 'c-1')) as unknown as Record<string, unknown>)?.['list_id']).toBe('l-3');
+  });
+
+  it('ctx.getAfter exposes the post-write image of the target doc', async () => {
+    const provider = new InMemoryStorageProvider<CardMeta>();
+    // Rule: reject the update when the post-write title is forbidden —
+    // the pattern Orchestra uses for "after" assertions.
+    const rules: TableWriteRules = {
+      ...CARD_RULES,
+      update: {
+        card_updated: async (ctx) => {
+          if (ctx.getAfter === undefined) return false;
+          const after = await ctx.getAfter('cards', ctx.id);
+          return after !== undefined && after['title'] !== 'forbidden';
+        },
+      },
+    };
+    class Svc extends BaseEntityStorageService<CardMeta> {
+      constructor(p: IStorageProvider<CardMeta>, s: Session) {
+        super({ provider: p, session: s, path: 'cards', rules });
+      }
+    }
+    const svc = new Svc(provider, makeSession());
+    await seed(provider);
+    await expect(
+      svc.update('c-1', { title: 'forbidden' }, { action: 'card_updated' }),
+    ).rejects.toThrow(WriteRuleDenied);
+    await svc.update('c-1', { title: 'fine' }, { action: 'card_updated' });
+    expect(((await provider.getDoc('cards', 'c-1')) as unknown as Record<string, unknown>)?.['title']).toBe('fine');
+  });
+
+  it('ctx.getAfter returns committed state for sibling docs and the deleted image on delete', async () => {
+    const provider = new InMemoryStorageProvider<CardMeta>();
+    const seen: Array<Record<string, unknown> | undefined> = [];
+    const rules: TableWriteRules = {
+      ...CARD_RULES,
+      delete: async (ctx) => {
+        if (ctx.getAfter === undefined) return false;
+        seen[0] = await ctx.getAfter('cards', ctx.id);
+        seen[1] = await ctx.getAfter('cards', 'other-card');
+        return true;
+      },
+    };
+    class Svc extends BaseEntityStorageService<CardMeta> {
+      constructor(p: IStorageProvider<CardMeta>, s: Session) {
+        super({ provider: p, session: s, path: 'cards', rules });
+      }
+    }
+    const svc = new Svc(provider, makeSession());
+    await seed(provider);
+    await provider.set('cards', 'other-card', { title: 'sib', list_id: 'l-1', position: 1 } as CardData, 'other-card');
+    await svc.delete('c-1');
+    // Target doc: committed image folded with the delete stamp.
+    expect(seen[0]).toMatchObject({ title: 'seed' });
+    expect(seen[0]?.['deleted_at']).toBeDefined();
+    // Sibling: untouched committed state.
+    expect(seen[1]).toMatchObject({ title: 'sib' });
+  });
+
+  it('ctx.getAfter is undefined for the target doc on destroy', async () => {
+    const provider = new InMemoryStorageProvider<CardMeta>();
+    const rules: TableWriteRules = {
+      ...CARD_RULES,
+      destroy: async (ctx) => ctx.getAfter !== undefined
+        && (await ctx.getAfter('cards', ctx.id)) === undefined,
+    };
+    class Svc extends BaseEntityStorageService<CardMeta> {
+      constructor(p: IStorageProvider<CardMeta>, s: Session) {
+        super({ provider: p, session: s, path: 'cards', rules });
+      }
+    }
+    const svc = new Svc(provider, makeSession());
+    await seed(provider);
+    await svc.destroy('c-1');
+    expect(await provider.getDoc('cards', 'c-1')).toBeNull();
+  });
+
+  it('forwards claims into single-doc rule evals', async () => {
+    const provider = new InMemoryStorageProvider<CardMeta>();
+    const rules: TableWriteRules = {
+      ...CARD_RULES,
+      update: {
+        card_updated: async (ctx) =>
+          ctx.claims?.['admin'] === true || ctx.patch['title'] !== 'admin-only',
+      },
+    };
+    class Svc extends BaseEntityStorageService<CardMeta> {
+      constructor(p: IStorageProvider<CardMeta>, s: Session, claims?: Readonly<Record<string, unknown>>) {
+        super({ provider: p, session: s, path: 'cards', rules, ...(claims !== undefined ? { claims } : {}) });
+      }
+    }
+    const plain = new Svc(provider, makeSession());
+    const admin = new Svc(provider, makeSession(), { admin: true });
+    await seed(provider);
+    // No claims → the protected value is denied, ordinary values pass.
+    await expect(
+      plain.update('c-1', { title: 'admin-only' }, { action: 'card_updated' }),
+    ).rejects.toThrow(WriteRuleDenied);
+    await plain.update('c-1', { title: 'ok' }, { action: 'card_updated' });
+    // Admin claim → the protected value passes.
+    await admin.update('c-1', { title: 'admin-only' }, { action: 'card_updated' });
+    expect(((await provider.getDoc('cards', 'c-1')) as unknown as Record<string, unknown>)?.['title']).toBe('admin-only');
+  });
+});

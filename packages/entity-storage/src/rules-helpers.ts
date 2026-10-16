@@ -315,10 +315,15 @@ export function resourceFieldIsCaller(field: string): WriteRulePredicate {
   return (ctx) => ctx.resource?.[field] === ctx.session.operatorUuid;
 }
 
-/** `reqResData.<field> == currUuid` — caller named on the INCOMING doc. */
+/**
+ * `request.resource.data.<field> == currUuid` — caller named on the
+ * POST-WRITE doc (Firestore's `reqResData` = stored doc + patch merged,
+ * patch wins). Reading `ctx.patch` alone silently denied updates whose
+ * owner field lives only on the stored row (NOTE-012).
+ */
 export function patchFieldIsCaller(field: string): WriteRulePredicate {
   return (ctx) =>
-    (ctx.verb === "create" ? ctx.patch[field] : ctx.patch[field]) ===
+    ({ ...(ctx.resource ?? {}), ...ctx.patch })[field] ===
     ctx.session.operatorUuid;
 }
 

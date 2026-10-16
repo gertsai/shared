@@ -31,8 +31,11 @@ import {
   computeAffectedKeys,
   WriteRuleDenied,
   type PendingWrite,
+  type RuleDocReader,
   type TableWriteRules,
   type WriteDenialObserver,
+  type WriteRuleEval,
+  type WriteVerb,
 } from "./write-rules";
 import {
   actionFromOpts,
@@ -335,6 +338,7 @@ export abstract class BaseEntityStorageService<
           action: { type: "create", params: {} },
           affectedKeys: Object.keys(rest),
           patch: rest,
+          ...this._docReaders("create", id, rest),
         },
         this._onDenied,
       );
@@ -408,6 +412,7 @@ export abstract class BaseEntityStorageService<
           ...(opts.expectedVersion !== undefined
             ? { expectedVersion: opts.expectedVersion }
             : {}),
+          ...this._docReaders("update", uid, patch),
         },
         this._onDenied,
       );
@@ -494,6 +499,7 @@ export abstract class BaseEntityStorageService<
           ...(opts.expectedVersion !== undefined
             ? { expectedVersion: opts.expectedVersion }
             : {}),
+          ...this._docReaders("delete", uid, {}),
         },
         this._onDenied,
       );
@@ -575,6 +581,7 @@ export abstract class BaseEntityStorageService<
           affectedKeys: [],
           patch: {},
           ...(resource !== undefined ? { resource } : {}),
+          ...this._docReaders("destroy", uid, {}),
         },
         this._onDenied,
       );
@@ -626,6 +633,7 @@ export abstract class BaseEntityStorageService<
           ...(opts.expectedVersion !== undefined
             ? { expectedVersion: opts.expectedVersion }
             : {}),
+          ...this._docReaders("restore", uid, {}),
         },
         this._onDenied,
       );
@@ -756,6 +764,7 @@ export abstract class BaseEntityStorageService<
             action: { type: "create", params: {} },
             affectedKeys: Object.keys(rest),
             patch: rest,
+            ...this._docReaders("create", _uid, rest),
           },
           this._onDenied,
         );
@@ -952,6 +961,50 @@ export abstract class BaseEntityStorageService<
    * write through {@link assertPendingWrites} against this service's
    * ruleset. No-op when the collection is ungoverned.
    */
+  /**
+   * Cross-document readers for a single-write eval — the write IS the
+   * whole transaction here, so `get` reads committed state through the
+   * provider and `getAfter` folds this write into the target doc's
+   * committed image (same fold `assertPendingWrites` applies per key:
+   * create replaces, update merges, delete stamps `deleted_*`, restore
+   * clears them, destroy removes).
+   */
+  private _docReaders(
+    verb: WriteVerb,
+    id: string,
+    patch: Record<string, unknown>,
+  ): Pick<WriteRuleEval, "get" | "getAfter"> {
+    const provider = this._provider;
+    const path0 = this._path;
+    const get: RuleDocReader = async (path, docId) =>
+      ((await provider.getDoc(path, docId)) ?? undefined) as
+        | Record<string, unknown>
+        | undefined;
+    const getAfter: RuleDocReader = async (path, docId) => {
+      const committed = await get(path, docId);
+      if (path !== path0 || docId !== id) return committed;
+      switch (verb) {
+        case "create":
+          return { ...patch };
+        case "update":
+          return committed === undefined
+            ? undefined
+            : { ...committed, ...patch };
+        case "delete":
+          return committed === undefined
+            ? undefined
+            : { ...committed, ...stampDelete(this._session) };
+        case "restore":
+          return committed === undefined
+            ? undefined
+            : { ...committed, ...stampRestore(this._session) };
+        case "destroy":
+          return undefined;
+      }
+    };
+    return { get, getAfter };
+  }
+
   private async _assertPending(
     pending: readonly PendingWrite[],
   ): Promise<void> {
@@ -961,8 +1014,8 @@ export abstract class BaseEntityStorageService<
       session: this._session,
       claims: this._claims,
       rulesFor: () => rules,
-      resource: async (_path, id) =>
-        ((await this._provider.getDoc(this._path, id)) ?? undefined) as
+      resource: async (path, id) =>
+        ((await this._provider.getDoc(path, id)) ?? undefined) as
           | Record<string, unknown>
           | undefined,
       ...(this._onDenied !== undefined ? { onDenied: this._onDenied } : {}),
