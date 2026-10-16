@@ -109,7 +109,7 @@ describe('PgStorageProvider — CRUD recorded SQL', () => {
     const provider = new PgStorageProvider<UserMeta>({ client });
     await provider.update('users', 'u1', { email: 'b@x' });
     const sql = client.recorded[0]?.sql ?? '';
-    expect(sql).toMatch(/UPDATE users SET data = data \|\| /);
+    expect(sql).toMatch(/UPDATE users SET data = (users\.)?data \|\| /);
     expect(sql).toMatch(/WHERE id = /);
   });
 
@@ -379,7 +379,7 @@ function buildPgProviderWithFakeStore(): PgStorageProvider<KvMeta> {
         store.set(values[0] as string, values[1] as KvData);
         return 1;
       }
-      if (/UPDATE kv SET data = data \|\|/.test(sql)) {
+      if (/UPDATE kv SET data = (kv\.)?data \|\|/.test(sql)) {
         const id = values[0] as string;
         const partial = values[1] as Partial<KvData>;
         const cur = store.get(id);
@@ -456,5 +456,96 @@ describe.each<{
     await provider.delete('a');
     expect(await provider.get('a')).toBeNull();
     expect(await provider.count()).toBe(1);
+  });
+});
+
+describe('PgStorageProvider — SetWriteOpts contract', () => {
+  it('set() default is merge-upsert: data = table.data || EXCLUDED.data', async () => {
+    const client = mockPgClient();
+    const provider = new PgStorageProvider<UserMeta>({ client });
+    await provider.set('users', 'u1', { name: 'a', email: 'a@x' });
+    const sql = client.recorded[0]?.sql ?? '';
+    expect(sql).toMatch(/ON CONFLICT \(id\) DO UPDATE SET data = users\.data \|\| EXCLUDED\.data/);
+  });
+
+  it('set() merge:false is a full overwrite: data = EXCLUDED.data', async () => {
+    const client = mockPgClient();
+    const provider = new PgStorageProvider<UserMeta>({ client });
+    await provider.set('users', 'u1', { name: 'a', email: 'a@x' }, { merge: false });
+    const sql = client.recorded[0]?.sql ?? '';
+    expect(sql).toMatch(/SET data = EXCLUDED\.data/);
+    expect(sql).not.toMatch(/users\.data \|\|/);
+  });
+
+  it('set() expectedVersion guards the conflict branch and passes it as $3', async () => {
+    const client = mockPgClient({ defaultExecuteResult: 1 });
+    const provider = new PgStorageProvider<UserMeta>({ client });
+    await provider.set(
+      'users',
+      'u1',
+      { name: 'a', email: 'a@x' },
+      { expectedVersion: 3 },
+    );
+    const q = client.recorded[0];
+    expect(q?.sql).toMatch(
+      /WHERE \(users\.data->>'update_version'\)::int = \$3/,
+    );
+    expect(q?.params).toEqual(['u1', { name: 'a', email: 'a@x' }, 3]);
+  });
+
+  it('set() stale expectedVersion surfaces VersionConflictError', async () => {
+    const client = mockPgClient({
+      executeResults: [{ pattern: /INSERT INTO users/, result: 0 }],
+    });
+    const provider = new PgStorageProvider<UserMeta>({ client });
+    await expect(
+      provider.set('users', 'u1', { name: 'a', email: 'a@x' }, { expectedVersion: 3 }),
+    ).rejects.toMatchObject({
+      name: 'VersionConflictError',
+      path: 'users',
+      id: 'u1',
+      expected: 3,
+    });
+  });
+
+  it('update() expectedVersion adds the version predicate', async () => {
+    const client = mockPgClient({ defaultExecuteResult: 1 });
+    const provider = new PgStorageProvider<UserMeta>({ client });
+    await provider.update('users', 'u1', { email: 'b@x' }, { expectedVersion: 5 });
+    const q = client.recorded[0];
+    expect(q?.sql).toMatch(
+      /AND \(users\.data->>'update_version'\)::int = \$3/,
+    );
+    expect(q?.params).toEqual(['u1', { email: 'b@x' }, 5]);
+  });
+
+  it('update() without expectedVersion stays a silent no-op on missing rows', async () => {
+    const client = mockPgClient({ defaultExecuteResult: 0 });
+    const provider = new PgStorageProvider<UserMeta>({ client });
+    await expect(provider.update('users', 'gone', { email: 'b@x' })).resolves.toBeUndefined();
+  });
+
+  it('batch set forwards merge + expectedVersion into the upsert SQL', async () => {
+    const client = mockPgClient({ defaultExecuteResult: 1 });
+    const provider = new PgStorageProvider<UserMeta>({ client });
+    await provider.runBatch(async (b) => {
+      b.set('users', 'u1', { name: 'a', email: 'a@x' }, { merge: false, expectedVersion: 2 });
+    });
+    const upsert = client.recorded.find((q) => /INSERT INTO users/.test(q.sql));
+    expect(upsert?.sql).toMatch(/SET data = EXCLUDED\.data WHERE/);
+    expect(upsert?.params).toEqual(['u1', { name: 'a', email: 'a@x' }, 2]);
+  });
+
+  it('tx set honors expectedVersion inside the transaction', async () => {
+    const client = mockPgClient({
+      executeResults: [{ pattern: /INSERT INTO users/, result: 0 }],
+      defaultExecuteResult: 1,
+    });
+    const provider = new PgStorageProvider<UserMeta>({ client });
+    await expect(
+      provider.runTransaction(async (tx) => {
+        tx.set('users', 'u1', { name: 'a', email: 'a@x' }, { expectedVersion: 2 });
+      }),
+    ).rejects.toMatchObject({ name: 'VersionConflictError' });
   });
 });

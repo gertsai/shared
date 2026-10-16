@@ -404,3 +404,80 @@ describe('InMemoryStorageProvider — concurrent runBatch (Wave 21 FR-X2)', () =
     expect((await p.getDoc('users', 'u1'))?.age).toBe(99);
   });
 });
+
+describe('InMemoryStorageProvider — set() SetWriteOpts parity', () => {
+  it('merge default: set over an existing row preserves absent fields', async () => {
+    const p = new InMemoryStorageProvider<UserMeta>();
+    await p.set('users', 'u1', { name: 'A', age: 1 });
+    await p.set('users', 'u1', { name: 'B' } as UserData);
+    expect(await p.getDoc('users', 'u1')).toEqual({ name: 'B', age: 1 });
+  });
+
+  it('merge:false drops absent fields (Firestore overwrite)', async () => {
+    const p = new InMemoryStorageProvider<UserMeta>();
+    await p.set('users', 'u1', { name: 'A', age: 1 });
+    await p.set('users', 'u1', { name: 'B' } as UserData, { merge: false });
+    expect(await p.getDoc('users', 'u1')).toEqual({ name: 'B' });
+  });
+
+  it('expectedVersion on the conflict path: stale ETag throws VersionConflictError', async () => {
+    const p = new InMemoryStorageProvider<UserMeta>();
+    await p.set('users', 'u1', { name: 'A', age: 1, update_version: 1 } as UserData);
+    await expect(
+      p.set('users', 'u1', { name: 'B', age: 2 }, { expectedVersion: 7 }),
+    ).rejects.toMatchObject({
+      name: 'VersionConflictError',
+      expected: 7,
+      actual: 1,
+    });
+    // The failed write left no trace.
+    expect((await p.getDoc('users', 'u1'))?.name).toBe('A');
+  });
+
+  it('expectedVersion matching the live row applies and bumps update_version', async () => {
+    const p = new InMemoryStorageProvider<UserMeta>();
+    await p.set('users', 'u1', { name: 'A', age: 1, update_version: 1 } as UserData);
+    await p.set('users', 'u1', { name: 'B', age: 2 }, { expectedVersion: 1 });
+    const doc = (await p.getDoc('users', 'u1')) as unknown as Record<
+      string,
+      unknown
+    >;
+    expect(doc['name']).toBe('B');
+    expect(doc['update_version']).toBe(2);
+  });
+
+  it('expectedVersion on an absent row inserts unconditionally', async () => {
+    const p = new InMemoryStorageProvider<UserMeta>();
+    await p.set('users', 'u1', { name: 'A', age: 1 }, { expectedVersion: 42 });
+    expect(await p.getDoc('users', 'u1')).toEqual({ name: 'A', age: 1 });
+  });
+
+  it('batch runner honors merge:false + expectedVersion on set', async () => {
+    const p = new InMemoryStorageProvider<UserMeta>();
+    await p.set('users', 'u1', { name: 'A', age: 1, update_version: 1 } as UserData);
+    await p.runBatch(async (b) => {
+      b.set('users', 'u1', { name: 'B' } as UserData, {
+        merge: false,
+        expectedVersion: 1,
+      });
+    });
+    const doc = (await p.getDoc('users', 'u1')) as unknown as Record<
+      string,
+      unknown
+    >;
+    expect(doc['name']).toBe('B');
+    expect(doc['age']).toBeUndefined();
+    expect(doc['update_version']).toBe(2);
+  });
+
+  it('tx runner honors expectedVersion on set', async () => {
+    const p = new InMemoryStorageProvider<UserMeta>();
+    await p.set('users', 'u1', { name: 'A', age: 1, update_version: 1 } as UserData);
+    await expect(
+      p.runTransaction(async (tx) => {
+        tx.set('users', 'u1', { name: 'B', age: 2 }, { expectedVersion: 9 });
+      }),
+    ).rejects.toMatchObject({ name: 'VersionConflictError' });
+    expect((await p.getDoc('users', 'u1'))?.name).toBe('A');
+  });
+});

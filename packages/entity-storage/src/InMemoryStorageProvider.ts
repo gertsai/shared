@@ -59,6 +59,7 @@ import {
   TransactionConflictError,
   VersionConflictError,
 } from '@gertsai/storage-core';
+import type { SetWriteOpts } from '@gertsai/storage-core';
 import { AUDIT_FIELDS } from '@gertsai/entity-audit';
 import { applyQueryFilter } from './applyQueryFilter';
 
@@ -251,10 +252,56 @@ export class InMemoryStorageProvider<
     return versioned;
   }
 
+  /**
+   * `set` with {@link SetWriteOpts} semantics shared by the standalone
+   * call and queued deltas: on an existing row `merge: false` writes
+   * `data` verbatim (Firestore overwrite) while the default merges
+   * `data` over committed state; `expectedVersion` is the same ETag as
+   * `update`, checked only on the conflict path (a fresh insert has no
+   * prior version — pg parity).
+   */
+  private _setOnto(
+    coll: Map<string, VersionedDoc>,
+    id: string,
+    data: unknown,
+    opts?: { readonly merge?: boolean; readonly expectedVersion?: number },
+    path?: string,
+  ): VersionedDoc {
+    const prev = coll.get(id);
+    if (prev !== undefined && opts?.expectedVersion !== undefined) {
+      const curUpdateVersion = (
+        prev.data as Record<string, unknown>
+      )['update_version'] as number | undefined;
+      if (curUpdateVersion !== opts.expectedVersion) {
+        throw new VersionConflictError({
+          ...(path !== undefined ? { path } : {}),
+          id,
+          expected: opts.expectedVersion,
+          ...(curUpdateVersion !== undefined
+            ? { actual: curUpdateVersion }
+            : {}),
+        });
+      }
+    }
+    const write =
+      prev !== undefined && opts?.merge !== false
+        ? ({
+            ...(prev.data as Record<string, unknown>),
+            ...(data as Record<string, unknown>),
+          } as unknown)
+        : data;
+    return this._writeOnto(coll, id, write);
+  }
+
   // ─────────────────── IStorageProvider — CRUD ───────────────────
 
-  async set(path: string, id: string, data: Meta['write']): Promise<void> {
-    this._writeOnto(this._coll(path), id, data);
+  async set(
+    path: string,
+    id: string,
+    data: Meta['write'],
+    opts?: SetWriteOpts,
+  ): Promise<void> {
+    this._setOnto(this._coll(path), id, data, opts, path);
     this._emitDoc(path, id);
     this._emitColl(path);
   }
@@ -449,7 +496,7 @@ export class InMemoryStorageProvider<
       const coll = this._coll(path);
       for (const op of ops) {
         if (op.kind === 'set') {
-          this._writeOnto(coll, id, op.data);
+          this._setOnto(coll, id, op.data, op, path);
         } else if (op.kind === 'update') {
           this._updateOnto(coll, id, op.partial, op.expectedVersion, path);
         } else {
@@ -491,8 +538,15 @@ export class InMemoryStorageProvider<
     };
 
     const runner: IBatchRunner<Meta> = {
-      set: (path, id, data): void => {
-        queue(path, id, { kind: 'set', data });
+      set: (path, id, data, opts): void => {
+        queue(path, id, {
+          kind: 'set',
+          data,
+          ...(opts?.merge !== undefined ? { merge: opts.merge } : {}),
+          ...(opts?.expectedVersion !== undefined
+            ? { expectedVersion: opts.expectedVersion }
+            : {}),
+        });
       },
       update: (path, id, partial, opts): void => {
         queue(path, id, {
@@ -582,7 +636,14 @@ export class InMemoryStorageProvider<
       } else if (op.kind === 'set') {
         const prev = localView.get(key)?.doc;
         const nextVer = (prev?.version ?? 0) + 1;
-        localView.set(key, { doc: { version: nextVer, data: op.data } });
+        const data =
+          prev !== null && prev !== undefined && op.merge !== false
+            ? ({
+                ...(prev.data as Record<string, unknown>),
+                ...(op.data as Record<string, unknown>),
+              } as unknown)
+            : op.data;
+        localView.set(key, { doc: { version: nextVer, data } });
       } else {
         const prev = localView.get(key)?.doc;
         const merged = {
@@ -601,8 +662,15 @@ export class InMemoryStorageProvider<
           doc === null ? null : structuredClone(doc.data)
         ) as Meta['read'] | null;
       },
-      set: (path, id, data): void => {
-        queue(path, id, { kind: 'set', data });
+      set: (path, id, data, opts): void => {
+        queue(path, id, {
+          kind: 'set',
+          data,
+          ...(opts?.merge !== undefined ? { merge: opts.merge } : {}),
+          ...(opts?.expectedVersion !== undefined
+            ? { expectedVersion: opts.expectedVersion }
+            : {}),
+        });
       },
       update: (path, id, partial, opts): void => {
         queue(path, id, {
@@ -682,7 +750,20 @@ function parseKey(key: string): readonly [string, string] {
  * commit phase which write to apply on the per-key merge pass.
  */
 type DeltaOp =
-  | { readonly kind: 'set'; readonly data: unknown }
+  | {
+      readonly kind: 'set';
+      readonly data: unknown;
+      /**
+       * `false` = Firestore `setDoc` overwrite; `true`/absent =
+       * merge-upsert — see {@link SetWriteOpts}.
+       */
+      readonly merge?: boolean;
+      /**
+       * Caller-declared ETag, checked on the conflict path — same
+       * contract as `update`'s, applied only when the row exists.
+       */
+      readonly expectedVersion?: number;
+    }
   | {
       readonly kind: 'update';
       readonly partial: Record<string, unknown>;

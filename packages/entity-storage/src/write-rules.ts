@@ -291,19 +291,48 @@ function valuesDiffer(a: unknown, b: unknown): boolean {
   }
 }
 
+/** `a.b.c` lookup into a committed doc — non-object hops yield `undefined`. */
+function nestedValue(
+  resource: Record<string, unknown>,
+  path: string,
+): unknown {
+  let cur: unknown = resource;
+  for (const seg of path.split(".")) {
+    if (cur === null || typeof cur !== "object") return undefined;
+    cur = (cur as Record<string, unknown>)[seg];
+  }
+  return cur;
+}
+
 /**
  * Compute Orchestra-style `affectedKeys`: patch keys whose value
  * differs from the stored doc. Missing `resource` → every patch key is
  * treated as affected (a write against a nonexistent row still names
  * the fields it tried to set).
+ *
+ * Dot-path keys (`settings.theme`) report their ROOT field —
+ * Firestore expands field paths into the document before diffing, so
+ * `MapDiff.affectedKeys()` names `settings`, never `settings.theme`.
+ * The diff itself still compares the LEAF value: a dot write that
+ * reproduces the committed leaf is a no-op and marks nothing. Several
+ * dot keys under one root collapse to a single affected field.
  */
 export function computeAffectedKeys(
   patch: Readonly<Record<string, unknown>>,
   resource: Record<string, unknown> | undefined,
 ): string[] {
-  return Object.keys(patch).filter(
-    (k) => resource === undefined || valuesDiffer(patch[k], resource[k]),
-  );
+  const affected = new Set<string>();
+  for (const k of Object.keys(patch)) {
+    const dot = k.indexOf(".");
+    const root = dot < 0 ? k : k.slice(0, dot);
+    if (resource === undefined) {
+      affected.add(root);
+      continue;
+    }
+    const committed = dot < 0 ? resource[k] : nestedValue(resource, k);
+    if (valuesDiffer(patch[k], committed)) affected.add(root);
+  }
+  return [...affected];
 }
 
 /**
@@ -383,12 +412,16 @@ export async function assertWriteAllowed(
   }
 
   // Guard 1 — protected fields can never ride a caller's diff.
+  // A `protected.x` dot-path write would otherwise slip past the
+  // literal key check — compare root segments, report full keys.
   if (ctx.verb === "update" || ctx.verb === "create") {
     const protectedSet =
       ctx.verb === "update" ? PROTECTED_UPDATE_FIELDS : PROTECTED_CREATE_FIELDS;
-    const illegal = Object.keys(ctx.patch).filter((k) =>
-      (protectedSet as readonly string[]).includes(k),
-    );
+    const illegal = Object.keys(ctx.patch).filter((k) => {
+      const dot = k.indexOf(".");
+      const root = dot < 0 ? k : k.slice(0, dot);
+      return (protectedSet as readonly string[]).includes(root);
+    });
     if (illegal.length > 0) {
       const err = new WriteRuleDenied(
         { ...ctx, actionType: ctx.action?.type },

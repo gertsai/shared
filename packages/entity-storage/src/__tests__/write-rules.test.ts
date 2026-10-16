@@ -60,6 +60,37 @@ describe("computeAffectedKeys — Orchestra affectedKeys() parity", () => {
     const resource = { a: null, b: "1" };
     expect(computeAffectedKeys({ a: "x", b: "1" }, resource)).toEqual(["a"]);
   });
+
+  it("dot-path writes report the root field (Firestore MapDiff parity)", () => {
+    const resource = { settings: { theme: "light", hidden: false } };
+    expect(
+      computeAffectedKeys({ "settings.theme": "dark" }, resource),
+    ).toEqual(["settings"]);
+  });
+
+  it("dot-path writes diff the LEAF — a no-op leaf write marks nothing", () => {
+    const resource = { settings: { theme: "dark", hidden: false } };
+    expect(
+      computeAffectedKeys({ "settings.theme": "dark" }, resource),
+    ).toEqual([]);
+    // …while a sibling dot key that does change still marks the root.
+    expect(
+      computeAffectedKeys(
+        { "settings.theme": "dark", "settings.hidden": true },
+        resource,
+      ),
+    ).toEqual(["settings"]);
+  });
+
+  it("dot-path against a scalar/nonexistent committed value is affected", () => {
+    const resource = { settings: "scalar" };
+    expect(
+      computeAffectedKeys({ "settings.theme": "dark" }, resource),
+    ).toEqual(["settings"]);
+    expect(
+      computeAffectedKeys({ "missing.deep": 1 }, resource),
+    ).toEqual(["missing"]);
+  });
 });
 
 describe("allowFields — verifyUpdateObject parity", () => {
@@ -148,6 +179,22 @@ describe("assertWriteAllowed — fail-closed semantics", () => {
       /protected fields in diff: update_version/,
     );
     expect(rules.create).not.toHaveBeenCalled();
+  });
+
+  it("protected fields are caught through a dot-path root", async () => {
+    // `entity_status.x` must not slip past the literal key check —
+    // the guard compares path roots, not full keys.
+    const rules: TableWriteRules = {
+      update: { "*": vi.fn(() => true) },
+    };
+    const evalDot = baseEval({
+      action: { type: "card_updated", params: {} },
+      affectedKeys: ["entity_status"],
+      patch: { "entity_status.archived": true },
+    });
+    await expect(assertWriteAllowed(rules, evalDot)).rejects.toThrow(
+      /protected fields in diff: entity_status\.archived/,
+    );
   });
 
   it("predicate returning false → denied with reason", async () => {
