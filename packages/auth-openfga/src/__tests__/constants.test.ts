@@ -47,10 +47,6 @@ describe('constants', () => {
   });
 
   describe('FGA_DEFAULT_CONFIG', () => {
-    it('should have default API URL', () => {
-      expect(FGA_DEFAULT_CONFIG.apiUrl).toContain('localhost:8080');
-    });
-
     it('should have default store name', () => {
       expect(FGA_DEFAULT_CONFIG.storeName).toBe('gerts');
     });

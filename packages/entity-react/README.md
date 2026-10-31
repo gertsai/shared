@@ -51,7 +51,7 @@ const user = new UserEntity({
 | Export | Signature | Purpose |
 |---|---|---|
 | `reactReactiveAdapter` | `ReactiveAdapter` | Satisfies `@gertsai/entity` SPI; wraps targets in a `Proxy` with `set` / `defineProperty` / `deleteProperty` traps that synchronously notify subscribers. |
-| `useEntity(entity)` | `<Data extends object>(entity: Entity<Data>) => Readonly<Data>` | React hook; returns the entity's `$data` reference and re-renders on every mutation. Built on `React.useSyncExternalStore` with a version-counter wrapper. |
+| `useEntity(entity)` | `<Data extends object>(entity: Entity<Data>) => Readonly<Data>` | React hook; returns the entity's `$data` reference and re-renders on every mutation. Its `useSyncExternalStore` snapshot stays stable between mutations and follows the current entity when the input changes. |
 | `subscribe(target, cb)` | `(target: object, cb: () => void) => () => void` | Low-level subscriber registry (used by `useEntity`); returns an unsubscribe function. |
 | `getVersion(target)` | `(target: object) => number` | Read the per-target version counter. Bumps on every Proxy-trapped mutation. |
 

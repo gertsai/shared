@@ -141,8 +141,8 @@ export function hasRoleWithSource(
   roles: string | readonly string[],
   sources: string | readonly string[],
 ): boolean {
-  const wantRoles = asStringArray(roles);
-  const wantSources = asStringArray(sources);
+  const wantRoles = typeof roles === "string" ? [roles] : roles;
+  const wantSources = typeof sources === "string" ? [sources] : sources;
   const observers = doc["observers"];
   if (typeof observers !== "object" || observers === null) return false;
   const rec = (observers as Record<string, unknown>)[uid];

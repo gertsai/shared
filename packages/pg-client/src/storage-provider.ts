@@ -88,23 +88,103 @@ function resolveTable(path: string, tableMap: TableMap | undefined): string {
 }
 
 /**
- * Tagged-template wrapper that turns a literal SQL string + values into the
- * `(strings, ...values)` shape `PgClient.$queryRaw` / `$executeRaw` expect.
- * Used internally by `PgStorageProvider` so we never construct unsafe
- * SQL at the call site.
+ * Convert a positional-parameter SQL string into the tagged-template shape
+ * expected by PgClient, preserving the order and repetition of each marker.
  */
+function toRawTemplate(
+  sql: string,
+  params: ReadonlyArray<unknown>,
+): [TemplateStringsArray, unknown[]] {
+  const parts: string[] = [];
+  const values: unknown[] = [];
+  let previousIndex = 0;
+
+  for (const match of sql.matchAll(/\$(\d+)/g)) {
+    const marker = match[0];
+    const start = match.index!;
+    parts.push(sql.slice(previousIndex, start));
+    values.push(params[Number(marker.slice(1)) - 1]);
+    previousIndex = start + marker.length;
+  }
+
+  parts.push(sql.slice(previousIndex));
+  const template = Object.assign(parts, { raw: parts }) as unknown as TemplateStringsArray;
+  return [template, values];
+}
+
 function rawQuery<T = unknown>(
   client: PgClient,
   sql: string,
   params: ReadonlyArray<unknown>,
 ): Promise<T[]> {
-  // Build TemplateStringsArray-shaped object from the (already-parameterized)
-  // SQL fragment. We re-split on $1/$2/... markers so the underlying client
-  // receives positional parameters (PgClient implementations rebuild their
-  // own SQL from the strings + values).
-  const parts = sql.split(/\$\d+/g);
-  const template = Object.assign(parts, { raw: parts }) as unknown as TemplateStringsArray;
-  return client.$queryRaw<T>(template, ...params);
+  const [template, values] = toRawTemplate(sql, params);
+  return client.$queryRaw<T>(template, ...values);
+}
+
+/**
+ * Compile a storage query against JSONB payload properties while retaining
+ * query-dsl's parameterized SQL generation. Field names are bound as JSONB
+ * operators' text operands; compiler predicates operate on JSONB projections.
+ */
+function compilePayloadQuery<Meta extends StorageMetadata>(
+  query: Query<Meta>,
+  table: string,
+): { readonly sql: string; readonly params: unknown[] } {
+  const fieldAliases = new Map<string, string>();
+  const constraints = query as unknown as ReadonlyArray<{
+    readonly kind: string;
+    readonly field?: string;
+  }>;
+  for (const constraint of constraints) {
+    if (
+      (constraint.kind === 'where' || constraint.kind === 'orderBy') &&
+      typeof constraint.field === 'string' &&
+      !fieldAliases.has(constraint.field)
+    ) {
+      fieldAliases.set(constraint.field, `__pg_payload_${fieldAliases.size}`);
+    }
+  }
+
+  const fieldParams = [...fieldAliases.keys()];
+  const mappedQuery = (
+    query as unknown as ReadonlyArray<Record<string, unknown>>
+  ).map((constraint) => {
+    if (
+      (constraint.kind !== 'where' && constraint.kind !== 'orderBy') ||
+      typeof constraint.field !== 'string'
+    ) {
+      return constraint;
+    }
+
+    const field = constraint.field;
+    const op = constraint.op;
+    const value = constraint.value;
+    const mapped: Record<string, unknown> = {
+      ...constraint,
+      field: fieldAliases.get(field),
+    };
+    if (
+      constraint.kind === 'where' &&
+      op !== 'array-contains' &&
+      op !== 'array-contains-any'
+    ) {
+      mapped.value = Array.isArray(value)
+        ? value.map((item) => JSON.stringify(item))
+        : JSON.stringify(value);
+    }
+    return mapped;
+  });
+
+  const compiled = compileToSql(mappedQuery as never, '_pg_payload_query');
+  const projections = [...fieldAliases.values()].map(
+    (alias, index) =>
+      `data -> $${compiled.params.length + index + 1}::text AS "${alias}"`,
+  );
+  const selectList = ['id', 'data', ...projections].join(', ');
+  return {
+    sql: `WITH _pg_payload_query AS (SELECT ${selectList} FROM ${table}) ${compiled.sql}`,
+    params: [...compiled.params, ...fieldParams],
+  };
 }
 
 function rawExecute(
@@ -112,9 +192,8 @@ function rawExecute(
   sql: string,
   params: ReadonlyArray<unknown>,
 ): Promise<number> {
-  const parts = sql.split(/\$\d+/g);
-  const template = Object.assign(parts, { raw: parts }) as unknown as TemplateStringsArray;
-  return client.$executeRaw(template, ...params);
+  const [template, values] = toRawTemplate(sql, params);
+  return client.$executeRaw(template, ...values);
 }
 
 function isTransactionConflict(err: unknown): boolean {
@@ -136,6 +215,20 @@ function isTransactionConflict(err: unknown): boolean {
  * guard reads `data->>'update_version'`. The insert branch is
  * unguarded by contract (no prior version exists).
  */
+function advanceStoredVersion(table: string, value: string): string {
+  return (
+    `CASE WHEN ${table}.data ? 'update_version' ` +
+    `THEN jsonb_set(${value}, '{update_version}', ` +
+    `to_jsonb((${table}.data->>'update_version')::bigint + 1), true) ` +
+    `ELSE ${value} END`
+  );
+}
+
+/**
+ * Build the `INSERT … ON CONFLICT` statement honoring {@link SetWriteOpts}.
+ * The insert branch preserves the seeded version; conflict updates derive the
+ * next version from the stored row so concurrent writes cannot reuse it.
+ */
 function upsertStatement(
   table: string,
   opts?: SetWriteOpts,
@@ -146,25 +239,26 @@ function upsertStatement(
       : `${table}.data || EXCLUDED.data`;
   const guard =
     opts?.expectedVersion !== undefined
-      ? ` WHERE (${table}.data->>'update_version')::int = $3`
+      ? ` WHERE (${table}.data->>'update_version')::bigint = $3`
       : '';
   return (
     `INSERT INTO ${table} (id, data) VALUES ($1, $2) ` +
-    `ON CONFLICT (id) DO UPDATE SET data = ${mergeExpr}${guard}`
+    `ON CONFLICT (id) DO UPDATE SET ` +
+    `data = ${advanceStoredVersion(table, mergeExpr)}${guard}`
   );
 }
 
-/**
- * `UPDATE` honoring {@link WriteConcurrencyOpts}: absent
- * `expectedVersion` keeps the plain blob merge; declared version adds
- * a jsonb `update_version` predicate.
- */
+/** `UPDATE` with an optional compare-and-swap predicate. */
 function updateStatement(table: string, opts?: WriteConcurrencyOpts): string {
   const guard =
     opts?.expectedVersion !== undefined
-      ? ` AND (${table}.data->>'update_version')::int = $3`
+      ? ` AND (${table}.data->>'update_version')::bigint = $3`
       : '';
-  return `UPDATE ${table} SET data = ${table}.data || $2 WHERE id = $1${guard}`;
+  return (
+    `UPDATE ${table} SET data = ` +
+    `${advanceStoredVersion(table, `${table}.data || $2`)} ` +
+    `WHERE id = $1${guard}`
+  );
 }
 
 /**
@@ -523,11 +617,12 @@ export class PgStorageProvider<Meta extends StorageMetadata>
     data: Meta['write'],
   ): Promise<{ id: string }> {
     const table = this._table(path);
+    const merged = `${table}.data || ${CREATOR_AUDIT_STRIP_FRAGMENT}`;
     await rawExecute(
       this._client,
       `INSERT INTO ${table} (id, data) VALUES ($1, $2) ` +
         `ON CONFLICT (id) DO UPDATE SET ` +
-        `data = ${table}.data || ${CREATOR_AUDIT_STRIP_FRAGMENT}`,
+        `data = ${advanceStoredVersion(table, merged)}`,
       [id, data],
     );
     return { id };
@@ -553,12 +648,7 @@ export class PgStorageProvider<Meta extends StorageMetadata>
       );
       return rows.map((r) => r.data);
     }
-    // Adapter boundary cast: storage-core ships a loose `Query<Meta>` shape
-    // (no forward dep on query-dsl); query-dsl's `compileToSql` expects its
-    // strict `QueryConstraint` union. In practice consumers build queries
-    // via query-dsl factories so the structural shape matches at runtime.
-    // Justified single `as` per ADR-005 adapter-boundary policy.
-    const compiled = compileToSql(query as never, table);
+    const compiled = compilePayloadQuery(query, table);
     const rows = await rawQuery<{ data: Meta['read'] }>(
       this._client,
       compiled.sql,
@@ -578,13 +668,8 @@ export class PgStorageProvider<Meta extends StorageMetadata>
       const first = rows[0];
       return first ? Number(first.count) : 0;
     }
-    // Adapter boundary cast: storage-core ships a loose `Query<Meta>` shape
-    // (no forward dep on query-dsl); query-dsl's `compileToSql` expects its
-    // strict `QueryConstraint` union. In practice consumers build queries
-    // via query-dsl factories so the structural shape matches at runtime.
-    // Justified single `as` per ADR-005 adapter-boundary policy.
-    const compiled = compileToSql(query as never, table);
-    // Wrap the SELECT data ... in a count subquery; preserves WHERE/limit.
+    const compiled = compilePayloadQuery(query, table);
+    // Wrapping the compiled SELECT preserves its WHERE and pagination.
     const wrapped = `SELECT COUNT(*)::bigint AS count FROM (${compiled.sql}) AS _q`;
     const rows = await rawQuery<{ count: number | bigint | string }>(
       this._client,

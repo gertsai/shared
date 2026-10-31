@@ -471,11 +471,10 @@ export class InMemoryStorageProvider<
   //   - a per-key version snapshot taken at the FIRST queue / read on
   //     that key (so blind writes are version-checked too — closes the
   //     pre-Wave-21 H-ENT-1/H-ENT-2 hazard);
-  //   - a commit phase that (a) re-verifies every snapshotted version
-  //     against the live store, throwing TransactionConflictError on
-  //     mismatch, and (b) applies the deltas per-key into the live
-  //     collection map (NOT a whole-map swap — concurrent commits no
-  //     longer clobber).
+  //   - a commit phase that re-verifies every snapshotted version and
+  //     stages all touched-key operations before publishing any values.
+  //     This preserves disjoint commits without exposing partial writes
+  //     when a later CAS check or clone fails.
   //
   // The shape is shared between batch + transaction so audit fixes only
   // need to land in one place.
@@ -491,9 +490,18 @@ export class InMemoryStorageProvider<
     deltas: ReadonlyMap<string, ReadonlyArray<DeltaOp>>,
     pathOf: (key: string) => readonly [string, string],
   ): void {
+    // Stage only touched keys. Any clone failure or late CAS rejection
+    // leaves the live store and listeners untouched.
+    const staged = new Map<string, VersionedDoc | null>();
     for (const [key, ops] of deltas) {
       const [path, id] = pathOf(key);
-      const coll = this._coll(path);
+      const current = this._store.get(path)?.get(id);
+      const initial =
+        current === undefined
+          ? null
+          : { version: current.version, data: structuredClone(current.data) };
+      const coll = new Map<string, VersionedDoc>();
+      if (initial !== null) coll.set(id, initial);
       for (const op of ops) {
         if (op.kind === 'set') {
           this._setOnto(coll, id, op.data, op, path);
@@ -503,6 +511,12 @@ export class InMemoryStorageProvider<
           coll.delete(id);
         }
       }
+      staged.set(key, coll.get(id) ?? null);
+    }
+    for (const [key, doc] of staged) {
+      const [path, id] = pathOf(key);
+      if (doc === null) this._store.get(path)?.delete(id);
+      else this._coll(path).set(id, doc);
     }
   }
 
@@ -533,7 +547,13 @@ export class InMemoryStorageProvider<
         q = [];
         deltas.set(key, q);
       }
-      q.push(op);
+      const ownedOp =
+        op.kind === 'set'
+          ? { ...op, data: structuredClone(op.data) }
+          : op.kind === 'update'
+            ? { ...op, partial: structuredClone(op.partial) }
+            : op;
+      q.push(ownedOp);
       touchedColls.add(path);
     };
 
@@ -603,7 +623,17 @@ export class InMemoryStorageProvider<
     const snapRead = (path: string, id: string): VersionedDoc | null => {
       const key = `${path}::${id}`;
       const cached = localView.get(key);
-      if (cached) return cached.doc;
+      if (cached) {
+        if (!reads.has(key)) {
+          reads.set(
+            key,
+            writeVersions.has(key)
+              ? (writeVersions.get(key) ?? null)
+              : (cached.doc?.version ?? null),
+          );
+        }
+        return cached.doc;
+      }
       const live = this._coll(path).get(id) ?? null;
       localView.set(key, { doc: live });
       if (!reads.has(key)) {
@@ -618,41 +648,57 @@ export class InMemoryStorageProvider<
         writeVersions.set(key, cur ? cur.version : null);
       }
     };
+    const snapshotForWrite = (path: string, id: string): void => {
+      const key = `${path}::${id}`;
+      if (!localView.has(key)) {
+        const live = this._store.get(path)?.get(id) ?? null;
+        localView.set(
+          key,
+          live === null
+            ? { doc: null }
+            : {
+                doc: {
+                  version: live.version,
+                  data: structuredClone(live.data),
+                },
+              },
+        );
+      }
+    };
     const queue = (path: string, id: string, op: DeltaOp): void => {
       const key = `${path}::${id}`;
       snapWrite(path, id);
+      snapshotForWrite(path, id);
+      const ownedOp =
+        op.kind === 'set'
+          ? { ...op, data: structuredClone(op.data) }
+          : op.kind === 'update'
+            ? { ...op, partial: structuredClone(op.partial) }
+            : op;
       let q = deltas.get(key);
       if (!q) {
         q = [];
         deltas.set(key, q);
       }
-      q.push(op);
+      q.push(ownedOp);
       touchedColls.add(path);
-      // Update the local view so subsequent tx.get reflects the queued
-      // write. We carry only the data, not a synthetic version — the
-      // version that matters at commit time is the live-store one.
-      if (op.kind === 'delete') {
-        localView.set(key, { doc: null });
-      } else if (op.kind === 'set') {
-        const prev = localView.get(key)?.doc;
-        const nextVer = (prev?.version ?? 0) + 1;
-        const data =
-          prev !== null && prev !== undefined && op.merge !== false
-            ? ({
-                ...(prev.data as Record<string, unknown>),
-                ...(op.data as Record<string, unknown>),
-              } as unknown)
-            : op.data;
-        localView.set(key, { doc: { version: nextVer, data } });
+      const prev = localView.get(key)?.doc ?? null;
+      const coll = new Map<string, VersionedDoc>();
+      if (prev !== null) coll.set(id, prev);
+      if (ownedOp.kind === 'set') {
+        this._setOnto(coll, id, ownedOp.data, ownedOp, path);
+      } else if (ownedOp.kind === 'update') {
+        this._updateOnto(
+          coll,
+          id,
+          ownedOp.partial,
+          ownedOp.expectedVersion,
+          path,
+        );
       } else {
-        const prev = localView.get(key)?.doc;
-        const merged = {
-          ...(prev?.data as Record<string, unknown> | undefined),
-          ...op.partial,
-        };
-        const nextVer = (prev?.version ?? 0) + 1;
-        localView.set(key, { doc: { version: nextVer, data: merged } });
+        coll.delete(id);
       }
+      localView.set(key, { doc: coll.get(id) ?? null });
     };
 
     const runner: ITransactionRunner<Meta> = {

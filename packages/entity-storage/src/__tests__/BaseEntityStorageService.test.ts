@@ -393,18 +393,6 @@ describe('BaseEntityStorageService — destroy() hard-delete (F-7)', () => {
     await expect(svc.destroy('any-id')).rejects.toThrow(/destroyed/);
   });
 
-  it('destroy() with batch/transaction routing throws — drop down to provider runner', async () => {
-    const provider = new InMemoryStorageProvider<UserMeta>();
-    const svc = new UsersStorage(provider, makeSession());
-    await provider.runBatch(async (b) => {
-      // We pass `b` cast as AuditedBatchRunner shape just to trigger the
-      // routed branch — the cast is fine because the routed branch throws
-      // before touching the runner's surface.
-      await expect(
-        svc.destroy('id', { batch: b as unknown as never }),
-      ).rejects.toThrow(/destroy via batch\/transaction not supported/);
-    });
-  });
 });
 
 describe('BaseEntityStorageService — per-method batch/transaction routing (F-8)', () => {

@@ -61,35 +61,20 @@ describe("computeAffectedKeys — Orchestra affectedKeys() parity", () => {
     expect(computeAffectedKeys({ a: "x", b: "1" }, resource)).toEqual(["a"]);
   });
 
-  it("dot-path writes report the root field (Firestore MapDiff parity)", () => {
-    const resource = { settings: { theme: "light", hidden: false } };
-    expect(
-      computeAffectedKeys({ "settings.theme": "dark" }, resource),
-    ).toEqual(["settings"]);
-  });
-
-  it("dot-path writes diff the LEAF — a no-op leaf write marks nothing", () => {
-    const resource = { settings: { theme: "dark", hidden: false } };
-    expect(
-      computeAffectedKeys({ "settings.theme": "dark" }, resource),
-    ).toEqual([]);
-    // …while a sibling dot key that does change still marks the root.
+  it("compares dotted patch keys as literal persisted keys", () => {
+    const resource = {
+      settings: { theme: "dark" },
+      "settings.theme": "light",
+    };
     expect(
       computeAffectedKeys(
-        { "settings.theme": "dark", "settings.hidden": true },
+        { "settings.theme": "dark", settings: { theme: "dark" } },
         resource,
       ),
-    ).toEqual(["settings"]);
-  });
-
-  it("dot-path against a scalar/nonexistent committed value is affected", () => {
-    const resource = { settings: "scalar" };
+    ).toEqual(["settings.theme"]);
     expect(
-      computeAffectedKeys({ "settings.theme": "dark" }, resource),
-    ).toEqual(["settings"]);
-    expect(
-      computeAffectedKeys({ "missing.deep": 1 }, resource),
-    ).toEqual(["missing"]);
+      computeAffectedKeys({ "settings.theme": "light" }, resource),
+    ).toEqual([]);
   });
 });
 
@@ -181,20 +166,18 @@ describe("assertWriteAllowed — fail-closed semantics", () => {
     expect(rules.create).not.toHaveBeenCalled();
   });
 
-  it("protected fields are caught through a dot-path root", async () => {
-    // `entity_status.x` must not slip past the literal key check —
-    // the guard compares path roots, not full keys.
-    const rules: TableWriteRules = {
-      update: { "*": vi.fn(() => true) },
-    };
-    const evalDot = baseEval({
-      action: { type: "card_updated", params: {} },
-      affectedKeys: ["entity_status"],
-      patch: { "entity_status.archived": true },
-    });
-    await expect(assertWriteAllowed(rules, evalDot)).rejects.toThrow(
-      /protected fields in diff: entity_status\.archived/,
+  it("does not interpret a dotted literal key as a protected root field", async () => {
+    const predicate = vi.fn(() => true);
+    const rules: TableWriteRules = { update: { "*": predicate } };
+    await assertWriteAllowed(
+      rules,
+      baseEval({
+        action: { type: "card_updated", params: {} },
+        affectedKeys: ["entity_status.archived"],
+        patch: { "entity_status.archived": true },
+      }),
     );
+    expect(predicate).toHaveBeenCalledTimes(1);
   });
 
   it("predicate returning false → denied with reason", async () => {
@@ -365,5 +348,47 @@ describe("assertPendingWrites — parallel resource prefetch", () => {
       ),
     ).rejects.toThrow(/no ruleset registered/);
     expect(resource).not.toHaveBeenCalled();
+  });
+});
+
+describe("assertPendingWrites — concurrent cross-document reads", () => {
+  it("memoizes in-flight reads and separates path/id boundary collisions", async () => {
+    const calls: string[] = [];
+    const resource = async (path: string, id: string) => {
+      calls.push(JSON.stringify([path, id]));
+      return { key: JSON.stringify([path, id]) };
+    };
+    const rules: TableWriteRules = {
+      update: {
+        changed: async (ctx) => {
+          const [sameA, sameB, left, right] = await Promise.all([
+            ctx.get?.("a b", "c"),
+            ctx.get?.("a b", "c"),
+            ctx.get?.("a", "b c"),
+            ctx.get?.("a b", "c"),
+          ]);
+          return (
+            sameA === sameB &&
+            sameB === right &&
+            left?.["key"] === JSON.stringify(["a", "b c"]) &&
+            right?.["key"] === JSON.stringify(["a b", "c"])
+          );
+        },
+      },
+    };
+    await assertPendingWrites(
+      [
+        {
+          verb: "update",
+          path: "cards",
+          id: "c-1",
+          patch: {},
+          action: { type: "changed", params: {} },
+        },
+      ],
+      { session: makeSession(), rulesFor: () => rules, resource },
+    );
+    expect(calls).toHaveLength(3);
+    expect(new Set(calls).size).toBe(3);
   });
 });

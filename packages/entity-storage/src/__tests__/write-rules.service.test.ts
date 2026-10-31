@@ -7,7 +7,7 @@ import type {
   IStorageProvider,
   StorageMetadata,
 } from '@gertsai/storage-core';
-
+import type { AuditedBatchRunner } from '../AuditedRunners';
 import { BaseEntityStorageService } from '../BaseEntityStorageService';
 import { InMemoryStorageProvider } from '../InMemoryStorageProvider';
 import { allowFields, allowWrite, denyWrite, WriteRuleDenied } from '../write-rules';
@@ -467,62 +467,152 @@ describe('BaseEntityStorageService write-rules — delete action channel', () =>
 });
 
 describe('BaseEntityStorageService write-rules — batch/transaction routing', () => {
-  it('a denied update routed via batch never lands in the queue', async () => {
+  it('defers routed rules once and evaluates getAfter with committed sibling state plus exact stamps', async () => {
     const provider = new InMemoryStorageProvider<CardMeta>();
     await seed(provider);
-    const svc = new CardsStorage(provider, makeSession());
-    const batchUpdate = vi.fn();
-    const fakeBatch = {
-      set: vi.fn(),
-      update: batchUpdate,
-      delete: vi.fn(),
-      restore: vi.fn(),
+    const calls: Array<{
+      claims: Readonly<Record<string, unknown>> | undefined;
+      target: Record<string, unknown> | undefined;
+      sibling: Record<string, unknown> | undefined;
+    }> = [];
+    const rules: TableWriteRules = {
+      ...CARD_RULES,
+      update: {
+        card_updated: async (ctx) => {
+          const [target, sibling] = await Promise.all([
+            ctx.getAfter?.('cards', ctx.id),
+            ctx.getAfter?.('cards', 'c-2'),
+          ]);
+          calls.push({ claims: ctx.claims, target, sibling });
+          return ctx.claims?.['can_edit'] === true
+            && target?.['title'] === 'changed'
+            && sibling?.['title'] === 'created-in-tx';
+        },
+      },
     };
-    await expect(
-      svc.update(
-        'c-1',
-        { title: 'x' },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        { action: 'bogus', batch: fakeBatch as any },
-      ),
-    ).rejects.toThrow(WriteRuleDenied);
-    expect(batchUpdate).not.toHaveBeenCalled();
+    class Svc extends BaseEntityStorageService<CardMeta> {
+      constructor(p: IStorageProvider<CardMeta>, s: Session) {
+        super({ provider: p, session: s, path: 'cards', rules, claims: { can_edit: true } });
+      }
+    }
+    const svc = new Svc(provider, makeSession());
+    await svc.runTransaction(async (tx) => {
+      await svc.update('c-1', { title: 'changed' }, { action: 'card_updated', transaction: tx });
+      await svc.set(
+        { _uid: 'c-2', title: 'created-in-tx', list_id: 'l-1', position: 2 } as CardData & { _uid: string },
+        { transaction: tx },
+      );
+      await svc.upsert(
+        { _uid: 'c-3', title: 'upserted-in-tx', list_id: 'l-1', position: 3 } as CardData & { _uid: string },
+        { transaction: tx },
+      );
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.claims).toEqual({ can_edit: true });
+    expect(calls[0]?.target).toMatchObject({
+      title: 'changed',
+      updated_by_uuid: 'op-1',
+    });
+    expect(calls[0]?.sibling).toMatchObject({ title: 'created-in-tx' });
+    expect(await provider.getDoc('cards', 'c-3')).toMatchObject({
+      title: 'upserted-in-tx',
+      creator_uuid: 'op-1',
+    });
+    const persisted = (await provider.getDoc('cards', 'c-1')) as unknown as Record<string, unknown>;
+    expect(persisted['updated_by_uuid']).toBe(calls[0]?.target?.['updated_by_uuid']);
+    expect(persisted['updated_at']).toEqual(calls[0]?.target?.['updated_at']);
   });
 
-  it('tx-routed update reads the resource from the provider (committed pre-state, not tx local view)', async () => {
+  it('memoizes concurrent single-write readers for the same document key', async () => {
     const provider = new InMemoryStorageProvider<CardMeta>();
     await seed(provider);
-    const svc = new CardsStorage(provider, makeSession());
-    const getDocSpy = vi.spyOn(provider, 'getDoc');
-    const txGet = vi.fn(async () => ({
-      _uid: 'c-1',
-      title: 'seed',
-      list_id: 'l-1',
-      position: 1000,
-    }));
-    const txUpdate = vi.fn();
-    const fakeTx = {
-      get: txGet,
-      set: vi.fn(),
-      update: txUpdate,
-      delete: vi.fn(),
-      restore: vi.fn(),
+    await provider.set('lists', 'l-1', { archived: false } as unknown as CardData);
+    const rules: TableWriteRules = {
+      ...CARD_RULES,
+      update: {
+        card_updated: async (ctx) => {
+          const [first, second] = await Promise.all([
+            ctx.get?.('lists', 'l-1'),
+            ctx.get?.('lists', 'l-1'),
+          ]);
+          return first?.['archived'] === false && second?.['archived'] === false;
+        },
+      },
     };
-    await svc.update(
-      'c-1',
-      { list_id: 'l-2', position: 2000 },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      { action: 'card_moved', transaction: fakeTx as any },
-    );
-    // Rules resource = committed row → provider read, never tx.get
-    // (the tx local view would already contain own queued writes).
-    expect(txGet).not.toHaveBeenCalled();
-    expect(getDocSpy).toHaveBeenCalledWith('cards', 'c-1');
-    expect(txUpdate).toHaveBeenCalledWith(
-      'c-1',
-      { list_id: 'l-2', position: 2000 },
-      expect.objectContaining({ action: 'card_moved' }),
-    );
+    class Svc extends BaseEntityStorageService<CardMeta> {
+      constructor(p: IStorageProvider<CardMeta>, s: Session) {
+        super({ provider: p, session: s, path: 'cards', rules });
+      }
+    }
+    const svc = new Svc(provider, makeSession());
+    const getDoc = vi.spyOn(provider, 'getDoc');
+    await svc.update('c-1', { title: 'memoized' }, { action: 'card_updated' });
+    expect(getDoc.mock.calls.filter(([path, id]) => path === 'lists' && id === 'l-1')).toHaveLength(1);
+  });
+
+  it('rejects a foreign active runner before a ruleless service can queue a mutation', async () => {
+    const provider = new InMemoryStorageProvider<CardMeta>();
+    await seed(provider);
+    const owner = new CardsStorage(provider, makeSession());
+    const ruleless = new RulelessStorage(provider, makeSession());
+    await owner.runBatch(async (batch) => {
+      await expect(
+        ruleless.update('c-1', { title: 'foreign' }, { batch }),
+      ).rejects.toThrow();
+      expect(await provider.getDoc('cards', 'c-1')).toMatchObject({ title: 'seed' });
+    });
+    expect(await provider.getDoc('cards', 'c-1')).toMatchObject({ title: 'seed' });
+    let expiredBatch: AuditedBatchRunner<CardMeta> | undefined;
+    await owner.runBatch(async (batch) => {
+      expiredBatch = batch;
+    });
+    if (expiredBatch === undefined) throw new Error('expected captured batch runner');
+    await expect(
+      ruleless.update('c-1', { title: 'expired' }, { batch: expiredBatch }),
+    ).rejects.toThrow();
+    const unregistered = {} as unknown as AuditedBatchRunner<CardMeta>;
+    await expect(
+      ruleless.update('c-1', { title: 'unregistered' }, { batch: unregistered }),
+    ).rejects.toThrow();
+    expect(await provider.getDoc('cards', 'c-1')).toMatchObject({ title: 'seed' });
+  });
+
+  it('routes delete and restore through the owning transaction with lifecycle stamps', async () => {
+    const provider = new InMemoryStorageProvider<CardMeta>();
+    await seed(provider);
+    class LifecycleStorage extends BaseEntityStorageService<CardMeta> {
+      constructor(p: IStorageProvider<CardMeta>, s: Session) {
+        super({ provider: p, session: s, path: 'cards', rules: CARD_RULES });
+      }
+    }
+    const svc = new LifecycleStorage(provider, makeSession());
+    await svc.runTransaction(async (tx) => {
+      await svc.delete('c-1', { transaction: tx });
+    });
+    expect(await provider.getDoc('cards', 'c-1')).toMatchObject({
+      status: 'deleted',
+      deleted_by_uuid: 'op-1',
+    });
+    await svc.runTransaction(async (tx) => {
+      await svc.restore('c-1', { transaction: tx });
+    });
+    expect(await provider.getDoc('cards', 'c-1')).toMatchObject({
+      status: 'created',
+      deleted_at: null,
+      update_action: expect.objectContaining({ type: 'restore' }),
+    });
+    await expect(
+      svc.runTransaction(async (tx) => {
+        await svc.destroy('c-1', { transaction: tx });
+      }),
+    ).rejects.toThrow(/destroy.*does not support batch or transaction routing/);
+    expect(await provider.getDoc('cards', 'c-1')).not.toBeNull();
+    await expect(
+      svc.runBatch(async (batch) => {
+        await svc.destroy('c-1', { batch });
+      }),
+    ).rejects.toThrow(/destroy.*does not support batch or transaction routing/);
+    expect(await provider.getDoc('cards', 'c-1')).not.toBeNull();
   });
 });
 
@@ -685,12 +775,12 @@ describe('BaseEntityStorageService write-rules — single-doc cross-document rea
       svc.update('c-1', { list_id: 'l-2', position: 5 }, { action: 'card_moved' }),
     ).rejects.toThrow(WriteRuleDenied);
     // Archived list → deny.
-    await provider.set('lists', 'l-2', { archived: true } as unknown as CardData, 'l-2');
+    await provider.set('lists', 'l-2', { archived: true } as unknown as CardData);
     await expect(
       svc.update('c-1', { list_id: 'l-2', position: 5 }, { action: 'card_moved' }),
     ).rejects.toThrow(WriteRuleDenied);
     // Live list → allow.
-    await provider.set('lists', 'l-3', { archived: false } as unknown as CardData, 'l-3');
+    await provider.set('lists', 'l-3', { archived: false } as unknown as CardData);
     await svc.update('c-1', { list_id: 'l-3', position: 5 }, { action: 'card_moved' });
     expect(((await provider.getDoc('cards', 'c-1')) as unknown as Record<string, unknown>)?.['list_id']).toBe('l-3');
   });
@@ -742,7 +832,7 @@ describe('BaseEntityStorageService write-rules — single-doc cross-document rea
     }
     const svc = new Svc(provider, makeSession());
     await seed(provider);
-    await provider.set('cards', 'other-card', { title: 'sib', list_id: 'l-1', position: 1 } as CardData, 'other-card');
+    await provider.set('cards', 'other-card', { title: 'sib', list_id: 'l-1', position: 1 } as CardData);
     await svc.delete('c-1');
     // Target doc: committed image folded with the delete stamp.
     expect(seen[0]).toMatchObject({ title: 'seed' });

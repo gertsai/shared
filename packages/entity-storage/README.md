@@ -73,7 +73,7 @@ await users.restore(id);  // un-delete
 | `InMemoryStorageProvider<Meta>` | class | Map-backed test fixture. Full listener / batch / transaction support. |
 | `STORAGE_EVENTS` | const | `entity-created`, `entity-updated`, `entity-deleted`, `entity-restored`, `entity-destroyed`, `destroyed`. |
 | `StorageLogger` (re-export) | interface | Pluggable logger (`debug`/`info`/`warn`/`error`) accepted via `BaseEntityStorageServiceOpts.logger`. Default `noopStorageLogger`. |
-| `MutationRoutingOpts<Meta>` | interface | Per-method `{ batch?, transaction? }` knob — route a mutation onto a caller-supplied audited runner instead of committing immediately. |
+| `MutationRoutingOpts<Meta>` | interface | Per-method `{ batch?, transaction? }` knob for supported mutations — accepts only a live audited runner from the same service instance's active `runBatch` / `runTransaction` callback. Hard `destroy()` is direct-only. |
 | `ListenersNotSupportedError` | class | Thrown by listener wrappers when provider reports `capabilities.listeners === false`. |
 | `TransactionConflictError` | class | Thrown by `runTransaction` on optimistic-concurrency violation. |
 
@@ -116,7 +116,7 @@ Two distinct mutation methods, audit semantics differ:
 ```ts
 await users.delete(id);   // soft-delete: row stays, status flips
 await users.restore(id);  // un-delete works
-await users.destroy(id);  // hard-delete: row physically removed, no audit trail
+await users.destroy(id);  // direct-only hard-delete: row physically removed, no audit trail
 ```
 
 `destroy(uid)` after `destroy(uid)` (or any provider that already
@@ -141,6 +141,29 @@ await provider.runTransaction(async (tx) => {
 
 If another caller mutates `users/u1` between the `tx.get` and the
 implicit commit, `runTransaction` throws.
+## Write rules and mutation routing
+
+Write-rule predicates compare literal persisted map keys. A key such as
+`"settings.theme"` is not expanded into a nested `settings` object; providers
+receive shallow patches with the key unchanged.
+
+Per-method `{ batch, transaction }` routing accepts only a live audited runner
+created by the same service instance inside its active `runBatch` or
+`runTransaction` callback. Foreign, expired, and raw provider runners are
+rejected before a mutation is queued. Deferred rules use the originating
+service's path, claims, and ruleset. Hard `destroy()` does not accept either
+routing option; raw provider runners remain the explicit escape hatch for
+transactional hard-delete.
+
+Service construction owns a deep snapshot of `claims`, including nested plain
+objects, arrays, Maps, and Sets; later mutations to the constructor argument
+do not affect direct or deferred authorization. Mutation inputs and action
+parameters are likewise copied before reads or rule evaluation, and deferred
+rules inspect the same owned payload that is queued for persistence. Audited
+batch/transaction mutators are valid only while the user callback is running;
+the runner closes before deferred policy evaluation starts. Reads remain
+available to the post-callback policy evaluation itself.
+
 
 ## Compatibility
 

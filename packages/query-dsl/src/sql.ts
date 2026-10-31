@@ -208,7 +208,7 @@ function compileWhere(
     }
     case 'array-contains-any': {
       const idx = pushParam(params, JSON.stringify(value));
-      return `${col} ?| (SELECT array_agg(value::text) FROM jsonb_array_elements($${idx}::jsonb))`;
+      return `${col} @> ANY (SELECT jsonb_build_array(candidates.value) FROM jsonb_array_elements($${idx}::jsonb) AS candidates(value))`;
     }
     default: {
       const exhaustive: never = op;

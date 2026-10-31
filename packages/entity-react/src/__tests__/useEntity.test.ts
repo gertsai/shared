@@ -1,111 +1,102 @@
 // SPDX-License-Identifier: Apache-2.0
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createElement, useRef, useSyncExternalStore } from 'react';
+import TestRenderer, { act } from 'react-test-renderer';
+import { afterEach, describe, expect, it } from 'vitest';
+import { Entity } from '@gertsai/entity';
 import { reactReactiveAdapter } from '../adapter.js';
-import {
-  __setUseSyncExternalStoreForTests,
-  useEntity,
-} from '../use-entity.js';
+import { setUseSyncExternalStore, useEntity } from '../use-entity.js';
 
-interface FakeEntityData {
+interface EntityData {
   name: string;
   count: number;
 }
 
-class FakeEntity {
-  public readonly $data: Readonly<FakeEntityData>;
-
-  constructor(seed: FakeEntityData) {
-    this.$data = reactReactiveAdapter.reactive(seed) as Readonly<FakeEntityData>;
-  }
-
-  $patch(partial: Partial<FakeEntityData>): void {
-    Object.assign(this.$data, partial);
+class ProfileEntity extends Entity<EntityData> {
+  $defaultData(): EntityData {
+    return { name: '', count: 0 };
   }
 }
 
-describe('useEntity hook — useSyncExternalStore wiring', () => {
+function createEntity(name: string): ProfileEntity {
+  return new ProfileEntity({
+    data: { name, count: 0 },
+    reactive: reactReactiveAdapter,
+  });
+}
+
+function EntityView({ entity }: { entity: ProfileEntity }) {
+  const renders = useRef(0);
+  renders.current += 1;
+  if (renders.current > 50) {
+    throw new Error('EntityView exceeded its render safety bound');
+  }
+
+  const data = useEntity(entity);
+  return createElement('span', null, `${data.name}:${data.count}`);
+}
+
+function renderedText(renderer: TestRenderer.ReactTestRenderer): string {
+  return renderer.root.findByType('span').children.join('');
+}
+
+describe('useEntity', () => {
+  const renderers: TestRenderer.ReactTestRenderer[] = [];
+
   afterEach(() => {
-    __setUseSyncExternalStoreForTests(undefined);
+    try {
+      for (const renderer of renderers) {
+        act(() => renderer.unmount());
+      }
+    } finally {
+      renderers.length = 0;
+      setUseSyncExternalStore(undefined);
+    }
   });
 
-  it('subscribes via useSyncExternalStore and returns the snapshot data', () => {
-    const entity = new FakeEntity({ name: 'Ada', count: 0 });
+  it('mounts with a stable snapshot and renders entity mutations', () => {
+    setUseSyncExternalStore(useSyncExternalStore);
+    const entity = createEntity('Ada');
+    let renderer!: TestRenderer.ReactTestRenderer;
 
-    let capturedSubscribe:
-      | ((cb: () => void) => () => void)
-      | undefined;
-    let capturedSnapshot: (() => unknown) | undefined;
+    act(() => {
+      renderer = TestRenderer.create(createElement(EntityView, { entity }));
+      renderers.push(renderer);
+    });
+    expect(renderedText(renderer)).toBe('Ada:0');
 
-    const useSyncExternalStoreMock = vi.fn(
-      (subscribeFn: (cb: () => void) => () => void, getSnapshot: () => unknown) => {
-        capturedSubscribe = subscribeFn;
-        capturedSnapshot = getSnapshot;
-        return getSnapshot();
-      },
-    );
-    __setUseSyncExternalStoreForTests(useSyncExternalStoreMock);
-
-    const result = useEntity(entity as unknown as Parameters<typeof useEntity>[0]);
-
-    expect(useSyncExternalStoreMock).toHaveBeenCalledTimes(1);
-    expect(capturedSubscribe).toBeTypeOf('function');
-    expect(capturedSnapshot).toBeTypeOf('function');
-    expect((result as FakeEntityData).name).toBe('Ada');
-
-    const snap0 = capturedSnapshot?.() as { data: FakeEntityData; version: number };
-    const v0 = snap0.version;
-    entity.$patch({ count: 5 });
-    const snap1 = capturedSnapshot?.() as { data: FakeEntityData; version: number };
-    expect(snap1.version).toBeGreaterThan(v0);
-    expect(snap1.data).toBe(snap0.data);
-    expect(snap1.data.count).toBe(5);
+    act(() => {
+      entity.$patch({ count: 1 });
+    });
+    expect(renderedText(renderer)).toBe('Ada:1');
   });
 
-  it('subscribe registered through hook fires callback on mutation; unsubscribe stops further calls', () => {
-    const entity = new FakeEntity({ name: 'Ada', count: 0 });
 
-    let capturedSubscribe:
-      | ((cb: () => void) => () => void)
-      | undefined;
+  it('does not render stale data after switching entities', () => {
+    setUseSyncExternalStore(useSyncExternalStore);
+    const first = createEntity('First');
+    const second = createEntity('Second');
+    let renderer!: TestRenderer.ReactTestRenderer;
 
-    const useSyncExternalStoreMock = vi.fn(
-      (subscribeFn: (cb: () => void) => () => void, getSnapshot: () => unknown) => {
-        capturedSubscribe = subscribeFn;
-        return getSnapshot();
-      },
-    );
-    __setUseSyncExternalStoreForTests(useSyncExternalStoreMock);
+    act(() => {
+      renderer = TestRenderer.create(createElement(EntityView, { entity: first }));
+      renderers.push(renderer);
+    });
+    expect(renderedText(renderer)).toBe('First:0');
 
-    useEntity(entity as unknown as Parameters<typeof useEntity>[0]);
+    act(() => {
+      renderer.update(createElement(EntityView, { entity: second }));
+    });
+    expect(renderedText(renderer)).toBe('Second:0');
 
-    const cb = vi.fn();
-    const unsubscribe = capturedSubscribe!(cb);
+    act(() => {
+      first.$patch({ name: 'Stale', count: 1 });
+    });
+    expect(renderedText(renderer)).toBe('Second:0');
 
-    entity.$patch({ count: 1 });
-    expect(cb).toHaveBeenCalledTimes(1);
+    act(() => {
+      second.$patch({ name: 'Second', count: 1 });
+    });
+    expect(renderedText(renderer)).toBe('Second:1');
 
-    unsubscribe();
-    entity.$patch({ count: 2 });
-    expect(cb).toHaveBeenCalledTimes(1);
-  });
-
-  it('mutation before subscribe — getSnapshot still returns latest data', () => {
-    const entity = new FakeEntity({ name: 'X', count: 0 });
-
-    let capturedSnapshot: (() => unknown) | undefined;
-
-    const useSyncExternalStoreMock = vi.fn(
-      (subscribeFn: (cb: () => void) => () => void, getSnapshot: () => unknown) => {
-        capturedSnapshot = getSnapshot;
-        return getSnapshot();
-      },
-    );
-    __setUseSyncExternalStoreForTests(useSyncExternalStoreMock);
-
-    entity.$patch({ count: 7 });
-
-    useEntity(entity as unknown as Parameters<typeof useEntity>[0]);
-    const snap = capturedSnapshot?.() as { data: FakeEntityData; version: number };
-    expect(snap.data.count).toBe(7);
   });
 });

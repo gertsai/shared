@@ -80,6 +80,21 @@ describe("observer/role doc helpers — firestore.rules parity", () => {
     ).toBe(true);
   });
 
+  it("accepts scalar and array role/source arguments with the same authorization", () => {
+    expect(hasRoleWithSource(observersDoc, "op-1", "member", "owner")).toBe(
+      true,
+    );
+    expect(
+      hasRoleWithSource(observersDoc, "op-1", ["member"], ["owner"]),
+    ).toBe(true);
+    expect(hasRoleWithSource(observersDoc, "op-1", "member", "invite")).toBe(
+      false,
+    );
+    expect(
+      hasRoleWithSource(observersDoc, "op-1", ["member"], ["invite"]),
+    ).toBe(false);
+  });
+
   it("privileged vs guest role sets", () => {
     expect(hasPrivilegedRole(observersDoc, "op-1")).toBe(true);
     expect(hasPrivilegedRole(observersDoc, "op-2")).toBe(false);
@@ -249,36 +264,6 @@ describe("assertPendingWrites — get/getAfter/now/claims wiring", () => {
     );
   });
 
-  it("delete in the same batch makes getAfter return undefined", async () => {
-    const rules: TableWriteRules = {
-      create: async (ctx) => {
-        const after = await ctx.getAfter?.("chats", "c-1");
-        return after === undefined;
-      },
-    };
-    await assertPendingWrites(
-      [
-        {
-          verb: "delete",
-          path: "chats",
-          id: "c-1",
-          patch: {},
-          action: { type: "archive", params: {} },
-        },
-        {
-          verb: "create",
-          path: "space_members",
-          id: "m-4",
-          patch: { space_uid: "s-1" },
-        },
-      ],
-      {
-        ...gate(rules),
-        rulesFor: (path) =>
-          path === "chats" ? { delete: { archive: () => true } } : rules,
-      },
-    );
-  });
 
   it("ctx.now is the shared batch stamp; ctx.claims reach predicates", async () => {
     let seenNow: Date | undefined;

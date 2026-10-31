@@ -1,18 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * Tests for {@link PgStorageProvider} (the additive `./storage` adapter for
- * `@gertsai/pg-client`). Covers W-4B-4 acceptance criteria + the sample
- * reference test (W-4B-2 + AC-W4-2): write one repository against
- * `IStorageProvider`, swap PgStorageProvider ↔ InMemoryStorageProvider, both
- * suites pass.
+ * Tests for PgStorageProvider behavior that does not require PostgreSQL.
+ * Write semantics are exercised by the real-PostgreSQL integration suite.
  */
 import { describe, expect, it, vi } from 'vitest';
 
 import { mockPgClient, type PgClient } from './index';
 import {
-  PgBatchRunner,
   PgStorageProvider,
-  PgTransactionRunner,
   type TableMap,
 } from './storage-provider';
 import type { StorageMetadata } from '@gertsai/storage-core';
@@ -20,8 +15,7 @@ import {
   ListenersNotSupportedError,
   TransactionConflictError,
 } from '@gertsai/storage-core';
-import { InMemoryStorageProvider } from '@gertsai/entity-storage';
-import { whereField, orderBy, limit } from '@gertsai/query-dsl';
+import { whereField } from '@gertsai/query-dsl';
 
 interface UserData {
   readonly _uid?: string;
@@ -38,10 +32,7 @@ describe('PgStorageProvider — capabilities + listeners', () => {
       listeners: false,
       transactions: true,
       batches: true,
-      // Wave 6.5 / PRD-007 + Wave 7.2 audit P1-1: tri-state cap.
-      // `upsertDoc()` uses `data || (EXCLUDED.data - 'creator_uuid' -
-      // 'created_at')` so create-time audit is preserved on conflict —
-      // `preservesCreatorAudit: true` is honest.
+      // Native upsert retains the original creator audit values on conflict.
       upsert: { supported: true, preservesCreatorAudit: true },
     });
   });
@@ -58,23 +49,7 @@ describe('PgStorageProvider — capabilities + listeners', () => {
 });
 
 describe('PgStorageProvider — TableMap + identifier validation', () => {
-  it('default identity: path → identical table name', async () => {
-    const client = mockPgClient();
-    const provider = new PgStorageProvider<UserMeta>({ client });
-    await provider.set('users', 'u1', { name: 'a', email: 'a@x' });
-    const recorded = client.recorded;
-    expect(recorded[0]?.sql).toContain('INSERT INTO users');
-  });
 
-  it('TableMap override: path → mapped table name', async () => {
-    const client = mockPgClient();
-    const provider = new PgStorageProvider<UserMeta>({
-      client,
-      tableMap: { users: 'app_users' },
-    });
-    await provider.set('users', 'u1', { name: 'a', email: 'a@x' });
-    expect(client.recorded[0]?.sql).toContain('INSERT INTO app_users');
-  });
 
   it('invalid identifier in tableMap throws at construction time', () => {
     expect(
@@ -94,31 +69,9 @@ describe('PgStorageProvider — TableMap + identifier validation', () => {
   });
 });
 
-describe('PgStorageProvider — CRUD recorded SQL', () => {
-  it('set: INSERT ... ON CONFLICT', async () => {
-    const client = mockPgClient();
-    const provider = new PgStorageProvider<UserMeta>({ client });
-    await provider.set('users', 'u1', { name: 'a', email: 'a@x' });
-    const sql = client.recorded[0]?.sql ?? '';
-    expect(sql).toMatch(/INSERT INTO users/);
-    expect(sql).toMatch(/ON CONFLICT \(id\)/);
-  });
+describe('PgStorageProvider — reads', () => {
 
-  it('update: UPDATE ... SET data = data || partial', async () => {
-    const client = mockPgClient();
-    const provider = new PgStorageProvider<UserMeta>({ client });
-    await provider.update('users', 'u1', { email: 'b@x' });
-    const sql = client.recorded[0]?.sql ?? '';
-    expect(sql).toMatch(/UPDATE users SET data = (users\.)?data \|\| /);
-    expect(sql).toMatch(/WHERE id = /);
-  });
 
-  it('delete: DELETE FROM ... WHERE id', async () => {
-    const client = mockPgClient();
-    const provider = new PgStorageProvider<UserMeta>({ client });
-    await provider.delete('users', 'u1');
-    expect(client.recorded[0]?.sql).toMatch(/DELETE FROM users WHERE id = /);
-  });
 
   it('getDoc: returns null when no row, otherwise data field', async () => {
     const provider1 = new PgStorageProvider<UserMeta>({ client: mockPgClient() });
@@ -138,145 +91,11 @@ describe('PgStorageProvider — CRUD recorded SQL', () => {
     expect(found).toEqual({ name: 'a', email: 'a@x' });
   });
 
-  it('getDocs (no query): SELECT data FROM table', async () => {
-    const client = mockPgClient({
-      queryResults: [
-        {
-          pattern: /SELECT data FROM users$/i,
-          result: [{ data: { name: 'a', email: 'a@x' } }],
-        },
-      ],
-    });
-    const provider = new PgStorageProvider<UserMeta>({ client });
-    const rows = await provider.getDocs('users');
-    expect(rows).toEqual([{ name: 'a', email: 'a@x' }]);
-  });
-
-  it('getDocs with whereField/orderBy/limit: forwards compiled SQL + params', async () => {
-    const client = mockPgClient({ defaultQueryResult: [] });
-    const provider = new PgStorageProvider<UserMeta>({ client });
-    await provider.getDocs('users', [
-      whereField<UserMeta, 'email'>('email', '==', 'a@x'),
-      orderBy<UserMeta, 'name'>('name', 'asc'),
-      limit<UserMeta>(10),
-    ]);
-    const recorded = client.recorded[0];
-    expect(recorded?.kind).toBe('query');
-    // compileToSql output is asserted in @gertsai/query-dsl tests; here we
-    // just confirm the params travelled through unchanged.
-    expect(recorded?.params).toContain('a@x');
-    expect(recorded?.params).toContain(10);
-  });
 });
 
-describe('PgStorageProvider — count', () => {
-  it('count without query: SELECT COUNT(*)', async () => {
-    const client = mockPgClient({
-      queryResults: [
-        { pattern: /SELECT COUNT\(\*\)/i, result: [{ count: 7 }] },
-      ],
-    });
-    const provider = new PgStorageProvider<UserMeta>({ client });
-    expect(await provider.count('users')).toBe(7);
-  });
 
-  it('count with query: COUNT(*) wraps compiled SELECT', async () => {
-    const client = mockPgClient({
-      queryResults: [
-        { pattern: /COUNT\(\*\)/i, result: [{ count: '3' }] }, // bigint sometimes returned as string
-      ],
-    });
-    const provider = new PgStorageProvider<UserMeta>({ client });
-    const n = await provider.count('users', [
-      whereField<UserMeta, 'email'>('email', '==', 'a@x'),
-    ]);
-    expect(n).toBe(3);
-  });
-});
-
-describe('PgStorageProvider — runBatch', () => {
-  it('queues ops and applies them atomically (BEGIN ... COMMIT)', async () => {
-    const client = mockPgClient();
-    const provider = new PgStorageProvider<UserMeta>({ client });
-    await provider.runBatch<void>(async (batch) => {
-      batch.set('users', 'a', { name: 'a', email: 'a@x' });
-      batch.update('users', 'b', { email: 'b@x' });
-      batch.delete('users', 'c');
-    });
-    const sqls = client.recorded.map((r) => r.sql);
-    expect(sqls[0]).toBe('BEGIN');
-    expect(sqls[1]).toMatch(/INSERT INTO users/);
-    expect(sqls[2]).toMatch(/UPDATE users/);
-    expect(sqls[3]).toMatch(/DELETE FROM users/);
-    expect(sqls[sqls.length - 1]).toBe('COMMIT');
-    expect(sqls).not.toContain('ROLLBACK');
-  });
-
-  it('empty batch does NOT emit BEGIN/COMMIT (early return)', async () => {
-    const client = mockPgClient();
-    const provider = new PgStorageProvider<UserMeta>({ client });
-    await provider.runBatch<void>(async () => {
-      // no ops queued
-    });
-    expect(client.recorded).toEqual([]);
-  });
-
-  it('failure mid-batch issues ROLLBACK and rethrows original error (atomic)', async () => {
-    const opError = Object.assign(new Error('op #2 fails'), { code: 'X' });
-    const seen: string[] = [];
-    let insertCalls = 0;
-    const failingClient: PgClient = {
-      $queryRaw: vi.fn().mockResolvedValue([]),
-      $executeRaw: vi.fn().mockImplementation(
-        async (s: TemplateStringsArray): Promise<number> => {
-          const sql = String(s[0] ?? '');
-          seen.push(sql);
-          if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return 0;
-          if (/INSERT INTO users/.test(sql)) {
-            insertCalls += 1;
-            if (insertCalls === 2) throw opError;
-            return 1;
-          }
-          return 0;
-        },
-      ),
-      $disconnect: vi.fn().mockResolvedValue(undefined),
-    };
-    const provider = new PgStorageProvider<UserMeta>({ client: failingClient });
-    await expect(
-      provider.runBatch<void>(async (batch) => {
-        batch.set('users', 'a', { name: 'a', email: 'a@x' }); // op1: succeeds
-        batch.set('users', 'b', { name: 'b', email: 'b@x' }); // op2: fails
-        batch.set('users', 'c', { name: 'c', email: 'c@x' }); // op3: never runs
-      }),
-    ).rejects.toBe(opError);
-
-    // BEGIN issued first, ROLLBACK issued after the failure, op3 never ran.
-    expect(seen[0]).toBe('BEGIN');
-    expect(seen).toContain('ROLLBACK');
-    expect(seen).not.toContain('COMMIT');
-    expect(insertCalls).toBe(2); // op1 + failed op2; op3 was never attempted
-  });
-
-  it('PgBatchRunner is constructible standalone (introspection)', () => {
-    const client = mockPgClient();
-    const runner = new PgBatchRunner<UserMeta>(client, (p) => p);
-    expect(runner).toBeInstanceOf(PgBatchRunner);
-  });
-});
 
 describe('PgStorageProvider — runTransaction + conflict mapping', () => {
-  it('wraps fn in BEGIN/COMMIT', async () => {
-    const client = mockPgClient();
-    const provider = new PgStorageProvider<UserMeta>({ client });
-    await provider.runTransaction<void>(async (tx) => {
-      tx.set('users', 'a', { name: 'a', email: 'a@x' });
-    });
-    const sqls = client.recorded.map((r) => r.sql);
-    expect(sqls[0]).toBe('BEGIN');
-    expect(sqls[sqls.length - 1]).toBe('COMMIT');
-  });
-
   it('PgTransactionRunner.get queries SELECT data', async () => {
     const client = mockPgClient({
       queryResults: [
@@ -331,221 +150,4 @@ describe('PgStorageProvider — runTransaction + conflict mapping', () => {
     ).rejects.toThrow(/connection lost/);
   });
 
-  it('PgTransactionRunner is constructible standalone (introspection)', () => {
-    const client = mockPgClient();
-    const runner = new PgTransactionRunner<UserMeta>(client, (p) => p);
-    expect(runner).toBeInstanceOf(PgTransactionRunner);
-  });
-});
-
-/* -------------------------------------------------------------------------
- * Sample reference test (W-4B-2 / AC-W4-2): same behavioural suite is run
- * against PgStorageProvider (with mockPgClient) AND InMemoryStorageProvider.
- * This is the "swap one provider for another" confidence test promised in
- * SPEC-008 Acceptance Checklist. Behaviour-level only — we DON'T compare
- * SQL recording (those are PgStorageProvider-specific).
- * ------------------------------------------------------------------------- */
-
-interface KvData {
-  readonly value: string;
-}
-interface KvMeta extends StorageMetadata<KvData, KvData, 'value'> {}
-
-function buildPgProviderWithFakeStore(): PgStorageProvider<KvMeta> {
-  // We construct a tiny in-memory shadow store that mockPgClient drives so
-  // PgStorageProvider acts as if it has a real backing PG. This is just for
-  // the *swap test* — production code uses a real PgClient impl.
-  const store = new Map<string, KvData>();
-  const client: PgClient = {
-    async $queryRaw<T>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T[]> {
-      const sql = strings.join('?');
-      if (/SELECT data FROM kv WHERE id/.test(sql)) {
-        const id = values[0] as string;
-        const row = store.get(id);
-        return (row ? [{ data: row }] : []) as T[];
-      }
-      if (sql.endsWith('SELECT data FROM kv') || /SELECT data FROM kv\b/.test(sql)) {
-        return Array.from(store.values()).map((data) => ({ data })) as T[];
-      }
-      if (/SELECT COUNT/i.test(sql)) {
-        return [{ count: store.size }] as T[];
-      }
-      return [] as T[];
-    },
-    async $executeRaw(strings: TemplateStringsArray, ...values: unknown[]): Promise<number> {
-      const sql = strings.join('?');
-      if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return 0;
-      if (/INSERT INTO kv/.test(sql)) {
-        store.set(values[0] as string, values[1] as KvData);
-        return 1;
-      }
-      if (/UPDATE kv SET data = (kv\.)?data \|\|/.test(sql)) {
-        const id = values[0] as string;
-        const partial = values[1] as Partial<KvData>;
-        const cur = store.get(id);
-        if (cur) store.set(id, { ...cur, ...partial });
-        return 1;
-      }
-      if (/DELETE FROM kv/.test(sql)) {
-        store.delete(values[0] as string);
-        return 1;
-      }
-      return 0;
-    },
-    $disconnect: vi.fn().mockResolvedValue(undefined),
-  };
-  return new PgStorageProvider<KvMeta>({ client });
-}
-
-describe.each<{
-  name: string;
-  build: () => Promise<{
-    set: (id: string, data: KvData) => Promise<void>;
-    get: (id: string) => Promise<KvData | null>;
-    update: (id: string, partial: Partial<KvData>) => Promise<void>;
-    delete: (id: string) => Promise<void>;
-    list: () => Promise<KvData[]>;
-    count: () => Promise<number>;
-  }>;
-}>([
-  {
-    name: 'PgStorageProvider (mock-backed)',
-    build: async () => {
-      const p = buildPgProviderWithFakeStore();
-      return {
-        set: (id, data) => p.set('kv', id, data),
-        get: (id) => p.getDoc('kv', id),
-        update: (id, partial) => p.update('kv', id, partial),
-        delete: (id) => p.delete('kv', id),
-        list: () => p.getDocs('kv'),
-        count: () => p.count('kv'),
-      };
-    },
-  },
-  {
-    name: 'InMemoryStorageProvider',
-    build: async () => {
-      const p = new InMemoryStorageProvider<KvMeta>();
-      return {
-        set: (id, data) => p.set('kv', id, data),
-        get: (id) => p.getDoc('kv', id),
-        update: (id, partial) => p.update('kv', id, partial),
-        delete: (id) => p.delete('kv', id),
-        list: () => p.getDocs('kv'),
-        count: () => p.count('kv'),
-      };
-    },
-  },
-])('AC-W4-2 cross-provider parity: $name', ({ build }) => {
-  it('CRUD round-trip', async () => {
-    const provider = await build();
-    expect(await provider.get('a')).toBeNull();
-
-    await provider.set('a', { value: 'one' });
-    expect(await provider.get('a')).toEqual({ value: 'one' });
-
-    await provider.update('a', { value: 'two' });
-    expect(await provider.get('a')).toEqual({ value: 'two' });
-
-    await provider.set('b', { value: 'three' });
-    expect(await provider.count()).toBe(2);
-
-    const list = await provider.list();
-    expect(list).toHaveLength(2);
-
-    await provider.delete('a');
-    expect(await provider.get('a')).toBeNull();
-    expect(await provider.count()).toBe(1);
-  });
-});
-
-describe('PgStorageProvider — SetWriteOpts contract', () => {
-  it('set() default is merge-upsert: data = table.data || EXCLUDED.data', async () => {
-    const client = mockPgClient();
-    const provider = new PgStorageProvider<UserMeta>({ client });
-    await provider.set('users', 'u1', { name: 'a', email: 'a@x' });
-    const sql = client.recorded[0]?.sql ?? '';
-    expect(sql).toMatch(/ON CONFLICT \(id\) DO UPDATE SET data = users\.data \|\| EXCLUDED\.data/);
-  });
-
-  it('set() merge:false is a full overwrite: data = EXCLUDED.data', async () => {
-    const client = mockPgClient();
-    const provider = new PgStorageProvider<UserMeta>({ client });
-    await provider.set('users', 'u1', { name: 'a', email: 'a@x' }, { merge: false });
-    const sql = client.recorded[0]?.sql ?? '';
-    expect(sql).toMatch(/SET data = EXCLUDED\.data/);
-    expect(sql).not.toMatch(/users\.data \|\|/);
-  });
-
-  it('set() expectedVersion guards the conflict branch and passes it as $3', async () => {
-    const client = mockPgClient({ defaultExecuteResult: 1 });
-    const provider = new PgStorageProvider<UserMeta>({ client });
-    await provider.set(
-      'users',
-      'u1',
-      { name: 'a', email: 'a@x' },
-      { expectedVersion: 3 },
-    );
-    const q = client.recorded[0];
-    expect(q?.sql).toMatch(
-      /WHERE \(users\.data->>'update_version'\)::int = \$3/,
-    );
-    expect(q?.params).toEqual(['u1', { name: 'a', email: 'a@x' }, 3]);
-  });
-
-  it('set() stale expectedVersion surfaces VersionConflictError', async () => {
-    const client = mockPgClient({
-      executeResults: [{ pattern: /INSERT INTO users/, result: 0 }],
-    });
-    const provider = new PgStorageProvider<UserMeta>({ client });
-    await expect(
-      provider.set('users', 'u1', { name: 'a', email: 'a@x' }, { expectedVersion: 3 }),
-    ).rejects.toMatchObject({
-      name: 'VersionConflictError',
-      path: 'users',
-      id: 'u1',
-      expected: 3,
-    });
-  });
-
-  it('update() expectedVersion adds the version predicate', async () => {
-    const client = mockPgClient({ defaultExecuteResult: 1 });
-    const provider = new PgStorageProvider<UserMeta>({ client });
-    await provider.update('users', 'u1', { email: 'b@x' }, { expectedVersion: 5 });
-    const q = client.recorded[0];
-    expect(q?.sql).toMatch(
-      /AND \(users\.data->>'update_version'\)::int = \$3/,
-    );
-    expect(q?.params).toEqual(['u1', { email: 'b@x' }, 5]);
-  });
-
-  it('update() without expectedVersion stays a silent no-op on missing rows', async () => {
-    const client = mockPgClient({ defaultExecuteResult: 0 });
-    const provider = new PgStorageProvider<UserMeta>({ client });
-    await expect(provider.update('users', 'gone', { email: 'b@x' })).resolves.toBeUndefined();
-  });
-
-  it('batch set forwards merge + expectedVersion into the upsert SQL', async () => {
-    const client = mockPgClient({ defaultExecuteResult: 1 });
-    const provider = new PgStorageProvider<UserMeta>({ client });
-    await provider.runBatch(async (b) => {
-      b.set('users', 'u1', { name: 'a', email: 'a@x' }, { merge: false, expectedVersion: 2 });
-    });
-    const upsert = client.recorded.find((q) => /INSERT INTO users/.test(q.sql));
-    expect(upsert?.sql).toMatch(/SET data = EXCLUDED\.data WHERE/);
-    expect(upsert?.params).toEqual(['u1', { name: 'a', email: 'a@x' }, 2]);
-  });
-
-  it('tx set honors expectedVersion inside the transaction', async () => {
-    const client = mockPgClient({
-      executeResults: [{ pattern: /INSERT INTO users/, result: 0 }],
-      defaultExecuteResult: 1,
-    });
-    const provider = new PgStorageProvider<UserMeta>({ client });
-    await expect(
-      provider.runTransaction(async (tx) => {
-        tx.set('users', 'u1', { name: 'a', email: 'a@x' }, { expectedVersion: 2 });
-      }),
-    ).rejects.toMatchObject({ name: 'VersionConflictError' });
-  });
 });

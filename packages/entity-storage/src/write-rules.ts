@@ -35,6 +35,12 @@
 
 import type { Session } from "@gertsai/session";
 import { VersionConflictError } from "@gertsai/storage-core";
+import {
+  stampCreate,
+  stampDelete,
+  stampRestore,
+  stampUpdate,
+} from "./write-stamps";
 
 /** Storage verb being evaluated. */
 export type WriteVerb = "create" | "update" | "delete" | "restore" | "destroy";
@@ -79,12 +85,9 @@ export interface WriteRuleEval {
    */
   readonly action?: WriteRuleAction;
   /**
-   * Keys whose persisted value actually changes — the caller's patch
-   * diffed against `resource` (Orchestra
-   * `request.data.diff(resource).affectedKeys()`). On create every
-   * supplied key counts; a key written with an identical value does
-   * not. Access/audit fields the stamp adds are excluded — predicates
-   * judge domain fields only.
+   * Keys whose literal persisted value actually changes, compared against
+   * `resource`. On create every supplied key counts; service-added audit
+   * fields are excluded so predicates judge domain fields only.
    */
   readonly affectedKeys: readonly string[];
   /** The caller's domain field map (pre-stamp). Empty on delete/restore. */
@@ -291,48 +294,21 @@ function valuesDiffer(a: unknown, b: unknown): boolean {
   }
 }
 
-/** `a.b.c` lookup into a committed doc — non-object hops yield `undefined`. */
-function nestedValue(
-  resource: Record<string, unknown>,
-  path: string,
-): unknown {
-  let cur: unknown = resource;
-  for (const seg of path.split(".")) {
-    if (cur === null || typeof cur !== "object") return undefined;
-    cur = (cur as Record<string, unknown>)[seg];
-  }
-  return cur;
-}
-
-/**
- * Compute Orchestra-style `affectedKeys`: patch keys whose value
- * differs from the stored doc. Missing `resource` → every patch key is
- * treated as affected (a write against a nonexistent row still names
- * the fields it tried to set).
- *
- * Dot-path keys (`settings.theme`) report their ROOT field —
- * Firestore expands field paths into the document before diffing, so
- * `MapDiff.affectedKeys()` names `settings`, never `settings.theme`.
- * The diff itself still compares the LEAF value: a dot write that
- * reproduces the committed leaf is a no-op and marks nothing. Several
- * dot keys under one root collapse to a single affected field.
- */
+/** Dotted patch keys are literal persisted keys, not field paths. */
 export function computeAffectedKeys(
   patch: Readonly<Record<string, unknown>>,
   resource: Record<string, unknown> | undefined,
 ): string[] {
-  const affected = new Set<string>();
-  for (const k of Object.keys(patch)) {
-    const dot = k.indexOf(".");
-    const root = dot < 0 ? k : k.slice(0, dot);
-    if (resource === undefined) {
-      affected.add(root);
-      continue;
+  const affected: string[] = [];
+  for (const key of Object.keys(patch)) {
+    if (
+      resource === undefined ||
+      valuesDiffer(patch[key], resource[key])
+    ) {
+      affected.push(key);
     }
-    const committed = dot < 0 ? resource[k] : nestedValue(resource, k);
-    if (valuesDiffer(patch[k], committed)) affected.add(root);
   }
-  return [...affected];
+  return affected;
 }
 
 /**
@@ -363,8 +339,10 @@ function resolvePredicate(
 ): WriteRulePredicate | undefined {
   if (rules === undefined) return undefined;
   if (typeof rules === "function") return rules;
-  if (actionType === undefined) return undefined;
-  return rules[actionType] ?? rules["*"];
+  if (actionType !== undefined && Object.hasOwn(rules, actionType)) {
+    return rules[actionType];
+  }
+  return Object.hasOwn(rules, "*") ? rules["*"] : undefined;
 }
 
 /**
@@ -411,17 +389,13 @@ export async function assertWriteAllowed(
     ctx = { ...ctx, now: new Date() };
   }
 
-  // Guard 1 — protected fields can never ride a caller's diff.
-  // A `protected.x` dot-path write would otherwise slip past the
-  // literal key check — compare root segments, report full keys.
+  // Guard 1 — protected persisted keys can never ride a caller's diff.
   if (ctx.verb === "update" || ctx.verb === "create") {
     const protectedSet =
       ctx.verb === "update" ? PROTECTED_UPDATE_FIELDS : PROTECTED_CREATE_FIELDS;
-    const illegal = Object.keys(ctx.patch).filter((k) => {
-      const dot = k.indexOf(".");
-      const root = dot < 0 ? k : k.slice(0, dot);
-      return (protectedSet as readonly string[]).includes(root);
-    });
+    const illegal = Object.keys(ctx.patch).filter((key) =>
+      (protectedSet as readonly string[]).includes(key),
+    );
     if (illegal.length > 0) {
       const err = new WriteRuleDenied(
         { ...ctx, actionType: ctx.action?.type },
@@ -520,17 +494,13 @@ export interface PendingWrite {
   readonly id: string;
   /** The caller's pre-stamp field map (`set` body / `update` partial). */
   readonly patch: Readonly<Record<string, unknown>>;
-  /**
-   * The caller-supplied `update_action`, when given. Lifecycle verbs
-   * omit it — the evaluator supplies the stamped type (`delete`,
-   * `restore`, `create`) so action-keyed rules resolve identically to
-   * the single-document path.
-   */
+  /** The caller-supplied journal; lifecycle verbs may omit it. */
   readonly action?: WriteRuleAction;
-  /**
-   * Caller-declared ETag — forwarded to the eval and to the raw
-   * runner's atomic `WHERE update_version = $n` at flush.
-   */
+  /** Exact persisted payload after service audit/lifecycle stamping. */
+  readonly persistedData?: Readonly<Record<string, unknown>>;
+  /** Set merge behavior; omitted follows provider defaults. */
+  readonly merge?: boolean;
+  /** Caller-declared ETag forwarded to the raw runner's atomic check. */
   readonly expectedVersion?: number;
 }
 
@@ -579,6 +549,55 @@ export interface PendingWriteGate {
 }
 
 /**
+ * Fold a queued write into its post-transaction image. Exact service
+ * stamps win; legacy raw entries receive lifecycle stamps once here.
+ */
+export function foldPendingWrite(
+  resource: Record<string, unknown> | undefined,
+  write: PendingWrite,
+  session: Session,
+): Record<string, unknown> | undefined {
+  if (write.verb === "destroy") return undefined;
+  if (
+    (write.verb === "delete" || write.verb === "restore") &&
+    resource === undefined
+  ) {
+    return undefined;
+  }
+
+  let data: Record<string, unknown>;
+  if (write.persistedData !== undefined) {
+    data = { ...write.persistedData };
+  } else {
+    switch (write.verb) {
+      case "create":
+        data = stampCreate(write.patch, session, write.id);
+        break;
+      case "update":
+        data = stampUpdate(write.patch, session, write.action);
+        break;
+      case "delete":
+        data = stampDelete(session, write.action);
+        break;
+      case "restore":
+        data = stampRestore(session);
+        break;
+    }
+  }
+
+  const currentVersion = resource?.["update_version"];
+  if (typeof currentVersion === "number") {
+    data["update_version"] = currentVersion + 1;
+  }
+  if (write.verb === "create") {
+    if (resource === undefined) return data;
+    return write.merge === false ? data : { ...resource, ...data };
+  }
+  if (resource === undefined) return undefined;
+  return { ...resource, ...data };
+}
+
+/**
  * Replay a batch/transaction's queued writes through the write-rules
  * gate — the deferred-eval counterpart of the per-call
  * {@link assertWriteAllowed}. Run AFTER the runner's `fn` queues
@@ -608,87 +627,69 @@ export async function assertPendingWrites(
   // remote store). Deduped by (path,id) — repeated writes to one row
   // share the read. Semantics unchanged: reads still observe committed
   // pre-commit state; the provider's atomic guard owns the last word.
-  const resources = new Map<string, Record<string, unknown> | undefined>();
-  const resKey = (path: string, id: string) => `${path} ${id}`;
+  const resources = new Map<
+    string,
+    Promise<Record<string, unknown> | undefined>
+  >();
+  const resKey = (path: string, id: string) => JSON.stringify([path, id]);
   if (gate.resource !== undefined) {
     const read = gate.resource;
-    const wanted = new Map<string, PendingWrite>();
-    for (const w of pending) {
-      if (gate.rulesFor(w.path) === undefined) continue;
-      const key = resKey(w.path, w.id);
-      if (!wanted.has(key)) wanted.set(key, w);
+    const wanted = new Map<string, { path: string; id: string }>();
+    for (const write of pending) {
+      if (gate.rulesFor(write.path) === undefined) continue;
+      const key = resKey(write.path, write.id);
+      if (!wanted.has(key)) wanted.set(key, { path: write.path, id: write.id });
     }
     await Promise.all(
-      [...wanted.values()].map(async (w) => {
-        const row = (await read(w.path, w.id)) ?? undefined;
-        resources.set(resKey(w.path, w.id), row);
+      [...wanted.entries()].map(([key, target]) => {
+        const promise = read(target.path, target.id).then((row) => row ?? undefined);
+        resources.set(key, promise);
+        return promise;
       }),
     );
   }
 
-  // `get(path)` — committed reads, memoized into the prefetch map so
-  // repeated lookups and the write-target prefetch share one cache. A
-  // doc queued in this batch but never prefetched (ungoverned path)
-  // still resolves through the live reader.
   const batchNow = gate.now ?? new Date();
   const get: RuleDocReader | undefined =
     gate.resource === undefined
       ? undefined
-      : async (path, id) => {
+      : (path, id) => {
           const key = resKey(path, id);
-          if (!resources.has(key)) {
-            resources.set(key, (await gate.resource!(path, id)) ?? undefined);
+          let promise = resources.get(key);
+          if (promise === undefined) {
+            promise = gate.resource!(path, id).then((row) => row ?? undefined);
+            resources.set(key, promise);
           }
-          return resources.get(key);
+          return promise;
         };
 
-  // `getAfter(path)` — post-transaction view. Computed lazily per key:
-  // start from committed state, then fold that key's pending writes in
-  // order (create replaces, update merges, delete/destroy removes,
-  // restore clears the deleted_* markers). Docs the batch doesn't touch
-  // resolve to committed state through `get`.
   let getAfter: RuleDocReader | undefined;
   if (get !== undefined) {
-    const committedGet = get;
     const pendingByKey = new Map<string, PendingWrite[]>();
-    for (const w of pending) {
-      const key = resKey(w.path, w.id);
+    for (const write of pending) {
+      const key = resKey(write.path, write.id);
       const list = pendingByKey.get(key);
-      if (list === undefined) pendingByKey.set(key, [w]);
-      else list.push(w);
+      if (list === undefined) pendingByKey.set(key, [write]);
+      else list.push(write);
     }
-    const postCache = new Map<string, Record<string, unknown> | undefined>();
-    getAfter = async (path, id) => {
+    const postCache = new Map<
+      string,
+      Promise<Record<string, unknown> | undefined>
+    >();
+    getAfter = (path, id) => {
       const key = resKey(path, id);
-      if (postCache.has(key)) return postCache.get(key);
-      let cur = await committedGet(path, id);
-      for (const w of pendingByKey.get(key) ?? []) {
-        switch (w.verb) {
-          case "create":
-            cur = { ...w.patch };
-            break;
-          case "update":
-            cur = cur === undefined ? undefined : { ...cur, ...w.patch };
-            break;
-          case "delete":
-          case "destroy":
-            cur = undefined;
-            break;
-          case "restore":
-            cur =
-              cur === undefined
-                ? undefined
-                : {
-                    ...cur,
-                    deleted_at: undefined,
-                    deleted_by_uuid: undefined,
-                    deleted_by_platform: undefined,
-                  };
-            break;
-        }
+      let promise = postCache.get(key);
+      if (promise === undefined) {
+        promise = (async () => {
+          let current = await get(path, id);
+          for (const write of pendingByKey.get(key) ?? []) {
+            current = foldPendingWrite(current, write, gate.session);
+          }
+          return current;
+        })();
+        postCache.set(key, promise);
       }
-      postCache.set(key, cur);
-      return cur;
+      return promise;
     };
   }
 
@@ -705,7 +706,7 @@ export async function assertPendingWrites(
       }
       continue;
     }
-    const resource = resources.get(resKey(w.path, w.id));
+    const resource = await resources.get(resKey(w.path, w.id));
     if (w.verb === "create" && resource !== undefined) {
       const err = new WriteRuleDenied(
         { path: w.path, id: w.id, verb: w.verb },

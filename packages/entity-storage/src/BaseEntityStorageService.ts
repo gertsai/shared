@@ -29,13 +29,13 @@ import {
   assertPendingWrites,
   assertWriteAllowed,
   computeAffectedKeys,
+  foldPendingWrite,
   WriteRuleDenied,
   type PendingWrite,
   type RuleDocReader,
   type TableWriteRules,
   type WriteDenialObserver,
   type WriteRuleEval,
-  type WriteVerb,
 } from "./write-rules";
 import {
   actionFromOpts,
@@ -44,26 +44,80 @@ import {
   stampRestore,
   stampUpdate,
 } from "./write-stamps";
+import type { WriteAction } from "./write-stamps";
+/**
+ * Clone caller-owned data before any asynchronous boundary, then recursively
+ * freeze the copy used by rules and persistence.
+ */
+function ownedSnapshot<T>(value: T): T {
+  const snapshot = structuredClone(value);
+  const seen = new WeakSet<object>();
+  const freeze = (current: unknown): void => {
+    if (
+      current === null ||
+      typeof current !== "object" ||
+      Object.isFrozen(current) ||
+      seen.has(current)
+    ) return;
+    seen.add(current);
+    if (current instanceof Map) {
+      for (const [key, entry] of current) {
+        freeze(key);
+        freeze(entry);
+      }
+      Object.defineProperties(current, {
+        set: { value: () => { throw new TypeError("Snapshot Map is immutable"); } },
+        delete: { value: () => { throw new TypeError("Snapshot Map is immutable"); } },
+        clear: { value: () => { throw new TypeError("Snapshot Map is immutable"); } },
+      });
+    } else if (current instanceof Set) {
+      for (const entry of current) freeze(entry);
+      Object.defineProperties(current, {
+        add: { value: () => { throw new TypeError("Snapshot Set is immutable"); } },
+        delete: { value: () => { throw new TypeError("Snapshot Set is immutable"); } },
+        clear: { value: () => { throw new TypeError("Snapshot Set is immutable"); } },
+      });
+    } else {
+      for (const entry of Object.values(current)) freeze(entry);
+    }
+    Object.freeze(current);
+  };
+  freeze(snapshot);
+  return snapshot;
+}
+function immutableAction(
+  action: WriteAction | undefined,
+): WriteAction | undefined {
+  if (action !== undefined) {
+    Object.freeze(action);
+    Object.freeze(action.params);
+  }
+  return action;
+}
+
+
+type RunnerCallbackState = { open: boolean };
+
+type RunnerRegistration = {
+  readonly owner: object;
+  active: boolean;
+  readonly enqueue: (write: PendingWrite) => void;
+};
+const auditedBatchRunners = new WeakMap<object, RunnerRegistration>();
+const auditedTxRunners = new WeakMap<object, RunnerRegistration>();
 
 /**
  * Optional per-method routing knob accepted by `set` / `update` / `delete` /
- * `restore` / `destroy`. When `batch` is set the mutation is queued onto the
- * caller-supplied {@link AuditedBatchRunner} (the caller's wrapping
- * `runBatch` then commits). When `transaction` is set, the mutation is
- * queued onto the caller-supplied {@link AuditedTxRunner}. When both are
- * absent the call commits immediately and emits the matching event —
- * current behaviour preserved.
+ * `restore` / `upsert`. A supplied runner must be an active audited runner
+ * created by this same service instance. `runBatch` or `runTransaction` then
+ * commits the queued mutation. Hard `destroy` is direct-only.
  *
  * Per SPEC-008 audit fix F-8: parity with Orchestra's per-method
  * `batch?` / `transaction?` overload, distinct from the `runTransaction(fn)` /
- * `runBatch(fn)` wrappers (W-2). Useful when callers compose several
- * services into one transactional flow without hard-wiring routing inside
- * each service.
+ * `runBatch(fn)` wrappers (W-2).
  *
- * **Emit semantics**: when routed onto a batch / transaction the service
- * SKIPS its synchronous emit — events fire only on the eventual flush of
- * the wrapping `runBatch` / `runTransaction` call. The batch/tx user is
- * responsible for emitting (or not) on commit.
+ * **Emit semantics**: routed mutations do not emit service events, either
+ * when queued or when the enclosing runner commits.
  *
  * @public
  */
@@ -108,10 +162,11 @@ export interface BaseEntityStorageServiceOpts<Meta extends StorageMetadata> {
   /**
    * Orchestra `firestore.rules`-parity write rules for this collection
    * (RFC-024 gap 5). When set, every `set`/`update`/`delete`/`restore`/
-   * `upsert`/`destroy` is evaluated by {@link assertWriteAllowed}
+   * `upsert` is evaluated by {@link assertWriteAllowed}
    * BEFORE stamping/routing — a table with a ruleset fails closed on
    * unlisted verbs, unknown `update_action` types, and protected-field
-   * diffs regardless of which use-case issued the write.
+   * diffs regardless of which use-case issued the write. Hard `destroy`
+   * remains direct-only and is evaluated by the same rules gate.
    */
   readonly rules?: TableWriteRules | undefined;
   /**
@@ -250,7 +305,7 @@ export abstract class BaseEntityStorageService<
     this._path = opts.path ?? "";
     this._rules = opts.rules;
     this._onDenied = opts.onDenied;
-    this._claims = opts.claims ?? {};
+    this._claims = ownedSnapshot(opts.claims ?? {});
     this._logger = opts.logger ?? noopStorageLogger;
     this._uuidProvider =
       opts.uuidProvider ??
@@ -282,6 +337,62 @@ export abstract class BaseEntityStorageService<
     const doc = await this._provider.getDoc(this._path, uid);
     return (doc ?? undefined) as Record<string, unknown> | undefined;
   }
+  private _assertOwnedRunner(
+    runner: object | undefined,
+    registry: WeakMap<object, RunnerRegistration>,
+    label: "batch" | "transaction",
+  ): RunnerRegistration | undefined {
+    if (runner === undefined) return undefined;
+    const registration = registry.get(runner);
+    if (
+      registration === undefined ||
+      registration.owner !== this ||
+      !registration.active ||
+      this._destroyed
+    ) {
+      throw new Error(
+        `${label} routing requires an active runner from this service instance`,
+      );
+    }
+    return registration;
+  }
+
+  private _docReaders(
+    write: PendingWrite,
+    targetResource: Record<string, unknown> | undefined,
+  ): Pick<WriteRuleEval, "get" | "getAfter"> {
+    const provider = this._provider;
+    const cache = new Map<string, Promise<Record<string, unknown> | undefined>>();
+    const keyFor = (path: string, id: string): string => JSON.stringify([path, id]);
+    const targetKey = keyFor(write.path, write.id);
+    cache.set(targetKey, Promise.resolve(targetResource));
+    const get: RuleDocReader = (path, id) => {
+      const key = keyFor(path, id);
+      let read = cache.get(key);
+      if (read === undefined) {
+        read = provider.getDoc(path, id).then(
+          (doc) => (doc ?? undefined) as Record<string, unknown> | undefined,
+        );
+        cache.set(key, read);
+      }
+      return read;
+    };
+    const afterCache = new Map<string, Promise<Record<string, unknown> | undefined>>();
+    const getAfter: RuleDocReader = async (path, id) => {
+      const key = keyFor(path, id);
+      let after = afterCache.get(key);
+      if (after === undefined) {
+        after = get(path, id).then((resource) =>
+          path === write.path && id === write.id
+            ? foldPendingWrite(resource, write, this._session)
+            : resource,
+        );
+        afterCache.set(key, after);
+      }
+      return after;
+    };
+    return { get, getAfter };
+  }
 
   /** Collection path bound at construction time. */
   get path(): string {
@@ -308,18 +419,32 @@ export abstract class BaseEntityStorageService<
     opts: MutationRoutingOpts<Meta, UpdateActionTypes> = {},
   ): Promise<{ id: string }> {
     this._assertAlive();
-    const { _uid, ...rest } = entity as { _uid?: string } & Record<
+    const { _uid, ...inputRest } = entity as { _uid?: string } & Record<
       string,
       unknown
     >;
+    const rest = ownedSnapshot(inputRest);
     const id = _uid ?? this._uuidProvider();
-    if (this._rules !== undefined) {
-      // Providers treat `set` as upsert (`INSERT … ON CONFLICT DO
-      // UPDATE`) — an existing row here means a create-stamped write
-      // would overwrite a live document, falsify the journal, and
-      // skip every update rule. Governed tables are create-only on
-      // `set`: update goes through `update()` (with `update_action`),
-      // upsert semantics through `upsert()` (create-only as well).
+    const batchRegistration = this._assertOwnedRunner(
+      opts.batch,
+      auditedBatchRunners,
+      "batch",
+    );
+    const txRegistration = this._assertOwnedRunner(
+      opts.transaction,
+      auditedTxRunners,
+      "transaction",
+    );
+    const data = stampCreate(rest, this._session, id) as Meta["write"];
+    Object.freeze(data);
+    const pendingWrite: PendingWrite = {
+      verb: "create",
+      path: this._path,
+      id,
+      patch: rest,
+      persistedData: data as Record<string, unknown>,
+    };
+    if (this._rules !== undefined && !batchRegistration && !txRegistration) {
       const resource = await this._readResource(id);
       if (resource !== undefined) {
         throw new WriteRuleDenied(
@@ -338,26 +463,23 @@ export abstract class BaseEntityStorageService<
           action: { type: "create", params: {} },
           affectedKeys: Object.keys(rest),
           patch: rest,
-          ...this._docReaders("create", id, rest),
+          ...this._docReaders(pendingWrite, resource),
         },
         this._onDenied,
       );
     }
-    if (opts.batch) {
+    if (batchRegistration) {
       this._logger.debug("set:batch", { path: this._path });
-      return opts.batch.set(entity);
+      batchRegistration.enqueue(pendingWrite);
+      return { id };
     }
-    if (opts.transaction) {
+    if (txRegistration) {
       this._logger.debug("set:tx", { path: this._path });
-      return opts.transaction.set(entity);
+      txRegistration.enqueue(pendingWrite);
+      return { id };
     }
     this._logger.debug("set", { path: this._path, id });
-    const data = stampCreate(rest, this._session, id) as Meta["write"];
     await this._provider.set(this._path, id, data);
-    // Wave 12.D-fix FR-021 / EVID-051 L-5 — re-check after await: if
-    // `$destroy` ran while the provider write was in-flight, suppress
-    // the emit (listeners have been removed, but tests + auditors should
-    // not see an event from a destroyed service).
     if (this._destroyed) return { id };
     const payload: StorageEventPayload<Meta> = {
       event: "entity-created",
@@ -387,9 +509,34 @@ export abstract class BaseEntityStorageService<
       MutationRoutingOpts<Meta, UpdateActionTypes> = {},
   ): Promise<void> {
     this._assertAlive();
-    if (this._rules !== undefined) {
+    const txRegistration = this._assertOwnedRunner(
+      opts.transaction,
+      auditedTxRunners,
+      "transaction",
+    );
+    const batchRegistration = this._assertOwnedRunner(
+      opts.batch,
+      auditedBatchRunners,
+      "batch",
+    );
+    const expectedVersion = opts.expectedVersion;
+    const actionType = opts.action;
+    const patch = ownedSnapshot(partial as Record<string, unknown>);
+    const params = opts.params === undefined ? undefined : ownedSnapshot(opts.params);
+    const action = immutableAction(actionFromOpts(actionType, params));
+    const data = stampUpdate(patch, this._session, action) as Partial<Meta["write"]>;
+    Object.freeze(data);
+    const pendingWrite: PendingWrite = {
+      verb: "update",
+      path: this._path,
+      id: uid,
+      patch,
+      persistedData: data as Record<string, unknown>,
+      ...(action !== undefined ? { action } : {}),
+      ...(expectedVersion !== undefined ? { expectedVersion } : {}),
+    };
+    if (this._rules !== undefined && !txRegistration && !batchRegistration) {
       const resource = await this._readResource(uid);
-      const patch = partial as Record<string, unknown>;
       await assertWriteAllowed(
         this._rules,
         {
@@ -398,58 +545,30 @@ export abstract class BaseEntityStorageService<
           id: uid,
           session: this._session,
           claims: this._claims,
-          ...(opts.action !== undefined
-            ? {
-                action: {
-                  type: opts.action as string,
-                  params: opts.params ?? {},
-                },
-              }
-            : {}),
+          ...(action !== undefined ? { action } : {}),
           affectedKeys: computeAffectedKeys(patch, resource),
           patch,
           ...(resource !== undefined ? { resource } : {}),
-          ...(opts.expectedVersion !== undefined
-            ? { expectedVersion: opts.expectedVersion }
-            : {}),
-          ...this._docReaders("update", uid, patch),
+          ...(expectedVersion !== undefined ? { expectedVersion } : {}),
+          ...this._docReaders(pendingWrite, resource),
         },
         this._onDenied,
       );
     }
-    const runnerOpts = {
-      ...(opts.action !== undefined && {
-        action: opts.action,
-        ...(opts.params !== undefined && { params: opts.params }),
-      }),
-      ...(opts.expectedVersion !== undefined && {
-        expectedVersion: opts.expectedVersion,
-      }),
-    };
-    const actionOpts =
-      Object.keys(runnerOpts).length > 0 ? runnerOpts : undefined;
-    if (opts.batch) {
+    if (batchRegistration) {
       this._logger.debug("update:batch", { path: this._path, id: uid });
-      opts.batch.update(uid, partial, actionOpts);
+      batchRegistration.enqueue(pendingWrite);
       return;
     }
-    if (opts.transaction) {
+    if (txRegistration) {
       this._logger.debug("update:tx", { path: this._path, id: uid });
-      opts.transaction.update(uid, partial, actionOpts);
+      txRegistration.enqueue(pendingWrite);
       return;
     }
     this._logger.debug("update", { path: this._path, id: uid });
-    const data = stampUpdate(
-      partial as Record<string, unknown>,
-      this._session,
-      actionFromOpts(opts.action, opts.params),
-    ) as Partial<Meta["write"]>;
     await this._provider.update(this._path, uid, data, {
-      ...(opts.expectedVersion !== undefined && {
-        expectedVersion: opts.expectedVersion,
-      }),
+      ...(expectedVersion !== undefined && { expectedVersion }),
     });
-    // Wave 12.D-fix FR-021 — see note in `set()`.
     if (this._destroyed) return;
     const payload: StorageEventPayload<Meta> = {
       event: "entity-updated",
@@ -479,7 +598,24 @@ export abstract class BaseEntityStorageService<
       MutationRoutingOpts<Meta, UpdateActionTypes> = {},
   ): Promise<void> {
     this._assertAlive();
-    if (this._rules !== undefined) {
+    const txRegistration = this._assertOwnedRunner(opts.transaction, auditedTxRunners, "transaction");
+    const batchRegistration = this._assertOwnedRunner(opts.batch, auditedBatchRunners, "batch");
+    const expectedVersion = opts.expectedVersion;
+    const actionType = opts.action;
+    const params = opts.params === undefined ? undefined : ownedSnapshot(opts.params);
+    const action = immutableAction(actionFromOpts(actionType, params));
+    const data = stampDelete(this._session, action) as Partial<Meta["write"]>;
+    Object.freeze(data);
+    const pendingWrite: PendingWrite = {
+      verb: "delete",
+      path: this._path,
+      id: uid,
+      patch: {},
+      persistedData: data as Record<string, unknown>,
+      ...(action !== undefined ? { action } : {}),
+      ...(expectedVersion !== undefined ? { expectedVersion } : {}),
+    };
+    if (this._rules !== undefined && !txRegistration && !batchRegistration) {
       const resource = await this._readResource(uid);
       await assertWriteAllowed(
         this._rules,
@@ -489,85 +625,57 @@ export abstract class BaseEntityStorageService<
           id: uid,
           session: this._session,
           claims: this._claims,
-          action: {
-            type: (opts.action ?? "delete") as string,
-            params: opts.params ?? {},
-          },
+          action: action ?? { type: "delete", params: params ?? {} },
           affectedKeys: [],
           patch: {},
           ...(resource !== undefined ? { resource } : {}),
-          ...(opts.expectedVersion !== undefined
-            ? { expectedVersion: opts.expectedVersion }
-            : {}),
-          ...this._docReaders("delete", uid, {}),
+          ...(expectedVersion !== undefined ? { expectedVersion } : {}),
+          ...this._docReaders(pendingWrite, resource),
         },
         this._onDenied,
       );
     }
-    const runnerOpts = {
-      ...(opts.action !== undefined && {
-        action: opts.action,
-        ...(opts.params !== undefined && { params: opts.params }),
-      }),
-      ...(opts.expectedVersion !== undefined && {
-        expectedVersion: opts.expectedVersion,
-      }),
-    };
-    const actionOpts =
-      Object.keys(runnerOpts).length > 0 ? runnerOpts : undefined;
-    if (opts.batch) {
-      this._logger.debug("delete:batch", { path: this._path, id: uid });
-      opts.batch.delete(uid, actionOpts);
+    if (batchRegistration) {
+      batchRegistration.enqueue(pendingWrite);
       return;
     }
-    if (opts.transaction) {
-      this._logger.debug("delete:tx", { path: this._path, id: uid });
-      opts.transaction.delete(uid, actionOpts);
+    if (txRegistration) {
+      txRegistration.enqueue(pendingWrite);
       return;
     }
     this._logger.debug("delete", { path: this._path, id: uid });
-    const data = stampDelete(
-      this._session,
-      opts.action !== undefined
-        ? { type: opts.action as string, params: opts.params ?? {} }
-        : undefined,
-    ) as Partial<Meta["write"]>;
     await this._provider.update(this._path, uid, data, {
-      ...(opts.expectedVersion !== undefined && {
-        expectedVersion: opts.expectedVersion,
-      }),
+      ...(expectedVersion !== undefined && { expectedVersion }),
     });
-    // Wave 12.D-fix FR-021 — see note in `set()`.
     if (this._destroyed) return;
-    const payload: StorageEventPayload<Meta> = {
+    this.emit(STORAGE_EVENTS.ENTITY_DELETED, {
       event: "entity-deleted",
       path: this._path,
       id: uid,
-    };
-    this.emit(STORAGE_EVENTS.ENTITY_DELETED, payload);
+    } satisfies StorageEventPayload<Meta>);
   }
 
   /**
-   * Hard-delete: physically removes the row via `provider.delete(path, uid)`,
-   * then emits {@link STORAGE_EVENTS.ENTITY_DESTROYED}. Distinct from
-   * {@link delete} (soft) — there is no audit trail because the row is gone.
-   *
-   * Per F-8: `opts.batch` / `opts.transaction` are accepted for symmetry,
-   * but the audited-runner shapes don't expose `destroy` (they queue
-   * soft-deletes only). When routed, this method delegates to the raw
-   * `provider.delete` via the runner's underlying queue. **TODO** — not
-   * currently exposed on `AuditedTxRunner` / `AuditedBatchRunner`; the
-   * routed branches throw `Error('destroy via batch/transaction not
-   * supported — use the raw provider runner')`. Direct (non-routed) calls
-   * are fully supported.
-   *
-   * Per SPEC-008 audit fix F-7.
+   * Hard-delete: physically removes the row and emits
+   * {@link STORAGE_EVENTS.ENTITY_DESTROYED}. Unlike soft {@link delete},
+   * this operation has no audit payload. Hard-destroy routing is unsupported;
+   * use an explicit raw provider runner when transactional hard-delete is
+   * required.
    */
   async destroy(
     uid: string,
     opts: MutationRoutingOpts<Meta, UpdateActionTypes> = {},
   ): Promise<void> {
     this._assertAlive();
+    if (opts.batch !== undefined || opts.transaction !== undefined) {
+      throw new Error("destroy() does not support batch or transaction routing");
+    }
+    const pendingWrite: PendingWrite = {
+      verb: "destroy",
+      path: this._path,
+      id: uid,
+      patch: {},
+    };
     if (this._rules !== undefined) {
       const resource = await this._readResource(uid);
       await assertWriteAllowed(
@@ -581,26 +689,19 @@ export abstract class BaseEntityStorageService<
           affectedKeys: [],
           patch: {},
           ...(resource !== undefined ? { resource } : {}),
-          ...this._docReaders("destroy", uid, {}),
+          ...this._docReaders(pendingWrite, resource),
         },
         this._onDenied,
       );
     }
-    if (opts.batch || opts.transaction) {
-      throw new Error(
-        "destroy via batch/transaction not supported — drop down to provider.runBatch / provider.runTransaction and call the raw runner.delete()",
-      );
-    }
     this._logger.debug("destroy", { path: this._path, id: uid });
     await this._provider.delete(this._path, uid);
-    // Wave 12.D-fix FR-021 — see note in `set()`.
     if (this._destroyed) return;
-    const payload: StorageEventPayload<Meta> = {
+    this.emit(STORAGE_EVENTS.ENTITY_DESTROYED, {
       event: "entity-destroyed",
       path: this._path,
       id: uid,
-    };
-    this.emit(STORAGE_EVENTS.ENTITY_DESTROYED, payload);
+    } satisfies StorageEventPayload<Meta>);
   }
 
   /**
@@ -616,7 +717,20 @@ export abstract class BaseEntityStorageService<
       MutationRoutingOpts<Meta, UpdateActionTypes> = {},
   ): Promise<void> {
     this._assertAlive();
-    if (this._rules !== undefined) {
+    const txRegistration = this._assertOwnedRunner(opts.transaction, auditedTxRunners, "transaction");
+    const batchRegistration = this._assertOwnedRunner(opts.batch, auditedBatchRunners, "batch");
+    const expectedVersion = opts.expectedVersion;
+    const data = stampRestore(this._session) as Partial<Meta["write"]>;
+    Object.freeze(data);
+    const pendingWrite: PendingWrite = {
+      verb: "restore",
+      path: this._path,
+      id: uid,
+      patch: {},
+      persistedData: data as Record<string, unknown>,
+      ...(expectedVersion !== undefined ? { expectedVersion } : {}),
+    };
+    if (this._rules !== undefined && !txRegistration && !batchRegistration) {
       const resource = await this._readResource(uid);
       await assertWriteAllowed(
         this._rules,
@@ -630,43 +744,30 @@ export abstract class BaseEntityStorageService<
           affectedKeys: [],
           patch: {},
           ...(resource !== undefined ? { resource } : {}),
-          ...(opts.expectedVersion !== undefined
-            ? { expectedVersion: opts.expectedVersion }
-            : {}),
-          ...this._docReaders("restore", uid, {}),
+          ...(expectedVersion !== undefined ? { expectedVersion } : {}),
+          ...this._docReaders(pendingWrite, resource),
         },
         this._onDenied,
       );
     }
-    const restoreOpts =
-      opts.expectedVersion !== undefined
-        ? { expectedVersion: opts.expectedVersion }
-        : undefined;
-    if (opts.batch) {
-      this._logger.debug("restore:batch", { path: this._path, id: uid });
-      opts.batch.restore(uid, restoreOpts);
+    if (batchRegistration) {
+      batchRegistration.enqueue(pendingWrite);
       return;
     }
-    if (opts.transaction) {
-      this._logger.debug("restore:tx", { path: this._path, id: uid });
-      opts.transaction.restore(uid, restoreOpts);
+    if (txRegistration) {
+      txRegistration.enqueue(pendingWrite);
       return;
     }
     this._logger.debug("restore", { path: this._path, id: uid });
-    const data = stampRestore(this._session) as Partial<Meta["write"]>;
     await this._provider.update(this._path, uid, data, {
-      ...(opts.expectedVersion !== undefined && {
-        expectedVersion: opts.expectedVersion,
-      }),
+      ...(expectedVersion !== undefined && { expectedVersion }),
     });
-    // Wave 12.D-fix FR-021 — see note in `set()`.
     if (this._destroyed) return;
-    const payload: StorageEventPayload<Meta> = {
+    this.emit(STORAGE_EVENTS.ENTITY_RESTORED, {
       event: "entity-restored",
       path: this._path,
       id: uid,
-    };
-    this.emit(STORAGE_EVENTS.ENTITY_RESTORED, payload);
+    } satisfies StorageEventPayload<Meta>);
   }
 
   /**
@@ -712,7 +813,13 @@ export abstract class BaseEntityStorageService<
     opts: MutationRoutingOpts<Meta, UpdateActionTypes> = {},
   ): Promise<{ id: string }> {
     this._assertAlive();
-    // Wave 6.5 fast path — provider has native 1-RTT upsert.
+    const snapshot = ownedSnapshot(entity);
+    const { _uid, ...rest } = snapshot as { _uid: string } & Record<
+      string,
+      unknown
+    >;
+    this._assertOwnedRunner(opts.batch, auditedBatchRunners, "batch");
+    this._assertOwnedRunner(opts.transaction, auditedTxRunners, "transaction");
     // Routing opts (batch/transaction) bypass the fast path because the
     // routing primitives still go through `set()`/`update()` semantics
     // at the runner level.
@@ -728,14 +835,21 @@ export abstract class BaseEntityStorageService<
       upsertCap?.preservesCreatorAudit === true &&
       this._provider.upsertDoc
     ) {
-      const { _uid, ...rest } = entity as { _uid: string } & Record<
-        string,
-        unknown
-      >;
       // Write-rules on the 1-RTT path cost the read back — fail-closed
       // trumps round-trips: a rules-governed table cannot let
       // INSERT...ON CONFLICT smuggle a create-vs-update verdict the
       // ruleset never saw.
+      const stamped = stampCreate(rest, this._session, _uid) as Meta["write"];
+      Object.freeze(stamped);
+      const pendingWrite: PendingWrite = {
+        verb: "create",
+        path: this._path,
+        id: _uid,
+        patch: rest,
+        persistedData: stamped as Record<string, unknown>,
+      };
+      // Governed native upserts cannot distinguish create from update
+      // without a pre-read; existing rows must use update() with an action.
       if (this._rules !== undefined) {
         const resource = (await this._provider.getDoc(
           this._path,
@@ -743,11 +857,6 @@ export abstract class BaseEntityStorageService<
         )) as Record<string, unknown> | null;
         const existing = resource ?? undefined;
         if (existing !== undefined) {
-          // The fast path stamps `buildDataForSet` — a `create` journal
-          // — so an honest upsert-update cannot exist here: allowed or
-          // not, the write would falsify the journal and skip
-          // update-rules. Create-only on governed tables; an update
-          // needs `update()` (which carries `update_action`).
           throw new WriteRuleDenied(
             { path: this._path, id: _uid, verb: "update" },
             "upsert cannot update a governed row — use update() with an update_action",
@@ -764,7 +873,7 @@ export abstract class BaseEntityStorageService<
             action: { type: "create", params: {} },
             affectedKeys: Object.keys(rest),
             patch: rest,
-            ...this._docReaders("create", _uid, rest),
+            ...this._docReaders(pendingWrite, existing),
           },
           this._onDenied,
         );
@@ -775,7 +884,6 @@ export abstract class BaseEntityStorageService<
       // `INSERT ... ON CONFLICT DO UPDATE`, the provider is responsible
       // for excluding `creator_uuid`/`created_*` from the UPDATE SET-list
       // so existing rows preserve their original creator audit.
-      const stamped = stampCreate(rest, this._session, _uid) as Meta["write"];
       // Wave 6.5: fast path does NOT emit ENTITY_CREATED / ENTITY_UPDATED
       // because we cannot tell insert from update without a pre-read
       // (which would defeat the 1-RTT optimization). Listeners that need
@@ -789,26 +897,22 @@ export abstract class BaseEntityStorageService<
       return result;
     }
     // Backwards-compat 2-RTT fallback (Sprint 3.5 path).
-    const existing = await this.get(entity._uid);
+    const existing = await this.get(_uid);
     // Wave 12.D-fix FR-021 — re-check after await between the two RTTs.
-    if (this._destroyed) return { id: entity._uid };
+    if (this._destroyed) return { id: _uid };
     if (existing) {
       // Same contract as the 1-RTT path: upsert is create-only on a
       // governed table — `update()` is the honest way to update.
       if (this._rules !== undefined) {
         throw new WriteRuleDenied(
-          { path: this._path, id: entity._uid, verb: "update" },
+          { path: this._path, id: _uid, verb: "update" },
           "upsert cannot update a governed row — use update() with an update_action",
         );
       }
-      const { _uid, ...rest } = entity as { _uid: string } & Record<
-        string,
-        unknown
-      >;
       await this.update(_uid, rest as Partial<Meta["write"]>, opts);
       return { id: _uid };
     }
-    return this.set(entity, opts);
+    return this.set(snapshot, opts);
   }
 
   /** Read a single document by id. Delegates to `provider.getDoc`. */
@@ -902,15 +1006,26 @@ export abstract class BaseEntityStorageService<
     try {
       const result = await this._provider.runTransaction(async (rawTx) => {
         const pending: PendingWrite[] = [];
-        const audited = this._wrapTxRunner(rawTx, pending);
-        const r = await fn(audited);
-        // Rules gate: every queued write is evaluated AFTER `fn` but
-        // BEFORE the provider commits — a denial aborts the transaction
-        // atomically. `resource` reads hit the committed state via the
-        // provider, never `rawTx.get` (the tx's local view already
-        // contains own queued writes — post-write, not `resource`).
-        await this._assertPending(pending);
-        return r;
+        const callbackState: RunnerCallbackState = { open: true };
+        const audited = this._wrapTxRunner(rawTx, pending, callbackState);
+        const registration: RunnerRegistration = {
+          owner: this,
+          active: true,
+          enqueue: (write) => this._enqueueTxWrite(rawTx, pending, callbackState, write),
+        };
+        auditedTxRunners.set(audited, registration);
+        try {
+          const r = await fn(audited);
+          callbackState.open = false;
+          registration.active = false;
+          auditedTxRunners.delete(audited);
+          await this._assertPending(pending);
+          return r;
+        } finally {
+          callbackState.open = false;
+          registration.active = false;
+          auditedTxRunners.delete(audited);
+        }
       });
       this._logger.debug("runTransaction:exit", { path: this._path });
       return result;
@@ -939,11 +1054,26 @@ export abstract class BaseEntityStorageService<
     try {
       const result = await this._provider.runBatch(async (rawBatch) => {
         const pending: PendingWrite[] = [];
-        const audited = this._wrapBatchRunner(rawBatch, pending);
-        const r = await fn(audited);
-        // Same gate as runTransaction — denial aborts the whole batch.
-        await this._assertPending(pending);
-        return r;
+        const callbackState: RunnerCallbackState = { open: true };
+        const audited = this._wrapBatchRunner(rawBatch, pending, callbackState);
+        const registration: RunnerRegistration = {
+          owner: this,
+          active: true,
+          enqueue: (write) => this._enqueueBatchWrite(rawBatch, pending, callbackState, write),
+        };
+        auditedBatchRunners.set(audited, registration);
+        try {
+          const r = await fn(audited);
+          callbackState.open = false;
+          registration.active = false;
+          auditedBatchRunners.delete(audited);
+          await this._assertPending(pending);
+          return r;
+        } finally {
+          callbackState.open = false;
+          registration.active = false;
+          auditedBatchRunners.delete(audited);
+        }
       });
       this._logger.debug("runBatch:exit", { path: this._path });
       return result;
@@ -961,49 +1091,6 @@ export abstract class BaseEntityStorageService<
    * write through {@link assertPendingWrites} against this service's
    * ruleset. No-op when the collection is ungoverned.
    */
-  /**
-   * Cross-document readers for a single-write eval — the write IS the
-   * whole transaction here, so `get` reads committed state through the
-   * provider and `getAfter` folds this write into the target doc's
-   * committed image (same fold `assertPendingWrites` applies per key:
-   * create replaces, update merges, delete stamps `deleted_*`, restore
-   * clears them, destroy removes).
-   */
-  private _docReaders(
-    verb: WriteVerb,
-    id: string,
-    patch: Record<string, unknown>,
-  ): Pick<WriteRuleEval, "get" | "getAfter"> {
-    const provider = this._provider;
-    const path0 = this._path;
-    const get: RuleDocReader = async (path, docId) =>
-      ((await provider.getDoc(path, docId)) ?? undefined) as
-        | Record<string, unknown>
-        | undefined;
-    const getAfter: RuleDocReader = async (path, docId) => {
-      const committed = await get(path, docId);
-      if (path !== path0 || docId !== id) return committed;
-      switch (verb) {
-        case "create":
-          return { ...patch };
-        case "update":
-          return committed === undefined
-            ? undefined
-            : { ...committed, ...patch };
-        case "delete":
-          return committed === undefined
-            ? undefined
-            : { ...committed, ...stampDelete(this._session) };
-        case "restore":
-          return committed === undefined
-            ? undefined
-            : { ...committed, ...stampRestore(this._session) };
-        case "destroy":
-          return undefined;
-      }
-    };
-    return { get, getAfter };
-  }
 
   private async _assertPending(
     pending: readonly PendingWrite[],
@@ -1021,6 +1108,60 @@ export abstract class BaseEntityStorageService<
       ...(this._onDenied !== undefined ? { onDenied: this._onDenied } : {}),
     });
   }
+  private _enqueueTxWrite(
+    runner: ITransactionRunner<Meta>,
+    pending: PendingWrite[],
+    state: RunnerCallbackState,
+    write: PendingWrite,
+  ): void {
+    if (!state.open) throw new Error("Audited runner callback has already settled");
+    if (write.persistedData === undefined) {
+      throw new Error("Routed writes require their exact stamped payload");
+    }
+    pending.push(write);
+    if (write.verb === "create") {
+      runner.set(write.path, write.id, write.persistedData as Meta["write"], {
+        ...(write.merge !== undefined ? { merge: write.merge } : {}),
+      });
+    } else {
+      runner.update(
+        write.path,
+        write.id,
+        write.persistedData as Partial<Meta["write"]>,
+        ...(write.expectedVersion !== undefined
+          ? [{ expectedVersion: write.expectedVersion }]
+          : []),
+      );
+    }
+  }
+
+  private _enqueueBatchWrite(
+    runner: IBatchRunner<Meta>,
+    pending: PendingWrite[],
+    state: RunnerCallbackState,
+    write: PendingWrite,
+  ): void {
+    if (!state.open) throw new Error("Audited runner callback has already settled");
+    if (write.persistedData === undefined) {
+      throw new Error("Routed writes require their exact stamped payload");
+    }
+    pending.push(write);
+    if (write.verb === "create") {
+      runner.set(write.path, write.id, write.persistedData as Meta["write"], {
+        ...(write.merge !== undefined ? { merge: write.merge } : {}),
+      });
+    } else {
+      runner.update(
+        write.path,
+        write.id,
+        write.persistedData as Partial<Meta["write"]>,
+        ...(write.expectedVersion !== undefined
+          ? [{ expectedVersion: write.expectedVersion }]
+          : []),
+      );
+    }
+  }
+
 
   /**
    * Audit-stamped tx runner — every write stamps via `write-stamps`
@@ -1031,87 +1172,74 @@ export abstract class BaseEntityStorageService<
   private _wrapTxRunner(
     rawTx: ITransactionRunner<Meta>,
     pending: PendingWrite[],
+    callbackState: RunnerCallbackState,
   ): AuditedTxRunner<Meta, UpdateActionTypes> {
     return {
       get: (uid): Promise<Meta["read"] | null> => rawTx.get(this._path, uid),
       set: (input): { id: string } => {
-        const { _uid, ...rest } = input as { _uid?: string } & Record<
+        if (!callbackState.open) throw new Error("Audited runner callback has already settled");
+        const { _uid, ...inputRest } = input as { _uid?: string } & Record<
           string,
           unknown
         >;
+        const rest = ownedSnapshot(inputRest);
         const id = _uid ?? this._uuidProvider();
-        pending.push({ verb: "create", path: this._path, id, patch: rest });
-        rawTx.set(
-          this._path,
+        const data = stampCreate(rest, this._session, id) as Meta["write"];
+        Object.freeze(data);
+        this._enqueueTxWrite(rawTx, pending, callbackState, {
+          verb: "create",
+          path: this._path,
           id,
-          stampCreate(rest, this._session, id) as Meta["write"],
-        );
+          patch: rest,
+          persistedData: data as Record<string, unknown>,
+        });
         return { id };
       },
       update: (uid, partial, opts = {}): void => {
-        const action = actionFromOpts(opts.action, opts.params);
-        pending.push({
+        if (!callbackState.open) throw new Error("Audited runner callback has already settled");
+        const patch = ownedSnapshot(partial as Record<string, unknown>);
+        const params = opts.params === undefined ? undefined : ownedSnapshot(opts.params);
+        const action = immutableAction(actionFromOpts(opts.action, params));
+        const data = stampUpdate(patch, this._session, action);
+        Object.freeze(data);
+        this._enqueueTxWrite(rawTx, pending, callbackState, {
           verb: "update",
           path: this._path,
           id: uid,
-          patch: partial as Record<string, unknown>,
+          patch,
+          persistedData: data,
           ...(action !== undefined ? { action } : {}),
-          ...(opts.expectedVersion !== undefined
-            ? { expectedVersion: opts.expectedVersion }
-            : {}),
+          ...(opts.expectedVersion !== undefined ? { expectedVersion: opts.expectedVersion } : {}),
         });
-        rawTx.update(
-          this._path,
-          uid,
-          stampUpdate(
-            partial as Record<string, unknown>,
-            this._session,
-            action,
-          ) as Partial<Meta["write"]>,
-          opts.expectedVersion !== undefined
-            ? { expectedVersion: opts.expectedVersion }
-            : undefined,
-        );
       },
       delete: (uid, opts): void => {
-        const action = actionFromOpts(opts?.action, opts?.params);
-        pending.push({
+        if (!callbackState.open) throw new Error("Audited runner callback has already settled");
+        const params = opts?.params === undefined ? undefined : ownedSnapshot(opts.params);
+        const action = immutableAction(actionFromOpts(opts?.action, params));
+        const persistedData = stampDelete(this._session, action);
+        Object.freeze(persistedData);
+        this._enqueueTxWrite(rawTx, pending, callbackState, {
           verb: "delete",
           path: this._path,
           id: uid,
           patch: {},
+          persistedData,
           ...(action !== undefined ? { action } : {}),
-          ...(opts?.expectedVersion !== undefined
-            ? { expectedVersion: opts.expectedVersion }
-            : {}),
+          ...(opts?.expectedVersion !== undefined ? { expectedVersion: opts.expectedVersion } : {}),
         });
-        rawTx.update(
-          this._path,
-          uid,
-          stampDelete(this._session, action) as Partial<Meta["write"]>,
-          opts?.expectedVersion !== undefined
-            ? { expectedVersion: opts.expectedVersion }
-            : undefined,
-        );
       },
       restore: (uid, opts): void => {
-        pending.push({
+        if (!callbackState.open) throw new Error("Audited runner callback has already settled");
+        const persistedData = stampRestore(this._session);
+        Object.freeze(persistedData);
+        this._enqueueTxWrite(rawTx, pending, callbackState, {
           verb: "restore",
           path: this._path,
           id: uid,
           patch: {},
-          ...(opts?.expectedVersion !== undefined
-            ? { expectedVersion: opts.expectedVersion }
-            : {}),
+          persistedData,
+          ...(opts?.expectedVersion !== undefined ? { expectedVersion: opts.expectedVersion } : {}),
         });
-        rawTx.update(
-          this._path,
-          uid,
-          stampRestore(this._session) as Partial<Meta["write"]>,
-          opts?.expectedVersion !== undefined
-            ? { expectedVersion: opts.expectedVersion }
-            : undefined,
-        );
       },
     };
   }
@@ -1120,86 +1248,73 @@ export abstract class BaseEntityStorageService<
   private _wrapBatchRunner(
     rawBatch: IBatchRunner<Meta>,
     pending: PendingWrite[],
+    callbackState: RunnerCallbackState,
   ): AuditedBatchRunner<Meta, UpdateActionTypes> {
     return {
       set: (input): { id: string } => {
-        const { _uid, ...rest } = input as { _uid?: string } & Record<
+        if (!callbackState.open) throw new Error("Audited runner callback has already settled");
+        const { _uid, ...inputRest } = input as { _uid?: string } & Record<
           string,
           unknown
         >;
+        const rest = ownedSnapshot(inputRest);
         const id = _uid ?? this._uuidProvider();
-        pending.push({ verb: "create", path: this._path, id, patch: rest });
-        rawBatch.set(
-          this._path,
+        const data = stampCreate(rest, this._session, id) as Meta["write"];
+        Object.freeze(data);
+        this._enqueueBatchWrite(rawBatch, pending, callbackState, {
+          verb: "create",
+          path: this._path,
           id,
-          stampCreate(rest, this._session, id) as Meta["write"],
-        );
+          patch: rest,
+          persistedData: data as Record<string, unknown>,
+        });
         return { id };
       },
       update: (uid, partial, opts = {}): void => {
-        const action = actionFromOpts(opts.action, opts.params);
-        pending.push({
+        if (!callbackState.open) throw new Error("Audited runner callback has already settled");
+        const patch = ownedSnapshot(partial as Record<string, unknown>);
+        const params = opts.params === undefined ? undefined : ownedSnapshot(opts.params);
+        const action = immutableAction(actionFromOpts(opts.action, params));
+        const data = stampUpdate(patch, this._session, action);
+        Object.freeze(data);
+        this._enqueueBatchWrite(rawBatch, pending, callbackState, {
           verb: "update",
           path: this._path,
           id: uid,
-          patch: partial as Record<string, unknown>,
+          patch,
+          persistedData: data,
           ...(action !== undefined ? { action } : {}),
-          ...(opts.expectedVersion !== undefined
-            ? { expectedVersion: opts.expectedVersion }
-            : {}),
+          ...(opts.expectedVersion !== undefined ? { expectedVersion: opts.expectedVersion } : {}),
         });
-        rawBatch.update(
-          this._path,
-          uid,
-          stampUpdate(
-            partial as Record<string, unknown>,
-            this._session,
-            action,
-          ) as Partial<Meta["write"]>,
-          opts.expectedVersion !== undefined
-            ? { expectedVersion: opts.expectedVersion }
-            : undefined,
-        );
       },
       delete: (uid, opts): void => {
-        const action = actionFromOpts(opts?.action, opts?.params);
-        pending.push({
+        if (!callbackState.open) throw new Error("Audited runner callback has already settled");
+        const params = opts?.params === undefined ? undefined : ownedSnapshot(opts.params);
+        const action = immutableAction(actionFromOpts(opts?.action, params));
+        const persistedData = stampDelete(this._session, action);
+        Object.freeze(persistedData);
+        this._enqueueBatchWrite(rawBatch, pending, callbackState, {
           verb: "delete",
           path: this._path,
           id: uid,
           patch: {},
+          persistedData,
           ...(action !== undefined ? { action } : {}),
-          ...(opts?.expectedVersion !== undefined
-            ? { expectedVersion: opts.expectedVersion }
-            : {}),
+          ...(opts?.expectedVersion !== undefined ? { expectedVersion: opts.expectedVersion } : {}),
         });
-        rawBatch.update(
-          this._path,
-          uid,
-          stampDelete(this._session, action) as Partial<Meta["write"]>,
-          opts?.expectedVersion !== undefined
-            ? { expectedVersion: opts.expectedVersion }
-            : undefined,
-        );
       },
       restore: (uid, opts): void => {
-        pending.push({
+        if (!callbackState.open) throw new Error("Audited runner callback has already settled");
+        const persistedData = stampRestore(this._session);
+        Object.freeze(persistedData);
+        this._enqueueBatchWrite(rawBatch, pending, callbackState, {
           verb: "restore",
           path: this._path,
           id: uid,
           patch: {},
-          ...(opts?.expectedVersion !== undefined
-            ? { expectedVersion: opts.expectedVersion }
-            : {}),
+          persistedData,
+          ...(opts?.expectedVersion !== undefined ? { expectedVersion: opts.expectedVersion } : {}),
         });
-        rawBatch.update(
-          this._path,
-          uid,
-          stampRestore(this._session) as Partial<Meta["write"]>,
-          opts?.expectedVersion !== undefined
-            ? { expectedVersion: opts.expectedVersion }
-            : undefined,
-        );
       },
     };
   }
