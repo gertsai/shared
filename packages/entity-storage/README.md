@@ -164,6 +164,29 @@ batch/transaction mutators are valid only while the user callback is running;
 the runner closes before deferred policy evaluation starts. Reads remain
 available to the post-callback policy evaluation itself.
 
+### Merge defaults and overwrite scope
+
+The supplied providers and their raw batch/transaction runners merge `set`
+into an existing row by default. Use `{ merge: false }` on those raw
+provider/runner APIs for overwrite semantics. `BaseEntityStorageService.set`
+does **not** expose a merge option; it follows the provider default. Do not
+pass `{ merge: false }` as a service routing option.
+
+Raw provider runners bypass the service's audit stamping and write rules.
+They are not an authorization-preserving substitute for a service overwrite
+method. Service `update`, `delete`, and `restore` accept `expectedVersion`;
+stale writes reject without removing the concurrency guard across awaits.
+
+### Rule helper exports
+
+The root exports `allOf`, `anyOf`, and `not` for predicate composition;
+`callerHasRole`, `hasRoleWithSource`, and related observer/role helpers;
+cross-document ownership helpers such as `callerIsCrossOwner`; and data
+predicates including `docFieldEq` and `docIsLive`. `get` reads committed
+documents, while `getAfter` evaluates the ordered pending post-image.
+Claims and mutation inputs are owned snapshots, not mutable caller aliases.
+
+
 
 ## Compatibility
 

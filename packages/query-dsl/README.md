@@ -171,8 +171,8 @@ import { compileToSql } from '@gertsai/query-dsl/sql';
 const { sql, params } = compileToSql(q, 'users');
 // sql:
 //   SELECT * FROM users
-//     WHERE name = $1 AND age >= $2 AND tags ?| (SELECT array_agg(value::text)
-//                                                  FROM jsonb_array_elements($3::jsonb))
+//     WHERE name = $1 AND age >= $2 AND tags @> ANY
+//       (SELECT jsonb_build_array(candidates.value) FROM jsonb_array_elements($3::jsonb) AS candidates(value))
 //     ORDER BY age DESC
 //     LIMIT $4
 //
@@ -187,9 +187,9 @@ const { sql, params } = compileToSql(q, 'users');
 | Parameter style | `$1`, `$2`, ... (Postgres / `pg`-driver style — NOT `?`) |
 | `!=` rendering | Emitted as `<>` to match canonical Postgres output |
 | `array-contains` | jsonb `@>` containment against a singleton-array literal |
-| `array-contains-any` | jsonb `?\|` against an array key list |
+| `array-contains-any` | jsonb `@> ANY` over singleton arrays; preserves string, numeric, and null candidate types |
 | Cursor constraints | `startAt` / `startAfter` / `endAt` / `endBefore` are accepted by `validateQuery` but emit no SQL in the v0.1 reference compiler — fall back to client-side slicing or layer your own paginator |
-| Identifier safety | Both the table name and every constraint `field` MUST match `^[A-Za-z_][A-Za-z0-9_]*$`; otherwise `TypeError` is thrown to prevent SQL injection (table / column names are not parameterisable in standard SQL) |
+| Identifier safety | Table names and constraint fields accept one optional qualifier (`schema.table` or `table.column`); each component must match `^[A-Za-z_][A-Za-z0-9_]*$`. Other forms throw `TypeError`; names are not SQL value parameters. |
 | Isolation | The compiler emits no `BEGIN` / `COMMIT`; callers wrapping the SQL in a `SERIALIZABLE` transaction must handle `40001 serialization_failure` retry themselves |
 
 The compiler targets the schema produced by the v0.1

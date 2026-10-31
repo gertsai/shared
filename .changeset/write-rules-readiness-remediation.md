@@ -11,4 +11,4 @@ Resolve PostgreSQL query fields from JSONB payloads with collision-free position
 
 Keep the original authorization action and optimistic-concurrency precondition across asynchronous reads and policy evaluation, so caller mutations cannot change the authorized journal or remove a stale-write guard. Resolve only explicitly owned action and wildcard predicates; inherited object methods cannot authorize writes.
 
-**Breaking default:** provider `set(path, id, data, opts?)`, including raw batch and transaction runners, now merges with an existing document by default instead of overwriting it. Pass `{ merge: false }` explicitly to retain overwrite semantics.
+**Breaking default:** provider `set(path, id, data, opts?)`, including raw batch and transaction runners, now merges with an existing document by default instead of overwriting it. Pass `{ merge: false }` on those provider/runner APIs to retain overwrite semantics. `BaseEntityStorageService.set` follows the provider default and does not expose a merge option; raw provider runners bypass service audit stamping and write rules.

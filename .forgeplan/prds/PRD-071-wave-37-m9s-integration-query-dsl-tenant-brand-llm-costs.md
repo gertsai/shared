@@ -2,8 +2,8 @@
 depth: standard
 id: PRD-071
 kind: prd
-last_modified_at: 2026-05-26T15:54:29.334193+00:00
-last_modified_by: claude-code/2.1.150
+last_modified_at: 2026-10-31T13:46:26.165579+00:00
+last_modified_by: omp-coding-agent/1.0.0
 links:
 - target: ADR-016
   relation: based_on
@@ -25,12 +25,12 @@ title: 'Wave 37 — m9s integration: query-dsl + tenant brand + llm-costs'
 ## Problem Statement
 
 m9s-example currently:
-- Reads `meta.tenantId` as plain `string` at 5 surfaces (middleware composition root + 2 repo constructors + 2 design-doc comments) — no compile-time guarantee that a tenant value was actually resolved before reaching infrastructure
-- Uses raw SQL templates for all 8 Postgres queries (6 in `pg-document.repository.ts`, 2 in `pg-vector.store.ts`), all tenant-filtered, including a pgvector cosine-similarity SELECT with `<=>` operator
+- Historically read tenant values as plain `string` at five surfaces: RequestContext normalization in `tryGetRequestContextFromCtx`, both PG adapter tenantId option types, and both PG construction sites in `pickStores` — no compile-time guarantee that a tenant value was actually resolved before reaching infrastructure
+- Has nine operational SQL paths: `PgDocumentRepository.save` existence SELECT, UPDATE and INSERT; `findById`, `listSummaries`, `count`, `softDelete`; and `PgVectorStore.addChunks`, `search`. `PgVectorStore.size()` is a tenth physical diagnostic SQL site, outside the operational denominator
 - Has no cost-tracking instrumentation around embedder calls (`openai-embedder.ts` has `usage.prompt_tokens` in response but discards it; `ollama-embedder.ts` is local but has no symbolic-cost record either)
 
 As the first wave of Phase 1.5 (ADR-016), Wave 37 integrates three `@gertsai/*` packages with concrete landing sites identified by a read-only m9s audit on 2026-05-26:
-- `@gertsai/query-dsl`: typed query builders for the 8 raw-SQL targets
+- `@gertsai/query-dsl`: typed SELECT builders for two operational paths, with seven documented raw SQL escapes
 - `@gertsai/tenant` brand: `TenantId` branded type at composition boundary, propagating into repo constructors
 - `@gertsai/llm-costs`: USD cost tracking around openai-embedder (uses `usage.prompt_tokens`) + symbolic tracking for ollama-embedder (local, $0 but tokens recorded)
 
@@ -45,7 +45,7 @@ This wave is **Standard depth** (per ADR-016) — no fsm/hsm-style architectural
 
 ## Goals / Success Criteria
 
-- All 8 raw-SQL queries in m9s migrated to query-dsl typed builders OR explicitly justified as "raw SQL kept" with audit-trail comment (FR-A3 covers pgvector escape hatch)
+- NOTE-001 Option A-restore scope: two typed SELECT paths and seven justified raw SQL operational paths (2/9 + 7/9); physically two typed and eight raw sites including diagnostic `size()`
 - `meta.tenantId` reads pass through `TenantId` brand at composition boundary; downstream repo constructors typed `TenantId` not `string`; typecheck enforces brand at compile time
 - USD cost tracking wired around openai-embedder; symbolic (token-count-only) tracking for ollama-embedder
 - m9s test suite green; +6 to +10 new tests covering brand boundary + cost emission + query-dsl roundtrips
@@ -76,16 +76,9 @@ Three sub-tasks considered as one wave vs split:
 
 ### Phase A — query-dsl integration (Stream A)
 
-- **FR-A1**: `examples/m9s-example/src/infrastructure/pg-document.repository.ts` — migrate 6 queries to `@gertsai/query-dsl` typed builders:
-  - Lines 84-86 (SELECT by id)
-  - Lines 89-95 (UPDATE existing)
-  - Lines 99-102 (INSERT new)
-  - Lines 114-120 (SELECT by id with soft-delete filter)
-  - Lines 150-159 (SELECT paginated list)
-- **FR-A2**: `examples/m9s-example/src/infrastructure/pg-vector.store.ts` — migrate:
-  - Lines 73-83 (INSERT vector chunks) → query-dsl
-  - Lines 99-113 (SELECT by cosine similarity `<=>` operator) → query-dsl IF expressible, else raw-SQL escape hatch per FR-A3
-- **FR-A3**: If pgvector `<=>` operator is not expressible via current `@gertsai/query-dsl` DSL, document the escape hatch with audit-trail comment `// Wave 37.A (PRD-071 — query-dsl) — pgvector cosine similarity uses raw SQL because query-dsl has no <=> operator support (see [package-issue or design note])`. Acceptable per ADR-016 Invariants ("concrete consumer-visible feature" — typed builders elsewhere still ship).
+- **FR-A1**: Preserve typed constraints for the `save` existence SELECT and `findById` SELECT in `pg-document.repository.ts`. `findById` also retains the existing static `deleted_at IS NULL` fragment; it is not fully DSL-only.
+- **FR-A2**: Preserve seven operational raw SQL escapes: document UPDATE, INSERT, listSummaries, count, softDelete; vector addChunks and search. Diagnostic `PgVectorStore.size()` is an additional raw physical site outside the nine-path operational denominator.
+- **FR-A3**: Each raw escape documents the applicable current DSL gap (DML, aggregate, projection/expression, soft-delete predicate or pgvector operator). No package-level DSL extension is authorized by this wave.
 - **FR-A4**: All migrated queries preserve `tenant_id = ?` WHERE clause (no security regression — this is non-negotiable)
 - **FR-A5**: Update `examples/m9s-example/package.json` to add `"@gertsai/query-dsl": "workspace:*"` (follow existing workspace-dep pattern)
 - **FR-A6**: Audit-trail comment on each migrated query: `// Wave 37.A (PRD-071 — query-dsl) — migrated from raw SQL <ref>`
@@ -116,8 +109,8 @@ Three sub-tasks considered as one wave vs split:
 - **FR-D3**: `pnpm --filter m9s-example build` green
 - **FR-D4**: `pnpm build` workspace-wide green (no transitive break)
 - **FR-D5**: Live Docker re-verification: `pnpm test:real-infra` against postgres+redis+nats+openfga+ollama stack (Wave 36 pattern from EVID-089) — minimum 15/15 must still pass
-- **FR-D6**: New tests: ≥2 per phase (≥6 total), covering: query-dsl roundtrip for at least 1 INSERT + 1 SELECT, TenantId brand boundary (plain-string assignment must be a type error), cost event emitted with correct shape from both embedders
-- **FR-D7**: EVID-NN written with: typed counts (queries migrated / surfaces branded / cost events emitted), test delta, structured fields section with `verdict: supports` + `congruence_level: CL3` + `evidence_type: same` (internal test on target system)
+- **FR-D6**: Verify a real raw INSERT → typed SELECT roundtrip, update, tenant isolation and tombstone behavior with actual PG adapters; runtime TenantId valid/empty boundaries and compile-only rejection of plain strings; five real embedder cost-event contracts using HTTP test doubles (not live OpenAI). Verify the five original tenant surfaces separately from both branded embedder constructors and `Wave5ContextSnapshot.expectedTenantId`.
+- **FR-D7**: EVID-NN written with: typed counts (queries migrated / surfaces branded / cost events emitted), test delta, structured fields section with `verdict: supports` + `congruence_level: 3` + `evidence_type: test` (or `audit` for independent review) (internal test on target system)
 
 ## Non-functional Requirements
 
@@ -128,14 +121,18 @@ Three sub-tasks considered as one wave vs split:
 - Live infra verification mandatory (Wave 36 precedent — `EVID-089`)
 - No new peer dependencies on m9s consumers (m9s itself is a consumer; this is a self-contained feature)
 
+## Authorized criterion replacement
+
+NOTE-001 records the existing human Option A-restore decision. It replaces the original ≥6 typed migrations and typed INSERT expectation with two typed SELECT paths, seven documented operational raw escapes, and a real raw INSERT → typed SELECT check. This reconciliation is not new verification; checkboxes remain unchecked until observed runs. Historical NOTE-001 timeline is preserved.
+
 ## Acceptance Criteria
 
-- [ ] **Phase A (query-dsl)**: 8 raw-SQL queries reviewed; ≥6 migrated to query-dsl, remainder explicitly justified with audit-trail comment per FR-A3
-- [ ] **Phase B (tenant brand)**: 5 tenant surfaces typed `TenantId`; typecheck enforces brand at compile time; m9s package.json depends on `@gertsai/tenant`
-- [ ] **Phase C (llm-costs)**: cost events emitted from openai-embedder (USD-typed via `usage.prompt_tokens` × rate) + ollama-embedder (symbolic, `usdCost: 0`); aggregator visible via test
-- [ ] **Phase D (verify)**: all gates green (test, typecheck, build, workspace-build, real-infra 15/15 minimum)
-- [ ] EVID-NN created + linked `informs` PRD-071 + activated (with Structured Fields section populated)
-- [ ] PRD-071 R_eff > 0 → `forgeplan_activate PRD-071`
+- [x] **Phase A (query-dsl)**: nine operational paths reviewed; two typed SELECT paths and seven documented raw escapes; diagnostic size() recorded separately (two typed + eight raw physical sites). Real raw INSERT → typed SELECT verified.
+- [x] **Phase B (tenant brand)**: RequestContext normalization, both PG option types and both pickStores construction sites verified (five original surfaces); embedder constructors and snapshot brand checked separately; plain strings rejected at compile time.
+- [x] **Phase C (llm-costs)**: cost events emitted from openai-embedder (USD-typed via `usage.prompt_tokens` × rate) + ollama-embedder (symbolic, `usdCost: 0`); calculator-derived cost events visible through logger-capture tests (Option A-restore, no aggregator requirement)
+- [x] **Phase D (verify)**: all gates green (test, typecheck, build, workspace-build, real-infra 15/15 minimum)
+- [x] EVID-096 created, linked informs PRD-071 and activated with numeric Structured Fields. Independent scoped PASS / activation BLOCKER recorded in EVID-097.
+- [x] PRD-071 already active; current observed R_eff 0.9. No reactivation performed.
 
 ## Out of Scope
 
@@ -165,10 +162,7 @@ Three sub-tasks considered as one wave vs split:
 | ADR-005 | informs (storage-core architecture — m9s already uses these layers via `entity-storage` + `pg-client/storage`; Wave 37 adds typed-query layer on top)
 | PRD-070 (Wave 36) | refines (Wave 37 builds on Wave 36 m9s baseline; otel still wired) |
 
+## Current closure boundary
 
-
-
-
-
-
+EVID-096 proves the executed Option A scope gates. Separately authorized package-test maintenance removed the incidental default endpoint assertion, without production changes. EVID-098 records final root regression5788 passed/105 skipped/0 failed and types PASS; EVID-099 independent Sol guardian PASS authorizes lifecycle closure after score/validation. EVID-095/EVID-097 retain historical failures with deprecated current applicability. PRD-071 was already active and is not reactivated.
 

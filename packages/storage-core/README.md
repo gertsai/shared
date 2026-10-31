@@ -41,7 +41,26 @@ packages and depend on this one.
 | `ITransactionRunner<Meta>` | interface | Async reads + queued writes inside a transaction. |
 | `ListenersNotSupportedError` | class | Thrown by listener methods when `capabilities.listeners = false`. |
 | `TransactionConflictError` | class | Thrown by `runTransaction` on commit conflict. Callers handle retry. |
+| `WriteConcurrencyOpts` | interface | Optional atomic `expectedVersion` precondition for an existing versioned row. |
+| `SetWriteOpts` | interface | Provider/runner `set` options: merge by default; `{ merge: false }` selects overwrite. |
+| `VersionConflictError` | class | A version precondition failed; the guarded write is not committed. |
 | `storageProviderIdentifier` | const | DI token for `ServicesRegistry.register` / `create`. |
+
+### Set semantics and optimistic concurrency
+
+**Breaking change:** provider `set(path, id, data, opts?)` and raw batch/
+transaction runner `set` merge into an existing document by default. Omitted
+fields remain stored. Pass `{ merge: false }` at that provider/runner boundary
+to replace the document's fields instead.
+
+`SetWriteOpts` also accepts `expectedVersion`. On an existing row, providers
+must check that version atomically with the mutation; a mismatch throws
+`VersionConflictError`. A first `set` insert remains unconditional because
+there is no previous version. The supplied providers advance an existing
+`update_version` from its stored value rather than trust its incoming value.
+This field-level precondition is distinct from transaction read-conflict
+detection, which reports `TransactionConflictError`.
+
 
 ## Quickstart
 

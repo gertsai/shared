@@ -358,3 +358,16 @@ uses `PgClient` directly via `pg-document.repository.ts` per Amendment 2
   42/42 m9s mock + 16/16 m9s real-infra. Pre-Build audit (security +
   arch + types) returned 1 P0 (literal type) + 5 P1, all fixed
   inline before activation.
+
+## 13. Example migration CLI — resolved
+
+The strict `ts-node` migration CLI compiles and loads dotenv configuration.
+Two isolated live rounds each passed all 27 cases, including 11 real CLI cases.
+The CLI retains typia validation, transaction locking and rollback.
+EVID-096 records the repair; deprecated EVID-094 preserves the original failure.
+
+Separately authorized package-test maintenance removed the incidental
+`localhost:8080` assertion from `auth-openfga` without changing production code.
+The final workspace regression passed with an explicit isolated OpenFGA URL:
+5788 passed, 105 skipped, 0 failed. Workspace typechecks also passed.
+EVID-098 records the final run, including 11 executed PG integration cases.
