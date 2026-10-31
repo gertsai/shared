@@ -37,8 +37,11 @@ const requireFromHere = createRequire(import.meta.url);
 // Probe Ollama before the suite registers — avoids spinning up the broker
 // when external infra is missing.
 // ---------------------------------------------------------------------------
-const OLLAMA_URL = process.env['EMBEDDER_URL'] ?? 'http://localhost:11434';
-const FORCE = process.env['OLLAMA_E2E'] === '1';
+const FORCE =
+  process.env['VITEST_REAL_INFRA'] === '1' ||
+  process.env['OLLAMA_E2E'] === '1';
+const OLLAMA_URL =
+  process.env['EMBEDDER_URL'] ?? 'http://localhost:11434';
 
 async function ollamaAlive(): Promise<boolean> {
   try {
@@ -113,6 +116,8 @@ maybe(
       // lazily (via `config` from project.config.ts) at action execution
       // time — but project.config.ts is module-scoped, evaluated once on
       // first import, so we MUST set env BEFORE the requires below.
+      process.env.JWT_SECRET ??=
+        'test-only-jwt-secret-not-used-in-broker.call-suite';
       process.env['EMBEDDER_PROVIDER'] = 'ollama';
       process.env['EMBEDDER_URL'] = OLLAMA_URL;
       process.env['EMBEDDER_MODEL'] = 'nomic-embed-text';

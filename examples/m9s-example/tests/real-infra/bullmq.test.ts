@@ -40,8 +40,11 @@ const requireFromHere = createRequire(import.meta.url);
 // Probe Redis before the suite registers — avoids spinning up the broker
 // when external infra is missing.
 // ---------------------------------------------------------------------------
-const REDIS_URL = process.env['REDIS_URL'] ?? 'redis://localhost:6379';
-const FORCE = process.env['BULLMQ_E2E'] === '1';
+const FORCE =
+  process.env['VITEST_REAL_INFRA'] === '1' ||
+  process.env['BULLMQ_E2E'] === '1';
+const REDIS_URL =
+  process.env['REDIS_URL'] ?? 'redis://localhost:6379';
 
 async function redisAlive(): Promise<boolean> {
   // ioredis is already a transitive dep via `@gertsai/api-core` queue config;
@@ -121,6 +124,8 @@ maybe(
       // evaluated once on first import; setting envs here MUST happen before
       // the dist requires below so `QUEUE_ENABLED = !!config.REDIS_URL` is
       // observed `true` by `services/index.ts` and the ingest action.
+      process.env.JWT_SECRET ??=
+        'test-only-jwt-secret-not-used-for-signing-in-broker.call-suite';
       process.env['REDIS_URL'] = REDIS_URL;
       // Mock embedder keeps the suite focused on async wiring, not vectors.
       process.env['EMBEDDER_PROVIDER'] = 'mock';
