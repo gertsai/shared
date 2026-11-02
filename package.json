@@ -28,8 +28,9 @@
     "moon:build": "moon run :build",
     "moon:test": "moon run :test",
     "changeset": "changeset",
-    "version": "changeset version",
-    "release": "pnpm build && changeset publish"
+    "changeset:status": "changeset status",
+    "version:packages": "changeset version",
+    "release": "gh workflow run publish.yml --ref main"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.2",

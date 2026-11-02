@@ -2,11 +2,11 @@
 
 Shared OSS infrastructure packages for the **gerts.ai** ecosystem.
 
-Apache 2.0 licensed, published to npm under the `@gertsai/*` scope.
+Apache 2.0 licensed npm packages under `@gertsai/*`, currently distributed through GitHub Packages.
 
 ## Packages
 
-27 OSS packages organized into 5 tiers (foundation → application).
+Independently versioned OSS packages organized into 5 tiers (foundation → application).
 
 | Package | Description | Tier |
 |---------|-------------|------|
@@ -57,11 +57,11 @@ for the framework choice rationale.
 
 ## Install
 
-> **Status (Wave 11.D)**: packages currently publish to **GitHub Packages**
-> (private to `gertsai` GitHub org). Public npm release planned once
-> internal testing settles. See [Publishing](#publishing) for the switch.
+> Packages currently publish to **GitHub Packages**. Visibility is configured
+> separately in GitHub; public npm publication requires an intentional registry
+> and authentication migration. See [Publishing](#publishing).
 
-### From GitHub Packages (current — private)
+### From GitHub Packages (current registry)
 
 1. Get a GitHub Personal Access Token with at least `read:packages` scope
    from <https://github.com/settings/tokens>.
@@ -95,21 +95,21 @@ just `pnpm add @gertsai/<package>` works from any machine.
 
 ## Publishing
 
-`pnpm changeset publish` (run by `.github/workflows/release.yml`) currently
-targets **GitHub Packages**. To switch to public npm:
+This monorepo uses Changesets to version public packages independently. The
+current registry is **GitHub Packages**; setting Changesets `access` to `public`
+does not make a GitHub package publicly visible. Package visibility is
+configured separately. Moving to public npm requires a separate intentional
+registry and authentication change and has not been performed.
 
-1. Edit each `packages/*/package.json` — change
-   `publishConfig.registry` from `https://npm.pkg.github.com` to
-   `https://registry.npmjs.org` (or remove the field entirely — that's the
-   default).
-2. Edit `.github/workflows/release.yml` — change `registry-url` to
-   `https://registry.npmjs.org` and the `NODE_AUTH_TOKEN` value from
-   `${{ secrets.GITHUB_TOKEN }}` to `${{ secrets.NPM_TOKEN }}`.
-3. Add `NPM_TOKEN` repo secret with publish rights to the `@gertsai` npm scope.
-4. Bump the changeset PR and merge — first push fires public publish.
+Contributors add changesets for consumer-facing package changes. After merge to
+`main`, the release bot opens or updates a version PR; maintainers review its
+generated versions and changelogs and require CI before merging. Merging that
+PR prepares versions but does **not** publish them. Publishing requires a
+separate guarded workflow dispatch from `main`.
 
-The package surface itself doesn't change between the two registries — it's
-just where the tarball lands.
+See the [Changesets guide](./.changeset/README.md) for bump selection, review
+and verification commands, the explicit publish gate, and partial-publish
+recovery.
 
 ## Develop
 
