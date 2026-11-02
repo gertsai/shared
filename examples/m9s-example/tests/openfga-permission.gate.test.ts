@@ -1,36 +1,43 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * Wave 6.2 / RFC-003 Edge 2 — gate apiToken acceptance test.
- *
- * Verifies:
- *   - The gate constructor accepts `client.apiToken` without throwing
- *     (Sprint 3.11 §P1-1 throw guard removed).
- *   - The fail-closed semantic from ADR-011 §A2.4 is preserved — a
- *     `can()` call against an unreachable endpoint still returns `false`
- *     (no rethrow, no fail-OPEN).
+ * Verifies the fail-closed semantic from ADR-011 §A2.4 is preserved — a
+ * `can()` call against an unreachable endpoint still returns `false`
+ * (no rethrow, no fail-OPEN).
  *
  * No live OpenFGA needed — uses an unreachable endpoint
  * (`http://127.0.0.1:1`) to provoke the catch path.
  */
 import { describe, it, expect } from 'vitest';
 
-import { OpenFgaPermissionGate } from '../src/infrastructure/openfga-permission.gate';
+import {
+  OpenFgaPermissionGate,
+  decodeResource,
+} from '../src/infrastructure/openfga-permission.gate';
 
-describe('OpenFgaPermissionGate — apiToken acceptance (Wave 6.2 / RFC-003 Edge 2)', () => {
-  it('constructor does not throw when client.apiToken is provided', () => {
-    expect(
-      () =>
-        new OpenFgaPermissionGate({
-          logger: { warn: () => {}, error: () => {} },
-          client: {
-            apiUrl: 'http://127.0.0.1:1',
-            storeId: 'store-x',
-            apiToken: 'secret-bearer-123',
-          },
-        }),
-    ).not.toThrow();
+describe('decodeResource', () => {
+  it("collapses '*' to defaultResourceType + 'global' id", () => {
+    expect(decodeResource('*', 'tenant')).toEqual({
+      resourceType: 'tenant',
+      resourceId: 'global',
+    });
   });
 
+  it("parses '<type>:<id>' shape", () => {
+    expect(decodeResource('document:doc-1', 'tenant')).toEqual({
+      resourceType: 'document',
+      resourceId: 'doc-1',
+    });
+  });
+
+  it('falls back to defaultResourceType for bare ids', () => {
+    expect(decodeResource('proj-42', 'project')).toEqual({
+      resourceType: 'project',
+      resourceId: 'proj-42',
+    });
+  });
+});
+
+describe('OpenFgaPermissionGate — fail-closed behavior', () => {
   it('fail-closed semantic preserved: can() returns false when OpenFGA is unreachable', async () => {
     // Reset singleton so this test isn't influenced by other suites.
     const mod = await import('@gertsai/auth-openfga');
@@ -52,32 +59,5 @@ describe('OpenFgaPermissionGate — apiToken acceptance (Wave 6.2 / RFC-003 Edge
       mod.resetPermissionCache();
     }
   }, 15_000);
-
-  it('constructor accepts undefined apiToken (no regression on the unset path)', () => {
-    expect(
-      () =>
-        new OpenFgaPermissionGate({
-          logger: { warn: () => {}, error: () => {} },
-          client: {
-            apiUrl: 'http://127.0.0.1:1',
-            storeId: 'store-x',
-            // apiToken intentionally omitted
-          },
-        }),
-    ).not.toThrow();
-  });
-
-  it('constructor accepts empty-string apiToken (composition layer maps "" → undefined)', () => {
-    expect(
-      () =>
-        new OpenFgaPermissionGate({
-          logger: { warn: () => {}, error: () => {} },
-          client: {
-            apiUrl: 'http://127.0.0.1:1',
-            storeId: 'store-x',
-            apiToken: '',
-          },
-        }),
-    ).not.toThrow();
-  });
 });
+

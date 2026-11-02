@@ -31,3 +31,9 @@ packages/*/reports/
 .forgeplan/claims/
 .forgeplan/session.yaml
 .mcp.json
+.forgeplan/state/
+.forgeplan/anomalies-journal.jsonl
+
+# Machine-local credentials and generated tsup configuration bundles
+.claude/settings.local.json
+packages/*/tsup.config.bundled_*.mjs

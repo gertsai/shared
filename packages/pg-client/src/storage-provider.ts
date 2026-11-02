@@ -25,12 +25,15 @@ import type {
   IStorageProvider,
   ITransactionRunner,
   Query,
+  SetWriteOpts,
   StorageCapabilities,
   StorageMetadata,
+  WriteConcurrencyOpts,
 } from '@gertsai/storage-core';
 import {
   ListenersNotSupportedError,
   TransactionConflictError,
+  VersionConflictError,
 } from '@gertsai/storage-core';
 import { compileToSql } from '@gertsai/query-dsl/sql';
 import { AUDIT_FIELDS } from '@gertsai/entity-audit';
@@ -85,23 +88,103 @@ function resolveTable(path: string, tableMap: TableMap | undefined): string {
 }
 
 /**
- * Tagged-template wrapper that turns a literal SQL string + values into the
- * `(strings, ...values)` shape `PgClient.$queryRaw` / `$executeRaw` expect.
- * Used internally by `PgStorageProvider` so we never construct unsafe
- * SQL at the call site.
+ * Convert a positional-parameter SQL string into the tagged-template shape
+ * expected by PgClient, preserving the order and repetition of each marker.
  */
+function toRawTemplate(
+  sql: string,
+  params: ReadonlyArray<unknown>,
+): [TemplateStringsArray, unknown[]] {
+  const parts: string[] = [];
+  const values: unknown[] = [];
+  let previousIndex = 0;
+
+  for (const match of sql.matchAll(/\$(\d+)/g)) {
+    const marker = match[0];
+    const start = match.index!;
+    parts.push(sql.slice(previousIndex, start));
+    values.push(params[Number(marker.slice(1)) - 1]);
+    previousIndex = start + marker.length;
+  }
+
+  parts.push(sql.slice(previousIndex));
+  const template = Object.assign(parts, { raw: parts }) as unknown as TemplateStringsArray;
+  return [template, values];
+}
+
 function rawQuery<T = unknown>(
   client: PgClient,
   sql: string,
   params: ReadonlyArray<unknown>,
 ): Promise<T[]> {
-  // Build TemplateStringsArray-shaped object from the (already-parameterized)
-  // SQL fragment. We re-split on $1/$2/... markers so the underlying client
-  // receives positional parameters (PgClient implementations rebuild their
-  // own SQL from the strings + values).
-  const parts = sql.split(/\$\d+/g);
-  const template = Object.assign(parts, { raw: parts }) as unknown as TemplateStringsArray;
-  return client.$queryRaw<T>(template, ...params);
+  const [template, values] = toRawTemplate(sql, params);
+  return client.$queryRaw<T>(template, ...values);
+}
+
+/**
+ * Compile a storage query against JSONB payload properties while retaining
+ * query-dsl's parameterized SQL generation. Field names are bound as JSONB
+ * operators' text operands; compiler predicates operate on JSONB projections.
+ */
+function compilePayloadQuery<Meta extends StorageMetadata>(
+  query: Query<Meta>,
+  table: string,
+): { readonly sql: string; readonly params: unknown[] } {
+  const fieldAliases = new Map<string, string>();
+  const constraints = query as unknown as ReadonlyArray<{
+    readonly kind: string;
+    readonly field?: string;
+  }>;
+  for (const constraint of constraints) {
+    if (
+      (constraint.kind === 'where' || constraint.kind === 'orderBy') &&
+      typeof constraint.field === 'string' &&
+      !fieldAliases.has(constraint.field)
+    ) {
+      fieldAliases.set(constraint.field, `__pg_payload_${fieldAliases.size}`);
+    }
+  }
+
+  const fieldParams = [...fieldAliases.keys()];
+  const mappedQuery = (
+    query as unknown as ReadonlyArray<Record<string, unknown>>
+  ).map((constraint) => {
+    if (
+      (constraint.kind !== 'where' && constraint.kind !== 'orderBy') ||
+      typeof constraint.field !== 'string'
+    ) {
+      return constraint;
+    }
+
+    const field = constraint.field;
+    const op = constraint.op;
+    const value = constraint.value;
+    const mapped: Record<string, unknown> = {
+      ...constraint,
+      field: fieldAliases.get(field),
+    };
+    if (
+      constraint.kind === 'where' &&
+      op !== 'array-contains' &&
+      op !== 'array-contains-any'
+    ) {
+      mapped.value = Array.isArray(value)
+        ? value.map((item) => JSON.stringify(item))
+        : JSON.stringify(value);
+    }
+    return mapped;
+  });
+
+  const compiled = compileToSql(mappedQuery as never, '_pg_payload_query');
+  const projections = [...fieldAliases.values()].map(
+    (alias, index) =>
+      `data -> $${compiled.params.length + index + 1}::text AS "${alias}"`,
+  );
+  const selectList = ['id', 'data', ...projections].join(', ');
+  return {
+    sql: `WITH _pg_payload_query AS (SELECT ${selectList} FROM ${table}) ${compiled.sql}`,
+    params: [...compiled.params, ...fieldParams],
+  };
 }
 
 function rawExecute(
@@ -109,9 +192,8 @@ function rawExecute(
   sql: string,
   params: ReadonlyArray<unknown>,
 ): Promise<number> {
-  const parts = sql.split(/\$\d+/g);
-  const template = Object.assign(parts, { raw: parts }) as unknown as TemplateStringsArray;
-  return client.$executeRaw(template, ...params);
+  const [template, values] = toRawTemplate(sql, params);
+  return client.$executeRaw(template, ...values);
 }
 
 function isTransactionConflict(err: unknown): boolean {
@@ -124,11 +206,102 @@ function isTransactionConflict(err: unknown): boolean {
   );
 }
 
+/**
+ * Build the `INSERT … ON CONFLICT` statement honoring
+ * {@link SetWriteOpts}: `merge !== false` merges EXCLUDED over the
+ * committed blob (`existing || incoming`), `merge: false` replaces.
+ * `expectedVersion` becomes a `WHERE` on the conflict branch — the
+ * blob store keeps `update_version` inside the `data` jsonb, so the
+ * guard reads `data->>'update_version'`. The insert branch is
+ * unguarded by contract (no prior version exists).
+ */
+function advanceStoredVersion(table: string, value: string): string {
+  return (
+    `CASE WHEN ${table}.data ? 'update_version' ` +
+    `THEN jsonb_set(${value}, '{update_version}', ` +
+    `to_jsonb((${table}.data->>'update_version')::bigint + 1), true) ` +
+    `ELSE ${value} END`
+  );
+}
+
+/**
+ * Build the `INSERT … ON CONFLICT` statement honoring {@link SetWriteOpts}.
+ * The insert branch preserves the seeded version; conflict updates derive the
+ * next version from the stored row so concurrent writes cannot reuse it.
+ */
+function upsertStatement(
+  table: string,
+  opts?: SetWriteOpts,
+): string {
+  const mergeExpr =
+    opts?.merge === false
+      ? 'EXCLUDED.data'
+      : `${table}.data || EXCLUDED.data`;
+  const guard =
+    opts?.expectedVersion !== undefined
+      ? ` WHERE (${table}.data->>'update_version')::bigint = $3`
+      : '';
+  return (
+    `INSERT INTO ${table} (id, data) VALUES ($1, $2) ` +
+    `ON CONFLICT (id) DO UPDATE SET ` +
+    `data = ${advanceStoredVersion(table, mergeExpr)}${guard}`
+  );
+}
+
+/** `UPDATE` with an optional compare-and-swap predicate. */
+function updateStatement(table: string, opts?: WriteConcurrencyOpts): string {
+  const guard =
+    opts?.expectedVersion !== undefined
+      ? ` AND (${table}.data->>'update_version')::bigint = $3`
+      : '';
+  return (
+    `UPDATE ${table} SET data = ` +
+    `${advanceStoredVersion(table, `${table}.data || $2`)} ` +
+    `WHERE id = $1${guard}`
+  );
+}
+
+/**
+ * Execute an upsert/update op and surface a {@link VersionConflictError}
+ * when a declared `expectedVersion` left the row untouched — on the
+ * upsert conflict branch a `rowCount` of 0 means the row exists but the
+ * version predicate failed (the insert branch always applies).
+ */
+function conflictInfo(
+  path: string,
+  id: string,
+  expected: number | undefined,
+): ConstructorParameters<typeof VersionConflictError>[0] {
+  return {
+    path,
+    id,
+    ...(expected !== undefined ? { expected } : {}),
+  };
+}
+
+async function execVersionedWrite(
+  client: PgClient,
+  sql: string,
+  params: ReadonlyArray<unknown>,
+  info: { readonly path: string; readonly id: string },
+  expected: number | undefined,
+): Promise<void> {
+  const affected = await rawExecute(client, sql, params);
+  // Without a declared ETag a zero-row write is the historical silent
+  // no-op (update on a missing doc); with one it is a genuine conflict.
+  if (affected === 0 && expected !== undefined) {
+    throw new VersionConflictError(conflictInfo(info.path, info.id, expected));
+  }
+}
+
 interface BatchOp<Meta extends StorageMetadata> {
   readonly kind: 'set' | 'update' | 'delete';
   readonly table: string;
+  readonly path: string;
   readonly id: string;
   readonly data?: Meta['write'] | Partial<Meta['write']>;
+  readonly merge?: boolean;
+  readonly expectedVersion?: number;
 }
 
 /**
@@ -153,21 +326,40 @@ export class PgBatchRunner<Meta extends StorageMetadata>
     private readonly _resolveTable: (path: string) => string,
   ) {}
 
-  set(path: string, id: string, data: Meta['write']): void {
-    this._ops.push({ kind: 'set', table: this._resolveTable(path), id, data });
+  set(path: string, id: string, data: Meta['write'], opts?: SetWriteOpts): void {
+    this._ops.push({
+      kind: 'set',
+      table: this._resolveTable(path),
+      path,
+      id,
+      data,
+      ...(opts?.merge !== undefined ? { merge: opts.merge } : {}),
+      ...(opts?.expectedVersion !== undefined
+        ? { expectedVersion: opts.expectedVersion }
+        : {}),
+    });
   }
 
-  update(path: string, id: string, partial: Partial<Meta['write']>): void {
+  update(
+    path: string,
+    id: string,
+    partial: Partial<Meta['write']>,
+    opts?: WriteConcurrencyOpts,
+  ): void {
     this._ops.push({
       kind: 'update',
       table: this._resolveTable(path),
+      path,
       id,
       data: partial,
+      ...(opts?.expectedVersion !== undefined
+        ? { expectedVersion: opts.expectedVersion }
+        : {}),
     });
   }
 
   delete(path: string, id: string): void {
-    this._ops.push({ kind: 'delete', table: this._resolveTable(path), id });
+    this._ops.push({ kind: 'delete', table: this._resolveTable(path), path, id });
   }
 
   /**
@@ -184,16 +376,22 @@ export class PgBatchRunner<Meta extends StorageMetadata>
     try {
       for (const op of this._ops) {
         if (op.kind === 'set') {
-          await rawExecute(
+          await execVersionedWrite(
             this._client,
-            `INSERT INTO ${op.table} (id, data) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data`,
-            [op.id, op.data],
+            upsertStatement(op.table, op),
+            op.expectedVersion !== undefined
+              ? [op.id, op.data, op.expectedVersion]
+              : [op.id, op.data],
+            { path: op.path, id: op.id }, op.expectedVersion,
           );
         } else if (op.kind === 'update') {
-          await rawExecute(
+          await execVersionedWrite(
             this._client,
-            `UPDATE ${op.table} SET data = data || $2 WHERE id = $1`,
-            [op.id, op.data],
+            updateStatement(op.table, op),
+            op.expectedVersion !== undefined
+              ? [op.id, op.data, op.expectedVersion]
+              : [op.id, op.data],
+            { path: op.path, id: op.id }, op.expectedVersion,
           );
         } else {
           await rawExecute(this._client, `DELETE FROM ${op.table} WHERE id = $1`, [
@@ -241,37 +439,62 @@ export class PgTransactionRunner<Meta extends StorageMetadata>
     return first ? first.data : null;
   }
 
-  set(path: string, id: string, data: Meta['write']): void {
-    this._ops.push({ kind: 'set', table: this._resolveTable(path), id, data });
+  set(path: string, id: string, data: Meta['write'], opts?: SetWriteOpts): void {
+    this._ops.push({
+      kind: 'set',
+      table: this._resolveTable(path),
+      path,
+      id,
+      data,
+      ...(opts?.merge !== undefined ? { merge: opts.merge } : {}),
+      ...(opts?.expectedVersion !== undefined
+        ? { expectedVersion: opts.expectedVersion }
+        : {}),
+    });
   }
 
-  update(path: string, id: string, partial: Partial<Meta['write']>): void {
+  update(
+    path: string,
+    id: string,
+    partial: Partial<Meta['write']>,
+    opts?: WriteConcurrencyOpts,
+  ): void {
     this._ops.push({
       kind: 'update',
       table: this._resolveTable(path),
+      path,
       id,
       data: partial,
+      ...(opts?.expectedVersion !== undefined
+        ? { expectedVersion: opts.expectedVersion }
+        : {}),
     });
   }
 
   delete(path: string, id: string): void {
-    this._ops.push({ kind: 'delete', table: this._resolveTable(path), id });
+    this._ops.push({ kind: 'delete', table: this._resolveTable(path), path, id });
   }
 
   /** Internal — flush queued writes inside the surrounding tx. */
   async _flush(): Promise<void> {
     for (const op of this._ops) {
       if (op.kind === 'set') {
-        await rawExecute(
+        await execVersionedWrite(
           this._client,
-          `INSERT INTO ${op.table} (id, data) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data`,
-          [op.id, op.data],
+          upsertStatement(op.table, op),
+          op.expectedVersion !== undefined
+            ? [op.id, op.data, op.expectedVersion]
+            : [op.id, op.data],
+          { path: op.path, id: op.id }, op.expectedVersion,
         );
       } else if (op.kind === 'update') {
-        await rawExecute(
+        await execVersionedWrite(
           this._client,
-          `UPDATE ${op.table} SET data = data || $2 WHERE id = $1`,
-          [op.id, op.data],
+          updateStatement(op.table, op),
+          op.expectedVersion !== undefined
+            ? [op.id, op.data, op.expectedVersion]
+            : [op.id, op.data],
+          { path: op.path, id: op.id }, op.expectedVersion,
         );
       } else {
         await rawExecute(this._client, `DELETE FROM ${op.table} WHERE id = $1`, [
@@ -305,9 +528,9 @@ export class PgStorageProvider<Meta extends StorageMetadata>
   /**
    * Wave 6.5 / PRD-007 + Wave 7.2 audit-aware upsert.
    *
-   * `set()` (above) uses a naive `ON CONFLICT DO UPDATE SET data =
-   * EXCLUDED.data` — correct for `set()` semantics (overwrite).
-   * `upsertDoc()` BELOW uses a surgical jsonb merge that strips
+   * `set()` honors {@link SetWriteOpts}: merge-upsert by default
+   * (`existing.data || EXCLUDED.data`), full replace only on
+   * `merge: false`. `upsertDoc()` BELOW uses a surgical jsonb merge that strips
    * `creator_uuid` + `created_at` from the incoming EXCLUDED payload
    * before merging, so create-time audit is preserved across UPDATE.
    * That makes `preservesCreatorAudit: true` honest and lets
@@ -339,11 +562,20 @@ export class PgStorageProvider<Meta extends StorageMetadata>
     return resolveTable(path, this._tableMap);
   }
 
-  async set(path: string, id: string, data: Meta['write']): Promise<void> {
-    await rawExecute(
+  async set(
+    path: string,
+    id: string,
+    data: Meta['write'],
+    opts?: SetWriteOpts,
+  ): Promise<void> {
+    const table = this._table(path);
+    await execVersionedWrite(
       this._client,
-      `INSERT INTO ${this._table(path)} (id, data) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data`,
-      [id, data],
+      upsertStatement(table, opts),
+      opts?.expectedVersion !== undefined
+        ? [id, data, opts.expectedVersion]
+        : [id, data],
+      { path, id }, opts?.expectedVersion,
     );
   }
 
@@ -385,11 +617,12 @@ export class PgStorageProvider<Meta extends StorageMetadata>
     data: Meta['write'],
   ): Promise<{ id: string }> {
     const table = this._table(path);
+    const merged = `${table}.data || ${CREATOR_AUDIT_STRIP_FRAGMENT}`;
     await rawExecute(
       this._client,
       `INSERT INTO ${table} (id, data) VALUES ($1, $2) ` +
         `ON CONFLICT (id) DO UPDATE SET ` +
-        `data = ${table}.data || ${CREATOR_AUDIT_STRIP_FRAGMENT}`,
+        `data = ${advanceStoredVersion(table, merged)}`,
       [id, data],
     );
     return { id };
@@ -415,12 +648,7 @@ export class PgStorageProvider<Meta extends StorageMetadata>
       );
       return rows.map((r) => r.data);
     }
-    // Adapter boundary cast: storage-core ships a loose `Query<Meta>` shape
-    // (no forward dep on query-dsl); query-dsl's `compileToSql` expects its
-    // strict `QueryConstraint` union. In practice consumers build queries
-    // via query-dsl factories so the structural shape matches at runtime.
-    // Justified single `as` per ADR-005 adapter-boundary policy.
-    const compiled = compileToSql(query as never, table);
+    const compiled = compilePayloadQuery(query, table);
     const rows = await rawQuery<{ data: Meta['read'] }>(
       this._client,
       compiled.sql,
@@ -440,13 +668,8 @@ export class PgStorageProvider<Meta extends StorageMetadata>
       const first = rows[0];
       return first ? Number(first.count) : 0;
     }
-    // Adapter boundary cast: storage-core ships a loose `Query<Meta>` shape
-    // (no forward dep on query-dsl); query-dsl's `compileToSql` expects its
-    // strict `QueryConstraint` union. In practice consumers build queries
-    // via query-dsl factories so the structural shape matches at runtime.
-    // Justified single `as` per ADR-005 adapter-boundary policy.
-    const compiled = compileToSql(query as never, table);
-    // Wrap the SELECT data ... in a count subquery; preserves WHERE/limit.
+    const compiled = compilePayloadQuery(query, table);
+    // Wrapping the compiled SELECT preserves its WHERE and pagination.
     const wrapped = `SELECT COUNT(*)::bigint AS count FROM (${compiled.sql}) AS _q`;
     const rows = await rawQuery<{ count: number | bigint | string }>(
       this._client,
@@ -461,11 +684,16 @@ export class PgStorageProvider<Meta extends StorageMetadata>
     path: string,
     id: string,
     partial: Partial<Meta['write']>,
+    opts?: WriteConcurrencyOpts,
   ): Promise<void> {
-    await rawExecute(
+    const table = this._table(path);
+    await execVersionedWrite(
       this._client,
-      `UPDATE ${this._table(path)} SET data = data || $2 WHERE id = $1`,
-      [id, partial],
+      updateStatement(table, opts),
+      opts?.expectedVersion !== undefined
+        ? [id, partial, opts.expectedVersion]
+        : [id, partial],
+      { path, id }, opts?.expectedVersion,
     );
   }
 

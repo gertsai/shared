@@ -74,6 +74,7 @@
     "@gertsai/di": "workspace:*",
     "@gertsai/errors": "workspace:*",
     "@gertsai/session": "workspace:*",
+    "@gertsai/session-guard": "workspace:*",
     "@gertsai/tenant-resolver": "workspace:*",
     "moleculer": "^0.14.35",
     "vitest": "^3.0.0"

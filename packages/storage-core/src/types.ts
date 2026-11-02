@@ -259,7 +259,7 @@ export type Query<Meta extends StorageMetadata> = ReadonlyArray<{
  */
 export interface IBatchRunner<Meta extends StorageMetadata> {
   /** Queue a `set` (full-document write) into the batch. */
-  set(path: string, id: string, data: Meta['write']): void;
+  set(path: string, id: string, data: Meta['write'], opts?: SetWriteOpts): void;
   /** Queue a partial-update into the batch. */
   update(
     path: string,
@@ -286,7 +286,7 @@ export interface ITransactionRunner<Meta extends StorageMetadata> {
   /** Read a document inside the transaction's consistent snapshot. */
   get(path: string, id: string): Promise<Meta['read'] | null>;
   /** Queue a `set` to commit when the transaction resolves. */
-  set(path: string, id: string, data: Meta['write']): void;
+  set(path: string, id: string, data: Meta['write'], opts?: SetWriteOpts): void;
   /** Queue a partial-update to commit when the transaction resolves. */
   update(
     path: string,
@@ -321,6 +321,33 @@ export interface WriteConcurrencyOpts {
    * Omit for last-write-wins (previous behaviour).
    */
   readonly expectedVersion?: number;
+}
+
+/**
+ * `set`-verb write knobs — Firestore `setDoc` options parity.
+ *
+ * `expectedVersion` carries the same ETag contract as
+ * {@link WriteConcurrencyOpts}, applied on the conflict path: an upsert
+ * over an existing row applies only while its `update_version` equals
+ * the declared value — a mismatch is a {@link VersionConflictError},
+ * not a silent no-op. It is meaningless on first write (an insert has
+ * no prior version), so providers apply it unconditionally there.
+ *
+ * `merge` selects full-overwrite vs merge-upsert semantics:
+ * `merge: false` gives Firestore `setDoc` overwrite semantics (the
+ * stored document becomes exactly `data` — absent fields are dropped);
+ * `merge: true` merges `data` over committed state (absent fields are
+ * preserved). The default (flag absent) is merge-upsert — adapters
+ * that historically overwrote on `set` move to merge semantics rather
+ * than keep divergent defaults.
+ * Providers that cannot express merge MAY treat the flag as
+ * best-effort, but MUST still honor `expectedVersion` atomically.
+ *
+ * @public
+ */
+export interface SetWriteOpts extends WriteConcurrencyOpts {
+  /** `false` = Firestore overwrite; `true`/absent = merge-upsert. */
+  readonly merge?: boolean;
 }
 
 /**
@@ -407,10 +434,15 @@ export interface IStorageProvider<Meta extends StorageMetadata> {
   readonly capabilities: StorageCapabilities;
 
   /**
-   * Write the full document at `(path, id)`. Overwrites any existing data.
-   * Use {@link IStorageProvider.update} for partial writes.
+   * Write the document at `(path, id)`. Use {@link IStorageProvider.update}
+   * for partial writes.
+   *
+   * `opts.merge === false` requests Firestore-`setDoc` overwrite
+   * semantics (absent fields are dropped); the default is the adapter's
+   * merge-upsert behaviour. `opts.expectedVersion` guards the conflict
+   * path atomically — see {@link SetWriteOpts}.
    */
-  set(path: string, id: string, data: Meta['write']): Promise<void>;
+  set(path: string, id: string, data: Meta['write'], opts?: SetWriteOpts): Promise<void>;
 
   /**
    * Read a single document. Returns `null` when the document does not exist.

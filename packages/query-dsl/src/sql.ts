@@ -33,8 +33,10 @@ import type { StorageMetadata } from '@gertsai/storage-core';
 import { validateQuery } from './validate';
 import type { Query, QueryConstraint, WhereOp } from './types';
 
-/** Quoted-string SQL identifier matcher — same charset Postgres allows for unquoted identifiers. */
-const IDENT_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+/** Quoted-string SQL identifier matcher — same charset Postgres allows
+ *  for unquoted identifiers, plus ONE dot for `schema.table` qualified
+ *  names (the orchestra schema is addressed that way). */
+const IDENT_RE = /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$/;
 
 /**
  * Output of {@link compileToSql}: a single parameterised SELECT plus the
@@ -206,7 +208,7 @@ function compileWhere(
     }
     case 'array-contains-any': {
       const idx = pushParam(params, JSON.stringify(value));
-      return `${col} ?| (SELECT array_agg(value::text) FROM jsonb_array_elements($${idx}::jsonb))`;
+      return `${col} @> ANY (SELECT jsonb_build_array(candidates.value) FROM jsonb_array_elements($${idx}::jsonb) AS candidates(value))`;
     }
     default: {
       const exhaustive: never = op;

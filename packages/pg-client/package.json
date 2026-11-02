@@ -76,6 +76,8 @@
     "@gertsai/entity-storage": "workspace:*",
     "@gertsai/query-dsl": "workspace:*",
     "@gertsai/storage-core": "workspace:*",
+    "@types/pg": "^8.15.5",
+    "pg": "^8.16.3",
     "vitest": "^3.0.0"
   },
   "keywords": [

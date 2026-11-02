@@ -104,6 +104,15 @@ interface EntitySnapshot<Data extends object> {
 }
 
 /**
+ * Per-target snapshot cache — `useSyncExternalStore` requires `getSnapshot`
+ * to return an identical reference until the store actually changes.
+ * A fresh `{data, version}` literal per call makes React observe a "change"
+ * on every render and loop forever; the WeakMap keeps one snapshot object
+ * per version and lets targets GC with their entities.
+ */
+const snapshotCache = new WeakMap<object, EntitySnapshot<object>>();
+
+/**
  * Subscribe a React component to an entity's data mutations.
  *
  * Returns the entity's reactive `$data` reference. The hook uses
@@ -119,7 +128,16 @@ export function useEntity<Data extends object>(
   const data = entity.$data as Data;
   const snapshot = useSyncExternalStore<EntitySnapshot<Data>>(
     (cb) => subscribe(data, cb),
-    () => ({ data, version: getVersion(data) }),
+    () => {
+      const version = getVersion(data);
+      const cached = snapshotCache.get(data) as
+        | EntitySnapshot<Data>
+        | undefined;
+      if (cached !== undefined && cached.version === version) return cached;
+      const next: EntitySnapshot<Data> = { data, version };
+      snapshotCache.set(data, next);
+      return next;
+    },
   );
   return snapshot.data;
 }

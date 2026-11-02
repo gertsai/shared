@@ -9,7 +9,7 @@ links:
   relation: informs
 - target: ADR-016
   relation: informs
-status: active
+status: deprecated
 title: Wave 37 closure — m9s integration (query-dsl + tenant brand + llm-costs) all gates green
 ---
 
@@ -135,4 +135,7 @@ Audit-trail comment references Wave 37.A FR-A3 follow-up + code-reviewer T4-A1 #
 - Hub-ADR-011 (pg-client agnostic invariant — preserved)
 
 
+## Deprecation
 
+Reason: Incomplete historical Wave37 closure replaced by EVID-096 current source-pinned 27-case live rounds, scope reconciliation and explicit root-red boundary; Sol authorization EVID-097. This is not overall activation approval.
+Date: 2026-10-31

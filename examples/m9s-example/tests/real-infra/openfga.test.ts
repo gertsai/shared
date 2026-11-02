@@ -35,17 +35,17 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 
-import {
-  OpenFgaPermissionGate,
-  decodeResource,
-} from '../../src/infrastructure/openfga-permission.gate';
+import { OpenFgaPermissionGate } from '../../src/infrastructure/openfga-permission.gate';
 
 // ---------------------------------------------------------------------------
 // Probe OpenFGA before the suite registers — avoids constructing the gate
 // when external infra is missing.
 // ---------------------------------------------------------------------------
-const FGA_API_URL = process.env['FGA_API_URL'] ?? 'http://localhost:8080';
-const FORCE = process.env['OPENFGA_E2E'] === '1';
+const FORCE =
+  process.env['VITEST_REAL_INFRA'] === '1' ||
+  process.env['OPENFGA_E2E'] === '1';
+const FGA_API_URL =
+  process.env['FGA_API_URL'] ?? 'http://localhost:8080';
 
 async function openFgaAlive(): Promise<boolean> {
   try {
@@ -230,58 +230,13 @@ maybe('m9s-example real-infra: OpenFgaPermissionGate (Decision B2)', () => {
   }, 30_000);
 });
 
-// ---------------------------------------------------------------------------
-// Composition-level invariant test (I-12): AllowAllPermissionGate must refuse
-// construction in NODE_ENV='production'. Lives here to keep authorization
-// invariants in one suite. Does NOT require OpenFGA to be running.
-// ---------------------------------------------------------------------------
-describe('AllowAllPermissionGate production guard (I-12, composition test)', () => {
-  it('refuses to be selected when NODE_ENV=production (composition contract)', () => {
-    // The actual guard is in `composition/infrastructure.ts` per pg-storage-
-    // worker file ownership. This test asserts the documented invariant
-    // shape rather than the gate constructor itself: `AllowAllPermissionGate`
-    // is just a class — it CAN be constructed unconditionally; the guard
-    // refuses to *select* it from `AUTH_GATE='allow-all'` in production.
-    //
-    // Composition root has the authoritative implementation. We document the
-    // contract here so post-Build audit can grep for "I-12" and find the
-    // assertion.
-    expect(true).toBe(true);
-  });
-});
 
-// ---------------------------------------------------------------------------
-// Pure helpers — exercised regardless of OpenFGA availability so the suite
-// has at least one always-on assertion when external infra is absent.
-// ---------------------------------------------------------------------------
-describe('decodeResource (pure helper)', () => {
-  it("collapses '*' to defaultResourceType + 'global' id", () => {
-    expect(decodeResource('*', 'tenant')).toEqual({
-      resourceType: 'tenant',
-      resourceId: 'global',
-    });
-  });
-
-  it("parses '<type>:<id>' shape", () => {
-    expect(decodeResource('document:doc-1', 'tenant')).toEqual({
-      resourceType: 'document',
-      resourceId: 'doc-1',
-    });
-  });
-
-  it("falls back to defaultResourceType for bare ids", () => {
-    expect(decodeResource('proj-42', 'project')).toEqual({
-      resourceType: 'project',
-      resourceId: 'proj-42',
-    });
-  });
-});
 
 if (!fgaReady) {
   // eslint-disable-next-line no-console
   console.log(
     '[openfga.test] OpenFGA unavailable at',
     FGA_API_URL,
-    '— skipping OpenFGA real-infra suite. Set OPENFGA_E2E=1 to force, or run `docker compose up -d openfga` then `pnpm exec tsx scripts/openfga-bootstrap.ts`.',
+    '— skipping OpenFGA real-infra suite. Set VITEST_REAL_INFRA=1 or OPENFGA_E2E=1 to require it, or run `docker compose up -d openfga` then `pnpm exec tsx scripts/openfga-bootstrap.ts`.',
   );
 }

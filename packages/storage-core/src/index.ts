@@ -15,6 +15,7 @@ export type {
   ITransactionRunner,
   StorageLogger,
   WriteConcurrencyOpts,
+  SetWriteOpts,
 } from './types';
 export { defineStorageMetadata, noopStorageLogger } from './types';
 

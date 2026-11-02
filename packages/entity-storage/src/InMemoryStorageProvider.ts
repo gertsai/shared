@@ -59,6 +59,7 @@ import {
   TransactionConflictError,
   VersionConflictError,
 } from '@gertsai/storage-core';
+import type { SetWriteOpts } from '@gertsai/storage-core';
 import { AUDIT_FIELDS } from '@gertsai/entity-audit';
 import { applyQueryFilter } from './applyQueryFilter';
 
@@ -251,10 +252,56 @@ export class InMemoryStorageProvider<
     return versioned;
   }
 
+  /**
+   * `set` with {@link SetWriteOpts} semantics shared by the standalone
+   * call and queued deltas: on an existing row `merge: false` writes
+   * `data` verbatim (Firestore overwrite) while the default merges
+   * `data` over committed state; `expectedVersion` is the same ETag as
+   * `update`, checked only on the conflict path (a fresh insert has no
+   * prior version — pg parity).
+   */
+  private _setOnto(
+    coll: Map<string, VersionedDoc>,
+    id: string,
+    data: unknown,
+    opts?: { readonly merge?: boolean; readonly expectedVersion?: number },
+    path?: string,
+  ): VersionedDoc {
+    const prev = coll.get(id);
+    if (prev !== undefined && opts?.expectedVersion !== undefined) {
+      const curUpdateVersion = (
+        prev.data as Record<string, unknown>
+      )['update_version'] as number | undefined;
+      if (curUpdateVersion !== opts.expectedVersion) {
+        throw new VersionConflictError({
+          ...(path !== undefined ? { path } : {}),
+          id,
+          expected: opts.expectedVersion,
+          ...(curUpdateVersion !== undefined
+            ? { actual: curUpdateVersion }
+            : {}),
+        });
+      }
+    }
+    const write =
+      prev !== undefined && opts?.merge !== false
+        ? ({
+            ...(prev.data as Record<string, unknown>),
+            ...(data as Record<string, unknown>),
+          } as unknown)
+        : data;
+    return this._writeOnto(coll, id, write);
+  }
+
   // ─────────────────── IStorageProvider — CRUD ───────────────────
 
-  async set(path: string, id: string, data: Meta['write']): Promise<void> {
-    this._writeOnto(this._coll(path), id, data);
+  async set(
+    path: string,
+    id: string,
+    data: Meta['write'],
+    opts?: SetWriteOpts,
+  ): Promise<void> {
+    this._setOnto(this._coll(path), id, data, opts, path);
     this._emitDoc(path, id);
     this._emitColl(path);
   }
@@ -424,11 +471,10 @@ export class InMemoryStorageProvider<
   //   - a per-key version snapshot taken at the FIRST queue / read on
   //     that key (so blind writes are version-checked too — closes the
   //     pre-Wave-21 H-ENT-1/H-ENT-2 hazard);
-  //   - a commit phase that (a) re-verifies every snapshotted version
-  //     against the live store, throwing TransactionConflictError on
-  //     mismatch, and (b) applies the deltas per-key into the live
-  //     collection map (NOT a whole-map swap — concurrent commits no
-  //     longer clobber).
+  //   - a commit phase that re-verifies every snapshotted version and
+  //     stages all touched-key operations before publishing any values.
+  //     This preserves disjoint commits without exposing partial writes
+  //     when a later CAS check or clone fails.
   //
   // The shape is shared between batch + transaction so audit fixes only
   // need to land in one place.
@@ -444,18 +490,33 @@ export class InMemoryStorageProvider<
     deltas: ReadonlyMap<string, ReadonlyArray<DeltaOp>>,
     pathOf: (key: string) => readonly [string, string],
   ): void {
+    // Stage only touched keys. Any clone failure or late CAS rejection
+    // leaves the live store and listeners untouched.
+    const staged = new Map<string, VersionedDoc | null>();
     for (const [key, ops] of deltas) {
       const [path, id] = pathOf(key);
-      const coll = this._coll(path);
+      const current = this._store.get(path)?.get(id);
+      const initial =
+        current === undefined
+          ? null
+          : { version: current.version, data: structuredClone(current.data) };
+      const coll = new Map<string, VersionedDoc>();
+      if (initial !== null) coll.set(id, initial);
       for (const op of ops) {
         if (op.kind === 'set') {
-          this._writeOnto(coll, id, op.data);
+          this._setOnto(coll, id, op.data, op, path);
         } else if (op.kind === 'update') {
           this._updateOnto(coll, id, op.partial, op.expectedVersion, path);
         } else {
           coll.delete(id);
         }
       }
+      staged.set(key, coll.get(id) ?? null);
+    }
+    for (const [key, doc] of staged) {
+      const [path, id] = pathOf(key);
+      if (doc === null) this._store.get(path)?.delete(id);
+      else this._coll(path).set(id, doc);
     }
   }
 
@@ -486,13 +547,26 @@ export class InMemoryStorageProvider<
         q = [];
         deltas.set(key, q);
       }
-      q.push(op);
+      const ownedOp =
+        op.kind === 'set'
+          ? { ...op, data: structuredClone(op.data) }
+          : op.kind === 'update'
+            ? { ...op, partial: structuredClone(op.partial) }
+            : op;
+      q.push(ownedOp);
       touchedColls.add(path);
     };
 
     const runner: IBatchRunner<Meta> = {
-      set: (path, id, data): void => {
-        queue(path, id, { kind: 'set', data });
+      set: (path, id, data, opts): void => {
+        queue(path, id, {
+          kind: 'set',
+          data,
+          ...(opts?.merge !== undefined ? { merge: opts.merge } : {}),
+          ...(opts?.expectedVersion !== undefined
+            ? { expectedVersion: opts.expectedVersion }
+            : {}),
+        });
       },
       update: (path, id, partial, opts): void => {
         queue(path, id, {
@@ -549,7 +623,17 @@ export class InMemoryStorageProvider<
     const snapRead = (path: string, id: string): VersionedDoc | null => {
       const key = `${path}::${id}`;
       const cached = localView.get(key);
-      if (cached) return cached.doc;
+      if (cached) {
+        if (!reads.has(key)) {
+          reads.set(
+            key,
+            writeVersions.has(key)
+              ? (writeVersions.get(key) ?? null)
+              : (cached.doc?.version ?? null),
+          );
+        }
+        return cached.doc;
+      }
       const live = this._coll(path).get(id) ?? null;
       localView.set(key, { doc: live });
       if (!reads.has(key)) {
@@ -564,34 +648,57 @@ export class InMemoryStorageProvider<
         writeVersions.set(key, cur ? cur.version : null);
       }
     };
+    const snapshotForWrite = (path: string, id: string): void => {
+      const key = `${path}::${id}`;
+      if (!localView.has(key)) {
+        const live = this._store.get(path)?.get(id) ?? null;
+        localView.set(
+          key,
+          live === null
+            ? { doc: null }
+            : {
+                doc: {
+                  version: live.version,
+                  data: structuredClone(live.data),
+                },
+              },
+        );
+      }
+    };
     const queue = (path: string, id: string, op: DeltaOp): void => {
       const key = `${path}::${id}`;
       snapWrite(path, id);
+      snapshotForWrite(path, id);
+      const ownedOp =
+        op.kind === 'set'
+          ? { ...op, data: structuredClone(op.data) }
+          : op.kind === 'update'
+            ? { ...op, partial: structuredClone(op.partial) }
+            : op;
       let q = deltas.get(key);
       if (!q) {
         q = [];
         deltas.set(key, q);
       }
-      q.push(op);
+      q.push(ownedOp);
       touchedColls.add(path);
-      // Update the local view so subsequent tx.get reflects the queued
-      // write. We carry only the data, not a synthetic version — the
-      // version that matters at commit time is the live-store one.
-      if (op.kind === 'delete') {
-        localView.set(key, { doc: null });
-      } else if (op.kind === 'set') {
-        const prev = localView.get(key)?.doc;
-        const nextVer = (prev?.version ?? 0) + 1;
-        localView.set(key, { doc: { version: nextVer, data: op.data } });
+      const prev = localView.get(key)?.doc ?? null;
+      const coll = new Map<string, VersionedDoc>();
+      if (prev !== null) coll.set(id, prev);
+      if (ownedOp.kind === 'set') {
+        this._setOnto(coll, id, ownedOp.data, ownedOp, path);
+      } else if (ownedOp.kind === 'update') {
+        this._updateOnto(
+          coll,
+          id,
+          ownedOp.partial,
+          ownedOp.expectedVersion,
+          path,
+        );
       } else {
-        const prev = localView.get(key)?.doc;
-        const merged = {
-          ...(prev?.data as Record<string, unknown> | undefined),
-          ...op.partial,
-        };
-        const nextVer = (prev?.version ?? 0) + 1;
-        localView.set(key, { doc: { version: nextVer, data: merged } });
+        coll.delete(id);
       }
+      localView.set(key, { doc: coll.get(id) ?? null });
     };
 
     const runner: ITransactionRunner<Meta> = {
@@ -601,8 +708,15 @@ export class InMemoryStorageProvider<
           doc === null ? null : structuredClone(doc.data)
         ) as Meta['read'] | null;
       },
-      set: (path, id, data): void => {
-        queue(path, id, { kind: 'set', data });
+      set: (path, id, data, opts): void => {
+        queue(path, id, {
+          kind: 'set',
+          data,
+          ...(opts?.merge !== undefined ? { merge: opts.merge } : {}),
+          ...(opts?.expectedVersion !== undefined
+            ? { expectedVersion: opts.expectedVersion }
+            : {}),
+        });
       },
       update: (path, id, partial, opts): void => {
         queue(path, id, {
@@ -682,7 +796,20 @@ function parseKey(key: string): readonly [string, string] {
  * commit phase which write to apply on the per-key merge pass.
  */
 type DeltaOp =
-  | { readonly kind: 'set'; readonly data: unknown }
+  | {
+      readonly kind: 'set';
+      readonly data: unknown;
+      /**
+       * `false` = Firestore `setDoc` overwrite; `true`/absent =
+       * merge-upsert — see {@link SetWriteOpts}.
+       */
+      readonly merge?: boolean;
+      /**
+       * Caller-declared ETag, checked on the conflict path — same
+       * contract as `update`'s, applied only when the row exists.
+       */
+      readonly expectedVersion?: number;
+    }
   | {
       readonly kind: 'update';
       readonly partial: Record<string, unknown>;

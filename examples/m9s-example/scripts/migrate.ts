@@ -18,6 +18,7 @@
  * Filename convention: `<3-digit-version>_<snake_case_name>.<up|down>.sql`,
  * e.g. `001_init_documents_chunks.up.sql`.
  */
+import 'dotenv/config';
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -40,6 +41,12 @@ interface DiscoveredMigration {
   readonly name: string;
   readonly upPath: string;
   readonly downPath: string;
+}
+
+interface MigrationSlot {
+  name: string;
+  up?: string;
+  down?: string;
 }
 
 interface AppliedRow {
@@ -96,7 +103,13 @@ function parseArgv(argv: ReadonlyArray<string>): MigrateCommand {
     raw = { mode: 'status' };
   } else if (targetArg) {
     const versionStr = targetArg.slice('--target-version='.length);
-    const version = Number.parseInt(versionStr, 10);
+    if (!/^\d+$/.test(versionStr)) {
+      throw new Error('--target-version must be a non-negative decimal integer.');
+    }
+    const version = Number(versionStr);
+    if (!Number.isInteger(version)) {
+      throw new Error('--target-version must be a non-negative decimal integer.');
+    }
     raw = { mode: 'target', version };
   } else {
     throw new Error(
@@ -118,15 +131,21 @@ async function ensureMigrationsTable(dbPool: Pool): Promise<void> {
 
 async function discoverMigrations(): Promise<DiscoveredMigration[]> {
   const entries = await readdir(MIGRATIONS_DIR);
-  const map = new Map<number, { name: string; up?: string; down?: string }>();
+  const map = new Map<number, MigrationSlot>();
 
   for (const entry of entries) {
     const match = MIGRATION_FILE_RE.exec(entry);
     if (!match) continue;
-    const version = Number.parseInt(match[1], 10);
-    const name = match[2];
-    const direction = match[3] as 'up' | 'down';
-    const slot = map.get(version) ?? { name };
+    const [, versionText, name, direction] = match;
+    if (
+      versionText === undefined ||
+      name === undefined ||
+      (direction !== 'up' && direction !== 'down')
+    ) {
+      continue;
+    }
+    const version = Number.parseInt(versionText, 10);
+    const slot: MigrationSlot = map.get(version) ?? { name };
     if (slot.name !== name) {
       throw new Error(
         `Migration version ${version} has inconsistent names: '${slot.name}' vs '${name}'.`,
@@ -255,8 +274,13 @@ async function applyToTarget(
   discovered: ReadonlyArray<DiscoveredMigration>,
   targetVersion: number,
 ): Promise<void> {
+  const maxVersion = discovered.at(-1)?.version ?? 0;
+  if (targetVersion > maxVersion) {
+    throw new Error('Target version exceeds latest available migration.');
+  }
+
   const applied = await listApplied(client);
-  const currentTop = applied.length === 0 ? 0 : applied[applied.length - 1].version;
+  const currentTop = applied.at(-1)?.version ?? 0;
 
   if (targetVersion === currentTop) {
     console.log(`[migrate] target=${targetVersion}: already at this version.`);

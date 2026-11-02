@@ -60,6 +60,22 @@ describe("computeAffectedKeys — Orchestra affectedKeys() parity", () => {
     const resource = { a: null, b: "1" };
     expect(computeAffectedKeys({ a: "x", b: "1" }, resource)).toEqual(["a"]);
   });
+
+  it("compares dotted patch keys as literal persisted keys", () => {
+    const resource = {
+      settings: { theme: "dark" },
+      "settings.theme": "light",
+    };
+    expect(
+      computeAffectedKeys(
+        { "settings.theme": "dark", settings: { theme: "dark" } },
+        resource,
+      ),
+    ).toEqual(["settings.theme"]);
+    expect(
+      computeAffectedKeys({ "settings.theme": "light" }, resource),
+    ).toEqual([]);
+  });
 });
 
 describe("allowFields — verifyUpdateObject parity", () => {
@@ -136,15 +152,32 @@ describe("assertWriteAllowed — fail-closed semantics", () => {
     await expect(assertWriteAllowed(rules, createEval)).rejects.toThrow(
       /protected fields in diff: creator_uuid/,
     );
+    // `status` is deliberately NOT protected on update — Orchestra writes
+    // it through action types (archive/delete/restore); per-action
+    // allowlists regulate it. Audit fields stay protected.
     const updateEval = baseEval({
       action: { type: "card_updated", params: {} },
-      affectedKeys: ["status"],
-      patch: { status: "deleted" },
+      affectedKeys: ["update_version"],
+      patch: { update_version: 99 },
     });
     await expect(assertWriteAllowed(rules, updateEval)).rejects.toThrow(
-      /protected fields in diff: status/,
+      /protected fields in diff: update_version/,
     );
     expect(rules.create).not.toHaveBeenCalled();
+  });
+
+  it("does not interpret a dotted literal key as a protected root field", async () => {
+    const predicate = vi.fn(() => true);
+    const rules: TableWriteRules = { update: { "*": predicate } };
+    await assertWriteAllowed(
+      rules,
+      baseEval({
+        action: { type: "card_updated", params: {} },
+        affectedKeys: ["entity_status.archived"],
+        patch: { "entity_status.archived": true },
+      }),
+    );
+    expect(predicate).toHaveBeenCalledTimes(1);
   });
 
   it("predicate returning false → denied with reason", async () => {
@@ -315,5 +348,47 @@ describe("assertPendingWrites — parallel resource prefetch", () => {
       ),
     ).rejects.toThrow(/no ruleset registered/);
     expect(resource).not.toHaveBeenCalled();
+  });
+});
+
+describe("assertPendingWrites — concurrent cross-document reads", () => {
+  it("memoizes in-flight reads and separates path/id boundary collisions", async () => {
+    const calls: string[] = [];
+    const resource = async (path: string, id: string) => {
+      calls.push(JSON.stringify([path, id]));
+      return { key: JSON.stringify([path, id]) };
+    };
+    const rules: TableWriteRules = {
+      update: {
+        changed: async (ctx) => {
+          const [sameA, sameB, left, right] = await Promise.all([
+            ctx.get?.("a b", "c"),
+            ctx.get?.("a b", "c"),
+            ctx.get?.("a", "b c"),
+            ctx.get?.("a b", "c"),
+          ]);
+          return (
+            sameA === sameB &&
+            sameB === right &&
+            left?.["key"] === JSON.stringify(["a", "b c"]) &&
+            right?.["key"] === JSON.stringify(["a b", "c"])
+          );
+        },
+      },
+    };
+    await assertPendingWrites(
+      [
+        {
+          verb: "update",
+          path: "cards",
+          id: "c-1",
+          patch: {},
+          action: { type: "changed", params: {} },
+        },
+      ],
+      { session: makeSession(), rulesFor: () => rules, resource },
+    );
+    expect(calls).toHaveLength(3);
+    expect(new Set(calls).size).toBe(3);
   });
 });

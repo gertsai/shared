@@ -35,6 +35,12 @@
 
 import type { Session } from "@gertsai/session";
 import { VersionConflictError } from "@gertsai/storage-core";
+import {
+  stampCreate,
+  stampDelete,
+  stampRestore,
+  stampUpdate,
+} from "./write-stamps";
 
 /** Storage verb being evaluated. */
 export type WriteVerb = "create" | "update" | "delete" | "restore" | "destroy";
@@ -44,6 +50,23 @@ export interface WriteRuleAction {
   readonly type: string;
   readonly params: Readonly<Record<string, unknown>>;
 }
+
+/**
+ * Committed-state document reader — the port of Firestore rules `get(path)`.
+ * The `path` argument is opaque to this package: hierarchical collection
+ * paths (`Workspaces/{s}/Space_Members`) and flattened table names both
+ * work — the gate's `resource` callback owns resolution.
+ *
+ * Semantics follow the Firestore contract exactly: the reader observes
+ * COMMITTED state only — writes queued in the same batch/transaction are
+ * invisible (use {@link WriteRuleEval.getAfter} for post-transaction
+ * state). A `get` result never changes between two calls inside one
+ * evaluation, so readers are memoized per gate invocation.
+ */
+export type RuleDocReader = (
+  path: string,
+  id: string,
+) => Promise<Record<string, unknown> | undefined>;
 
 /** Everything a predicate may inspect for one write. */
 export interface WriteRuleEval {
@@ -62,12 +85,9 @@ export interface WriteRuleEval {
    */
   readonly action?: WriteRuleAction;
   /**
-   * Keys whose persisted value actually changes — the caller's patch
-   * diffed against `resource` (Orchestra
-   * `request.data.diff(resource).affectedKeys()`). On create every
-   * supplied key counts; a key written with an identical value does
-   * not. Access/audit fields the stamp adds are excluded — predicates
-   * judge domain fields only.
+   * Keys whose literal persisted value actually changes, compared against
+   * `resource`. On create every supplied key counts; service-added audit
+   * fields are excluded so predicates judge domain fields only.
    */
   readonly affectedKeys: readonly string[];
   /** The caller's domain field map (pre-stamp). Empty on delete/restore. */
@@ -87,6 +107,37 @@ export interface WriteRuleEval {
    * re-enforces the same condition atomically at write time.
    */
   readonly expectedVersion?: number;
+  /**
+   * `request.time` port — the server-side stamp for this evaluation.
+   * One value per gate invocation (`assertPendingWrites` stamps it once
+   * for the whole batch, matching Firestore's per-request semantics).
+   * Predicates use it for expiry checks (`invites.expire_at > now`) and
+   * `update_action.timestamp` equality. Defaults to the wall clock when
+   * the caller didn't supply one.
+   */
+  readonly now?: Date;
+  /**
+   * `request.auth.token` port — decoded JWT claims attached to the
+   * operator session (`admin`, tenant flags, ...). Empty object when the
+   * caller carried none; predicates must treat absence as "no claims"
+   * (fail-closed).
+   */
+  readonly claims?: Readonly<Record<string, unknown>>;
+  /**
+   * `get(path)` port — committed read of an arbitrary document (the
+   * `getChat(space_uid)`/`getMember(space)` pattern Orchestra rules use
+   * for cross-document authorization). Undefined when the gate was built
+   * without a resource reader; predicates needing it deny.
+   */
+  readonly get?: RuleDocReader;
+  /**
+   * `getAfter(path)` port — the document as it will exist after every
+   * pending write in this batch applies (committed state folded with
+   * queued creates/updates/deletes, in order). Used by rules that assert
+   * post-transaction invariants on sibling documents. Undefined when no
+   * batch reader is wired; predicates needing it deny.
+   */
+  readonly getAfter?: RuleDocReader;
 }
 
 /** Rule predicate — `true` allows the write. May be async. */
@@ -205,15 +256,17 @@ export const PROTECTED_AUDIT_FIELDS: readonly string[] = [
  * Fields additionally protected on **update**: identity and lifecycle
  * columns that callers may legitimately write on create (`id`,
  * `created_at`, `updated_at` sit inside `WriteShape`) but can never
- * patch later. `entity_status`/`status` are lifecycle-owned on every
- * verb (the delete/restore stamps own transitions).
+ * patch later. `entity_status` is stamp-owned on every verb (the
+ * delete/restore stamps own its transitions). `status` is deliberately
+ * NOT here: in the Orchestra model it is a domain field written through
+ * action-gated updates (`archive`/`delete`/`restore` actions), so each
+ * action's field allowlist decides whether status may move.
  */
 export const PROTECTED_UPDATE_FIELDS: readonly string[] = [
   ...PROTECTED_AUDIT_FIELDS,
   "_uid",
   "id",
   "entity_status",
-  "status",
   "created_at",
   "updated_at",
   "update_version",
@@ -241,19 +294,21 @@ function valuesDiffer(a: unknown, b: unknown): boolean {
   }
 }
 
-/**
- * Compute Orchestra-style `affectedKeys`: patch keys whose value
- * differs from the stored doc. Missing `resource` → every patch key is
- * treated as affected (a write against a nonexistent row still names
- * the fields it tried to set).
- */
+/** Dotted patch keys are literal persisted keys, not field paths. */
 export function computeAffectedKeys(
   patch: Readonly<Record<string, unknown>>,
   resource: Record<string, unknown> | undefined,
 ): string[] {
-  return Object.keys(patch).filter(
-    (k) => resource === undefined || valuesDiffer(patch[k], resource[k]),
-  );
+  const affected: string[] = [];
+  for (const key of Object.keys(patch)) {
+    if (
+      resource === undefined ||
+      valuesDiffer(patch[key], resource[key])
+    ) {
+      affected.push(key);
+    }
+  }
+  return affected;
 }
 
 /**
@@ -284,8 +339,10 @@ function resolvePredicate(
 ): WriteRulePredicate | undefined {
   if (rules === undefined) return undefined;
   if (typeof rules === "function") return rules;
-  if (actionType === undefined) return undefined;
-  return rules[actionType] ?? rules["*"];
+  if (actionType !== undefined && Object.hasOwn(rules, actionType)) {
+    return rules[actionType];
+  }
+  return Object.hasOwn(rules, "*") ? rules["*"] : undefined;
 }
 
 /**
@@ -326,13 +383,18 @@ export async function assertWriteAllowed(
   onDenied?: WriteDenialObserver,
 ): Promise<void> {
   if (rules === undefined) return;
+  // `request.time` parity — the stamp defaults to the wall clock so a
+  // standalone caller never hands predicates an undefined `now`.
+  if (ctx.now === undefined) {
+    ctx = { ...ctx, now: new Date() };
+  }
 
-  // Guard 1 — protected fields can never ride a caller's diff.
+  // Guard 1 — protected persisted keys can never ride a caller's diff.
   if (ctx.verb === "update" || ctx.verb === "create") {
     const protectedSet =
       ctx.verb === "update" ? PROTECTED_UPDATE_FIELDS : PROTECTED_CREATE_FIELDS;
-    const illegal = Object.keys(ctx.patch).filter((k) =>
-      (protectedSet as readonly string[]).includes(k),
+    const illegal = Object.keys(ctx.patch).filter((key) =>
+      (protectedSet as readonly string[]).includes(key),
     );
     if (illegal.length > 0) {
       const err = new WriteRuleDenied(
@@ -432,17 +494,13 @@ export interface PendingWrite {
   readonly id: string;
   /** The caller's pre-stamp field map (`set` body / `update` partial). */
   readonly patch: Readonly<Record<string, unknown>>;
-  /**
-   * The caller-supplied `update_action`, when given. Lifecycle verbs
-   * omit it — the evaluator supplies the stamped type (`delete`,
-   * `restore`, `create`) so action-keyed rules resolve identically to
-   * the single-document path.
-   */
+  /** The caller-supplied journal; lifecycle verbs may omit it. */
   readonly action?: WriteRuleAction;
-  /**
-   * Caller-declared ETag — forwarded to the eval and to the raw
-   * runner's atomic `WHERE update_version = $n` at flush.
-   */
+  /** Exact persisted payload after service audit/lifecycle stamping. */
+  readonly persistedData?: Readonly<Record<string, unknown>>;
+  /** Set merge behavior; omitted follows provider defaults. */
+  readonly merge?: boolean;
+  /** Caller-declared ETag forwarded to the raw runner's atomic check. */
   readonly expectedVersion?: number;
 }
 
@@ -454,14 +512,26 @@ export interface PendingWriteGate {
   readonly rulesFor: (path: string) => TableWriteRules | undefined;
   /**
    * Committed-state row reader (`provider.getDoc`). Supplies `resource`
-   * for update/delete/restore evals and the create-existence check.
+   * for update/delete/restore evals and the create-existence check —
+   * and backs `ctx.get`/`ctx.getAfter` for cross-document rules.
    * Omit to evaluate without `resource` (weaker: `affectedKeys` falls
-   * back to full patch keys, params-vs-resource checks degrade).
+   * back to full patch keys, params-vs-resource checks degrade, and
+   * rules needing `get`/`getAfter` deny).
    */
   readonly resource?: (
     path: string,
     id: string,
   ) => Promise<Record<string, unknown> | undefined>;
+  /**
+   * `request.auth.token` claims forwarded to every eval (`admin`, ...).
+   * One gate invocation = one caller = one claims set.
+   */
+  readonly claims?: Readonly<Record<string, unknown>>;
+  /**
+   * `request.time` — stamped once and shared across every eval in this
+   * batch. Defaults to `new Date()` at gate entry.
+   */
+  readonly now?: Date;
   /**
    * What a write to a path with no registered ruleset does.
    * `'skip'` (default) preserves the engine's opt-in semantics —
@@ -476,6 +546,55 @@ export interface PendingWriteGate {
    * and version conflicts surfaced inside the gate.
    */
   readonly onDenied?: WriteDenialObserver;
+}
+
+/**
+ * Fold a queued write into its post-transaction image. Exact service
+ * stamps win; legacy raw entries receive lifecycle stamps once here.
+ */
+export function foldPendingWrite(
+  resource: Record<string, unknown> | undefined,
+  write: PendingWrite,
+  session: Session,
+): Record<string, unknown> | undefined {
+  if (write.verb === "destroy") return undefined;
+  if (
+    (write.verb === "delete" || write.verb === "restore") &&
+    resource === undefined
+  ) {
+    return undefined;
+  }
+
+  let data: Record<string, unknown>;
+  if (write.persistedData !== undefined) {
+    data = { ...write.persistedData };
+  } else {
+    switch (write.verb) {
+      case "create":
+        data = stampCreate(write.patch, session, write.id);
+        break;
+      case "update":
+        data = stampUpdate(write.patch, session, write.action);
+        break;
+      case "delete":
+        data = stampDelete(session, write.action);
+        break;
+      case "restore":
+        data = stampRestore(session);
+        break;
+    }
+  }
+
+  const currentVersion = resource?.["update_version"];
+  if (typeof currentVersion === "number") {
+    data["update_version"] = currentVersion + 1;
+  }
+  if (write.verb === "create") {
+    if (resource === undefined) return data;
+    return write.merge === false ? data : { ...resource, ...data };
+  }
+  if (resource === undefined) return undefined;
+  return { ...resource, ...data };
 }
 
 /**
@@ -508,23 +627,72 @@ export async function assertPendingWrites(
   // remote store). Deduped by (path,id) — repeated writes to one row
   // share the read. Semantics unchanged: reads still observe committed
   // pre-commit state; the provider's atomic guard owns the last word.
-  const resources = new Map<string, Record<string, unknown> | undefined>();
-  const resKey = (path: string, id: string) => `${path} ${id}`;
+  const resources = new Map<
+    string,
+    Promise<Record<string, unknown> | undefined>
+  >();
+  const resKey = (path: string, id: string) => JSON.stringify([path, id]);
   if (gate.resource !== undefined) {
     const read = gate.resource;
-    const wanted = new Map<string, PendingWrite>();
-    for (const w of pending) {
-      if (gate.rulesFor(w.path) === undefined) continue;
-      const key = resKey(w.path, w.id);
-      if (!wanted.has(key)) wanted.set(key, w);
+    const wanted = new Map<string, { path: string; id: string }>();
+    for (const write of pending) {
+      if (gate.rulesFor(write.path) === undefined) continue;
+      const key = resKey(write.path, write.id);
+      if (!wanted.has(key)) wanted.set(key, { path: write.path, id: write.id });
     }
     await Promise.all(
-      [...wanted.values()].map(async (w) => {
-        const row = (await read(w.path, w.id)) ?? undefined;
-        resources.set(resKey(w.path, w.id), row);
+      [...wanted.entries()].map(([key, target]) => {
+        const promise = read(target.path, target.id).then((row) => row ?? undefined);
+        resources.set(key, promise);
+        return promise;
       }),
     );
   }
+
+  const batchNow = gate.now ?? new Date();
+  const get: RuleDocReader | undefined =
+    gate.resource === undefined
+      ? undefined
+      : (path, id) => {
+          const key = resKey(path, id);
+          let promise = resources.get(key);
+          if (promise === undefined) {
+            promise = gate.resource!(path, id).then((row) => row ?? undefined);
+            resources.set(key, promise);
+          }
+          return promise;
+        };
+
+  let getAfter: RuleDocReader | undefined;
+  if (get !== undefined) {
+    const pendingByKey = new Map<string, PendingWrite[]>();
+    for (const write of pending) {
+      const key = resKey(write.path, write.id);
+      const list = pendingByKey.get(key);
+      if (list === undefined) pendingByKey.set(key, [write]);
+      else list.push(write);
+    }
+    const postCache = new Map<
+      string,
+      Promise<Record<string, unknown> | undefined>
+    >();
+    getAfter = (path, id) => {
+      const key = resKey(path, id);
+      let promise = postCache.get(key);
+      if (promise === undefined) {
+        promise = (async () => {
+          let current = await get(path, id);
+          for (const write of pendingByKey.get(key) ?? []) {
+            current = foldPendingWrite(current, write, gate.session);
+          }
+          return current;
+        })();
+        postCache.set(key, promise);
+      }
+      return promise;
+    };
+  }
+
   for (const w of pending) {
     const rules = gate.rulesFor(w.path);
     if (rules === undefined) {
@@ -538,7 +706,7 @@ export async function assertPendingWrites(
       }
       continue;
     }
-    const resource = resources.get(resKey(w.path, w.id));
+    const resource = await resources.get(resKey(w.path, w.id));
     if (w.verb === "create" && resource !== undefined) {
       const err = new WriteRuleDenied(
         { path: w.path, id: w.id, verb: w.verb },
@@ -559,6 +727,10 @@ export async function assertPendingWrites(
         path: w.path,
         id: w.id,
         session: gate.session,
+        now: batchNow,
+        claims: gate.claims ?? {},
+        ...(get !== undefined ? { get } : {}),
+        ...(getAfter !== undefined ? { getAfter } : {}),
         ...(action !== undefined ? { action } : {}),
         affectedKeys:
           w.verb === "create"

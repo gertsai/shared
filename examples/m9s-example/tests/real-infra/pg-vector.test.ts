@@ -3,9 +3,9 @@
  * Real-infra test — PgVectorStore + PgDocumentRepository against a live
  * Postgres + pgvector instance (Sprint 3.11 W-3-11-8).
  *
- * Env-gated per ADR-011 I-5: skipped unless `PGVECTOR_E2E=1` and
- * `POSTGRES_URL` are both set. Locally the docker-compose.yml in this
- * package brings up `pgvector/pgvector:pg16` listening on `:5432`.
+ * Enabled by `VITEST_REAL_INFRA=1` or `PGVECTOR_E2E=1`. Enabled runs require
+ * `POSTGRES_URL`; locally docker-compose.yml brings up `pgvector/pgvector:pg16`
+ * listening on `:5432`.
  *
  * Coverage:
  *   1. Round-trip: ingest a document + chunks → search returns the chunk
@@ -15,6 +15,8 @@
  *   3. Update path: re-saving a document overwrites the row without
  *      duplicating tuples.
  *   4. Cosine ordering: nearer vectors score higher than farther ones.
+ *   5. Tombstones: deleted docs are hidden from reads/list/count while their
+ *      raw row remains and the other tenant is unaffected.
  *
  * Migrations are assumed applied: the suite errors loudly if `documents`
  * or `chunks` is missing rather than silently creating ad-hoc DDL.
@@ -23,19 +25,29 @@ import { randomUUID } from 'node:crypto';
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 
+import { asTenantId, type TenantId } from '@gertsai/tenant';
+
 import { PgClientAdapter } from '../../src/infrastructure/pg-client.adapter';
 import { PgDocumentRepository } from '../../src/infrastructure/pg-document.repository';
 import { PgVectorStore } from '../../src/infrastructure/pg-vector.store';
 
-const SHOULD_RUN = process.env.PGVECTOR_E2E === '1' && Boolean(process.env.POSTGRES_URL);
+const ENABLED =
+  process.env['VITEST_REAL_INFRA'] === '1' ||
+  process.env['PGVECTOR_E2E'] === '1';
 
-const describeOrSkip = SHOULD_RUN ? describe : describe.skip;
+if (ENABLED && !process.env.POSTGRES_URL) {
+  throw new Error(
+    'POSTGRES_URL is required when real-infra verification is enabled.',
+  );
+}
+
+const describeOrSkip = ENABLED ? describe : describe.skip;
 
 describeOrSkip('real-infra :: PgVectorStore + PgDocumentRepository', () => {
-  const url = process.env.POSTGRES_URL ?? '';
+  const url = process.env.POSTGRES_URL!;
   let pgClient: PgClientAdapter;
-  const TENANT_A = 'tenant-test-a';
-  const TENANT_B = 'tenant-test-b';
+  const TENANT_A = asTenantId('tenant-test-a');
+  const TENANT_B = asTenantId('tenant-test-b');
 
   beforeAll(async () => {
     pgClient = new PgClientAdapter({ connectionString: url });
@@ -61,7 +73,7 @@ describeOrSkip('real-infra :: PgVectorStore + PgDocumentRepository', () => {
     await pgClient.$executeRaw`DELETE FROM documents WHERE tenant_id IN (${TENANT_A}, ${TENANT_B})`;
   });
 
-  function makeStores(tenantId: string) {
+  function makeStores(tenantId: TenantId) {
     const docs = new PgDocumentRepository({
       client: pgClient,
       tenantId,
@@ -160,5 +172,38 @@ describeOrSkip('real-infra :: PgVectorStore + PgDocumentRepository', () => {
     expect(hits.length).toBe(2);
     expect(hits[0].chunkIdx).toBe(0);
     expect(hits[0].score).toBeGreaterThan(hits[1].score);
+  });
+
+  it('hides a tombstone from document reads, list, and count without affecting another tenant', async () => {
+    const aStores = makeStores(TENANT_A);
+    const bStores = makeStores(TENANT_B);
+    const deletedDocId = randomUUID();
+    const activeDocId = randomUUID();
+    const otherTenantDocId = randomUUID();
+
+    await aStores.docs.save({ id: deletedDocId, text: 'deleted document', metadata: {} });
+    await aStores.docs.save({ id: activeDocId, text: 'active document', metadata: {} });
+    await bStores.docs.save({ id: otherTenantDocId, text: 'other tenant document', metadata: {} });
+
+    await aStores.docs.softDelete(deletedDocId);
+
+    expect(await aStores.docs.findById(deletedDocId)).toBeNull();
+    expect((await aStores.docs.listSummaries()).map((doc) => doc.id)).toEqual([activeDocId]);
+    expect(await aStores.docs.count()).toBe(1);
+
+    const deletedRows = await pgClient.$queryRaw<{
+      deleted_at: Date | null;
+    }>`
+      SELECT deleted_at
+        FROM documents
+       WHERE id = ${deletedDocId}
+         AND tenant_id = ${TENANT_A}
+    `;
+    expect(deletedRows).toHaveLength(1);
+    expect(deletedRows[0].deleted_at).not.toBeNull();
+
+    expect((await bStores.docs.findById(otherTenantDocId))?.id).toBe(otherTenantDocId);
+    expect((await bStores.docs.listSummaries()).map((doc) => doc.id)).toEqual([otherTenantDocId]);
+    expect(await bStores.docs.count()).toBe(1);
   });
 });
