@@ -4,12 +4,20 @@ on:
   workflow_dispatch:
     inputs:
       expected_sha:
-        description: Exact 40-character main commit SHA to publish
+        description: Exact 40-character main commit SHA to preview or publish
         required: true
         type: string
       confirmation:
-        description: Type PUBLISH to authorize this publication
+        description: PREVIEW is read-only; PUBLISH requires owner approval of the exact preview plan
         required: true
+        default: PREVIEW
+        type: choice
+        options:
+          - PREVIEW
+          - PUBLISH
+      expected_plan_sha256:
+        description: Copy the approved PREVIEW plan SHA-256 when choosing PUBLISH
+        required: false
         type: string
 
 concurrency:
@@ -20,17 +28,88 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
+  preview:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      plan_sha256: ${{ steps.preview.outputs.plan_sha256 }}
+      has_releases: ${{ steps.preview.outputs.has_releases }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://npm.pkg.github.com
+          scope: '@gertsai'
+
+      - name: Verify exact preview commit
+        uses: actions/github-script@v7
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        with:
+          script: |
+            const { verifyCandidate } = require('./.github/scripts/release-plan.cjs');
+            await verifyCandidate({ github, context, expectedSha: process.env.EXPECTED_SHA });
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Generate native read-only publication plan
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLISH_PLAN_PATH: ${{ runner.temp }}/publish-plan.json
+        run: pnpm changeset publish-plan --output "$PUBLISH_PLAN_PATH"
+
+      - name: Describe exact owner approval scope
+        id: preview
+        uses: actions/github-script@v7
+        env:
+          PUBLISH_PLAN_PATH: ${{ runner.temp }}/publish-plan.json
+        with:
+          script: |
+            const { describePlan } = require('./.github/scripts/release-plan.cjs');
+            await describePlan({ core, planPath: process.env.PUBLISH_PLAN_PATH, candidateSha: context.sha });
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: changesets-preview-${{ github.sha }}
+          path: ${{ runner.temp }}/publish-plan.json
+          retention-days: 7
+
   publish:
+    needs: preview
+    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'PUBLISH' && needs.preview.outputs.has_releases == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
       packages: write
       actions: read
     steps:
+      - name: Validate owner-approved publication plan
+        uses: actions/github-script@v7
+        env:
+          EXPECTED_PLAN_SHA256: ${{ inputs.expected_plan_sha256 }}
+          ACTUAL_PLAN_SHA256: ${{ needs.preview.outputs.plan_sha256 }}
+        with:
+          script: |
+            const expected = process.env.EXPECTED_PLAN_SHA256;
+            if (!/^[0-9a-f]{64}$/i.test(expected) || expected.toLowerCase() !== process.env.ACTUAL_PLAN_SHA256) {
+              throw new Error('Approved publication plan is missing or changed; review PREVIEW and approve its exact plan SHA-256.');
+            }
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
+          persist-credentials: false
 
       - uses: pnpm/action-setup@v4
 
@@ -76,21 +155,55 @@ jobs:
 
       - run: pnpm run depcruise
 
+      - name: Refresh the native publication plan after checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLISH_PLAN_PATH: ${{ runner.temp }}/publish-plan.json
+        run: pnpm changeset publish-plan --output "$PUBLISH_PLAN_PATH"
+
+      - name: Verify refreshed approval before packing
+        uses: actions/github-script@v7
+        env:
+          EXPECTED_PLAN_SHA256: ${{ inputs.expected_plan_sha256 }}
+          PUBLISH_PLAN_PATH: ${{ runner.temp }}/publish-plan.json
+        with:
+          script: |
+            const { describePlan, requireApprovedPlan } = require('./.github/scripts/release-plan.cjs');
+            const plan = await describePlan({ core, planPath: process.env.PUBLISH_PLAN_PATH, candidateSha: context.sha, summary: false });
+            requireApprovedPlan(process.env.EXPECTED_PLAN_SHA256, plan.sha256);
+
+      - name: Pack only the approved native publication plan
+        env:
+          PUBLISH_PLAN_PATH: ${{ runner.temp }}/publish-plan.json
+          RELEASE_PACK_DIR: ${{ runner.temp }}/release-pack
+        run: pnpm changeset pack --from-publish-plan "$PUBLISH_PLAN_PATH" --out-dir "$RELEASE_PACK_DIR"
+
+      - name: Refresh Changesets status after packing
+        env:
+          CHANGESET_STATUS_PATH: ${{ runner.temp }}/changesets-status.json
+        run: pnpm changeset status --output "$CHANGESET_STATUS_PATH"
+
       - name: Re-check publication preflight immediately before publishing
         uses: actions/github-script@v7
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
           RELEASE_CONFIRMATION: ${{ inputs.confirmation }}
           CHANGESET_STATUS_PATH: ${{ runner.temp }}/changesets-status.json
+          EXPECTED_PLAN_SHA256: ${{ inputs.expected_plan_sha256 }}
+          PACKED_PLAN_PATH: ${{ runner.temp }}/release-pack/publish-plan.json
         with:
           script: |
+            const { describePlan, requireApprovedPlan } = require('./.github/scripts/release-plan.cjs');
+            const plan = await describePlan({ core, planPath: process.env.PACKED_PLAN_PATH, candidateSha: context.sha, summary: false, packed: true });
+            requireApprovedPlan(process.env.EXPECTED_PLAN_SHA256, plan.sha256);
             const validate = require('./.github/scripts/release-preflight.cjs');
             await validate({ github, context, core, statusPath: process.env.CHANGESET_STATUS_PATH });
 
       - name: Publish packages and create GitHub releases
-        uses: changesets/action@v1
+        uses: changesets/action/publish@v2.1.2
         with:
-          publish: pnpm changeset publish
+          script: pnpm changeset publish --from-pack-dir "${{ runner.temp }}/release-pack"
+          create-github-releases: true
+          push-git-tags: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

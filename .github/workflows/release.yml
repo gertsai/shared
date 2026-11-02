@@ -34,21 +34,34 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Create or update the release pull request
-        id: changesets
-        uses: changesets/action@v1
-        with:
-          version: pnpm run version:packages
-          commit: 'chore: release packages'
-          title: 'chore: release packages'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Dispatch CI for the generated release pull request
-        if: steps.changesets.outputs.pullRequestNumber != ''
+      - name: Detect pending version intent without querying a registry
+        id: intent
         uses: actions/github-script@v7
         env:
-          RELEASE_PR_NUMBER: ${{ steps.changesets.outputs.pullRequestNumber }}
+          VERSION_STATUS_PATH: ${{ runner.temp }}/version-status.json
+        with:
+          script: |
+            const { execFileSync } = require('node:child_process');
+            const fs = require('node:fs');
+            execFileSync('pnpm', ['changeset', 'status', '--output', process.env.VERSION_STATUS_PATH], { stdio: 'inherit' });
+            const status = JSON.parse(fs.readFileSync(process.env.VERSION_STATUS_PATH, 'utf8'));
+            if (!Array.isArray(status.changesets)) throw new Error('Malformed version-intent status.');
+            return status.changesets.length > 0;
+
+      - name: Create or update the release pull request
+        if: steps.intent.outputs.result == 'true'
+        id: changesets
+        uses: changesets/action/version@v2.1.2
+        with:
+          script: pnpm run version:packages
+          commit-message: 'chore: release packages'
+          pr-title: 'chore: release packages'
+
+      - name: Dispatch CI for the generated release pull request
+        if: steps.changesets.outputs.pr-number != ''
+        uses: actions/github-script@v7
+        env:
+          RELEASE_PR_NUMBER: ${{ steps.changesets.outputs.pr-number }}
         with:
           script: |
             const pullNumber = Number(process.env.RELEASE_PR_NUMBER);

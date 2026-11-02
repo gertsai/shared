@@ -22,20 +22,32 @@ Use `pnpm run changeset:status --since=origin/main` to review the proposed relea
 
 After changes land on `main`, `.github/workflows/release.yml` creates or updates the `chore: release packages` version PR and explicitly dispatches CI on its head. This avoids depending on bot-triggered workflow events or their approval prompts. A maintainer reviews the generated versions, changelogs, and internal dependency propagation, and requires CI before merging. Merging this version PR does **not** publish packages.
 
-Publishing is a separate, explicitly gated action. Dispatch `.github/workflows/publish.yml` from `main` with `expected_sha` set to the exact current 40-character `main` commit SHA and `confirmation` set to `PUBLISH`. The equivalent convenience command is:
+Publishing is a separate, explicitly gated action. First inspect the real registry plan at the exact current `main` commit:
 
 ```sh
-pnpm release -f expected_sha=<full-40-character-sha> -f confirmation=PUBLISH
+SHA=$(gh api repos/gertsai/shared/commits/main --jq .sha)
+pnpm release -f expected_sha="$SHA" -f confirmation=PREVIEW
 ```
 
-The command only dispatches the workflow; it does not publish locally. The workflow requires the expected SHA to remain the current `main` SHA, the latest main push CI run at that SHA to have succeeded, and no pending changesets or release-plan entries. Unpublished registry versions are expected at this point; the empty Changesets plan means version preparation is complete. The workflow rechecks its guards immediately before publishing.
+PREVIEW uses `packages: read`, cannot publish, and produces a summary plus a `changesets-preview-<sha>` artifact. Review every candidate and the plan SHA-256. The version PR is not the complete publication set: Changesets can publish any public workspace version absent from the registry. A 404 can mean a new package or insufficient package access, so do not interpret it as proof the registry is empty.
 
-The current registry is GitHub Packages. Publishing credentials are limited to the publish workflow, which uses `GITHUB_TOKEN` with `packages: write`; no PAT or GitHub App setup is required. Changesets' `access` setting does not make GitHub Packages visible publicly: package visibility is configured separately. Moving to public npm requires a separately approved registry and authentication change; it is not part of this process.
+After explicit owner approval of every listed package/version, set `APPROVED_PLAN_SHA256` to the reviewed preview digest:
 
-Publishing cannot be undone by reverting Git. Never overwrite published versions or force-update tags. If a publish partially succeeds, inspect which package versions actually published. Re-dispatch for the same SHA only if all gates still pass and the publishing code is unchanged; Changesets checks existing versions. If code changed, prepare a new version instead of retrying the old release.
+```sh
+pnpm release -f expected_sha="$SHA" -f confirmation=PUBLISH -f expected_plan_sha256="$APPROVED_PLAN_SHA256"
+```
+
+The command only dispatches Actions; it does not publish locally. Publication requires the exact current `main` SHA, successful latest main push CI, no pending changesets or release-plan entries, and the same approved package/version/access/dist-tag/registry digest. The workflow refreshes the native registry plan after its checks, packs only that approved plan, then revalidates the packed intent and fresh Changesets status. `publish --from-pack-dir` consumes those tarballs instead of discovering additional publishable packages.
+
+The root toolchain pins Changesets CLI 3.0.3 and Action 2.1.2; both preview and publish use the same CLI because native plan JSON is experimental across versions. The version-only Action runs only when local changeset intent exists and never enters publication mode. No hand-written registry client or new long-lived credential is used.
+
+The current registry is GitHub Packages. Preview uses the repository `GITHUB_TOKEN` with `packages: read`; publishing uses `packages: write`. No PAT or GitHub App setup is required, but existing packages must grant this repository Actions access. Visibility is separate from Changesets `access`. Public npm requires a separately approved registry/authentication migration.
+
+Publishing cannot be undone by reverting Git. Never overwrite versions or force-update tags. After partial success, inspect actual registry state, run PREVIEW again and obtain approval for the remaining versions/new digest. Retry the same SHA only if all gates still pass and the publishing code is unchanged; changed code requires a new version.
 
 ## Official references
 
-- [Changesets Action v1](https://github.com/changesets/action/tree/v1)
+- [Changesets Action 2.1.2](https://github.com/changesets/action/tree/v2.1.2)
+- [Native publish-plan, pack and publish commands](https://changesets.dev/guide/cli#publish-plan)
 - [Changesets configuration](https://changesets.dev/guide/config)
 - [GitHub: events that trigger workflows and `GITHUB_TOKEN`](https://docs.github.com/en/actions/using-workflows/triggering-a-workflow#triggering-a-workflow-from-a-workflow)
