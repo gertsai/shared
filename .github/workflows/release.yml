@@ -1,65 +1,82 @@
 name: Release
 
-# Publishes @gertsai/* packages to GitHub Packages (the private registry
-# scoped to this repo's owner). Use this for internal testing across
-# multiple projects before any public npm publish.
-#
-# Switch to public npm by:
-#   1. Changing publishConfig.registry in each package.json to
-#      https://registry.npmjs.org  (or removing the field entirely).
-#   2. Replacing the registry-url + NODE_AUTH_TOKEN below with the npm
-#      registry + secrets.NPM_TOKEN.
-# (Tracked in README → Publishing section.)
-
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
-concurrency: ${{ github.workflow }}-${{ github.ref }}
+concurrency:
+  group: changesets-release-${{ github.repository }}
+  cancel-in-progress: false
 
-# Opt into Node.js 24 for JavaScript actions (actions/checkout, actions/
-# setup-node, pnpm/action-setup) so they don't emit the Node 20 deprecation
-# warning. GitHub forces Node 24 by default starting 2026-06-02 and removes
-# Node 20 entirely on 2026-09-16 — this env makes us future-proof.
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
-permissions:
-  contents: write
-  pull-requests: write
-  id-token: write
-  packages: write
-
 jobs:
-  release:
+  version:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10.29.2
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@gertsai'
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm build
-
-      - name: Create Release Pull Request or Publish
+      - name: Create or update the release pull request
+        id: changesets
         uses: changesets/action@v1
         with:
-          publish: pnpm changeset publish
-          version: pnpm changeset version
+          version: pnpm run version:packages
           commit: 'chore: release packages'
           title: 'chore: release packages'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Dispatch CI for the generated release pull request
+        if: steps.changesets.outputs.pullRequestNumber != ''
+        uses: actions/github-script@v7
+        env:
+          RELEASE_PR_NUMBER: ${{ steps.changesets.outputs.pullRequestNumber }}
+        with:
+          script: |
+            const pullNumber = Number(process.env.RELEASE_PR_NUMBER);
+            if (!Number.isSafeInteger(pullNumber) || pullNumber <= 0) {
+              core.setFailed('Changesets returned an invalid pull request number.');
+              return;
+            }
+
+            const { owner, repo } = context.repo;
+            const { data: pull } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: pullNumber,
+            });
+            if (
+              pull.base?.repo?.full_name !== `${owner}/${repo}` ||
+              pull.base?.ref !== 'main' ||
+              pull.head?.repo?.full_name !== `${owner}/${repo}` ||
+              pull.head?.ref !== 'changeset-release/main' ||
+              !pull.head?.sha
+            ) {
+              core.setFailed('Changesets PR repository, base, or branch did not match the expected release PR.');
+              return;
+            }
+
+            await github.rest.actions.createWorkflowDispatch({
+              owner,
+              repo,
+              workflow_id: 'ci.yml',
+              ref: pull.head.ref,
+            });
