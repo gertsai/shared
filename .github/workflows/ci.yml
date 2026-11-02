@@ -36,6 +36,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Test publication approval boundaries
+        run: pnpm exec vitest run --dir .github/scripts
+
       - name: Fetch main for pull request comparison
         run: git fetch origin main
 

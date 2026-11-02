@@ -104,8 +104,10 @@ registry and authentication change and has not been performed.
 Contributors add changesets for consumer-facing package changes. After merge to
 `main`, the release bot opens or updates a version PR; maintainers review its
 generated versions and changelogs and require CI before merging. Merging that
-PR prepares versions but does **not** publish them. Publishing requires a
-separate guarded workflow dispatch from `main`.
+PR prepares versions but does **not** publish them. Run the guarded workflow
+from `main` in read-only `PREVIEW` mode first. Publishing then requires owner
+approval of the exact listed versions, the preview plan SHA-256 and the tested
+`main` commit. The publisher uses only tarballs packed from that approved plan.
 
 See the [Changesets guide](./.changeset/README.md) for bump selection, review
 and verification commands, the explicit publish gate, and partial-publish

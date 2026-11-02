@@ -32,14 +32,25 @@ infrastructure packages used across the gerts.ai ecosystem.
    This avoids relying on bot-generated events to trigger ordinary workflows.
 7. A maintainer reviews versions, changelogs and internal dependency propagation,
    and requires green CI before merging the version PR. This does **not** publish.
-8. Publish separately from `main`, using the exact current 40-character SHA:
+8. Inspect the real registry publication plan before approving a release:
    ```sh
-   pnpm release -f expected_sha=<full-40-character-sha> -f confirmation=PUBLISH
+   SHA=$(gh api repos/gertsai/shared/commits/main --jq .sha)
+   pnpm release -f expected_sha="$SHA" -f confirmation=PREVIEW
    ```
-   This dispatches `publish.yml`; it does not publish locally. The workflow
-   requires that SHA to match current `main`, the latest main push CI to have
-   succeeded at that SHA, and no pending changesets or release-plan entries.
-   It rechecks immediately before publishing.
+   `publish.yml` uses read-only package permissions for preview. Review its
+   summary and `changesets-preview-<sha>` artifact: the publish set can include
+   packages beyond the version PR when a local version is absent from the
+   registry. A registry 404 can also mean insufficient package access.
+9. After explicit owner approval of every listed package/version, set
+   `APPROVED_PLAN_SHA256` to the digest from that reviewed preview and dispatch:
+   ```sh
+   pnpm release -f expected_sha="$SHA" -f confirmation=PUBLISH -f expected_plan_sha256="$APPROVED_PLAN_SHA256"
+   ```
+   The workflow requires current `main`, successful latest main push CI, an
+   empty Changesets status and the same approval digest. Native Changesets
+   `pack`/`publish --from-pack-dir` limit publication to the approved plan.
+   Registry state, packed intent and Changesets status are checked again after
+   build/test/type/lint/package checks; a changed plan requires fresh approval.
 
 The current registry is GitHub Packages. The publishing step uses the
 repository's `GITHUB_TOKEN` with `packages: write`; no new PAT or GitHub App is
@@ -47,16 +58,16 @@ required. Visibility is configured separately from Changesets' `access` option.
 Public npm requires a separately approved registry/authentication migration.
 
 Publishing cannot be undone by reverting Git. If a publish partially succeeds,
-inspect actual published versions. Re-dispatch the same SHA only if all guards
-still pass and the publishing code is unchanged; Changesets checks existing
-versions. Changed code requires a new version. Never overwrite published
-versions or force-update tags.
+inspect actual registry state, run PREVIEW again and obtain approval for the
+remaining versions/new digest. Retry the same SHA only if all guards pass and
+publishing code is unchanged. Changed code requires a new version. Never
+overwrite published versions or force-update tags.
 
 See the [Changesets guide](./.changeset/README.md) for details and official sources.
 
 ## Local toolchain
 
-- Node ≥ 22 LTS
+- Node 22.13+ LTS, Node 24 LTS, or Node 26+ for root release tooling
 - pnpm 10.x
 - TypeScript 5.9+
 - (Optional) [moonrepo](https://moonrepo.dev) — `pnpm dlx @moonrepo/cli` exposes
