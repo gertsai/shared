@@ -71,7 +71,7 @@ jobs:
           REPO_FULL: ${{ github.repository }}
         run: |
           # Extract repo name (everything after the last slash) for the Pages
-          # subpath. Read from shell env, never inline ${{ }} into run: scripts
+          # subpath. Read from shell env, never inline Actions expressions into scripts
           # (workflow-injection-safe pattern).
           REPO_NAME="${REPO_FULL##*/}"
           printf 'BASE_URL=/%s/\n' "$REPO_NAME" >> "$GITHUB_OUTPUT"
