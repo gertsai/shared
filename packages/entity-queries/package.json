@@ -1,6 +1,6 @@
 {
   "name": "@gertsai/entity-queries",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Validated entity read-path — loadOne/loadPage/loadUids with guard hook, safe-query policy (op/field whitelist, pinned scope, limit cap), soft-delete lifecycle predicate and server-field stripping. Backend-agnostic over IStorageProvider. Per RFC-024 (Fluxis merge).",
   "license": "Apache-2.0",
   "type": "module",
