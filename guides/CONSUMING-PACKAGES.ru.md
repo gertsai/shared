@@ -2,10 +2,10 @@
 
 Как использовать `@gertsai/*` пакеты из этого репозитория в **другом** проекте.
 
-> **Контекст**: пакеты публикуются в **GitHub Packages** (npm registry,
-> scoped к owner org `gertsai`). Не на public npm — это намеренно (pre-v1.0,
-> internal testing across multiple projects). После v1.0 будет миграция на
-> public npm registry (см. ROADMAP P4.2).
+> **Текущий канал:** GitHub Packages, scope `@gertsai`.
+> Версии пакетов независимы; среди них уже есть 1.x и выше.
+> Переход на public npm — отдельное решение, не автоматическое следствие v1.0.
+> [Каталог пакетов](../packages/INDEX.md) и [инструкция для ИИ](AI-CONSUMER-GUIDE.md).
 
 ---
 
@@ -27,35 +27,37 @@
 
 ### Что нужно установить локально
 
-- **Node ≥ 22 LTS** (тот же что в этом репо — см. `package.json` engines)
-- **pnpm 10.x** (npm/yarn тоже работают, но pnpm — наш референс)
-- **GitHub аккаунт** с доступом к org `gertsai` (read доступ к private packages
-  если visibility = private; для public packages auth всё равно нужен — quirk GitHub Packages)
+- **Node:** поддерживаемая workspace-версия — `^22.13.0 || ^24.0.0 || >=26.0.0`;
+  дополнительно проверь `engines` выбранного пакета.
+- **pnpm 10.x** — основной проверяемый менеджер этого репозитория.
+- **GitHub account** с правом читать нужные packages; членство в org само по
+  себе не доказывает доступ. Для npm registry GitHub авторизация нужна и для public packages.
 
 ### GitHub Personal Access Token (PAT)
 
-GitHub Packages требует auth даже для "public" scope packages. Один раз:
+Для локальной установки GitHub Packages поддерживает **PAT classic**, а не
+fine-grained PAT. Создай его через <https://github.com/settings/tokens/new> с
+минимальным scope `read:packages`. Для установки не нужны `write:packages` или
+`delete:packages`. При SAML SSO авторизуй токен для нужной организации.
 
-1. Открой <https://github.com/settings/tokens/new> (classic PAT) ИЛИ
-   <https://github.com/settings/tokens?type=beta> (fine-grained)
-2. **Classic PAT** — отметь scope: `read:packages` (минимум; добавь
-   `write:packages` если будешь publish'ить)
-3. **Fine-grained PAT** — выбрать `gertsai` org, permissions: `Packages: Read`
-4. Сгенерируй, скопируй token (`ghp_...` или `github_pat_...`)
-5. Сохрани в password manager — больше не покажет
+### Передай token в окружение
 
-### Установи token в окружение
+Используй password manager или secret manager, чтобы передать credential в
+`NODE_AUTH_TOKEN` текущего процесса. Не вставляй значение в shell-команды,
+startup-файлы, `.envrc`, git, логи или чат ИИ. Не включай shell tracing.
+
+Проверка **наличия**, не права доступа и не валидности:
 
 ```bash
-# zsh / bash — в ~/.zshrc или ~/.bashrc
-export GITHUB_PACKAGES_TOKEN="ghp_..."
-
-# или per-project, через .envrc + direnv:
-echo 'export GITHUB_PACKAGES_TOKEN="ghp_..."' > .envrc
-direnv allow
+if [ -n "${NODE_AUTH_TOKEN:-}" ]; then
+  printf '%s\n' 'NODE_AUTH_TOKEN is set'
+else
+  printf '%s\n' 'NODE_AUTH_TOKEN is missing' >&2
+  exit 1
+fi
 ```
 
-Имя переменной — твой выбор; ниже использую `GITHUB_PACKAGES_TOKEN`.
+Не печатай значение, префикс, суффикс, длину или hash токена.
 
 ---
 
@@ -66,13 +68,13 @@ direnv allow
 ```ini
 # .npmrc
 @gertsai:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_PACKAGES_TOKEN}
+//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}
 
 # (Опционально) ускорение pnpm resolution для остальных пакетов
 auto-install-peers=true
 ```
 
-**Важно**: `${GITHUB_PACKAGES_TOKEN}` — это **literal** строка в `.npmrc`,
+**Важно**: `${NODE_AUTH_TOKEN}` — это **literal** строка в `.npmrc`,
 pnpm/npm подставит её из process env при resolve. Не вписывай токен в файл
 напрямую — `.npmrc` попадёт в git, токен утечёт.
 
@@ -81,53 +83,38 @@ pnpm/npm подставит её из process env при resolve. Не впис�
 
 ### Шаг 2 — добавь пакет(ы) в зависимости
 
-```bash
-# pnpm
-pnpm add @gertsai/utils @gertsai/fsm @gertsai/api-core
+Для первого полного сценария используй
+[versioned timeout recipe](AI-CONSUMER-GUIDE.md#recipe-bound-an-asynchronous-wait).
+Для других пакетов сначала выбери доступные exact versions и обязательные peers
+по выбранной версии README/manifest. Не заменяй этот выбор установкой latest.
 
-# npm
-npm install @gertsai/utils @gertsai/fsm @gertsai/api-core
-
-# yarn
-yarn add @gertsai/utils @gertsai/fsm @gertsai/api-core
-```
-
-Lock file (`pnpm-lock.yaml` / `package-lock.json` / `yarn.lock`) обновится с
-точными версиями — закоммить.
+Закоммить manifest и lockfile consumer-проекта после review получившегося набора.
 
 ### Шаг 3 — используй
 
 ```ts
-import { ... } from '@gertsai/utils';
-import { Fsm } from '@gertsai/fsm';
-import { defineAction } from '@gertsai/api-core/moleculer'; // subpath
+// Пример public import; полный исполнимый сценарий — в AI consumer guide.
+import { defineAction } from '@gertsai/api-core/moleculer';
 ```
 
 TypeScript types подцепляются автоматически (все пакеты ship `.d.ts` в `dist/`).
 
 ---
 
-## 3. Version pinning strategy (важно pre-v1.0)
+## 3. Version pinning strategy
 
-Пока проект **pre-v1.0** (текущее состояние):
+Выбирай версию **каждого пакета отдельно**. Для воспроизводимой интеграции и
+проверки используй exact versions и закоммиченный lockfile; проверь peers
+выбранного набора. В [записях релизов](https://github.com/gertsai/shared/releases)
+зафиксирован storage-набор `storage-core@3.0.0`, `query-dsl@3.0.0`,
+`entity-queries@1.0.0`; доступность своему credential и весь peer-набор проверяй отдельно.
 
-- ❌ **Не используй `^0.x.y`** — pnpm/npm semver caret для `0.x` версий
-  означает `>=0.x.y <0.(x+1).0`, но **breaking changes допустимы в minor
-  bumps** при `0.x` (CLAUDE.md явно разрешает это; SPEC SemVer тоже).
-- ✅ **Используй точную версию** или `~0.x.y`:
+Для пакета 0.x minor может менять контракт; для пакета ≥1.0 breaking change
+требует major по SemVer. Range не заменяет review CHANGELOG и проверки
+consumer-проекта. Нельзя применять общий ярлык «всё pre-v1.0» ко всему repo.
 
-```json
-{
-  "dependencies": {
-    "@gertsai/utils": "0.2.1",      // pin exact
-    "@gertsai/fsm": "~0.2.1",        // accept 0.2.x patches only
-    "@gertsai/api-core": "0.2.1"
-  }
-}
-```
-
-После **v1.0** (Phase 2 в ROADMAP) — стандартный semver caret `^1.0.0` будет
-безопасен.
+Версия в checkout не доказывает наличие tarball в registry. Сначала проверь
+доступность нужной версии своим read credential, затем устанавливай её и peers.
 
 ### Узнать актуальные версии
 
@@ -143,50 +130,12 @@ npm view @gertsai/utils version --registry https://npm.pkg.github.com
 
 ---
 
-## 4. Доступные пакеты (38 шт.)
+## 4. Каталог пакетов
 
-| Tier | Package | Описание |
-|---|---|---|
-| 1 | `@gertsai/utils` | Generic utilities |
-| 1 | `@gertsai/fsm` | Finite state machine primitives |
-| 1 | `@gertsai/fetch` | HTTP fetch wrapper |
-| 1 | `@gertsai/collection` | Collection utilities |
-| 1 | `@gertsai/llm-costs` | LLM cost calculation (rate table) |
-| 1 | `@gertsai/m9s-cache` | Moleculer cache adapter |
-| 1 | `@gertsai/ws-rpc` | WebSocket RPC primitives |
-| 1 | `@gertsai/async-utils` | sleep/retry/debounce/throttle/withTimeout |
-| 1 | `@gertsai/logger-factory` | createLogger + pino/winston subpaths |
-| 1 | `@gertsai/errors` | Universal error taxonomy (Shared Kernel) |
-| 1 | `@gertsai/tenant-resolver` | Composable tenant strategy chain |
-| 1 | `@gertsai/config` | Config primitives |
-| 1 | `@gertsai/tenant` | TenantId brand + Moleculer adapter |
-| 1 | `@gertsai/otel` | OpenTelemetry SDK setup |
-| 1 | `@gertsai/pg-client` | Postgres client + storage adapter |
-| 1 | `@gertsai/session` | Session + AbstractDialog + scoping |
-| 1 | `@gertsai/entity-audit` | Audit mutation marks |
-| 2 | `@gertsai/di` | DI container |
-| 2 | `@gertsai/flux` | Reactive streams |
-| 2 | `@gertsai/queue` | BullMQ wrappers + /standalone runner |
-| 2 | `@gertsai/entity` | Model + Entity + EntityWithMetadata |
-| 2 | `@gertsai/storage-core` | IStorageProvider abstract layer |
-| 2 | `@gertsai/query-dsl` | Type-safe query constraints + /sql |
-| 2 | `@gertsai/audit-primitives` | Timestamp + AuditMarks |
-| 2 | `@gertsai/entity-vue` | Vue ReactiveAdapter |
-| 2 | `@gertsai/entity-react` | React ReactiveAdapter + useEntity |
-| 2 | `@gertsai/entity-solid` | SolidJS ReactiveAdapter |
-| 2 | `@gertsai/entity-svelte` | Svelte ReactiveAdapter |
-| 2 | `@gertsai/rest-request-manager` | retry + rate-limit + circuit-breaker |
-| 2 | `@gertsai/session-guard` | External invariant guards over session |
-| 3 | `@gertsai/core` | Platform contracts (Workflow types) |
-| 3 | `@gertsai/hsm` | Hierarchical state machines |
-| 3 | `@gertsai/entity-storage` | session-aware audit-stamped CRUD |
-| 3 | `@gertsai/rpc-proxy-builder` | createRpcProxy<TActionMap> |
-| 4 | `@gertsai/auth-openfga` | OpenFGA ReBAC adapter |
-| 4 | `@gertsai/api-core` | Moleculer SDK + subpaths /contracts /moleculer /runtime/node |
-| 4 | `@gertsai/runtime-context` | Per-request composition root |
-| 5 | `@gertsai/api-rlr` | Rate limiter / retry loop runtime |
-
-Подробности по каждому — README в `packages/<name>/` этого репозитория.
+[Единый каталог по задачам](../packages/INDEX.md) ведёт к каноническому README
+каждого package. Это каталог исходников, не обещание доступности всех версий в
+registry. Имена, `exports`, `engines` и обязательные peers сверяй с manifest
+выбранной версии; optional peer может быть необходим при использовании adapter subpath.
 
 ### Subpath exports
 
@@ -207,13 +156,15 @@ Subpath list — см. `exports` field в `packages/<name>/package.json`.
 
 ## 5. CI/CD (GitHub Actions)
 
-Если consumer repo тоже на GitHub Actions:
+Consumer workflow должен иметь read permissions и доступ к выбранным packages:
 
 ```yaml
-# .github/workflows/ci.yml
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -224,19 +175,20 @@ jobs:
           node-version: '22'
           registry-url: 'https://npm.pkg.github.com'
           scope: '@gertsai'
-      - run: pnpm install
+      - run: pnpm install --frozen-lockfile
         env:
-          # GITHUB_TOKEN автоматически предоставлен runner'у;
-          # для cross-org access нужен PAT через repo secrets
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Если consumer repo НЕ в `gertsai` org — нужен PAT:
-          # NODE_AUTH_TOKEN: ${{ secrets.GERTSAI_PACKAGES_PAT }}
 ```
 
-**Важно для cross-org**: если consumer repo НЕ в org `gertsai`, дефолтный
-`GITHUB_TOKEN` runner'a **не имеет** доступа к пакетам `gertsai`. Создай
-PAT с `read:packages` и сохрани как secret `GERTSAI_PACKAGES_PAT` в
-consumer repo (`Settings → Secrets and variables → Actions`).
+В `.npmrc` из раздела 2 используется та же переменная `NODE_AUTH_TOKEN`.
+Для private package настрой **Package settings → Manage Actions access** и
+дай consumer repository право Read. `packages: read` и принадлежность к той
+же org сами по себе этот grant не создают.
+
+Если доступа через `GITHUB_TOKEN` нет, используй разрешённый политикой PAT
+classic с `read:packages`, сохранённый как Actions secret. Замени только
+binding на `NODE_AUTH_TOKEN: ${{ secrets.GERTSAI_PACKAGES_PAT }}`.
+Не выдавай недоверенному PR-коду доступ к private packages через privileged workflow.
 
 ---
 
@@ -290,12 +242,10 @@ entry, run `pnpm install` — pnpm подставит published version обра
 
 ### `401 Unauthorized` при `pnpm install`
 
-- Проверь что `GITHUB_PACKAGES_TOKEN` экспортирован в текущей оболочке:
-  `echo $GITHUB_PACKAGES_TOKEN`
-- Проверь что PAT не expired (PAT'ы имеют срок жизни)
-- Проверь что PAT имеет scope `read:packages` (classic) или
-  `Packages: Read` (fine-grained)
-- Проверь что у твоего GitHub аккаунта есть доступ к org `gertsai`
+- Проверь наличие `NODE_AUTH_TOKEN` способом из раздела 1, **не выводя token**.
+- Проверь expiration, scope `read:packages`, права аккаунта/package и SSO.
+- Для Actions отдельно проверь `packages: read` и package-level repository grant.
+- `403` из-за scopes — проблема credential, а не доказательство отсутствия пакета.
 
 ### `404 Not Found` при resolve
 
@@ -314,21 +264,14 @@ entry, run `pnpm install` — pnpm подставит published version обра
 
 ### Lockfile конфликты
 
-GitHub Packages иногда меняет URL формат resolved entries в lockfile при
-re-install. Если pnpm-lock.yaml даёт merge conflicts на каждом install:
-
-```bash
-rm pnpm-lock.yaml
-pnpm install
-git add pnpm-lock.yaml
-git commit -m "chore: regenerate lockfile"
-```
-
-Один раз — должно стабилизироваться.
+Не удаляй lockfile автоматически. Сначала сравни изменения dependency versions,
+registry mapping и версию менеджера пакетов, затем разреши конфликт штатным
+способом consumer-проекта. Любую необходимую регенерацию согласуй отдельно и
+проверь полный diff; не выдавай её за универсальное исправление registry access.
 
 ### Pre-v1.0 breaking change неожиданно сломал consumer
 
-Это **normal** до v1.0 (CLAUDE.md разрешает breaking в minor bumps). Решение:
+Для выбранного пакета 0.x проверь migration notes minor-релиза:
 
 - Pin точные версии (раздел 3)
 - Подписаться на release notifications: <https://github.com/gertsai/shared/releases>
@@ -339,22 +282,15 @@ git commit -m "chore: regenerate lockfile"
 
 ## 8. Будущее (миграция на public npm)
 
-Когда проект достигнет v1.0 (см. ROADMAP Phase 2 + P4.2):
-
-- Registry переключится на `https://registry.npmjs.org`
-- Auth для read больше не нужен (public registry)
-- `.npmrc` упростится (можно убрать `@gertsai:registry` overload)
-- Versioning перейдёт на стандартный `^1.x.y` caret
-
-Изменения будут анонсированы в release notes + migration guide.
-
-До тех пор — GitHub Packages — единственный канал.
+GitHub Packages остаётся текущим каналом. Переезд на public npm требует
+отдельного изменения registry/auth, объявления и migration guide. Версия
+отдельного пакета ≥1.0 сама по себе registry не переключает.
 
 ---
 
 ## Refs
 
-- ROADMAP.md (Phase 2 v1.0 release + P4.2 public npm migration)
-- GIT-FLOW-GUIDE.ru.md (для committer'ов в этот репо)
-- CLAUDE.md → Releases (как пакеты публикуются)
+- [Карта документации](INDEX.md).
+- [Канонический release guide](../.changeset/README.md).
+- [Git Flow guide](GIT-FLOW-GUIDE.ru.md) для contributors.
 - GitHub Packages docs: <https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry>

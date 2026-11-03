@@ -4,39 +4,19 @@ Shared OSS infrastructure packages for the **gerts.ai** ecosystem.
 
 Apache 2.0 licensed npm packages under `@gertsai/*`, currently distributed through GitHub Packages.
 
-## Packages
+## Documentation
 
-Independently versioned OSS packages organized into 5 tiers (foundation → application).
+- [Use these packages with an AI assistant](./guides/AI-CONSUMER-GUIDE.md) — version-aware retrieval, a complete small recipe and verification boundaries.
+- [Guides and task-based retrieval map](./guides/INDEX.md) — find the smallest relevant set of files.
+- [Package catalog](./packages/INDEX.md) — all package READMEs, grouped by task.
+- [Install in another project](./guides/CONSUMING-PACKAGES.ru.md) — registry access, versions and required peers (Russian).
+- [Build an application](./guides/BUILDING-APPS.md) — composition patterns and linked references/templates.
+- [Reference applications](./examples/INDEX.md) — backend, API snapshot and frontend.
 
-| Package | Description | Tier |
-|---------|-------------|------|
-| [`@gertsai/fsm`](./packages/fsm) | Generic, zero-dep finite state machine | 1 |
-| [`@gertsai/fetch`](./packages/fetch) | undici + Fetch API HTTP wrapper | 1 |
-| [`@gertsai/collection`](./packages/collection) | Immutable + persistent data structures | 1 |
-| [`@gertsai/llm-costs`](./packages/llm-costs) | LLM cost registry | 1 |
-| [`@gertsai/utils`](./packages/utils) | Generic utilities | 1 |
-| [`@gertsai/m9s-cache`](./packages/m9s-cache) | Memory / cache primitives | 1 |
-| [`@gertsai/ws-rpc`](./packages/ws-rpc) | WebSocket RPC | 1 |
-| [`@gertsai/config`](./packages/config) | Config helpers (re-exports api-core/runtime/node) | 1 |
-| [`@gertsai/tenant`](./packages/tenant) | TenantId brand + strict/optional getters + `/moleculer` | 1 |
-| [`@gertsai/otel`](./packages/otel) | OTel SDK setup + `/moleculer` tracing | 1 |
-| [`@gertsai/pg-client`](./packages/pg-client) | Agnostic 3-method PgClient + `/storage` adapter | 1 |
-| [`@gertsai/session`](./packages/session) | Session + AbstractDialog + 24-value OperatorType | 1 |
-| [`@gertsai/entity-audit`](./packages/entity-audit) | MutationMarks + audit-builder helpers | 1 |
-| [`@gertsai/errors`](./packages/errors) | Domain error hierarchy (Wave 5 Phase 1) | 1 |
-| [`@gertsai/tenant-resolver`](./packages/tenant-resolver) | Tenant resolution chain (Wave 5 Phase 1) | 1 |
-| [`@gertsai/di`](./packages/di) | Dependency injection | 2 |
-| [`@gertsai/flux`](./packages/flux) | Flux architecture utilities | 2 |
-| [`@gertsai/queue`](./packages/queue) | BullMQ wrappers + `/standalone` runner | 2 |
-| [`@gertsai/entity`](./packages/entity) | Model + Entity base classes + reactive adapter | 2 |
-| [`@gertsai/storage-core`](./packages/storage-core) | Backend-agnostic `IStorageProvider<Meta>` | 2 |
-| [`@gertsai/query-dsl`](./packages/query-dsl) | Type-safe query constraints + `/sql` compiler | 2 |
-| [`@gertsai/core`](./packages/core) | Core errors, session types, RAG, LLM costs | 3 |
-| [`@gertsai/hsm`](./packages/hsm) | Hierarchical state machine | 3 |
-| [`@gertsai/entity-storage`](./packages/entity-storage) | Session-aware audit-stamped CRUD + InMemory fixture | 3 |
-| [`@gertsai/auth-openfga`](./packages/auth-openfga) | OpenFGA / Zanzibar ReBAC integration | 4 |
-| [`@gertsai/api-core`](./packages/api-core) | API primitives, Moleculer mixins, OpenAPI merge | 4 |
-| [`@gertsai/api-rlr`](./packages/api-rlr) | Rate limiter / retry loop runtime over api-core | 5 |
+Package versions are independent. A source checkout, a GitHub release and an
+installed registry artifact are different sources of evidence; verify the
+selected package version before copying an example. Maintainer history and
+personal configuration are not consumer instructions.
 
 ## Reference applications
 
@@ -46,13 +26,14 @@ adopters who want a working starting point rather than a snippet.
 | Path | Purpose |
 |---|---|
 | [`examples/m9s-example`](./examples/m9s-example) | Moleculer broker with hex layering, Wave 5–8 composition facade, real-infra Postgres + pgvector + OpenFGA + Redis + Ollama (Sprint 3.11). |
-| [`examples/m9s-example-api-types`](./examples/m9s-example-api-types) | OpenAPI 3.1 contract snapshot generated from the m9s-example backend (Wave 9). |
+| [`examples/m9s-example-api-types`](./examples/m9s-example-api-types) | Hand-aligned API contract snapshot shared by the backend and web example. |
 | [`examples/m9s-example-web`](./examples/m9s-example-web) | SvelteKit 2 + Svelte 5 + Tailwind v4 + `openapi-fetch` frontend for m9s-example (Wave 9). |
 
-The Wave 9 trio (`m9s-example` + `m9s-example-api-types` + `m9s-example-web`)
-demonstrates a complete type-safe stack: backend action change → regenerate
-contract → frontend typecheck flags the affected call sites. See
-[ADR-014](./.forgeplan/adrs/ADR-014-sveltekit-2-openapi-fetch-as-the-full-stack-reference-pattern-for-gertsai-example-applications.md)
+The backend, hand-aligned API snapshot and web example demonstrate the shared
+contract boundary. Update the snapshot explicitly when the backend contract
+changes, then typecheck consumers; do not assume automatic schema generation.
+See the [snapshot update instructions](./examples/m9s-example-api-types/README.md)
+and [ADR-014](./.forgeplan/adrs/ADR-014-sveltekit-2-openapi-fetch-as-the-full-stack-reference-pattern-for-gertsai-example-applications.md)
 for the framework choice rationale.
 
 ## Install
@@ -63,30 +44,21 @@ for the framework choice rationale.
 
 ### From GitHub Packages (current registry)
 
-1. Get a GitHub Personal Access Token with at least `read:packages` scope
-   from <https://github.com/settings/tokens>.
+Use a **classic** GitHub Personal Access Token with `read:packages` and permission
+to read the selected packages. Inject it as `NODE_AUTH_TOKEN` from your secret
+manager; do not paste it into commands, files, logs or AI chat.
 
-2. Add to `~/.npmrc` (or your project's `.npmrc`):
+Commit only the placeholder configuration in the consumer project's `.npmrc`:
 
-   ```ini
-   @gertsai:registry=https://npm.pkg.github.com
-   //npm.pkg.github.com/:_authToken=YOUR_GITHUB_PAT
-   ```
+```ini
+@gertsai:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}
+```
 
-   Or via env var:
-
-   ```ini
-   @gertsai:registry=https://npm.pkg.github.com
-   //npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}
-   ```
-
-3. Install as usual:
-
-   ```sh
-   pnpm add @gertsai/<package>
-   # or
-   npm i @gertsai/<package>
-   ```
+Select an available exact version and its peers before installing. See the
+[consumer guide](./guides/CONSUMING-PACKAGES.ru.md) for local/Actions access,
+SSO, version selection and troubleshooting. Installing does not require
+publish or delete permissions.
 
 ### From public npm (when published)
 

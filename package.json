@@ -30,7 +30,8 @@
     "changeset": "changeset",
     "changeset:status": "changeset status",
     "version:packages": "changeset version",
-    "release": "gh workflow run publish.yml --ref main"
+    "release": "gh workflow run publish.yml --ref main",
+    "docs:check": "node --test .github/scripts/check-docs.node.mjs && node .github/scripts/check-docs.mjs"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.2",

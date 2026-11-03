@@ -13,9 +13,15 @@ just install the packages.
 The English in this guide and all code identifiers are deliberate; comments and
 copy paths follow the repo conventions.
 
+Use the [task map](INDEX.md) for selective reading and the
+[AI consumer guide](AI-CONSUMER-GUIDE.md) for a complete small recipe.
+References below are repository files, not a requirement to install a specific
+assistant. Templates are adaptation examples: application-local helpers,
+configuration and explicit verification are still required.
+
 ## What the @gertsai stack is
 
-`@gertsai/*` is a 38-package OSS infrastructure monorepo: a finite set of
+`@gertsai/*` is an independently versioned OSS infrastructure monorepo: a set of
 framework-agnostic primitives (errors taxonomy, tenant resolution, runtime
 context, session + session-guard, entity/storage abstractions, query DSL,
 pg-client, OpenFGA auth, OTel, logger factory, rate limiter, and a Moleculer SDK
@@ -37,11 +43,11 @@ feature set.
 
 Two orthogonal axes hold the whole design together.
 
-**Axis 1 — the hexagonal dependency rule.** Code flows in exactly one
-direction:
+**Axis 1 — the hexagonal dependency rule.** Imports point inward:
 
-```
-domain/  →  application/  →  infrastructure/  →  services/
+```text
+services/       → application/ → domain/
+infrastructure/ → domain/ports/
 ```
 
 - `domain/` — `readonly` entity interfaces + invariant-guarding factory
@@ -83,7 +89,7 @@ leak into business code.
 1. **Lay out the hexagon and the boot chain.** Create `src/{domain,application,
    infrastructure,services,composition,shared,lib,mol-services}`,
    `project.config.ts`, `moleculer.config.ts`, `src/index.ts`. See
-   *Project bootstrap* below and `references/bootstrap.md`.
+   *Project bootstrap* below and [bootstrap reference](../.claude/skills/building-gertsai-apps/references/bootstrap.md).
 2. **Author config** in `project.config.ts` (parsed once, `loadConfig`
    overlay). See *Configuration*.
 3. **Model the domain**: entities + factories + outbound ports + use-cases. See
@@ -117,8 +123,10 @@ env-driven transporter, `validator: false`, the Wave 5 middleware stack, and
 set); `src/index.ts` initializes OTel **first**, side-effect-imports `./services`
 (which calls `ApiController.configure` once and registers all controllers), then
 hands everything to `ApiController.Start`. Broker startup is guarded behind
-`require.main === module` so tests can import the entrypoint inertly. Build with
-`tspc` (ts-patch + typia), dev with `ts-node-dev`.
+`require.main === module` so tests can import the entrypoint inertly. This is
+the reference application's **CommonJS + typia** build: `tspc` (ts-patch +
+typia), with `ts-node-dev` in development. It is not an ESM entrypoint recipe or
+a requirement for every consumer of the built ESM/CJS libraries.
 
 ```ts
 // src/index.ts — entrypoint. NEVER `new ServiceBroker()`.
@@ -149,8 +157,8 @@ if (require.main === module) {
 export { main };
 ```
 
-Full depth: `.claude/skills/building-gertsai-apps/references/bootstrap.md`.
-Template: `templates/app-bootstrap.ts`.
+Full depth: [bootstrap](../.claude/skills/building-gertsai-apps/references/bootstrap.md).
+Template: [app bootstrap](../.claude/skills/building-gertsai-apps/templates/app-bootstrap.ts).
 
 ## 2. Configuration & run modes
 
@@ -188,7 +196,7 @@ Validate enum values at the `pick*` switch (throw naming the missing companion
 var), not in `loadConfig`. Fail-closed in production: `AUTH_GATE='allow-all'`
 throws under `NODE_ENV=production`.
 
-Full depth: `references/configuration.md`. Template: `templates/project.config.ts`.
+Full depth: [configuration](../.claude/skills/building-gertsai-apps/references/configuration.md). Template: [project configuration](../.claude/skills/building-gertsai-apps/templates/project.config.ts).
 
 ## 3. Domain, ports & use-cases (hexagonal core)
 
@@ -212,17 +220,15 @@ import { permissionDenied } from '../shared/errors';
 export interface DoSomethingDeps { readonly fooStore: IFooStore; readonly gate: IPermissionGate; }
 export interface DoSomethingInput {
   readonly userId: string; readonly docId: string; readonly text: string;
-  readonly session?: Session; readonly expectedTenantId?: string; // optional, additive
+  readonly session: Session; readonly expectedTenantId?: string;
 }
 
 export class DoSomethingUseCase {
   constructor(private readonly deps: DoSomethingDeps) {}
   async execute(input: DoSomethingInput): Promise<{ docId: string }> {
     const { userId, docId, text, session, expectedTenantId } = input;
-    if (session !== undefined) {                  // back-compat guard
-      assertAuthenticated(session);
-      if (expectedTenantId !== undefined) assertSessionInTenant(session, expectedTenantId);
-    }
+    assertAuthenticated(session);
+    if (expectedTenantId !== undefined) assertSessionInTenant(session, expectedTenantId);
     if (!(await this.deps.gate.can(userId, 'do-something', docId))) {
       throw permissionDenied(userId, 'do-something', docId); // fail closed, before side effects
     }
@@ -236,7 +242,7 @@ export class DoSomethingUseCase {
 Keep the neutral error kernel in `shared/` (not `composition/`) so all layers can
 import it without inverting hex direction.
 
-Full depth: `references/domain-core.md`. Template: `templates/DoSomethingUseCase.ts`.
+Full depth: [domain core](../.claude/skills/building-gertsai-apps/references/domain-core.md). Template: [use case](../.claude/skills/building-gertsai-apps/templates/DoSomethingUseCase.ts).
 
 ## 4. Service modules & composition
 
@@ -274,7 +280,7 @@ export { controller };
 Declare your wiring on the `ServiceContext` interface, but do **not** declare
 `addJob` / `getQueue` — api-core injects those when a queue is configured.
 
-Full depth: `references/services.md`. Template: `templates/service-module.lifecycle.ts`.
+Full depth: [services](../.claude/skills/building-gertsai-apps/references/services.md). Template: [service lifecycle](../.claude/skills/building-gertsai-apps/templates/service-module.lifecycle.ts).
 
 ## 5. API gateway & controllers
 
@@ -315,7 +321,7 @@ export default createApiService(
 `disableAuth: true` is a no-op since Wave 16.A — auth is consumer-mounted
 middleware now. Use `setRestBasePath('/')` so the gateway prefix isn't doubled.
 
-Full depth: `references/api-controllers.md`. Template: `templates/api-gateway-and-controllers.template.ts`.
+Full depth: [controllers](../.claude/skills/building-gertsai-apps/references/api-controllers.md). Template: [gateway and controllers](../.claude/skills/building-gertsai-apps/templates/api-gateway-and-controllers.template.ts).
 
 ## 6. Actions & request handling
 
@@ -363,7 +369,7 @@ export const myAction = defineAction(controller.register('do', {
 }));
 ```
 
-Full depth: `references/actions.md`. Template: `templates/myaction.action.ts`.
+Full depth: [actions](../.claude/skills/building-gertsai-apps/references/actions.md). Template: [action](../.claude/skills/building-gertsai-apps/templates/myaction.action.ts).
 
 ## 7. Queues & workers
 
@@ -404,7 +410,7 @@ controller.registerWorker(MY_QUEUE_NAME, [{
 Set retry policy in `defaultJobOptions`; use `ioredis` with
 `maxRetriesPerRequest: null`.
 
-Full depth: `references/queues-workers.md`. Template: `templates/queue-worker.worker.ts`.
+Full depth: [queues and workers](../.claude/skills/building-gertsai-apps/references/queues-workers.md). Template: [queue worker](../.claude/skills/building-gertsai-apps/templates/queue-worker.worker.ts).
 
 ## 8. Channels & SSE realtime
 
@@ -443,9 +449,16 @@ Producers publish with `if (broker?.sendToChannel) await broker.sendToChannel(..
 (undefined without Redis). Emit the **same** SSE frame sequence from both inline
 and queued paths so the UI has one code path.
 
-Full depth: `references/channels-sse.md`. Template: `templates/realtime-sse-and-channels.template.ts`.
+Full depth: [channels and SSE](../.claude/skills/building-gertsai-apps/references/channels-sse.md). Template: [realtime](../.claude/skills/building-gertsai-apps/templates/realtime-sse-and-channels.template.ts).
 
 ## 9. Durable workflows with replay
+
+> **Scope:** the current pure `WorkflowSignal` does not expose journaled task,
+> pause or native engine context. See [issue127](https://github.com/gertsai/shared/issues/127).
+> The skeleton below delegates a use case; it does not establish step-level
+> exactly-once I/O or pause/resume across a restart. An `anonymous` fallback is
+> illustrative, not a production identity source: authenticated applications
+> must supply verified identity through their own input boundary.
 
 Author a pure, transport-agnostic `WorkflowDefinition<TInput, TOutput>` from
 `@gertsai/core` (name/version/params/`handler(input, signal)`, no Moleculer
@@ -478,7 +491,7 @@ export function createMyProcessWorkflow(deps: { readonly useCase: MyUseCase }): 
 // runtime name = `<svc.fullName>.<key>` => 'v1.my.process'; call broker.wf.run('v1.my.process', payload).
 ```
 
-Full depth: `references/workflows.md`. Template: `templates/durable-workflow.workflow.ts`.
+Full depth: [workflows](../.claude/skills/building-gertsai-apps/references/workflows.md). Template: [workflow](../.claude/skills/building-gertsai-apps/templates/durable-workflow.workflow.ts).
 
 ## 10. Auth & authorization (JWT + OpenFGA)
 
@@ -514,7 +527,7 @@ export function verifyToken(token: string): JwtClaims | null {
 Callers MUST check `claims.kind`. On raw HTTP endpoints (SSE) re-authenticate and
 cross-check `claims.tenantId` against the requested tenant (IDOR / CWE-639).
 
-Full depth: `references/auth-authz.md`. Template: `templates/auth-jwt-and-permission-gate.skeleton.ts`.
+Full depth: [auth and authorization](../.claude/skills/building-gertsai-apps/references/auth-authz.md). Template: [auth skeleton](../.claude/skills/building-gertsai-apps/templates/auth-jwt-and-permission-gate.skeleton.ts).
 
 ## 11. Errors, tenant, runtime-context, session-guard, rate-limit
 
@@ -561,7 +574,7 @@ export function tryGetRequestContextFromCtx(ctx: Context): { session: unknown; e
 }
 ```
 
-Full depth: `references/cross-cutting.md`. Template: `templates/wave5-cross-cutting.reference.ts`.
+Full depth: [cross-cutting concerns](../.claude/skills/building-gertsai-apps/references/cross-cutting.md). Template: [middleware reference](../.claude/skills/building-gertsai-apps/templates/wave5-cross-cutting.reference.ts).
 
 ## 12. Storage adapters & ports (swapping backends)
 
@@ -597,7 +610,7 @@ function pickThingStore(): IThingStore {
 export const infrastructure = { thingStore: pickThingStore() }; // module-load singleton
 ```
 
-Full depth: `references/storage-adapters.md`. Template: `templates/storage-port-and-adapters.ts`.
+Full depth: [storage adapters](../.claude/skills/building-gertsai-apps/references/storage-adapters.md). Template: [ports and adapters](../.claude/skills/building-gertsai-apps/templates/storage-port-and-adapters.ts).
 
 ## 13. Testing, Docker & deployment
 
@@ -645,7 +658,7 @@ Set `fileParallelism: false` (broker boots are heavy). In production: never
 `AUTH_GATE=allow-all`, supply `FGA_API_TOKEN`, keep `MIGRATIONS_AUTO_APPLY=false`,
 and front the broker with a proxy that strips client-supplied `X-Tenant-ID`.
 
-Full depth: `references/testing-deploy.md`. Template: `templates/app-e2e.test.ts`.
+Full depth: [testing and deployment](../.claude/skills/building-gertsai-apps/references/testing-deploy.md). Template: [application test](../.claude/skills/building-gertsai-apps/templates/app-e2e.test.ts).
 
 ---
 
@@ -702,7 +715,8 @@ the service name on top of the gateway route.
 or a late subscriber connected after a synchronous inline run finished — buffer
 and replay the last N events per `docId`.
 
-**Where is the real code?** `examples/m9s-example/` is the canonical reference;
-every reference doc cites exact `path:line` anchors into it. For installing the
-packages, see `guides/CONSUMING-PACKAGES.ru.md`. For full per-concern depth, see
-`.claude/skills/building-gertsai-apps/references/`.
+**Where is the real code?** [m9s-example](../examples/m9s-example/README.md) is the
+reference application; line-number citations in older references may drift.
+Use the [install guide](CONSUMING-PACKAGES.ru.md) for packages and the
+[reference directory](../.claude/skills/building-gertsai-apps/references/) for
+per-concern depth, checking each selected version's public contract.
