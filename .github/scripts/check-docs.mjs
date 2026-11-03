@@ -79,15 +79,31 @@ export async function checkDocs(rootDirectory) {
   const inside = path => { const rel = relative(root, path); return !isAbsolute(rel) && rel !== '..' && !rel.startsWith('../'); };
   const fail = (code, source, target, message) => errors.push({ code, source, target, message });
 
-  for (const entry of await readdir(resolve(root, 'packages'), { withFileTypes: true })) {
+  const confined = async source => {
+    const actual = await realpath(resolve(root, source));
+    if (!inside(actual)) {
+      fail('outside_root', source, source, 'Input symlink leaves repository');
+      return null;
+    }
+    return actual;
+  };
+  const packageRoot = await confined('packages');
+  const packageEntries = packageRoot ? await readdir(packageRoot, { withFileTypes: true }) : [];
+  for (const entry of packageEntries) {
     if (!entry.isDirectory()) continue;
     let manifest;
-    try { manifest = JSON.parse(await readFile(resolve(root, 'packages', entry.name, 'package.json'), 'utf8')); }
-    catch (error) { if (error.code === 'ENOENT') continue; throw error; }
+    try {
+      const manifestPath = await confined(`packages/${entry.name}/package.json`);
+      if (!manifestPath) continue;
+      manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+    } catch (error) { if (error.code === 'ENOENT') continue; throw error; }
     packages.set(manifest.name, { manifest, directory: entry.name });
   }
   for (const source of entrypoints) {
-    try { documents.set(source, await readFile(resolve(root, source), 'utf8')); }
+    try {
+      const documentPath = await confined(source);
+      if (documentPath) documents.set(source, await readFile(documentPath, 'utf8'));
+    }
     catch (error) { if (error.code !== 'ENOENT') throw error; fail('missing_document', source, source, 'Required entrypoint is missing'); }
   }
   for (const [source, text] of documents) {

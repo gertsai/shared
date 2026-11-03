@@ -99,3 +99,36 @@ test('public imports, query links, raw repository URLs and explicit anchors form
   const result = await checkDocs(root);
   assert.deepEqual(result.errors, []);
 });
+
+test('a symlinked entrypoint is rejected before processing its external contents', async t => {
+  const root = await fixture(t);
+  const outside = await mkdtemp(join(tmpdir(), 'shared-doc-entry-'));
+  t.after(() => rm(outside, { recursive: true, force: true }));
+  await writeFile(join(outside, 'external.md'), "# Private\nimport { value } from '@gertsai/private-leak';\n");
+  await rm(join(root, 'README.md'));
+  await symlink(join(outside, 'external.md'), join(root, 'README.md'));
+  const result = await checkDocs(root);
+  assert.ok(result.errors.some(error => error.code === 'outside_root' && error.source === 'README.md'));
+  assert.ok(!result.errors.some(error => error.target === '@gertsai/private-leak'));
+});
+
+test('a symlinked package manifest is rejected before parsing external metadata', async t => {
+  const root = await fixture(t);
+  const outside = await mkdtemp(join(tmpdir(), 'shared-doc-manifest-'));
+  t.after(() => rm(outside, { recursive: true, force: true }));
+  await writeFile(join(outside, 'package.json'), 'not JSON: must not be read');
+  await rm(join(root, 'packages/example/package.json'));
+  await symlink(join(outside, 'package.json'), join(root, 'packages/example/package.json'));
+  const result = await checkDocs(root);
+  assert.ok(result.errors.some(error => error.code === 'outside_root' && error.source === 'packages/example/package.json'));
+});
+
+test('a symlinked packages root is rejected before enumerating external files', async t => {
+  const root = await fixture(t);
+  const outside = await mkdtemp(join(tmpdir(), 'shared-doc-packages-'));
+  t.after(() => rm(outside, { recursive: true, force: true }));
+  await rm(join(root, 'packages'), { recursive: true });
+  await symlink(outside, join(root, 'packages'));
+  const result = await checkDocs(root);
+  assert.ok(result.errors.some(error => error.code === 'outside_root' && error.source === 'packages'));
+});
