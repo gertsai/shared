@@ -1,3 +1,7 @@
+> **Historical audit, not current consumer guidance.** The claims and paths below
+> are preserved as discussion history and have not been reconciled with current
+> releases. Use the [documentation map](../guides/INDEX.md) for supported routes.
+
 • Находки
 
   1. api-core сейчас ведёт себя как приложение, а не как библиотека: импорт корня автоматически грузит .env через packages/api-core/src/index.ts:4. Для reusable platform package это плохая граница, потому

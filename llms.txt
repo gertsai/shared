@@ -1,0 +1,22 @@
+# @gertsai/shared
+
+> Independently versioned TypeScript infrastructure packages for the gerts.ai ecosystem.
+
+GitHub Packages is the current registry. Read access requires authentication.
+Select each installed package version and public exports; repository main is
+not automatically the installed release. These main URLs describe merged
+sources, not unmerged changes or verified registry availability.
+
+## Start here
+
+- [AI consumer guide](https://raw.githubusercontent.com/gertsai/shared/main/guides/AI-CONSUMER-GUIDE.md): Version selection, safe installation, complete timeout recipe and verification boundaries.
+- [Task-based file retrieval map](https://raw.githubusercontent.com/gertsai/shared/main/guides/INDEX.md): Choose the smallest relevant guide and package contract.
+- [Package catalog](https://raw.githubusercontent.com/gertsai/shared/main/packages/INDEX.md): Canonical package README links grouped by task.
+- [Application patterns](https://raw.githubusercontent.com/gertsai/shared/main/guides/BUILDING-APPS.md): Composition patterns and repository-local references/templates requiring adaptation.
+- [Reference applications](https://raw.githubusercontent.com/gertsai/shared/main/examples/INDEX.md): Backend, hand-aligned API snapshot and web example.
+
+## Optional
+
+- [Consumer context template](https://raw.githubusercontent.com/gertsai/shared/main/guides/CONSUMER-CONTEXT.md): Supply a downstream project's conventions, installed versions and verification commands without secrets.
+- [Detailed installation guide](https://raw.githubusercontent.com/gertsai/shared/main/guides/CONSUMING-PACKAGES.ru.md): Russian registry/authentication and peer-version guidance.
+- [Context7 preparation](https://raw.githubusercontent.com/gertsai/shared/main/guides/CONTEXT7.md): Separate opt-in external indexing and acceptance; not a claim of registration.
